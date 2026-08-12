@@ -1,0 +1,85 @@
+# =========================================================================
+# MediBridge Root Git Ignore
+# Covers Python backend, React Native / Expo, Flutter, Vite Web, and OS / IDEs
+# =========================================================================
+
+# Dependencies & Build Outputs
+node_modules/
+dist/
+dist-ssr/
+build/
+.build/
+*.egg-info/
+.eggs/
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+*.sqlite
+*.sqlite3
+medibridge.db
+
+# Expo & React Native
+.expo/
+.expo-shared/
+web-build/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/mobile_flutter/build/
+/mobile_flutter/android/app/debug
+/mobile_flutter/android/app/profile
+/mobile_flutter/android/app/release
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Log files
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini

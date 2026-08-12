@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "MediBridge",
+    "slug": "medibridge-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#1F4E79"
+    },
+    "ios": { "supportsTablet": true },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#1F4E79" }
+    }
+  }
+}

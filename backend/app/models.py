@@ -1,0 +1,166 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Column, String, DateTime, ForeignKey, Text, Boolean, JSON
+)
+from sqlalchemy.orm import relationship
+
+from .database import Base
+
+
+def gen_id():
+    return str(uuid.uuid4())
+
+
+class User(Base):
+    """A hospital staff account, a patient account, or an emergency-responder
+    account. `role` drives what a token can see (see auth.py / rbac.py)."""
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    full_name = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # admin | clinician | records_officer | patient | emergency_responder
+    facility = Column(String, nullable=True)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=True)  # set if role == patient
+
+    patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
+
+
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    full_name = Column(String, nullable=False)
+    date_of_birth = Column(String, nullable=False)  # ISO date
+    gender = Column(String, nullable=True)
+    national_id = Column(String, unique=True, nullable=True)
+    blood_type = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    senior_citizen_mode = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user_account = relationship("User", back_populates="patient", uselist=False, foreign_keys=[User.patient_id])
+    conditions = relationship("Condition", back_populates="patient", cascade="all, delete-orphan")
+    medications = relationship("MedicationStatement", back_populates="patient", cascade="all, delete-orphan")
+    allergies = relationship("AllergyIntolerance", back_populates="patient", cascade="all, delete-orphan")
+    encounters = relationship("Encounter", back_populates="patient", cascade="all, delete-orphan")
+    documents = relationship("ClinicalDocument", back_populates="patient", cascade="all, delete-orphan")
+
+
+class Encounter(Base):
+    """FHIR Encounter-lite: one visit / transfer event at a facility."""
+    __tablename__ = "encounters"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    facility_name = Column(String, nullable=False)
+    encounter_type = Column(String, nullable=False)  # outpatient | inpatient | emergency | transfer
+    reason = Column(Text, nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+
+    patient = relationship("Patient", back_populates="encounters")
+
+
+class Condition(Base):
+    __tablename__ = "conditions"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String, default="active")  # active | resolved
+    diagnosed_at = Column(String, nullable=True)
+    is_chronic = Column(Boolean, default=False)
+    critical_for_emergency = Column(Boolean, default=False)
+
+    patient = relationship("Patient", back_populates="conditions")
+
+
+class MedicationStatement(Base):
+    __tablename__ = "medication_statements"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    drug_name = Column(String, nullable=False)
+    dosage = Column(String, nullable=True)
+    frequency = Column(String, nullable=True)
+    prescribed_by_facility = Column(String, nullable=True)
+    start_date = Column(String, nullable=True)
+    active = Column(Boolean, default=True)
+    critical_for_emergency = Column(Boolean, default=True)
+
+    patient = relationship("Patient", back_populates="medications")
+
+
+class AllergyIntolerance(Base):
+    __tablename__ = "allergy_intolerances"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    substance = Column(String, nullable=False)
+    reaction = Column(String, nullable=True)
+    severity = Column(String, default="unknown")  # mild | moderate | severe
+    critical_for_emergency = Column(Boolean, default=True)
+
+    patient = relationship("Patient", back_populates="allergies")
+
+
+class ClinicalDocument(Base):
+    """A raw or AI-digitised document (scanned prescription, discharge summary,
+    X-ray report). `extracted_text` / `ai_summary` are filled by the AI layer."""
+    __tablename__ = "clinical_documents"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    doc_type = Column(String, nullable=False)  # prescription | discharge_summary | lab_report | imaging
+    original_filename = Column(String, nullable=True)
+    raw_text = Column(Text, nullable=True)          # OCR output
+    ai_summary = Column(Text, nullable=True)         # LLM/rule-based summary
+    uploaded_by_facility = Column(String, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    patient = relationship("Patient", back_populates="documents")
+
+
+class EmergencyToken(Base):
+    """A short-lived, single-scope token bound to a QR code / physical card
+    reference. Never stores the actual medical data — just the grant.
+
+    Two independent "keys" can point at the same grant:
+      - `card_reference`: the pointer encoded in the QR code, issued by the
+        patient from the app (see /emergency/issue). Meant to be reissued
+        often; short-lived by default.
+      - `nfc_uid`: the UID of a physical NFC card/tag, registered by staff
+        via /emergency/nfc/register (e.g. for a senior citizen without a
+        smartphone). Longer-lived by default, admin-managed, admin-revocable.
+    A grant may have either, both, or (rarely) be created with just one.
+    """
+    __tablename__ = "emergency_tokens"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    card_reference = Column(String, unique=True, nullable=True)  # printed on physical card / encoded in QR
+    nfc_uid = Column(String, unique=True, nullable=True)  # UID of a registered physical NFC tag/card
+    scope = Column(JSON, default=lambda: ["allergies", "medications", "conditions", "blood_type"])
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    registered_by = Column(String, nullable=True)  # staff user id, for nfc_uid registrations
+
+
+class AuditLog(Base):
+    """Append-only-in-spirit log of every access to patient data."""
+    __tablename__ = "audit_logs"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=True)
+    actor = Column(String, nullable=False)          # user id, "emergency_token:<id>", or "system"
+    actor_role = Column(String, nullable=True)
+    action = Column(String, nullable=False)         # e.g. "view_record", "emergency_access", "upload_document"
+    fields_accessed = Column(JSON, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    detail = Column(Text, nullable=True)

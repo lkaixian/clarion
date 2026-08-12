@@ -1,0 +1,111 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required in every build variant (not just debug) because this app
+         talks to the MediBridge backend over HTTP(S) for login, patient
+         records, and emergency card issuance. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Camera-based emergency QR scanner (responder flow, mobile_scanner
+         package). Runtime-requested by the plugin when the scanner opens —
+         this is what was silently missing before: there was no camera
+         screen at all yet, so Android never had a reason to prompt. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- NFC-tap emergency card scanner (responder flow, nfc_manager
+         package), for senior citizens / anyone using a physical card
+         instead of a smartphone. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
+    <!-- Android 13+ (API 33+) requires this explicit runtime permission
+         before local notifications (medication / appointment reminders)
+         can be shown. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Android 12+ (API 31+): used for more precisely-timed reminder
+         notifications. The app degrades to inexact scheduling if this is
+         denied/unavailable rather than requiring it — see
+         lib/services/notification_service.dart. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:label="MediBridge"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <!-- flutter_local_notifications: redelivers scheduled reminders
+             after a device reboot. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11+ (API 30+) package visibility: needed for
+             url_launcher's canLaunchUrl()/launchUrl() to fall back to a
+             browser for the MySejahtera website (https://) if the app
+             -launch attempt below fails outright. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <!-- CRITICAL for the MySejahtera launcher
+             (lib/services/mysejahtera_launcher.dart, external_app_launcher
+             package): its Android implementation calls
+             PackageManager.getPackageInfo(packageName, 0) directly to check
+             whether MySejahtera is installed. Without this <package>
+             declaration, Android 11+ (API 30+) package-visibility
+             filtering makes that call throw NameNotFoundException
+             *even when the app genuinely is installed* — silently making
+             every launch attempt fall through to "open the Play Store
+             listing instead", which looks exactly like "the button doesn't
+             open the app". This one line is what actually fixes that. -->
+        <package android:name="my.gov.onegovappstore.mysejahtera" />
+    </queries>
+</manifest>

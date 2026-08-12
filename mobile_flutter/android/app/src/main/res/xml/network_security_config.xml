@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The backend base URL is user-configurable at runtime (see Settings screen
+  / API_BASE_URL) and, during development, is typically plain HTTP: the
+  Android-emulator loopback alias (http://10.0.2.2:8000) or a LAN IP
+  (http://192.168.x.x:8000) — neither of which have TLS certificates.
+  Android 9+ (API 28+) blocks cleartext (non-HTTPS) traffic by default, so
+  we explicitly allow it here. Once the app is pointed at a Cloudflare
+  tunnel (https://*.trycloudflare.com), traffic is HTTPS anyway.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
