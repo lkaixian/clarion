@@ -5,7 +5,9 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../theme/app_theme.dart';
+import '../emergency_scanner_screen.dart';
 import 'senior_emergency_screen.dart';
+import 'senior_language_screen.dart';
 import 'senior_medications_screen.dart';
 
 /// The Senior Citizen Mode hub — MediBridge's differentiation feature.

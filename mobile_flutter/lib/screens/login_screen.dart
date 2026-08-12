@@ -15,13 +15,18 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'patient@medibridge.demo');
+  // Backend contract (see backend/app/routers/auth_router.py): the existing
+  // `username` form field on `POST /auth/login` now accepts either an
+  // email address or a patient's NRIC (Patient.national_id) — same field,
+  // same endpoint, same response shape either way. Field/controller kept
+  // generically named for that reason.
+  final _identifierController = TextEditingController(text: 'patient@medibridge.demo');
   final _passwordController = TextEditingController(text: 'patient123');
   bool _obscure = true;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -29,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     final l10n = AppLocalizations.of(context);
     final auth = context.read<AuthProvider>();
-    final ok = await auth.login(_emailController.text.trim(), _passwordController.text);
+    final ok = await auth.login(_identifierController.text.trim(), _passwordController.text);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.error ?? l10n.loginFailedGeneric)),
@@ -117,11 +122,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: _identifierController,
+                  keyboardType: TextInputType.text,
                   autocorrect: false,
                   textCapitalization: TextCapitalization.none,
-                  decoration: InputDecoration(labelText: l10n.emailLabel, hintText: l10n.emailLabel),
+                  decoration: InputDecoration(labelText: l10n.emailOrNricLabel, hintText: l10n.emailOrNricLabel),
                 ),
                 const SizedBox(height: 12),
                 TextField(

@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/section_card.dart';
 import 'audit_log_screen.dart';
+import 'emergency_scanner_screen.dart';
 import 'emergency_screen.dart';
 import 'reminders_screen.dart';
 import 'settings_screen.dart';
@@ -49,6 +50,18 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(l10n.homeTitle),
         actions: [
+          // Reachable while already signed in — e.g. a clinician, or a
+          // patient who's also acting as a bystander/responder — without
+          // having to sign out first. Deliberately a small app-bar icon
+          // (not a prominent button) so it stays clearly secondary to
+          // "View / Issue Emergency QR Card" below, which is about *this
+          // patient's own* card, not scanning someone else's.
+          IconButton(
+            tooltip: l10n.scanSomeoneElsesCardTooltip,
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () =>
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyScannerScreen())),
+          ),
           IconButton(
             tooltip: l10n.apiSettingsTooltip,
             icon: const Icon(Icons.settings_outlined),

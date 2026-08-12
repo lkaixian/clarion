@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../config/app_config.dart';
 import '../l10n/generated/app_localizations.dart';
+import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -56,11 +57,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Turns Senior Citizen Mode on/off from within an authenticated session
+  /// (previously only reachable from the pre-login LoginScreen — you'd
+  /// have to sign out first to turn it on). `_AuthGate` in app.dart
+  /// already reactively swaps `HomeScreen`/`SeniorHomeScreen` based on
+  /// `AuthProvider.prefersSeniorMode` via `Consumer<AuthProvider>`, but
+  /// that swap happens *underneath* whatever route is currently pushed on
+  /// top of it (this Settings screen) — it's applied to the widget tree
+  /// immediately, but not visible until the user navigates back to the
+  /// root route. Popping back to root here makes the swap visible right
+  /// away instead of leaving the user looking at this screen with no
+  /// visible feedback that anything changed.
+  Future<void> _setSeniorMode(bool value) async {
+    final auth = context.read<AuthProvider>();
+    await auth.setPrefersSeniorMode(value);
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final config = context.watch<AppConfig>();
     final localeProvider = context.watch<LocaleProvider>();
+    final auth = context.watch<AuthProvider>();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.apiSettingsTitle)),
@@ -69,6 +89,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (auth.isAuthenticated) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.chipBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l10n.seniorModeToggleLabel,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                          const SizedBox(height: 4),
+                          Text(l10n.seniorModeToggleDesc,
+                              style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.3)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Switch(
+                      value: auth.prefersSeniorMode,
+                      onChanged: _setSeniorMode,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+            ],
             Text(l10n.languageLabel,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
