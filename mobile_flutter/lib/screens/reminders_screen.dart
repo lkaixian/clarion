@@ -215,6 +215,9 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                 else
                   ...patient.activeMedications.map((m) {
                     final enabled = remindersState.isMedicationReminderEnabled(m.drugName);
+                    final doseFreq = [m.dosage, m.frequency]
+                        .where((p) => p != null && p.trim().isNotEmpty)
+                        .join(', ');
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
@@ -234,7 +237,8 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                                 const SizedBox(height: 2),
                                 Text(l10n.prescribedBy(m.prescribedByFacility ?? l10n.unknownFacility),
                                     style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                                Text(l10n.suggestedReminder, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                                Text(doseFreq.isNotEmpty ? doseFreq : l10n.suggestedReminder,
+                                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
                               ],
                             ),
                           ),

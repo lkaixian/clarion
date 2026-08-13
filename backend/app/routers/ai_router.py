@@ -5,11 +5,11 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
-from .. import models, auth
+from .. import models, auth, schemas
 from ..database import get_db
 from ..audit import log_access
 from ..ai.summarize import generate_handover_brief
-from ..ai.interactions import check_interactions, check_duplicate_prescriptions
+from ..ai.interactions import check_interactions, check_duplicate_prescriptions, get_medication_support
 from ..ai.ocr import extract_text_from_image, extract_structured_fields
 from .patients import _serialize_patient
 
@@ -21,6 +21,13 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # retention/cleanup policy, same "demo-scale, not production storage" caveat
 # as the SQLite backups directory.
 UPLOAD_ROOT = Path(__file__).resolve().parent.parent.parent / "uploads"
+
+# Upload size cap for POST /ai/digitise/{patient_id} -- this endpoint OCRs
+# scanned prescriptions/lab reports/discharge summaries/X-ray images, not
+# video or bulk data, so 15MB comfortably covers even a high-res multi-page
+# scan while blocking accidental/abusive multi-hundred-MB uploads (no size
+# limit was previously enforced at all).
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 
 
 @router.get("/summary/{patient_id}")
@@ -39,7 +46,7 @@ def get_handover_brief(
 
 
 @router.get("/interaction-check/{patient_id}")
-def get_interaction_check(
+async def get_interaction_check(
     patient_id: str, db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer")),
 ):
@@ -51,11 +58,16 @@ def get_interaction_check(
     drug_names = [m.drug_name for m in active_meds]
     med_dicts = [{"drug_name": m.drug_name, "active": m.active, "prescribed_by_facility": m.prescribed_by_facility} for m in active_meds]
 
-    interactions = check_interactions(drug_names)
-    duplicates = check_duplicate_prescriptions(med_dicts)
+    interactions = await check_interactions(drug_names)
+    duplicates = await check_duplicate_prescriptions(med_dicts)
+    medication_support = await get_medication_support(drug_names)
 
     log_access(db, patient_id, current_user.id, current_user.role, "run_interaction_check")
-    return {"interactions": interactions, "cross_facility_duplicates": duplicates}
+    return {
+        "interactions": interactions,
+        "cross_facility_duplicates": duplicates,
+        "medication_support": medication_support,
+    }
 
 
 @router.post("/digitise/{patient_id}")
@@ -75,8 +87,30 @@ async def digitise_document(
     extracted text was ever recoverable, never the original image/scan
     itself. File persistence is best-effort: a disk-write failure here
     never blocks or rolls back the OCR ingestion that already succeeded."""
+    if doc_type not in schemas.VALID_DOC_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"doc_type must be one of: {', '.join(sorted(schemas.VALID_DOC_TYPES))}",
+        )
+
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     suffix = os.path.splitext(file.filename or "")[1] or ".png"
     file_bytes = await file.read()
+
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large — max {MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
+        )
+
+    # Sanitized basename -- matches what's actually used for the on-disk
+    # path below, so the DB/API/Content-Disposition value seen elsewhere
+    # (e.g. GET .../documents/{document_id}/file) never echoes the raw,
+    # attacker-controlled multipart filename verbatim.
+    safe_name = os.path.basename(file.filename or "upload")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(file_bytes)
@@ -87,7 +121,7 @@ async def digitise_document(
     os.unlink(tmp_path)
 
     doc = models.ClinicalDocument(
-        patient_id=patient_id, doc_type=doc_type, original_filename=file.filename,
+        patient_id=patient_id, doc_type=doc_type, original_filename=safe_name,
         raw_text=raw_text, uploaded_by_facility=current_user.facility,
     )
     db.add(doc)
@@ -97,7 +131,6 @@ async def digitise_document(
     try:
         patient_dir = UPLOAD_ROOT / patient_id
         patient_dir.mkdir(parents=True, exist_ok=True)
-        safe_name = os.path.basename(file.filename or "upload")
         dest_path = patient_dir / f"{doc.id}_{safe_name}"
         with open(dest_path, "wb") as f:
             f.write(file_bytes)

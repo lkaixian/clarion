@@ -176,6 +176,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chronicSuffix => '（慢性）';
 
   @override
+  String diagnosedOnLabel(String date) {
+    return '诊断日期 $date';
+  }
+
+  @override
   String get currentMedicationsTitle => '目前用药';
 
   @override
@@ -195,6 +200,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noEncounters => '暂无就诊记录。';
+
+  @override
+  String encounterReasonLabel(String reason) {
+    return '原因：$reason';
+  }
+
+  @override
+  String encounterNotesLabel(String notes) {
+    return '备注：$notes';
+  }
+
+  @override
+  String get documentsTitle => '文件';
+
+  @override
+  String get noDocuments => '暂无文件记录。';
+
+  @override
+  String get docTypePrescription => '处方';
+
+  @override
+  String get docTypeDischargeSummary => '出院小结';
+
+  @override
+  String get docTypeLabReport => '化验报告';
+
+  @override
+  String get docTypeImaging => '影像检查';
+
+  @override
+  String get docTypeOther => '文件';
+
+  @override
+  String documentUploadedLine(String facility, String date) {
+    return '由 $facility 于 $date 上传';
+  }
 
   @override
   String get remindersButton => '用药与预约提醒';

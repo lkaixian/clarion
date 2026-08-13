@@ -426,6 +426,12 @@ abstract class AppLocalizations {
   /// **'(chronic)'**
   String get chronicSuffix;
 
+  /// No description provided for @diagnosedOnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnosed {date}'**
+  String diagnosedOnLabel(String date);
+
   /// No description provided for @currentMedicationsTitle.
   ///
   /// In en, this message translates to:
@@ -467,6 +473,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No encounters on record.'**
   String get noEncounters;
+
+  /// No description provided for @encounterReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String encounterReasonLabel(String reason);
+
+  /// No description provided for @encounterNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes: {notes}'**
+  String encounterNotesLabel(String notes);
+
+  /// No description provided for @documentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get documentsTitle;
+
+  /// No description provided for @noDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'No documents on record.'**
+  String get noDocuments;
+
+  /// No description provided for @docTypePrescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescription'**
+  String get docTypePrescription;
+
+  /// No description provided for @docTypeDischargeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Discharge Summary'**
+  String get docTypeDischargeSummary;
+
+  /// No description provided for @docTypeLabReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Lab Report'**
+  String get docTypeLabReport;
+
+  /// No description provided for @docTypeImaging.
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging'**
+  String get docTypeImaging;
+
+  /// No description provided for @docTypeOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Document'**
+  String get docTypeOther;
+
+  /// No description provided for @documentUploadedLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded by {facility} on {date}'**
+  String documentUploadedLine(String facility, String date);
 
   /// No description provided for @remindersButton.
   ///

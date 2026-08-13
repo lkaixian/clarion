@@ -246,6 +246,14 @@ def _validate_encounter_type(v: Optional[str]) -> Optional[str]:
     return v
 
 
+# Enforced on POST /ai/digitise/{patient_id} -- mirrors VALID_ENCOUNTER_TYPES
+# above. ClinicalDocument.doc_type's intended enum has been documented in a
+# models.py comment since the column was added (see app/models.py), but
+# nothing actually validated it server-side until now, so arbitrary strings
+# were silently accepted.
+VALID_DOC_TYPES = {"prescription", "discharge_summary", "lab_report", "imaging"}
+
+
 class EncounterCreate(BaseModel):
     facility_name: str
     encounter_type: str

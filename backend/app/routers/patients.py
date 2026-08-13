@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from typing import List
 
@@ -12,6 +13,19 @@ from ..audit import log_access
 from ..nric import normalize_nric
 
 router = APIRouter(prefix="/patients", tags=["patients"])
+
+# Content-Types this app actually needs to serve inline/safely from
+# GET /patients/{id}/documents/{document_id}/file -- scanned prescriptions,
+# lab reports, discharge summaries, X-ray/imaging. Anything guessed outside
+# this allowlist (in particular text/html, which a browser will happily
+# execute in this app's own origin) is forced to application/octet-stream
+# instead, which browsers only ever download, never render/execute. See
+# get_document_file below -- deliberately guessed from the sanitized
+# on-disk filename (ClinicalDocument.file_path), never from the
+# attacker-controlled ClinicalDocument.original_filename.
+SAFE_DOCUMENT_MEDIA_TYPES = {
+    "image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf",
+}
 
 
 def _serialize_patient(p: models.Patient) -> dict:
@@ -430,6 +444,16 @@ def get_audit_log(
 
 
 def _get_document_or_404(db: Session, patient_id: str, document_id: str) -> models.ClinicalDocument:
+    # Check the patient exists first -- there's no FK enforcement between
+    # ClinicalDocument.patient_id and Patient.id (SQLite foreign_keys pragma
+    # is off), so a bogus patient_id must not silently succeed just because
+    # a matching (possibly orphaned) document row happens to exist. Mirrors
+    # how the rest of the API treats a nonexistent patient_id (see
+    # get_patient_full_record above).
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     document = (
         db.query(models.ClinicalDocument)
         .filter(models.ClinicalDocument.id == document_id, models.ClinicalDocument.patient_id == patient_id)
@@ -486,7 +510,20 @@ def get_document_file(
         raise HTTPException(status_code=404, detail="Original file not available for this document")
 
     log_access(db, patient_id, current_user.id, current_user.role, "view_document_file", detail=document_id)
+
+    # Content-Type is guessed from the sanitized on-disk filename
+    # (document.file_path is written as "{document_id}_{safe_basename}" by
+    # POST /ai/digitise/{patient_id}), NEVER from the attacker-controlled
+    # document.original_filename -- otherwise a file uploaded as e.g.
+    # "evil.html" would be served back with Content-Type: text/html and
+    # execute in this app's own origin when opened by staff (stored XSS).
+    # Anything outside the small allowlist of types this app actually needs
+    # falls back to application/octet-stream, which browsers only download.
+    guessed_type, _ = mimetypes.guess_type(document.file_path)
+    media_type = guessed_type if guessed_type in SAFE_DOCUMENT_MEDIA_TYPES else "application/octet-stream"
+
     return FileResponse(
         document.file_path,
         filename=document.original_filename or f"document_{document_id}",
+        media_type=media_type,
     )

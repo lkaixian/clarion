@@ -171,9 +171,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? _EmptyLine(l10n.noConditions)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: patient.conditions
-                            .map((c) => _BulletLine('${c.name}${c.isChronic ? ' ${l10n.chronicSuffix}' : ''}'))
-                            .toList(),
+                        children: patient.conditions.map((c) {
+                          final diagnosedAt = c.diagnosedAt;
+                          return _BulletLine(
+                            '${c.name}${c.isChronic ? ' ${l10n.chronicSuffix}' : ''}',
+                            subtitle: (diagnosedAt != null && diagnosedAt.trim().isNotEmpty)
+                                ? l10n.diagnosedOnLabel(diagnosedAt)
+                                : null,
+                          );
+                        }).toList(),
                       ),
               ),
               SectionCard(
@@ -182,9 +188,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? _EmptyLine(l10n.noActiveMedications)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: activeMeds
-                            .map((m) => _BulletLine('${m.drugName} (${m.prescribedByFacility ?? l10n.unknownFacility})'))
-                            .toList(),
+                        children: activeMeds.map((m) {
+                          final doseFreq = _joinNonEmpty([m.dosage, m.frequency], ', ');
+                          final title = doseFreq.isEmpty ? m.drugName : '${m.drugName} — $doseFreq';
+                          return _BulletLine(
+                            title,
+                            subtitle: l10n.prescribedBy(m.prescribedByFacility ?? l10n.unknownFacility),
+                          );
+                        }).toList(),
                       ),
               ),
               SectionCard(
@@ -193,9 +204,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? _EmptyLine(l10n.noAllergies)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: patient.allergies
-                            .map((a) => _BulletLine('${a.substance} (${a.severity})'))
-                            .toList(),
+                        children: patient.allergies.map((a) {
+                          final reaction = a.reaction;
+                          final title = (reaction != null && reaction.trim().isNotEmpty)
+                              ? '${a.substance} (${a.severity}) — $reaction'
+                              : '${a.substance} (${a.severity})';
+                          return _BulletLine(title);
+                        }).toList(),
                       ),
               ),
               SectionCard(
@@ -204,9 +219,38 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? _EmptyLine(l10n.noEncounters)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: recentEncounters
-                            .map((e) => _BulletLine('${e.encounterType} @ ${e.facilityName} — ${e.startedAt}'))
-                            .toList(),
+                        children: recentEncounters.map((e) {
+                          final subtitleLines = <String>[];
+                          final reason = e.reason;
+                          final notes = e.notes;
+                          if (reason != null && reason.trim().isNotEmpty) {
+                            subtitleLines.add(l10n.encounterReasonLabel(reason));
+                          }
+                          if (notes != null && notes.trim().isNotEmpty) {
+                            subtitleLines.add(l10n.encounterNotesLabel(notes));
+                          }
+                          return _BulletLine(
+                            '${e.encounterType} @ ${e.facilityName} — ${e.startedAt}',
+                            subtitle: subtitleLines.isEmpty ? null : subtitleLines.join('\n'),
+                          );
+                        }).toList(),
+                      ),
+              ),
+              SectionCard(
+                title: l10n.documentsTitle,
+                child: patient.documents.isEmpty
+                    ? _EmptyLine(l10n.noDocuments)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: patient.documents.map((d) {
+                          return _BulletLine(
+                            '${_docTypeLabel(l10n, d.docType)} — ${d.originalFilename}',
+                            subtitle: l10n.documentUploadedLine(
+                              d.uploadedByFacility ?? l10n.unknownFacility,
+                              d.uploadedAt,
+                            ),
+                          );
+                        }).toList(),
                       ),
               ),
               if (patientState.nfcCards.isNotEmpty)
@@ -260,15 +304,54 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// Joins the non-empty entries of [parts] with [separator] — used to fold
+/// optional data fields (e.g. dosage + frequency) into a single display
+/// string without stray separators when some fields are missing.
+String _joinNonEmpty(List<String?> parts, String separator) {
+  return parts.where((p) => p != null && p.trim().isNotEmpty).join(separator);
+}
+
+String _docTypeLabel(AppLocalizations l10n, String docType) {
+  switch (docType) {
+    case 'prescription':
+      return l10n.docTypePrescription;
+    case 'discharge_summary':
+      return l10n.docTypeDischargeSummary;
+    case 'lab_report':
+      return l10n.docTypeLabReport;
+    case 'imaging':
+      return l10n.docTypeImaging;
+    default:
+      return l10n.docTypeOther;
+  }
+}
+
 class _BulletLine extends StatelessWidget {
-  const _BulletLine(this.text);
+  const _BulletLine(this.text, {this.subtitle});
   final String text;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
+    final subtitleText = subtitle;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text('•  $text', style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('•  $text', style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
+          if (subtitleText != null && subtitleText.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 1),
+              child: Text(
+                subtitleText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.3),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

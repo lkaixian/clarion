@@ -49,7 +49,27 @@ export const addCondition = (id, payload) => client.post(`/patients/${id}/condit
 export const addMedication = (id, payload) => client.post(`/patients/${id}/medications`, payload).then((r) => r.data);
 export const addAllergy = (id, payload) => client.post(`/patients/${id}/allergies`, payload).then((r) => r.data);
 export const addEncounter = (id, payload) => client.post(`/patients/${id}/encounters`, payload).then((r) => r.data);
+// Staff-only partial edits (fixing a typo'd dosage, correcting a visit
+// reason after the fact, etc.) — separate from the add* calls above, which
+// stay create-only. Each sends only the fields the form actually touched.
+export const updateCondition = (id, conditionId, payload) => client.patch(`/patients/${id}/conditions/${conditionId}`, payload).then((r) => r.data);
+export const updateMedication = (id, medicationId, payload) => client.patch(`/patients/${id}/medications/${medicationId}`, payload).then((r) => r.data);
+export const updateAllergy = (id, allergyId, payload) => client.patch(`/patients/${id}/allergies/${allergyId}`, payload).then((r) => r.data);
+export const updateEncounter = (id, encounterId, payload) => client.patch(`/patients/${id}/encounters/${encounterId}`, payload).then((r) => r.data);
 export const getAuditLog = (id) => client.get(`/patients/${id}/audit-log`).then((r) => r.data);
+
+// Document detail (raw OCR text + AI summary) is staff-only and deliberately
+// left out of GET /patients/{id} (which only returns a lightweight summary
+// list) so a normal patient-record fetch stays cheap. file_available tells
+// you whether the ORIGINAL uploaded file (not just its OCR'd text) can be
+// fetched — false for anything uploaded before file persistence existed.
+export const getDocumentDetail = (id, documentId) => client.get(`/patients/${id}/documents/${documentId}`).then((r) => r.data);
+// Fetched as a blob (not a plain <img src>/<a href>) because the endpoint
+// requires the same Bearer auth as everything else here — a bare URL can't
+// carry that header. Caller is responsible for revoking the object URL it
+// builds from this when done with it.
+export const getDocumentFileBlob = (id, documentId) =>
+  client.get(`/patients/${id}/documents/${documentId}/file`, { responseType: "blob" }).then((r) => r.data);
 
 export const getSummary = (id) => client.get(`/ai/summary/${id}`).then((r) => r.data);
 export const getInteractionCheck = (id) => client.get(`/ai/interaction-check/${id}`).then((r) => r.data);

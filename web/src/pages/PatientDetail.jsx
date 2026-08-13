@@ -5,8 +5,10 @@ import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
   revokeEmergencyCard, getCurrentCardStatus,
   addCondition, addMedication, addAllergy, addEncounter, getAuditLog,
+  updateCondition, updateMedication, updateAllergy, updateEncounter,
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
   issuePatientAccount, updateOwnProfile, refreshCurrentUser,
+  digitiseDocument, getDocumentDetail, getDocumentFileBlob,
 } from "../api/client";
 
 const PROFILE_FIELD_LABELS = {
@@ -16,12 +18,363 @@ const PROFILE_FIELD_LABELS = {
   emergency_contact_phone: "Emergency contact phone",
 };
 
+// Field configs for the add/edit modal, one per record kind. Drives both
+// what inputs are rendered and what gets sent to the POST (add) / PATCH
+// (edit) endpoint — kept in lockstep with schemas.py's *Create / *Update
+// models so the modal never offers a field the backend would reject.
+const RECORD_FIELD_CONFIG = {
+  condition: {
+    label: "Condition",
+    addFn: addCondition, updateFn: updateCondition,
+    fields: [
+      { key: "name", label: "Condition name", type: "text", required: true },
+      { key: "status", label: "Status", type: "select", options: ["active", "resolved"], default: "active" },
+      { key: "diagnosed_at", label: "Diagnosed on", type: "date" },
+      { key: "is_chronic", label: "Chronic", type: "checkbox" },
+      { key: "critical_for_emergency", label: "Show on emergency card", type: "checkbox" },
+    ],
+  },
+  medication: {
+    label: "Medication",
+    addFn: addMedication, updateFn: updateMedication,
+    fields: [
+      { key: "drug_name", label: "Drug name", type: "text", required: true },
+      { key: "dosage", label: "Dosage", type: "text", placeholder: "e.g. 500mg" },
+      { key: "frequency", label: "Frequency", type: "text", placeholder: "e.g. twice daily" },
+      { key: "prescribed_by_facility", label: "Prescribing facility", type: "text" },
+      { key: "start_date", label: "Start date", type: "date" },
+      { key: "active", label: "Currently active", type: "checkbox", default: true },
+      { key: "critical_for_emergency", label: "Show on emergency card", type: "checkbox", default: true },
+    ],
+  },
+  allergy: {
+    label: "Allergy",
+    addFn: addAllergy, updateFn: updateAllergy,
+    fields: [
+      { key: "substance", label: "Allergen", type: "text", required: true },
+      { key: "reaction", label: "Reaction", type: "text", placeholder: "e.g. rash, anaphylaxis" },
+      { key: "severity", label: "Severity", type: "select", options: ["mild", "moderate", "severe", "unknown"], default: "unknown" },
+      { key: "critical_for_emergency", label: "Show on emergency card", type: "checkbox", default: true },
+    ],
+  },
+  encounter: {
+    label: "Visit / Transfer",
+    addFn: addEncounter, updateFn: updateEncounter,
+    fields: [
+      { key: "facility_name", label: "Facility name", type: "text", required: true },
+      { key: "encounter_type", label: "Type", type: "select", options: ["outpatient", "inpatient", "emergency", "transfer"], default: "outpatient" },
+      { key: "reason", label: "Reason for visit", type: "textarea" },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+  },
+};
+
+const DOC_TYPE_OPTIONS = ["prescription", "discharge_summary", "lab_report", "imaging"];
+const DOC_TYPE_LABELS = {
+  prescription: "Prescription", discharge_summary: "Discharge summary",
+  lab_report: "Lab report", imaging: "Imaging (X-ray/scan)",
+};
+
+// Generic add/edit form for conditions/medications/allergies/encounters —
+// replaces the old window.prompt() chain (quickAdd) with real inputs,
+// select dropdowns constrained to the backend's actual enums, and proper
+// edit-in-place instead of "create a new one, never touch the old one".
+function RecordModal({ kind, mode, initial, onClose, onSaved }) {
+  const config = RECORD_FIELD_CONFIG[kind];
+  const [values, setValues] = useState(() => {
+    const seed = {};
+    for (const f of config.fields) {
+      seed[f.key] = initial ? (initial[f.key] ?? "") : (f.default ?? (f.type === "checkbox" ? false : ""));
+    }
+    return seed;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const missing = config.fields.find((f) => f.required && !String(values[f.key] || "").trim());
+    if (missing) {
+      setError(`${missing.label} is required.`);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      if (mode === "add") {
+        await config.addFn(initial.patientId, values);
+      } else {
+        await config.updateFn(initial.patientId, initial.id, values);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to save. Check the fields and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold text-slate-800 mb-4">
+          {mode === "add" ? `Add ${config.label}` : `Edit ${config.label}`}
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {config.fields.map((f) => (
+            <div key={f.key}>
+              {f.type === "checkbox" ? (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!!values[f.key]}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.checked }))}
+                  />
+                  {f.label}
+                </label>
+              ) : (
+                <>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {f.label}{f.required && <span className="text-red-600"> *</span>}
+                  </label>
+                  {f.type === "select" ? (
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={values[f.key]}
+                      onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    >
+                      {f.options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
+                    </select>
+                  ) : f.type === "textarea" ? (
+                    <textarea
+                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={3}
+                      value={values[f.key]}
+                      placeholder={f.placeholder}
+                      onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    />
+                  ) : (
+                    <input
+                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      type={f.type}
+                      placeholder={f.placeholder}
+                      value={values[f.key]}
+                      onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2">
+            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // How often to re-check "is there still a live QR card, and is it the one
 // we're displaying?" — this is what makes a revoke/reissue done *elsewhere*
 // (e.g. from the patient's phone) show up here without a manual browser
 // refresh. Short enough to feel responsive in a demo, long enough not to
 // hammer the backend.
 const CARD_STATUS_POLL_MS = 4000;
+
+// Viewer for a single document: fetches the full detail (OCR text + AI
+// summary — deliberately not part of the patient record's lightweight
+// documents list) on open, and lazily fetches the original file as a blob
+// (never a bare <img src>/<a href>, since the endpoint needs the same
+// Bearer auth as everything else) only if file_available says one exists.
+function DocumentModal({ patientId, documentId, onClose }) {
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState("");
+  const [fileUrl, setFileUrl] = useState(null);
+  const [fileError, setFileError] = useState("");
+
+  useEffect(() => {
+    getDocumentDetail(patientId, documentId)
+      .then(setDetail)
+      .catch((e) => setError(e?.response?.data?.detail || "Failed to load document."));
+  }, [patientId, documentId]);
+
+  useEffect(() => {
+    if (!detail?.file_available) return;
+    let objectUrl;
+    getDocumentFileBlob(patientId, documentId)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setFileUrl(objectUrl);
+      })
+      .catch(() => setFileError("The original file could not be loaded."));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [detail, patientId, documentId]);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+        {!detail && !error && <p className="text-sm text-slate-400">Loading...</p>}
+        {detail && (
+          <>
+            <h3 className="font-semibold text-slate-800 mb-1">
+              {DOC_TYPE_LABELS[detail.doc_type] || detail.doc_type}
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              {detail.original_filename || "unnamed file"} · {detail.uploaded_by_facility || "unknown facility"} · {detail.uploaded_at}
+            </p>
+
+            {detail.file_available ? (
+              fileUrl ? (
+                <div className="mb-4">
+                  {/* Not every doc_type is an image (a scanned lab PDF isn't) —
+                      fall back to a plain link if the browser can't render it inline. */}
+                  <img
+                    src={fileUrl}
+                    alt={detail.original_filename || "document"}
+                    className="max-w-full max-h-64 border border-slate-200 rounded-lg mb-2"
+                    onError={(e) => { e.target.style.display = "none"; }}
+                  />
+                  <a href={fileUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-700 hover:underline">
+                    Open original file in a new tab
+                  </a>
+                </div>
+              ) : fileError ? (
+                <p className="text-sm text-red-600 mb-4">{fileError}</p>
+              ) : (
+                <p className="text-sm text-slate-400 mb-4">Loading original file...</p>
+              )
+            ) : (
+              <p className="text-xs text-slate-400 mb-4">
+                Original file not available for this document (only the extracted text below was kept).
+              </p>
+            )}
+
+            {detail.ai_summary && (
+              <div className="mb-3">
+                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">AI Summary</h4>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{detail.ai_summary}</p>
+              </div>
+            )}
+            {detail.raw_text && (
+              <div className="mb-3">
+                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">Extracted Text (OCR)</h4>
+                <pre className="text-xs text-slate-600 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto font-sans">
+                  {detail.raw_text}
+                </pre>
+              </div>
+            )}
+          </>
+        )}
+        <button onClick={onClose} className="w-full text-sm bg-blue-800 text-white px-3 py-2 rounded-lg mt-2">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Upload + list for scanned/digitised documents (prescriptions, discharge
+// summaries, lab reports, X-rays). Staff-only end to end — a patient
+// viewing their own record only sees that a document exists via the
+// summary embedded in GET /patients/{id} (below), not its content; see
+// DocumentModal's staff-only detail/file fetches.
+function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
+  const [docType, setDocType] = useState(DOC_TYPE_OPTIONS[0]);
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [viewingId, setViewingId] = useState(null);
+  const fileInputRef = useRef(null);
+
+  async function handleUpload(e) {
+    e.preventDefault();
+    if (!file) {
+      setError("Choose a file first.");
+      return;
+    }
+    setUploading(true);
+    setError("");
+    try {
+      await digitiseDocument(patientId, docType, file);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      onUploaded();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to upload/digitise this document.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Section title="Documents (scans, prescriptions, lab reports, X-rays)">
+      {isStaff && (
+        <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Document type</label>
+            <select
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+              value={docType}
+              onChange={(e) => setDocType(e.target.value)}
+            >
+              {DOC_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">File</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="text-sm"
+            />
+          </div>
+          <button disabled={uploading} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            {uploading ? "Uploading & digitising..." : "Upload & Digitise"}
+          </button>
+        </form>
+      )}
+      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+
+      {documents.length === 0 ? (
+        <p className="text-sm text-slate-400">No documents on file yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {documents.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => isStaff && setViewingId(d.id)}
+              disabled={!isStaff}
+              className={`w-full flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-left ${isStaff ? "hover:bg-slate-100" : "cursor-default"}`}
+            >
+              <div>
+                <p className="text-sm text-slate-700">{DOC_TYPE_LABELS[d.doc_type] || d.doc_type}</p>
+                <p className="text-xs text-slate-400">{d.original_filename || "unnamed"} · {d.uploaded_by_facility || "unknown facility"} · {d.uploaded_at}</p>
+              </div>
+              {isStaff && <span className="text-xs text-blue-700 whitespace-nowrap">View →</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {!isStaff && documents.length > 0 && (
+        <p className="text-xs text-slate-400 mt-2">Ask your clinic to review document contents with you.</p>
+      )}
+
+      {viewingId && (
+        <DocumentModal patientId={patientId} documentId={viewingId} onClose={() => setViewingId(null)} />
+      )}
+    </Section>
+  );
+}
 
 function Section({ title, children, action }) {
   return (
@@ -75,6 +428,8 @@ export default function PatientDetail() {
   // member dismisses the dialog; never persisted, never re-fetchable.
   const [issuedAccount, setIssuedAccount] = useState(null);
   const [busy, setBusy] = useState("");
+  // { kind: 'condition'|'medication'|'allergy'|'encounter', mode: 'add'|'edit', initial } | null
+  const [recordModal, setRecordModal] = useState(null);
   const emergencyCardRef = useRef(null);
   emergencyCardRef.current = emergencyCard;
 
@@ -235,22 +590,16 @@ export default function PatientDetail() {
     refresh();
   }
 
-  async function quickAdd(kind) {
-    if (kind === "condition") {
-      const name = prompt("Condition name:");
-      if (name) await addCondition(id, { name, critical_for_emergency: true });
-    } else if (kind === "medication") {
-      const drug_name = prompt("Drug name:");
-      const prescribed_by_facility = prompt("Prescribing facility:");
-      if (drug_name) await addMedication(id, { drug_name, prescribed_by_facility, active: true, critical_for_emergency: true });
-    } else if (kind === "allergy") {
-      const substance = prompt("Allergen:");
-      if (substance) await addAllergy(id, { substance, critical_for_emergency: true });
-    } else if (kind === "encounter") {
-      const facility_name = prompt("Facility name:");
-      const reason = prompt("Reason for visit:");
-      if (facility_name) await addEncounter(id, { facility_name, encounter_type: "outpatient", reason });
-    }
+  function openAddRecord(kind) {
+    setRecordModal({ kind, mode: "add", initial: { patientId: id } });
+  }
+
+  function openEditRecord(kind, record) {
+    setRecordModal({ kind, mode: "edit", initial: { ...record, patientId: id } });
+  }
+
+  function handleRecordSaved() {
+    setRecordModal(null);
     refresh();
   }
 
@@ -492,19 +841,80 @@ export default function PatientDetail() {
       </Section>
 
       <div className="grid grid-cols-2 gap-4">
-        <Section title="Conditions" action={isStaff && <button onClick={() => quickAdd("condition")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.conditions.map((c, i) => <p key={i} className="text-sm text-slate-700">{c.name} {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}</p>)}
+        <Section title="Conditions" action={isStaff && <button onClick={() => openAddRecord("condition")} className="text-xs text-blue-700">+ Add</button>}>
+          {patient.conditions.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+          {patient.conditions.map((c) => (
+            <div key={c.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+              <div className="text-sm text-slate-700">
+                <p>
+                  {c.name}{" "}
+                  {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}{" "}
+                  <span className="text-xs text-slate-400">{c.status}</span>
+                </p>
+                {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
+              </div>
+              {isStaff && <button onClick={() => openEditRecord("condition", c)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+            </div>
+          ))}
         </Section>
-        <Section title="Medications" action={isStaff && <button onClick={() => quickAdd("medication")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.medications.map((m, i) => <p key={i} className="text-sm text-slate-700">{m.drug_name} <span className="text-xs text-slate-400">({m.prescribed_by_facility})</span></p>)}
+        <Section title="Medications" action={isStaff && <button onClick={() => openAddRecord("medication")} className="text-xs text-blue-700">+ Add</button>}>
+          {patient.medications.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+          {patient.medications.map((m) => (
+            <div key={m.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+              <div className="text-sm text-slate-700">
+                <p>
+                  {m.drug_name}{" "}
+                  {!m.active && <span className="text-xs text-slate-400">(inactive)</span>}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
+                  {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
+                </p>
+              </div>
+              {isStaff && <button onClick={() => openEditRecord("medication", m)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+            </div>
+          ))}
         </Section>
-        <Section title="Allergies" action={isStaff && <button onClick={() => quickAdd("allergy")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.allergies.map((a, i) => <p key={i} className="text-sm text-slate-700">{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>)}
+        <Section title="Allergies" action={isStaff && <button onClick={() => openAddRecord("allergy")} className="text-xs text-blue-700">+ Add</button>}>
+          {patient.allergies.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+          {patient.allergies.map((a) => (
+            <div key={a.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+              <div className="text-sm text-slate-700">
+                <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
+                {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
+              </div>
+              {isStaff && <button onClick={() => openEditRecord("allergy", a)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+            </div>
+          ))}
         </Section>
-        <Section title="Visit / Transfer History" action={isStaff && <button onClick={() => quickAdd("encounter")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.encounters.map((e, i) => <p key={i} className="text-sm text-slate-700">{e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span></p>)}
+        <Section title="Visit / Transfer Timeline" action={isStaff && <button onClick={() => openAddRecord("encounter")} className="text-xs text-blue-700">+ Add</button>}>
+          {patient.encounters.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {[...patient.encounters]
+              .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+              .map((e) => (
+                <div key={e.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                  <div className="text-sm text-slate-700">
+                    <p>
+                      {e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span>
+                    </p>
+                    <p className="text-xs text-slate-400">{e.started_at}</p>
+                    {e.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {e.reason}</p>}
+                    {e.notes && <p className="text-xs text-slate-500 mt-0.5">Notes: {e.notes}</p>}
+                  </div>
+                  {isStaff && <button onClick={() => openEditRecord("encounter", e)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                </div>
+              ))}
+          </div>
         </Section>
       </div>
+
+      <DocumentsSection
+        patientId={id}
+        documents={patient.documents || []}
+        isStaff={isStaff}
+        onUploaded={refresh}
+      />
 
       <Section title="Access Audit Log (who viewed this record)">
         <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -515,6 +925,16 @@ export default function PatientDetail() {
           ))}
         </div>
       </Section>
+
+      {recordModal && (
+        <RecordModal
+          kind={recordModal.kind}
+          mode={recordModal.mode}
+          initial={recordModal.initial}
+          onClose={() => setRecordModal(null)}
+          onSaved={handleRecordSaved}
+        />
+      )}
     </Layout>
   );
 }

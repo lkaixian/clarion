@@ -188,6 +188,11 @@ class AppLocalizationsMs extends AppLocalizations {
   String get chronicSuffix => '(kronik)';
 
   @override
+  String diagnosedOnLabel(String date) {
+    return 'Didiagnosis $date';
+  }
+
+  @override
   String get currentMedicationsTitle => 'Ubat Semasa';
 
   @override
@@ -207,6 +212,42 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get noEncounters => 'Tiada rekod lawatan.';
+
+  @override
+  String encounterReasonLabel(String reason) {
+    return 'Sebab: $reason';
+  }
+
+  @override
+  String encounterNotesLabel(String notes) {
+    return 'Nota: $notes';
+  }
+
+  @override
+  String get documentsTitle => 'Dokumen';
+
+  @override
+  String get noDocuments => 'Tiada dokumen direkodkan.';
+
+  @override
+  String get docTypePrescription => 'Preskripsi';
+
+  @override
+  String get docTypeDischargeSummary => 'Ringkasan Discaj';
+
+  @override
+  String get docTypeLabReport => 'Laporan Makmal';
+
+  @override
+  String get docTypeImaging => 'Pengimejan';
+
+  @override
+  String get docTypeOther => 'Dokumen';
+
+  @override
+  String documentUploadedLine(String facility, String date) {
+    return 'Dimuat naik oleh $facility pada $date';
+  }
 
   @override
   String get remindersButton => 'Peringatan Ubat & Temu Janji';

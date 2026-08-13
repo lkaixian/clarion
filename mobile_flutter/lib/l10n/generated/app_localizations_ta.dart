@@ -190,6 +190,11 @@ class AppLocalizationsTa extends AppLocalizations {
   String get chronicSuffix => '(நீடித்த)';
 
   @override
+  String diagnosedOnLabel(String date) {
+    return 'கண்டறியப்பட்டது $date';
+  }
+
+  @override
   String get currentMedicationsTitle => 'தற்போதைய மருந்துகள்';
 
   @override
@@ -209,6 +214,42 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get noEncounters => 'பதிவில் வருகைகள் இல்லை.';
+
+  @override
+  String encounterReasonLabel(String reason) {
+    return 'காரணம்: $reason';
+  }
+
+  @override
+  String encounterNotesLabel(String notes) {
+    return 'குறிப்புகள்: $notes';
+  }
+
+  @override
+  String get documentsTitle => 'ஆவணங்கள்';
+
+  @override
+  String get noDocuments => 'பதிவில் ஆவணங்கள் இல்லை.';
+
+  @override
+  String get docTypePrescription => 'மருந்துச் சீட்டு';
+
+  @override
+  String get docTypeDischargeSummary => 'வெளியேற்றச் சுருக்கம்';
+
+  @override
+  String get docTypeLabReport => 'ஆய்வக அறிக்கை';
+
+  @override
+  String get docTypeImaging => 'இமேஜிங்';
+
+  @override
+  String get docTypeOther => 'ஆவணம்';
+
+  @override
+  String documentUploadedLine(String facility, String date) {
+    return '$facility ஆல் $date அன்று பதிவேற்றப்பட்டது';
+  }
 
   @override
   String get remindersButton => 'மருந்து & சந்திப்பு நினைவூட்டல்கள்';

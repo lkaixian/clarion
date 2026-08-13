@@ -51,6 +51,9 @@ class SeniorMedicationsScreen extends StatelessWidget {
                         separatorBuilder: (_, _) => const SizedBox(height: 16),
                         itemBuilder: (context, i) {
                           final m = meds[i];
+                          final doseFreq = [m.dosage, m.frequency]
+                              .where((p) => p != null && p.trim().isNotEmpty)
+                              .join(', ');
                           return Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
@@ -67,7 +70,7 @@ class SeniorMedicationsScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  l10n.takeTwiceDaily,
+                                  doseFreq.isNotEmpty ? doseFreq : l10n.takeTwiceDaily,
                                   style: const TextStyle(color: SeniorColors.accent, fontSize: 18),
                                 ),
                                 const SizedBox(height: 4),

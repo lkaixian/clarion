@@ -187,6 +187,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chronicSuffix => '(chronic)';
 
   @override
+  String diagnosedOnLabel(String date) {
+    return 'Diagnosed $date';
+  }
+
+  @override
   String get currentMedicationsTitle => 'Current Medications';
 
   @override
@@ -206,6 +211,42 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noEncounters => 'No encounters on record.';
+
+  @override
+  String encounterReasonLabel(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String encounterNotesLabel(String notes) {
+    return 'Notes: $notes';
+  }
+
+  @override
+  String get documentsTitle => 'Documents';
+
+  @override
+  String get noDocuments => 'No documents on record.';
+
+  @override
+  String get docTypePrescription => 'Prescription';
+
+  @override
+  String get docTypeDischargeSummary => 'Discharge Summary';
+
+  @override
+  String get docTypeLabReport => 'Lab Report';
+
+  @override
+  String get docTypeImaging => 'Imaging';
+
+  @override
+  String get docTypeOther => 'Document';
+
+  @override
+  String documentUploadedLine(String facility, String date) {
+    return 'Uploaded by $facility on $date';
+  }
 
   @override
   String get remindersButton => 'Medication & Appointment Reminders';
