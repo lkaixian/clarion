@@ -25,6 +25,9 @@ class AppLocalizationsMs extends AppLocalizations {
   String get emailLabel => 'E-mel';
 
   @override
+  String get emailOrNricLabel => 'E-mel atau No. Kad Pengenalan';
+
+  @override
   String get passwordLabel => 'Kata Laluan';
 
   @override
@@ -35,7 +38,7 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      'Log masuk demo: patient@medibridge.demo / patient123';
+      'Log masuk demo: patient@medibridge.demo / patient123 (atau No. K/P 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -65,7 +68,65 @@ class AppLocalizationsMs extends AppLocalizations {
   String get orSignInDivider => 'atau log masuk untuk urus rekod anda sendiri';
 
   @override
+  String get forgotPasswordButton => 'Lupa kata laluan?';
+
+  @override
+  String get forgotPasswordTitle => 'Tetapkan Semula Kata Laluan';
+
+  @override
+  String get forgotPasswordDesc =>
+      'Hanya untuk pesakit. Masukkan No. Kad Pengenalan dan tarikh lahir anda seperti yang tertera pada rekod kesihatan anda, kemudian pilih kata laluan baharu.';
+
+  @override
+  String get nricLabel => 'No. Kad Pengenalan';
+
+  @override
+  String get dateOfBirthLabel => 'Tarikh lahir';
+
+  @override
+  String get newPasswordLabel => 'Kata laluan baharu';
+
+  @override
+  String get confirmNewPasswordLabel => 'Sahkan kata laluan baharu';
+
+  @override
+  String get allFieldsRequired => 'Sila isi semua ruangan.';
+
+  @override
+  String get passwordsDoNotMatch => 'Kata laluan tidak sepadan.';
+
+  @override
+  String get resetPasswordButton => 'Tetapkan Semula Kata Laluan';
+
+  @override
+  String get passwordResetSuccessSnack =>
+      'Kata laluan anda telah ditetapkan semula. Sila log masuk dengan kata laluan baharu anda.';
+
+  @override
+  String get forgotPasswordFailedGeneric =>
+      'Tidak dapat menetapkan semula kata laluan anda. Semak butiran anda atau alamat asas API dalam Tetapan.';
+
+  @override
+  String get changePasswordTitle => 'Tukar Kata Laluan';
+
+  @override
+  String get changePasswordRequiredNotice =>
+      'Akaun anda disediakan dengan kata laluan sementara. Demi keselamatan, anda perlu menetapkan kata laluan sendiri sebelum meneruskan.';
+
+  @override
+  String get temporaryPasswordLabel => 'Kata laluan sementara';
+
+  @override
+  String get changePasswordButton => 'Tukar Kata Laluan';
+
+  @override
+  String get passwordChangedSnack => 'Kata laluan berjaya ditukar.';
+
+  @override
   String get homeTitle => 'Rekod Kesihatan Saya';
+
+  @override
+  String get scanSomeoneElsesCardTooltip => 'Imbas kad kecemasan orang lain';
 
   @override
   String get noPatientRecord =>
@@ -335,6 +396,13 @@ class AppLocalizationsMs extends AppLocalizations {
   String get resetSnack => 'Ditetapkan semula ke lalai masa kompil.';
 
   @override
+  String get seniorModeToggleLabel => 'Mod Warga Emas';
+
+  @override
+  String get seniorModeToggleDesc =>
+      'Paparan ringkas dengan teks lebih besar dan pilihan lebih sedikit';
+
+  @override
   String get languageLabel => 'Bahasa';
 
   @override
@@ -432,6 +500,9 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get signOutSenior => 'Log Keluar';
+
+  @override
+  String get seniorLanguageTitle => 'Tukar Bahasa';
 
   @override
   String get seniorEmergencyTitle => 'KAD KECEMASAN';

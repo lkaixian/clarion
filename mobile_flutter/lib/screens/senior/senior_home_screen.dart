@@ -56,6 +56,30 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Reachable without signing out — e.g. a senior who is
+                  // also acting as a bystander/responder for someone else.
+                  // Kept as a small corner icon, well below the two giant
+                  // tiles below, matching this screen's "no secondary
+                  // reading" design philosophy.
+                  IconButton(
+                    tooltip: l10n.scanSomeoneElsesCardTooltip,
+                    icon: const Icon(Icons.qr_code_scanner, color: SeniorColors.text, size: 30),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const EmergencyScannerScreen()),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: l10n.seniorLanguageTitle,
+                    icon: const Icon(Icons.language, color: SeniorColors.text, size: 30),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SeniorLanguageScreen()),
+                    ),
+                  ),
+                ],
+              ),
               Text(
                 patient?.fullName ?? l10n.appTitle,
                 textAlign: TextAlign.center,

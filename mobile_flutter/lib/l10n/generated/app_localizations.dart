@@ -132,6 +132,12 @@ abstract class AppLocalizations {
   /// **'Email'**
   String get emailLabel;
 
+  /// No description provided for @emailOrNricLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email or NRIC'**
+  String get emailOrNricLabel;
+
   /// No description provided for @passwordLabel.
   ///
   /// In en, this message translates to:
@@ -153,7 +159,7 @@ abstract class AppLocalizations {
   /// No description provided for @demoLoginHint.
   ///
   /// In en, this message translates to:
-  /// **'Demo login: patient@medibridge.demo / patient123'**
+  /// **'Demo login: patient@medibridge.demo / patient123 (or NRIC 520314-01-1234 / patient123)'**
   String get demoLoginHint;
 
   /// No description provided for @loginFailedGeneric.
@@ -204,11 +210,119 @@ abstract class AppLocalizations {
   /// **'or sign in to manage your own record'**
   String get orSignInDivider;
 
+  /// No description provided for @forgotPasswordButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get forgotPasswordButton;
+
+  /// No description provided for @forgotPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Password'**
+  String get forgotPasswordTitle;
+
+  /// No description provided for @forgotPasswordDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'For patients only. Enter your NRIC and date of birth exactly as they appear on your health record, then choose a new password.'**
+  String get forgotPasswordDesc;
+
+  /// No description provided for @nricLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'NRIC'**
+  String get nricLabel;
+
+  /// No description provided for @dateOfBirthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get dateOfBirthLabel;
+
+  /// No description provided for @newPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get newPasswordLabel;
+
+  /// No description provided for @confirmNewPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm new password'**
+  String get confirmNewPasswordLabel;
+
+  /// No description provided for @allFieldsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill in all fields.'**
+  String get allFieldsRequired;
+
+  /// No description provided for @passwordsDoNotMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match.'**
+  String get passwordsDoNotMatch;
+
+  /// No description provided for @resetPasswordButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Password'**
+  String get resetPasswordButton;
+
+  /// No description provided for @passwordResetSuccessSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Your password has been reset. Please sign in with your new password.'**
+  String get passwordResetSuccessSnack;
+
+  /// No description provided for @forgotPasswordFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reset your password. Check your details or the API base URL in Settings.'**
+  String get forgotPasswordFailedGeneric;
+
+  /// No description provided for @changePasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Password'**
+  String get changePasswordTitle;
+
+  /// No description provided for @changePasswordRequiredNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account was set up with a temporary password. For security, you must set your own password before continuing.'**
+  String get changePasswordRequiredNotice;
+
+  /// No description provided for @temporaryPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporary password'**
+  String get temporaryPasswordLabel;
+
+  /// No description provided for @changePasswordButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Password'**
+  String get changePasswordButton;
+
+  /// No description provided for @passwordChangedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed successfully.'**
+  String get passwordChangedSnack;
+
   /// No description provided for @homeTitle.
   ///
   /// In en, this message translates to:
   /// **'My Health Record'**
   String get homeTitle;
+
+  /// No description provided for @scanSomeoneElsesCardTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan someone else\'s emergency card'**
+  String get scanSomeoneElsesCardTooltip;
 
   /// No description provided for @noPatientRecord.
   ///
@@ -678,6 +792,18 @@ abstract class AppLocalizations {
   /// **'Reset to compile-time default.'**
   String get resetSnack;
 
+  /// No description provided for @seniorModeToggleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Senior Citizen Mode'**
+  String get seniorModeToggleLabel;
+
+  /// No description provided for @seniorModeToggleDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Simplified view with larger text and fewer choices'**
+  String get seniorModeToggleDesc;
+
   /// No description provided for @languageLabel.
   ///
   /// In en, this message translates to:
@@ -851,6 +977,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sign Out'**
   String get signOutSenior;
+
+  /// No description provided for @seniorLanguageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Language'**
+  String get seniorLanguageTitle;
 
   /// No description provided for @seniorEmergencyTitle.
   ///

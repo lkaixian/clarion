@@ -29,6 +29,12 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isAuthenticated => status == AuthStatus.authenticated && user != null;
 
+  /// True right after a login where the backend flagged this account as
+  /// needing a password change (staff-issued temp password). `_AuthGate`
+  /// (see app.dart) reads this to route to ChangePasswordScreen instead of
+  /// Home/SeniorHome. Cleared locally by [changePassword] on success.
+  bool get mustChangePassword => user?.mustChangePassword ?? false;
+
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     prefersSeniorMode = prefs.getBool(_seniorPrefKey) ?? false;
@@ -56,6 +62,36 @@ class AuthProvider extends ChangeNotifier {
       await _tokenStorage.saveUser(userJson);
       user = MBUser.fromJson(userJson);
       status = AuthStatus.authenticated;
+      return true;
+    } on ApiException catch (e) {
+      error = e.message;
+      return false;
+    } catch (e) {
+      error = 'Unexpected error: $e';
+      return false;
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Handles the forced "must change password" flow: calls
+  /// `POST /auth/change-password`, then — on success — clears the flag on
+  /// the in-memory user *and* rewrites the cached user JSON in secure
+  /// storage (same mechanism `login`/`bootstrap` use) so a cold restart
+  /// doesn't resurrect the forced-change screen. No fresh login required:
+  /// `_AuthGate` is a `Consumer<AuthProvider>`, so notifyListeners() alone
+  /// is enough for it to fall through to Home/SeniorHome.
+  Future<bool> changePassword(String currentPassword, String newPassword) async {
+    isBusy = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _api.changePassword(currentPassword: currentPassword, newPassword: newPassword);
+      if (user != null) {
+        user = user!.copyWith(mustChangePassword: false);
+        await _tokenStorage.saveUser(user!.toJson());
+      }
       return true;
     } on ApiException catch (e) {
       error = e.message;

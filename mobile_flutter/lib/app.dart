@@ -8,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/patient_provider.dart';
 import 'providers/reminders_provider.dart';
+import 'screens/change_password_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/senior/senior_home_screen.dart';
@@ -133,6 +134,13 @@ class _AuthGate extends StatelessWidget {
           case AuthStatus.unauthenticated:
             return const LoginScreen();
           case AuthStatus.authenticated:
+            // A staff-issued temp password (`must_change_password` on the
+            // login response) blocks entry to Home/SeniorHome until
+            // changed — see ChangePasswordScreen. This check must come
+            // before the Senior Mode branch: forced password change is not
+            // part of the simplified senior hub, it always uses standard
+            // styling regardless of that preference.
+            if (auth.mustChangePassword) return const ChangePasswordScreen();
             return auth.prefersSeniorMode ? const SeniorHomeScreen() : const HomeScreen();
         }
       },

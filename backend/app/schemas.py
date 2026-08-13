@@ -1,6 +1,23 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+
+# Minimum acceptable length for any newly-set password (staff-issued temp
+# passwords are exempt -- they're generated server-side via
+# auth.generate_temp_password(), which always produces 14 chars). Applied
+# everywhere a human can choose/submit their own password: initial
+# registration, self-service forgot-password, and authenticated
+# change-password. Deliberately just a length floor, not a complexity
+# policy (mandatory mixed-case/digits/symbols) -- this is a health-record
+# demo app, not a bank, and complexity rules mostly just push people toward
+# predictable substitutions without meaningfully raising entropy.
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password_length(value: str) -> str:
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long.")
+    return value
 
 
 # ---------- Auth ----------
@@ -12,6 +29,11 @@ class UserCreate(BaseModel):
     facility: Optional[str] = None
     patient_id: Optional[str] = None
 
+    @field_validator("password")
+    @classmethod
+    def _password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
+
 
 class UserOut(BaseModel):
     id: str
@@ -20,6 +42,7 @@ class UserOut(BaseModel):
     role: str
     facility: Optional[str] = None
     patient_id: Optional[str] = None
+    must_change_password: bool = False
 
     class Config:
         from_attributes = True
@@ -29,6 +52,44 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+# ---------- Patient account issuance / password reset ----------
+class IssueAccountResponse(BaseModel):
+    """Response for POST /auth/patients/{patient_id}/issue-account.
+    `temporary_password` is shown exactly once — it is never stored or
+    logged in plaintext anywhere after this response is sent."""
+
+    temporary_password: str
+    national_id: Optional[str] = None
+    email: str
+    must_change_password: bool = True
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Public, unauthenticated self-service reset. Identity is proven with
+    NRIC + date of birth (both are on the physical IC / commonly known to
+    family, so this is a low-but-nonzero bar — mitigated with attempt
+    rate-limiting/lockout below, same as a bank's "forgot password" flow)."""
+
+    national_id: str
+    date_of_birth: str  # ISO date string, must match Patient.date_of_birth exactly
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
 
 
 # ---------- Patient ----------

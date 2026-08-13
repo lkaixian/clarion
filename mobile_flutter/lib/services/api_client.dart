@@ -61,6 +61,50 @@ class ApiClient {
     });
   }
 
+  /// `POST /auth/forgot-password` — public (no bearer token needed, and
+  /// none is sent even if one happens to be cached — this is reachable
+  /// straight from the pre-login LoginScreen). Patient-only, DOB-based
+  /// reset: the backend verifies `national_id` + `date_of_birth` match a
+  /// patient record before honouring `new_password`. `dateOfBirth` must be
+  /// an ISO date string ("yyyy-MM-dd"), same format Patient.dateOfBirth
+  /// already uses.
+  Future<void> forgotPassword({
+    required String nationalId,
+    required String dateOfBirth,
+    required String newPassword,
+  }) {
+    return _guard(() async {
+      await _dio.post<Map<String, dynamic>>(
+        '/auth/forgot-password',
+        data: {
+          'national_id': nationalId,
+          'date_of_birth': dateOfBirth,
+          'new_password': newPassword,
+        },
+      );
+    });
+  }
+
+  /// `POST /auth/change-password` — authenticated; the bearer token is
+  /// attached automatically by the interceptor set up in the constructor,
+  /// same as every other call on this client. Used both for the forced
+  /// "must change password" flow after a staff-issued temp password and
+  /// (in principle) any future voluntary password change from Settings.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) {
+    return _guard(() async {
+      await _dio.post<Map<String, dynamic>>(
+        '/auth/change-password',
+        data: {
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      );
+    });
+  }
+
   Future<Map<String, dynamic>> getMe() {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>('/auth/me');

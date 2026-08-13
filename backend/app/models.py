@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, String, DateTime, ForeignKey, Text, Boolean, JSON
+    Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer
 )
 from sqlalchemy.orm import relationship
 
@@ -24,7 +24,30 @@ class User(Base):
     full_name = Column(String, nullable=False)
     role = Column(String, nullable=False)  # admin | clinician | records_officer | patient | emergency_responder
     facility = Column(String, nullable=True)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=True)  # set if role == patient
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=True, index=True)  # set if role == patient
+
+    # True right after a staff-issued temp password or a self-service reset,
+    # cleared once the user successfully calls /auth/change-password. Lets
+    # clients force a "you must change your password" screen.
+    must_change_password = Column(Boolean, nullable=False, default=False)
+
+    # Self-service (NRIC + DOB) password-reset rate limiting. Persisted
+    # (not in-memory) so it survives process restarts. Only ever touched by
+    # POST /auth/forgot-password; staff-mediated resets via
+    # POST /auth/patients/{id}/issue-account reset these to a clean state.
+    reset_attempt_count = Column(Integer, nullable=False, default=0)
+    reset_locked_until = Column(DateTime, nullable=True)
+
+    # POST /auth/login failed-attempt rate limiting/lockout. Deliberately
+    # separate columns from reset_attempt_count/reset_locked_until above —
+    # those are scoped to the NRIC+DOB self-service forgot-password flow
+    # only; these track wrong-password attempts against this account's
+    # actual login. Keeping them independent means a user locked out of one
+    # flow isn't automatically locked out of the other, and vice versa.
+    # Persisted (not in-memory) so it survives process restarts and works
+    # correctly if the backend ever runs multiple workers.
+    login_failed_count = Column(Integer, nullable=False, default=0)
+    login_locked_until = Column(DateTime, nullable=True)
 
     patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
 

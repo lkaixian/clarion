@@ -24,6 +24,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailLabel => '电子邮件';
 
   @override
+  String get emailOrNricLabel => '电邮或身份证号码';
+
+  @override
   String get passwordLabel => '密码';
 
   @override
@@ -33,7 +36,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signingIn => '正在登录…';
 
   @override
-  String get demoLoginHint => '演示账号：patient@medibridge.demo / patient123';
+  String get demoLoginHint =>
+      '演示账号：patient@medibridge.demo / patient123（或身份证号码 520314-01-1234 / patient123）';
 
   @override
   String get loginFailedGeneric => '登录失败。请检查您的账号密码，或在设置中检查 API 地址。';
@@ -60,7 +64,62 @@ class AppLocalizationsZh extends AppLocalizations {
   String get orSignInDivider => '或登录以管理您自己的记录';
 
   @override
+  String get forgotPasswordButton => '忘记密码？';
+
+  @override
+  String get forgotPasswordTitle => '重设密码';
+
+  @override
+  String get forgotPasswordDesc => '仅限病患使用。请输入与您健康记录一致的身份证号码及出生日期，然后设置新密码。';
+
+  @override
+  String get nricLabel => '身份证号码';
+
+  @override
+  String get dateOfBirthLabel => '出生日期';
+
+  @override
+  String get newPasswordLabel => '新密码';
+
+  @override
+  String get confirmNewPasswordLabel => '确认新密码';
+
+  @override
+  String get allFieldsRequired => '请填写所有栏位。';
+
+  @override
+  String get passwordsDoNotMatch => '两次输入的密码不一致。';
+
+  @override
+  String get resetPasswordButton => '重设密码';
+
+  @override
+  String get passwordResetSuccessSnack => '您的密码已重设。请使用新密码登录。';
+
+  @override
+  String get forgotPasswordFailedGeneric => '无法重设您的密码。请检查您的资料，或在设置中检查 API 地址。';
+
+  @override
+  String get changePasswordTitle => '更改密码';
+
+  @override
+  String get changePasswordRequiredNotice =>
+      '您的账号使用了临时密码。为了安全起见，请先设置您自己的密码后再继续。';
+
+  @override
+  String get temporaryPasswordLabel => '临时密码';
+
+  @override
+  String get changePasswordButton => '更改密码';
+
+  @override
+  String get passwordChangedSnack => '密码已成功更改。';
+
+  @override
   String get homeTitle => '我的健康记录';
+
+  @override
+  String get scanSomeoneElsesCardTooltip => '扫描他人的紧急卡';
 
   @override
   String get noPatientRecord => '此账号未关联任何病患记录。';
@@ -319,6 +378,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get resetSnack => '已恢复为编译时默认地址。';
 
   @override
+  String get seniorModeToggleLabel => '长者模式';
+
+  @override
+  String get seniorModeToggleDesc => '简化视图，文字更大，选项更少';
+
+  @override
   String get languageLabel => '语言';
 
   @override
@@ -411,6 +476,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get signOutSenior => '登出';
+
+  @override
+  String get seniorLanguageTitle => '更改语言';
 
   @override
   String get seniorEmergencyTitle => '紧急卡片';

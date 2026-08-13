@@ -6,6 +6,7 @@ import {
   revokeEmergencyCard, getCurrentCardStatus,
   addCondition, addMedication, addAllergy, addEncounter, getAuditLog,
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
+  issuePatientAccount,
 } from "../api/client";
 
 // How often to re-check "is there still a live QR card, and is it the one
@@ -36,6 +37,12 @@ export default function PatientDetail() {
   // would get a 403 clicking any of those buttons. Hide them for a patient
   // viewer instead of showing an action that's guaranteed to fail.
   const isStaff = getCurrentUser()?.role !== "patient";
+  // Narrower than isStaff: POST /auth/patients/{id}/issue-account is
+  // admin/records_officer-only on the backend (a clinician or
+  // emergency_responder gets a 403), unlike the AI brief/NFC/quick-add
+  // actions above which clinicians *are* allowed to use. isStaff alone
+  // would show this button to roles that always 403 on click.
+  const canManageLogins = ["admin", "records_officer"].includes(getCurrentUser()?.role);
   const [patient, setPatient] = useState(null);
   const [brief, setBrief] = useState(null);
   const [interactions, setInteractions] = useState(null);
@@ -43,6 +50,11 @@ export default function PatientDetail() {
   const [cardStatus, setCardStatus] = useState(null); // {active, card_reference, scope, grant_valid_until} | null (not loaded yet)
   const [auditLog, setAuditLog] = useState([]);
   const [nfcCards, setNfcCards] = useState([]);
+  // Set once, right after a successful issue/reset call — holds the ONLY
+  // moment the plaintext temp password is ever visible anywhere (the
+  // backend never stores or logs it in plaintext). Cleared when the staff
+  // member dismisses the dialog; never persisted, never re-fetchable.
+  const [issuedAccount, setIssuedAccount] = useState(null);
   const [busy, setBusy] = useState("");
   const emergencyCardRef = useRef(null);
   emergencyCardRef.current = emergencyCard;
@@ -143,6 +155,24 @@ export default function PatientDetail() {
       refresh();
     } catch (e) {
       alert(e?.response?.data?.detail || "Failed to register NFC card.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function issueAccount() {
+    if (!confirm(
+      "Issue a login for this patient? If they already have one, this immediately " +
+      "replaces their password with a new temporary one — their current password " +
+      "(if any) stops working right away. Only do this after verifying their " +
+      "identity in person."
+    )) return;
+    setBusy("account");
+    try {
+      const data = await issuePatientAccount(id);
+      setIssuedAccount(data);
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to issue/reset login.");
     } finally {
       setBusy("");
     }
@@ -274,6 +304,46 @@ export default function PatientDetail() {
           <p className="text-sm text-slate-400">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
         )}
       </Section>
+
+      {canManageLogins && (
+        <Section title="Patient Login Account" action={
+          <button onClick={issueAccount} disabled={busy === "account"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+            {busy === "account" ? "Working..." : "Issue / Reset Login"}
+          </button>
+        }>
+          <p className="text-xs text-slate-400">
+            Patients don't self-register — NRIC alone isn't secret in Malaysia (it's on every IC
+            and form), so anyone claiming an account with just an NRIC would be a takeover risk.
+            Verify identity in person, then issue a one-time temporary password here; the patient
+            sets their own password on first login. Also use this to reset a forgotten password
+            for a patient who can't self-serve via NRIC + date of birth in the app.
+          </p>
+        </Section>
+      )}
+
+      {issuedAccount && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="font-semibold text-slate-800 mb-1">Temporary login issued</h3>
+            <p className="text-xs text-red-700 font-semibold uppercase mb-3">
+              Shown once — write it down or hand it to the patient now
+            </p>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-sm space-y-1">
+              <p>NRIC: <code className="bg-slate-100 px-1 rounded">{issuedAccount.national_id || "—"}</code></p>
+              <p>Temporary password: <code className="bg-slate-100 px-1 rounded font-bold">{issuedAccount.temporary_password}</code></p>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              The patient will be required to set their own password the first time they sign in.
+            </p>
+            <button
+              onClick={() => setIssuedAccount(null)}
+              className="w-full text-sm bg-blue-800 text-white px-3 py-2 rounded-lg"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       <Section title="NFC Physical Card (senior citizens / no smartphone)" action={
         isStaff ? (

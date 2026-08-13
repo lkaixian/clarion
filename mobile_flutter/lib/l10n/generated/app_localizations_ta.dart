@@ -25,6 +25,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get emailLabel => 'மின்னஞ்சல்';
 
   @override
+  String get emailOrNricLabel => 'மின்னஞ்சல் அல்லது அடையாள அட்டை எண்';
+
+  @override
   String get passwordLabel => 'கடவுச்சொல்';
 
   @override
@@ -35,7 +38,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      'டெமோ உள்நுழைவு: patient@medibridge.demo / patient123';
+      'டெமோ உள்நுழைவு: patient@medibridge.demo / patient123 (அல்லது அடையாள அட்டை 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -66,7 +69,66 @@ class AppLocalizationsTa extends AppLocalizations {
       'அல்லது உங்கள் சொந்த பதிவை நிர்வகிக்க உள்நுழையவும்';
 
   @override
+  String get forgotPasswordButton => 'கடவுச்சொல்லை மறந்துவிட்டீர்களா?';
+
+  @override
+  String get forgotPasswordTitle => 'கடவுச்சொல்லை மீட்டமை';
+
+  @override
+  String get forgotPasswordDesc =>
+      'நோயாளிகளுக்கு மட்டும். உங்கள் சுகாதார பதிவில் உள்ளபடி உங்கள் அடையாள அட்டை எண் மற்றும் பிறந்த தேதியை உள்ளிட்டு, புதிய கடவுச்சொல்லைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get nricLabel => 'அடையாள அட்டை எண்';
+
+  @override
+  String get dateOfBirthLabel => 'பிறந்த தேதி';
+
+  @override
+  String get newPasswordLabel => 'புதிய கடவுச்சொல்';
+
+  @override
+  String get confirmNewPasswordLabel => 'புதிய கடவுச்சொல்லை உறுதிப்படுத்தவும்';
+
+  @override
+  String get allFieldsRequired => 'அனைத்து புலங்களையும் நிரப்பவும்.';
+
+  @override
+  String get passwordsDoNotMatch => 'கடவுச்சொற்கள் பொருந்தவில்லை.';
+
+  @override
+  String get resetPasswordButton => 'கடவுச்சொல்லை மீட்டமை';
+
+  @override
+  String get passwordResetSuccessSnack =>
+      'உங்கள் கடவுச்சொல் மீட்டமைக்கப்பட்டது. உங்கள் புதிய கடவுச்சொல்லுடன் உள்நுழையவும்.';
+
+  @override
+  String get forgotPasswordFailedGeneric =>
+      'உங்கள் கடவுச்சொல்லை மீட்டமைக்க முடியவில்லை. உங்கள் விவரங்களை அல்லது அமைப்புகளில் உள்ள API முகவரியை சரிபார்க்கவும்.';
+
+  @override
+  String get changePasswordTitle => 'கடவுச்சொல்லை மாற்று';
+
+  @override
+  String get changePasswordRequiredNotice =>
+      'உங்கள் கணக்கு தற்காலிக கடவுச்சொல்லுடன் அமைக்கப்பட்டது. பாதுகாப்பிற்காக, தொடர்வதற்கு முன் உங்கள் சொந்த கடவுச்சொல்லை அமைக்க வேண்டும்.';
+
+  @override
+  String get temporaryPasswordLabel => 'தற்காலிக கடவுச்சொல்';
+
+  @override
+  String get changePasswordButton => 'கடவுச்சொல்லை மாற்று';
+
+  @override
+  String get passwordChangedSnack => 'கடவுச்சொல் வெற்றிகரமாக மாற்றப்பட்டது.';
+
+  @override
   String get homeTitle => 'எனது சுகாதார பதிவு';
+
+  @override
+  String get scanSomeoneElsesCardTooltip =>
+      'மற்றவரின் அவசர அட்டையை ஸ்கேன் செய்யவும்';
 
   @override
   String get noPatientRecord =>
@@ -337,6 +399,13 @@ class AppLocalizationsTa extends AppLocalizations {
   String get resetSnack => 'தொகுப்பு-நேர இயல்புநிலைக்கு மீட்டமைக்கப்பட்டது.';
 
   @override
+  String get seniorModeToggleLabel => 'மூத்த குடிமக்கள் பயன்முறை';
+
+  @override
+  String get seniorModeToggleDesc =>
+      'பெரிய எழுத்துகள் மற்றும் குறைவான தேர்வுகளுடன் எளிமையான காட்சி';
+
+  @override
   String get languageLabel => 'மொழி';
 
   @override
@@ -434,6 +503,9 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get signOutSenior => 'வெளியேறு';
+
+  @override
+  String get seniorLanguageTitle => 'மொழியை மாற்று';
 
   @override
   String get seniorEmergencyTitle => 'அவசர அட்டை';

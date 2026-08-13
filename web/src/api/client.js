@@ -72,4 +72,11 @@ export const registerNfcCard = (patientId, nfcUid, scope) =>
   client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope }).then((r) => r.data);
 export const revokeNfcCard = (nfcUid) => client.post(`/emergency/nfc/revoke/${nfcUid}`).then((r) => r.data);
 
+// Staff-only. Creates a login for a patient who doesn't have one yet, or
+// regenerates the password of an existing one (doubles as staff-mediated
+// password reset — same endpoint either way). Returns the plaintext temp
+// password exactly once; the backend never stores or logs it in plaintext.
+export const issuePatientAccount = (patientId) =>
+  client.post(`/auth/patients/${patientId}/issue-account`).then((r) => r.data);
+
 export default client;

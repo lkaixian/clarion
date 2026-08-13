@@ -24,6 +24,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailLabel => 'Email';
 
   @override
+  String get emailOrNricLabel => 'Email or NRIC';
+
+  @override
   String get passwordLabel => 'Password';
 
   @override
@@ -34,7 +37,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      'Demo login: patient@medibridge.demo / patient123';
+      'Demo login: patient@medibridge.demo / patient123 (or NRIC 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -63,7 +66,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String get orSignInDivider => 'or sign in to manage your own record';
 
   @override
+  String get forgotPasswordButton => 'Forgot password?';
+
+  @override
+  String get forgotPasswordTitle => 'Reset Password';
+
+  @override
+  String get forgotPasswordDesc =>
+      'For patients only. Enter your NRIC and date of birth exactly as they appear on your health record, then choose a new password.';
+
+  @override
+  String get nricLabel => 'NRIC';
+
+  @override
+  String get dateOfBirthLabel => 'Date of birth';
+
+  @override
+  String get newPasswordLabel => 'New password';
+
+  @override
+  String get confirmNewPasswordLabel => 'Confirm new password';
+
+  @override
+  String get allFieldsRequired => 'Please fill in all fields.';
+
+  @override
+  String get passwordsDoNotMatch => 'Passwords do not match.';
+
+  @override
+  String get resetPasswordButton => 'Reset Password';
+
+  @override
+  String get passwordResetSuccessSnack =>
+      'Your password has been reset. Please sign in with your new password.';
+
+  @override
+  String get forgotPasswordFailedGeneric =>
+      'Could not reset your password. Check your details or the API base URL in Settings.';
+
+  @override
+  String get changePasswordTitle => 'Change Password';
+
+  @override
+  String get changePasswordRequiredNotice =>
+      'Your account was set up with a temporary password. For security, you must set your own password before continuing.';
+
+  @override
+  String get temporaryPasswordLabel => 'Temporary password';
+
+  @override
+  String get changePasswordButton => 'Change Password';
+
+  @override
+  String get passwordChangedSnack => 'Password changed successfully.';
+
+  @override
   String get homeTitle => 'My Health Record';
+
+  @override
+  String get scanSomeoneElsesCardTooltip =>
+      'Scan someone else\'s emergency card';
 
   @override
   String get noPatientRecord =>
@@ -332,6 +394,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetSnack => 'Reset to compile-time default.';
 
   @override
+  String get seniorModeToggleLabel => 'Senior Citizen Mode';
+
+  @override
+  String get seniorModeToggleDesc =>
+      'Simplified view with larger text and fewer choices';
+
+  @override
   String get languageLabel => 'Language';
 
   @override
@@ -428,6 +497,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signOutSenior => 'Sign Out';
+
+  @override
+  String get seniorLanguageTitle => 'Change Language';
 
   @override
   String get seniorEmergencyTitle => 'EMERGENCY CARD';
