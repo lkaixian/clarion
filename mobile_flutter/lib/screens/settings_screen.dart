@@ -6,6 +6,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../theme/app_theme.dart';
+import 'edit_profile_screen.dart';
 
 /// Runtime-editable API base URL (persisted with shared_preferences) plus
 /// the app's language picker.
@@ -90,6 +91,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (auth.isAuthenticated) ...[
+              if (auth.user?.role == 'patient') ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+                    icon: const Icon(Icons.person_outline),
+                    label: Text(l10n.editProfileTitle),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: AppColors.chipBg,
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(

@@ -13,6 +13,20 @@ def gen_id():
     return str(uuid.uuid4())
 
 
+# Patient-profile fields that are worth nudging a patient to fill in right
+# after login if still blank (missing_profile_fields on schemas.UserOut).
+# Deliberately a plain list, not hardcoded logic per-field, so a future
+# column addition (e.g. a 5th contact field) only ever means appending here
+# — see auth_router.py's use of this for the "informational, not a security
+# gate" computation.
+PATIENT_PROFILE_FIELDS_TO_PROMPT = [
+    "email",
+    "phone",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+]
+
+
 class User(Base):
     """A hospital staff account, a patient account, or an emergency-responder
     account. `role` drives what a token can see (see auth.py / rbac.py)."""
@@ -31,23 +45,42 @@ class User(Base):
     # clients force a "you must change your password" screen.
     must_change_password = Column(Boolean, nullable=False, default=False)
 
-    # Self-service (NRIC + DOB) password-reset rate limiting. Persisted
-    # (not in-memory) so it survives process restarts. Only ever touched by
-    # POST /auth/forgot-password; staff-mediated resets via
-    # POST /auth/patients/{id}/issue-account reset these to a clean state.
+    # Vestigial: rate limiting for the old self-service NRIC+DOB
+    # /auth/forgot-password flow, which has been REMOVED and replaced by
+    # the email-OTP reset (otp_* columns below). Left in place (unused by
+    # any endpoint now, just zeroed by _apply_new_password for hygiene)
+    # rather than dropped, since this project's migrations are additive
+    # only (see main.py's _migrate_lightweight) — a destructive column
+    # drop isn't worth the risk against a live seeded DB.
     reset_attempt_count = Column(Integer, nullable=False, default=0)
     reset_locked_until = Column(DateTime, nullable=True)
 
     # POST /auth/login failed-attempt rate limiting/lockout. Deliberately
     # separate columns from reset_attempt_count/reset_locked_until above —
-    # those are scoped to the NRIC+DOB self-service forgot-password flow
-    # only; these track wrong-password attempts against this account's
-    # actual login. Keeping them independent means a user locked out of one
+    # those were scoped to the now-removed NRIC+DOB self-service
+    # forgot-password flow only; these track wrong-password attempts
+    # against this account's actual login. Keeping them independent means
+    # a user locked out of one
     # flow isn't automatically locked out of the other, and vice versa.
     # Persisted (not in-memory) so it survives process restarts and works
     # correctly if the backend ever runs multiple workers.
     login_failed_count = Column(Integer, nullable=False, default=0)
     login_locked_until = Column(DateTime, nullable=True)
+
+    # Password-reset-via-email-OTP state (POST /auth/request-password-reset-otp
+    # and POST /auth/reset-password-with-otp). Only ever the HASH of the
+    # 6-digit code is stored, never the plaintext — mirrors hashed_password.
+    # otp_attempt_count is the *verify* attempt counter (wrong codes against
+    # a live OTP); it is distinct from otp_request_count/otp_request_window_start
+    # below, which rate-limit how often a fresh OTP can be *requested* in the
+    # first place (stops email-bombing a patient's inbox). Both persisted
+    # (not in-memory) so they survive process restarts, same reasoning as
+    # reset_attempt_count/login_failed_count above.
+    otp_code_hash = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime, nullable=True)
+    otp_attempt_count = Column(Integer, nullable=False, default=0)
+    otp_request_count = Column(Integer, nullable=False, default=0)
+    otp_request_window_start = Column(DateTime, nullable=True)
 
     patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
 
@@ -64,6 +97,17 @@ class Patient(Base):
     phone = Column(String, nullable=True)
     senior_citizen_mode = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Patient-owned contact/profile fields, editable via the self-service
+    # PATCH /patients/{id}/profile endpoint. Deliberately separate from
+    # User.email, which stays the internal login-identifier/synthetic-
+    # placeholder field (e.g. "patient-<id>@medibridge.local") and is never
+    # shown to or edited by the patient directly. `email` here is where the
+    # password-reset OTP is actually sent.
+    email = Column(String, nullable=True)
+    emergency_contact_name = Column(String, nullable=True)
+    emergency_contact_phone = Column(String, nullable=True)
+    emergency_contact_relationship = Column(String, nullable=True)
 
     user_account = relationship("User", back_populates="patient", uselist=False, foreign_keys=[User.patient_id])
     conditions = relationship("Condition", back_populates="patient", cascade="all, delete-orphan")
@@ -144,6 +188,13 @@ class ClinicalDocument(Base):
     ai_summary = Column(Text, nullable=True)         # LLM/rule-based summary
     uploaded_by_facility = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    # Local-disk path to the original uploaded file (backend/uploads/{patient_id}/{id}_{filename}),
+    # set by POST /ai/digitise/{patient_id} on a best-effort basis after OCR.
+    # NULL for any document uploaded before this column existed, or if the
+    # disk write failed at upload time -- always check for NULL/missing-file
+    # before assuming GET .../documents/{id}/file will succeed.
+    file_path = Column(String, nullable=True)
 
     patient = relationship("Patient", back_populates="documents")
 

@@ -228,6 +228,60 @@ abstract class AppLocalizations {
   /// **'For patients only. Enter your NRIC and date of birth exactly as they appear on your health record, then choose a new password.'**
   String get forgotPasswordDesc;
 
+  /// No description provided for @forgotPasswordStep1Desc.
+  ///
+  /// In en, this message translates to:
+  /// **'For patients only. Enter your NRIC and, if there\'s an email on file for your account, we\'ll send it a verification code.'**
+  String get forgotPasswordStep1Desc;
+
+  /// No description provided for @sendCodeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send code'**
+  String get sendCodeButton;
+
+  /// No description provided for @otpRequestedGenericSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'If this NRIC has an email on file, a verification code has been sent to it.'**
+  String get otpRequestedGenericSnack;
+
+  /// No description provided for @otpCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get otpCodeLabel;
+
+  /// No description provided for @forgotPasswordStep2Desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code we sent, then choose a new password.'**
+  String get forgotPasswordStep2Desc;
+
+  /// No description provided for @resendCodeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Didn\'t get a code? Resend'**
+  String get resendCodeButton;
+
+  /// No description provided for @resendCodeSentSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'If this NRIC has an email on file, a new verification code has been sent.'**
+  String get resendCodeSentSnack;
+
+  /// No description provided for @useDifferentNricButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a different NRIC'**
+  String get useDifferentNricButton;
+
+  /// No description provided for @requestOtpFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not request a verification code. Check your NRIC or the API base URL in Settings.'**
+  String get requestOtpFailedGeneric;
+
   /// No description provided for @nricLabel.
   ///
   /// In en, this message translates to:
@@ -1067,6 +1121,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Card {uid} — revoked'**
   String nfcCardRevokedLine(String uid);
+
+  /// No description provided for @editProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfileTitle;
+
+  /// No description provided for @readOnlyFieldsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name, date of birth, and NRIC can\'t be changed here. Contact your clinic to correct them.'**
+  String get readOnlyFieldsNote;
+
+  /// No description provided for @fullNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get fullNameLabel;
+
+  /// No description provided for @editableProfileSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Details'**
+  String get editableProfileSectionTitle;
+
+  /// No description provided for @profileEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get profileEmailLabel;
+
+  /// No description provided for @profilePhoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get profilePhoneLabel;
+
+  /// No description provided for @emergencyContactSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency Contact'**
+  String get emergencyContactSectionTitle;
+
+  /// No description provided for @emergencyContactNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency contact name'**
+  String get emergencyContactNameLabel;
+
+  /// No description provided for @emergencyContactPhoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency contact phone'**
+  String get emergencyContactPhoneLabel;
+
+  /// No description provided for @emergencyContactRelationshipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Relationship to you'**
+  String get emergencyContactRelationshipLabel;
+
+  /// No description provided for @saveProfileButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get saveProfileButton;
+
+  /// No description provided for @profileUpdatedSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile has been updated.'**
+  String get profileUpdatedSnack;
+
+  /// No description provided for @profileUpdateFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update your profile. Please try again.'**
+  String get profileUpdateFailedGeneric;
+
+  /// No description provided for @missingProfileBannerText.
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile is missing some details — tap to complete it.'**
+  String get missingProfileBannerText;
+
+  /// No description provided for @dismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get dismiss;
+
+  /// No description provided for @unexpectedErrorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get unexpectedErrorGeneric;
 }
 
 class _AppLocalizationsDelegate

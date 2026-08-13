@@ -76,6 +76,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'For patients only. Enter your NRIC and date of birth exactly as they appear on your health record, then choose a new password.';
 
   @override
+  String get forgotPasswordStep1Desc =>
+      'For patients only. Enter your NRIC and, if there\'s an email on file for your account, we\'ll send it a verification code.';
+
+  @override
+  String get sendCodeButton => 'Send code';
+
+  @override
+  String get otpRequestedGenericSnack =>
+      'If this NRIC has an email on file, a verification code has been sent to it.';
+
+  @override
+  String get otpCodeLabel => 'Verification code';
+
+  @override
+  String get forgotPasswordStep2Desc =>
+      'Enter the 6-digit code we sent, then choose a new password.';
+
+  @override
+  String get resendCodeButton => 'Didn\'t get a code? Resend';
+
+  @override
+  String get resendCodeSentSnack =>
+      'If this NRIC has an email on file, a new verification code has been sent.';
+
+  @override
+  String get useDifferentNricButton => 'Use a different NRIC';
+
+  @override
+  String get requestOtpFailedGeneric =>
+      'Could not request a verification code. Check your NRIC or the API base URL in Settings.';
+
+  @override
   String get nricLabel => 'NRIC';
 
   @override
@@ -550,4 +582,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String nfcCardRevokedLine(String uid) {
     return 'Card $uid — revoked';
   }
+
+  @override
+  String get editProfileTitle => 'Edit Profile';
+
+  @override
+  String get readOnlyFieldsNote =>
+      'Your name, date of birth, and NRIC can\'t be changed here. Contact your clinic to correct them.';
+
+  @override
+  String get fullNameLabel => 'Full name';
+
+  @override
+  String get editableProfileSectionTitle => 'Contact Details';
+
+  @override
+  String get profileEmailLabel => 'Email';
+
+  @override
+  String get profilePhoneLabel => 'Phone';
+
+  @override
+  String get emergencyContactSectionTitle => 'Emergency Contact';
+
+  @override
+  String get emergencyContactNameLabel => 'Emergency contact name';
+
+  @override
+  String get emergencyContactPhoneLabel => 'Emergency contact phone';
+
+  @override
+  String get emergencyContactRelationshipLabel => 'Relationship to you';
+
+  @override
+  String get saveProfileButton => 'Save Changes';
+
+  @override
+  String get profileUpdatedSnack => 'Your profile has been updated.';
+
+  @override
+  String get profileUpdateFailedGeneric =>
+      'Could not update your profile. Please try again.';
+
+  @override
+  String get missingProfileBannerText =>
+      'Your profile is missing some details — tap to complete it.';
+
+  @override
+  String get dismiss => 'Dismiss';
+
+  @override
+  String get unexpectedErrorGeneric =>
+      'Something went wrong. Please try again.';
 }

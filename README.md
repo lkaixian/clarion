@@ -24,7 +24,7 @@ python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install fastapi "uvicorn[standard]" sqlalchemy pydantic[email] \
             "python-jose[cryptography]" "passlib[bcrypt]" bcrypt==4.0.1 \
-            python-multipart qrcode pillow
+            python-multipart qrcode pillow python-dotenv requests
 
 python seed.py                    # creates demo admin/clinician/patient logins
 uvicorn app.main:app --reload --port 8000

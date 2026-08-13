@@ -67,6 +67,59 @@ class PatientProvider extends ChangeNotifier {
     }
   }
 
+  bool isUpdatingProfile = false;
+  String? profileUpdateError;
+
+  /// `PATCH /patients/{id}/profile` — see EditProfileScreen. Only the
+  /// editable contact fields the endpoint returns are folded back into
+  /// [patient] (via [Patient.copyWith]) rather than replacing it outright,
+  /// since the PATCH response is PatientOut-shaped and doesn't include
+  /// conditions/medications/allergies/encounters — replacing [patient]
+  /// wholesale would make those vanish from Home/SeniorHome until the next
+  /// full [loadRecord].
+  Future<bool> updateProfile({
+    required String patientId,
+    String? email,
+    String? phone,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? emergencyContactRelationship,
+  }) async {
+    isUpdatingProfile = true;
+    profileUpdateError = null;
+    notifyListeners();
+    try {
+      final updated = await _api.updatePatientProfile(
+        patientId: patientId,
+        email: email,
+        phone: phone,
+        emergencyContactName: emergencyContactName,
+        emergencyContactPhone: emergencyContactPhone,
+        emergencyContactRelationship: emergencyContactRelationship,
+      );
+      final existing = patient;
+      patient = existing == null
+          ? updated
+          : existing.copyWith(
+              phone: updated.phone,
+              email: updated.email,
+              emergencyContactName: updated.emergencyContactName,
+              emergencyContactPhone: updated.emergencyContactPhone,
+              emergencyContactRelationship: updated.emergencyContactRelationship,
+            );
+      return true;
+    } on ApiException catch (e) {
+      profileUpdateError = e.message;
+      return false;
+    } catch (e) {
+      profileUpdateError = 'Unexpected error: $e';
+      return false;
+    } finally {
+      isUpdatingProfile = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> issueEmergencyCard({
     required String patientId,
     required List<String> scope,

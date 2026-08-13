@@ -6,8 +6,10 @@ import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/missing_profile_banner.dart';
 import '../widgets/section_card.dart';
 import 'audit_log_screen.dart';
+import 'edit_profile_screen.dart';
 import 'emergency_scanner_screen.dart';
 import 'emergency_screen.dart';
 import 'reminders_screen.dart';
@@ -21,6 +23,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Session-only dismiss (no persistence needed per spec) — resets if the
+  // user navigates away and back, which is fine for a purely informational
+  // nudge.
+  bool _profileBannerDismissed = false;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +69,15 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () =>
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyScannerScreen())),
           ),
+          // Only meaningful for patient-role accounts — staff/clinician
+          // accounts don't have a Patient record of their own to edit here.
+          if (auth.user?.role == 'patient')
+            IconButton(
+              tooltip: l10n.editProfileTitle,
+              icon: const Icon(Icons.person_outline),
+              onPressed: () =>
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+            ),
           IconButton(
             tooltip: l10n.apiSettingsTooltip,
             icon: const Icon(Icons.settings_outlined),
@@ -119,6 +135,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+              if (!_profileBannerDismissed && auth.missingProfileFields.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                MissingProfileBanner(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                  ),
+                  onDismiss: () => setState(() => _profileBannerDismissed = true),
+                ),
+              ],
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,

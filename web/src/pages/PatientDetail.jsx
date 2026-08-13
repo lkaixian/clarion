@@ -6,8 +6,15 @@ import {
   revokeEmergencyCard, getCurrentCardStatus,
   addCondition, addMedication, addAllergy, addEncounter, getAuditLog,
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
-  issuePatientAccount,
+  issuePatientAccount, updateOwnProfile, refreshCurrentUser,
 } from "../api/client";
+
+const PROFILE_FIELD_LABELS = {
+  email: "Contact email",
+  phone: "Phone number",
+  emergency_contact_name: "Emergency contact name",
+  emergency_contact_phone: "Emergency contact phone",
+};
 
 // How often to re-check "is there still a live QR card, and is it the one
 // we're displaying?" — this is what makes a revoke/reissue done *elsewhere*
@@ -43,6 +50,18 @@ export default function PatientDetail() {
   // actions above which clinicians *are* allowed to use. isStaff alone
   // would show this button to roles that always 403 on click.
   const canManageLogins = ["admin", "records_officer"].includes(getCurrentUser()?.role);
+  // Patient viewing their own record — the only case profile self-editing
+  // (and the missing-data nudge) applies. A patient can't reach anyone
+  // else's /patients/:id at all (backend scopes GET /patients/{id} to
+  // staff or the matching patient_id), but double-check here too rather
+  // than assume that's the only guard.
+  const currentUser = getCurrentUser();
+  const isOwnRecord = currentUser?.role === "patient" && currentUser?.patient_id === id;
+  const [missingProfileFields, setMissingProfileFields] = useState(currentUser?.missing_profile_fields || []);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [patient, setPatient] = useState(null);
   const [brief, setBrief] = useState(null);
   const [interactions, setInteractions] = useState(null);
@@ -178,6 +197,38 @@ export default function PatientDetail() {
     }
   }
 
+  function startEditingProfile() {
+    setProfileForm({
+      email: patient.email || "",
+      phone: patient.phone || "",
+      emergency_contact_name: patient.emergency_contact_name || "",
+      emergency_contact_phone: patient.emergency_contact_phone || "",
+      emergency_contact_relationship: patient.emergency_contact_relationship || "",
+    });
+    setProfileError("");
+    setEditingProfile(true);
+  }
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const updated = await updateOwnProfile(id, profileForm);
+      setPatient((prev) => ({ ...prev, ...updated }));
+      setEditingProfile(false);
+      // Re-fetch so missing_profile_fields (computed at login/me time)
+      // reflects whatever was just filled in, without requiring a fresh
+      // login.
+      const me = await refreshCurrentUser();
+      setMissingProfileFields(me.missing_profile_fields || []);
+    } catch (err) {
+      setProfileError(err?.response?.data?.detail || "Failed to save. Check your details and try again.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function revokeNfc(nfcUid) {
     if (!confirm(`Revoke NFC card ${nfcUid}? This cannot be undone from here — you'd need to re-register it.`)) return;
     await revokeNfcCard(nfcUid);
@@ -211,6 +262,66 @@ export default function PatientDetail() {
         <h1 className="text-2xl font-bold text-slate-800">{patient.full_name}</h1>
         <p className="text-sm text-slate-500">DOB {patient.date_of_birth} · Blood type {patient.blood_type || "unknown"}</p>
       </div>
+
+      {isOwnRecord && missingProfileFields.length > 0 && !editingProfile && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-amber-800">
+            Your profile is missing: {missingProfileFields.map((f) => PROFILE_FIELD_LABELS[f] || f).join(", ")}.
+          </p>
+          <button onClick={startEditingProfile} className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg whitespace-nowrap">
+            Complete profile
+          </button>
+        </div>
+      )}
+
+      {isOwnRecord && (
+        <Section title="My Contact Info" action={
+          !editingProfile && <button onClick={startEditingProfile} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">Edit</button>
+        }>
+          <p className="text-xs text-slate-400 mb-3">
+            Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
+          </p>
+          {editingProfile ? (
+            <form onSubmit={saveProfile} className="space-y-3">
+              {profileError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{profileError}</div>}
+              {[
+                ["email", "Contact email", "email"],
+                ["phone", "Phone number", "tel"],
+                ["emergency_contact_name", "Emergency contact name", "text"],
+                ["emergency_contact_phone", "Emergency contact phone", "tel"],
+                ["emergency_contact_relationship", "Relationship", "text"],
+              ].map(([key, label, type]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                  <input
+                    className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type={type}
+                    value={profileForm[key]}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <button disabled={profileSaving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+                  {profileSaving ? "Saving..." : "Save"}
+                </button>
+                <button type="button" onClick={() => setEditingProfile(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="text-sm text-slate-700 space-y-1">
+              <p>Email: {patient.email || <span className="text-slate-400">not set</span>}</p>
+              <p>Phone: {patient.phone || <span className="text-slate-400">not set</span>}</p>
+              <p>Emergency contact: {patient.emergency_contact_name
+                ? `${patient.emergency_contact_name} (${patient.emergency_contact_relationship || "relationship not set"}) — ${patient.emergency_contact_phone || "no phone on file"}`
+                : <span className="text-slate-400">not set</span>}
+              </p>
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title="AI Clinical Handover Brief" action={
         isStaff ? (

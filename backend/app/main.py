@@ -2,8 +2,18 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Loaded as early as possible, before anything (email_service in
+# particular) reads MAILGUN_* / other env vars, so a local backend/.env
+# file works the same as real environment variables in a deployment. A
+# missing .env is fine -- load_dotenv() just no-ops.
+load_dotenv()
+
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import inspect, text
 
 from . import models
@@ -61,6 +71,14 @@ def _migrate_lightweight():
         existing_user_columns = {col["name"] for col in inspector.get_columns("users")}
         existing_user_indexes = {idx["name"] for idx in inspector.get_indexes("users")}
 
+    existing_patient_columns = set()
+    if "patients" in inspector.get_table_names():
+        existing_patient_columns = {col["name"] for col in inspector.get_columns("patients")}
+
+    existing_document_columns = set()
+    if "clinical_documents" in inspector.get_table_names():
+        existing_document_columns = {col["name"] for col in inspector.get_columns("clinical_documents")}
+
     pending = (
         ("emergency_tokens" in inspector.get_table_names() and (
             "nfc_uid" not in existing_columns or "registered_by" not in existing_columns
@@ -72,6 +90,20 @@ def _migrate_lightweight():
             or "login_failed_count" not in existing_user_columns
             or "login_locked_until" not in existing_user_columns
             or "ix_users_patient_id" not in existing_user_indexes
+            or "otp_code_hash" not in existing_user_columns
+            or "otp_expires_at" not in existing_user_columns
+            or "otp_attempt_count" not in existing_user_columns
+            or "otp_request_count" not in existing_user_columns
+            or "otp_request_window_start" not in existing_user_columns
+        ))
+        or ("patients" in inspector.get_table_names() and (
+            "email" not in existing_patient_columns
+            or "emergency_contact_name" not in existing_patient_columns
+            or "emergency_contact_phone" not in existing_patient_columns
+            or "emergency_contact_relationship" not in existing_patient_columns
+        ))
+        or ("clinical_documents" in inspector.get_table_names() and (
+            "file_path" not in existing_document_columns
         ))
     )
     if pending:
@@ -121,6 +153,52 @@ def _migrate_lightweight():
                 conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS ix_users_patient_id ON users (patient_id)"
                 ))
+            # Added for the email-OTP password reset flow (POST
+            # /auth/request-password-reset-otp, POST
+            # /auth/reset-password-with-otp), replacing the old NRIC+DOB
+            # single-step /auth/forgot-password. Only ever the HASH of the
+            # OTP is stored (otp_code_hash), never the plaintext code.
+            if "otp_code_hash" not in existing_user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN otp_code_hash VARCHAR"))
+            if "otp_expires_at" not in existing_user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN otp_expires_at DATETIME"))
+            if "otp_attempt_count" not in existing_user_columns:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN otp_attempt_count INTEGER NOT NULL DEFAULT 0"
+                ))
+            if "otp_request_count" not in existing_user_columns:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN otp_request_count INTEGER NOT NULL DEFAULT 0"
+                ))
+            if "otp_request_window_start" not in existing_user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN otp_request_window_start DATETIME"))
+
+    # Added for patient self-service profile editing (PATCH
+    # /patients/{id}/profile). All nullable — additive/safe ALTER TABLE
+    # against an already-seeded medibridge.db. `email` here is the
+    # patient's own contact address (where the password-reset OTP is
+    # sent), distinct from users.email which stays the internal
+    # login-identifier field.
+    if "patients" in inspector.get_table_names():
+        with engine.begin() as conn:
+            if "email" not in existing_patient_columns:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN email VARCHAR"))
+            if "emergency_contact_name" not in existing_patient_columns:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_name VARCHAR"))
+            if "emergency_contact_phone" not in existing_patient_columns:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_phone VARCHAR"))
+            if "emergency_contact_relationship" not in existing_patient_columns:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_relationship VARCHAR"))
+
+    # Added for original-file retrieval of uploaded clinical documents (GET
+    # /patients/{id}/documents/{id}/file) -- see ClinicalDocument.file_path.
+    # Nullable/additive; existing rows just get file_path=NULL (their
+    # original file was never persisted -- only OCR'd text is available for
+    # those, same as before this change).
+    if "clinical_documents" in inspector.get_table_names():
+        with engine.begin() as conn:
+            if "file_path" not in existing_document_columns:
+                conn.execute(text("ALTER TABLE clinical_documents ADD COLUMN file_path VARCHAR"))
 
 
 _migrate_lightweight()
@@ -138,6 +216,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """FastAPI's default handler for a pydantic validation failure returns
+    `{"detail": [{"type": ..., "loc": [...], "msg": "Value error, ...", ...}]}`
+    -- a list of objects. Every other error in this API returns
+    `{"detail": "<plain string>"}`, and every client (mobile's
+    ApiException, web's `e?.response?.data?.detail`) expects/displays a
+    plain string, so this one class of error (any pydantic field_validator
+    failure -- password length being the case that got reported, but this
+    applies app-wide to any current/future validator) rendered as raw
+    JSON/junk in the UI instead of a readable message.
+
+    Fixed centrally here rather than per-field: take the first error, strip
+    pydantic's "Value error, " prefix (added automatically for a
+    ValueError raised inside a field_validator) if present, and return a
+    single clean string at 422 -- same shape as every other error response
+    in this API.
+    """
+    first_error = exc.errors()[0]
+    message = str(first_error.get("msg", "Invalid request."))
+    prefix = "Value error, "
+    if message.startswith(prefix):
+        message = message[len(prefix):]
+    return JSONResponse(status_code=422, content={"detail": message})
+
 
 app.include_router(auth_router.router)
 app.include_router(patients.router)

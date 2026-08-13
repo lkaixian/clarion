@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
 import PatientList from "./pages/PatientList";
 import PatientDetail from "./pages/PatientDetail";
 import { getCurrentUser } from "./api/client";
@@ -26,6 +27,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/patients" element={<Protected><StaffOnly><PatientList /></StaffOnly></Protected>} />
         <Route path="/patients/:id" element={<Protected><PatientDetail /></Protected>} />
       </Routes>

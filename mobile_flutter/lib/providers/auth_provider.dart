@@ -35,6 +35,11 @@ class AuthProvider extends ChangeNotifier {
   /// Home/SeniorHome. Cleared locally by [changePassword] on success.
   bool get mustChangePassword => user?.mustChangePassword ?? false;
 
+  /// Informational (see MBUser.missingProfileFields) — never used to block
+  /// navigation, only to drive the dismissible "complete your profile"
+  /// banner on Home/SeniorHome.
+  List<String> get missingProfileFields => user?.missingProfileFields ?? [];
+
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     prefersSeniorMode = prefs.getBool(_seniorPrefKey) ?? false;
@@ -102,6 +107,23 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       isBusy = false;
       notifyListeners();
+    }
+  }
+
+  /// Re-fetches `GET /auth/me` and refreshes the in-memory + cached user —
+  /// used after EditProfileScreen saves changes so `missingProfileFields`
+  /// (and anything else `/auth/me` reports) reflects the update without
+  /// requiring a fresh login. Silently does nothing on failure: this is a
+  /// best-effort refresh, not something worth surfacing an error for (the
+  /// profile edit itself already succeeded by the time this is called).
+  Future<void> refreshUser() async {
+    try {
+      final json = await _api.getMe();
+      user = MBUser.fromJson(json);
+      await _tokenStorage.saveUser(json);
+      notifyListeners();
+    } catch (_) {
+      // Best-effort only — see doc comment above.
     }
   }
 

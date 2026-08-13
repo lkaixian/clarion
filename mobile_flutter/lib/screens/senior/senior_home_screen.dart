@@ -20,6 +20,14 @@ import 'senior_medications_screen.dart';
 /// one tap away. No checkboxes, no scope pickers, no secondary reading —
 /// every decision the standard app asks of the user has been removed or
 /// defaulted here.
+///
+/// Deliberately does NOT show the "complete your profile"
+/// missing-profile-fields banner/nudge that HomeScreen shows (see
+/// MissingProfileBanner) — it's purely informational, and adding a third
+/// thing to read/dismiss here would work against this screen's whole
+/// "no secondary reading" design goal for a senior citizen / caregiver
+/// under stress. Editing contact details is also not exposed from this
+/// hub at all (no Settings-equivalent screen here) for the same reason.
 class SeniorHomeScreen extends StatefulWidget {
   const SeniorHomeScreen({super.key});
 

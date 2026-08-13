@@ -61,24 +61,45 @@ class ApiClient {
     });
   }
 
-  /// `POST /auth/forgot-password` — public (no bearer token needed, and
-  /// none is sent even if one happens to be cached — this is reachable
-  /// straight from the pre-login LoginScreen). Patient-only, DOB-based
-  /// reset: the backend verifies `national_id` + `date_of_birth` match a
-  /// patient record before honouring `new_password`. `dateOfBirth` must be
-  /// an ISO date string ("yyyy-MM-dd"), same format Patient.dateOfBirth
-  /// already uses.
-  Future<void> forgotPassword({
+  /// `POST /auth/request-password-reset-otp` — public (no bearer token
+  /// needed, and none is sent even if one happens to be cached — this is
+  /// reachable straight from the pre-login LoginScreen). Step 1 of the
+  /// two-step, DOB-free self-service reset flow: the backend emails a
+  /// 6-digit OTP to whatever email is on file for this NRIC, if any.
+  /// `nationalId` is passed through exactly as typed (with or without
+  /// dashes) — the backend normalizes it, so this deliberately does no
+  /// client-side dash stripping/validation. The response is always the
+  /// same generic shape regardless of whether the NRIC/email actually
+  /// exists (anti-enumeration by design) — callers should treat any
+  /// success here as "if this account has an email on file, a code was
+  /// sent", not as confirmation the NRIC is real. May also throw
+  /// [ApiException] for a rate-limit error if requested too often; callers
+  /// should just surface [ApiException.message] generically.
+  Future<void> requestPasswordResetOtp({required String nationalId}) {
+    return _guard(() async {
+      await _dio.post<Map<String, dynamic>>(
+        '/auth/request-password-reset-otp',
+        data: {'national_id': nationalId},
+      );
+    });
+  }
+
+  /// `POST /auth/reset-password-with-otp` — public (no bearer token).
+  /// Step 2: verifies `otpCode` against the code most recently requested
+  /// for `nationalId`, and if valid, sets `newPassword`. A wrong/expired
+  /// code, or too many wrong attempts, surfaces as a generic
+  /// [ApiException] with a plain-string message from the backend.
+  Future<void> resetPasswordWithOtp({
     required String nationalId,
-    required String dateOfBirth,
+    required String otpCode,
     required String newPassword,
   }) {
     return _guard(() async {
       await _dio.post<Map<String, dynamic>>(
-        '/auth/forgot-password',
+        '/auth/reset-password-with-otp',
         data: {
           'national_id': nationalId,
-          'date_of_birth': dateOfBirth,
+          'otp_code': otpCode,
           'new_password': newPassword,
         },
       );
@@ -115,6 +136,44 @@ class ApiClient {
   Future<Patient> getPatient(String patientId) {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>('/patients/$patientId');
+      return Patient.fromJson(response.data!);
+    });
+  }
+
+  /// `PATCH /patients/{patient_id}/profile` — authenticated; a patient may
+  /// only edit their own record (enforced server-side). Accepts any subset
+  /// of the contact/profile fields below — full name, date of birth, and
+  /// NRIC are deliberately NOT accepted here (immutable via self-service,
+  /// see EditProfileScreen's read-only fields). Only the parameters that
+  /// are non-null are sent, so callers can update just one field at a time
+  /// if they want; pass an empty string (not null) to explicitly clear a
+  /// field — EXCEPT `email`, which the backend validates as `EmailStr`
+  /// (see backend/app/schemas.py::PatientProfileUpdate) and therefore
+  /// rejects an empty string for with a 422; a blank/empty `email` is
+  /// always omitted from the request body here regardless of whether the
+  /// caller passed `null` or `''`, since there is no supported way to
+  /// clear it back to blank via this endpoint.
+  Future<Patient> updatePatientProfile({
+    required String patientId,
+    String? email,
+    String? phone,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? emergencyContactRelationship,
+  }) {
+    return _guard(() async {
+      final body = <String, dynamic>{
+        if (email != null && email.trim().isNotEmpty) 'email': email,
+        if (phone != null) 'phone': phone,
+        if (emergencyContactName != null) 'emergency_contact_name': emergencyContactName,
+        if (emergencyContactPhone != null) 'emergency_contact_phone': emergencyContactPhone,
+        if (emergencyContactRelationship != null)
+          'emergency_contact_relationship': emergencyContactRelationship,
+      };
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/patients/$patientId/profile',
+        data: body,
+      );
       return Patient.fromJson(response.data!);
     });
   }

@@ -73,6 +73,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get forgotPasswordDesc => '仅限病患使用。请输入与您健康记录一致的身份证号码及出生日期，然后设置新密码。';
 
   @override
+  String get forgotPasswordStep1Desc =>
+      '仅限病患使用。请输入您的身份证号码，如果您的账号已登记电邮地址，我们会将验证码发送到该邮箱。';
+
+  @override
+  String get sendCodeButton => '发送验证码';
+
+  @override
+  String get otpRequestedGenericSnack => '如果该身份证号码已登记电邮地址，验证码已发送至该邮箱。';
+
+  @override
+  String get otpCodeLabel => '验证码';
+
+  @override
+  String get forgotPasswordStep2Desc => '请输入我们发送的6位数验证码，然后设置新密码。';
+
+  @override
+  String get resendCodeButton => '没收到验证码？重新发送';
+
+  @override
+  String get resendCodeSentSnack => '如果该身份证号码已登记电邮地址，新的验证码已发送。';
+
+  @override
+  String get useDifferentNricButton => '使用其他身份证号码';
+
+  @override
+  String get requestOtpFailedGeneric => '无法请求验证码。请检查您的身份证号码，或在设置中检查 API 地址。';
+
+  @override
   String get nricLabel => '身份证号码';
 
   @override
@@ -529,4 +557,52 @@ class AppLocalizationsZh extends AppLocalizations {
   String nfcCardRevokedLine(String uid) {
     return '卡片 $uid — 已撤销';
   }
+
+  @override
+  String get editProfileTitle => '编辑个人资料';
+
+  @override
+  String get readOnlyFieldsNote => '您的姓名、出生日期和身份证号码无法在此更改。如需更正，请联系您的诊所。';
+
+  @override
+  String get fullNameLabel => '全名';
+
+  @override
+  String get editableProfileSectionTitle => '联系方式';
+
+  @override
+  String get profileEmailLabel => '电子邮件';
+
+  @override
+  String get profilePhoneLabel => '电话';
+
+  @override
+  String get emergencyContactSectionTitle => '紧急联系人';
+
+  @override
+  String get emergencyContactNameLabel => '紧急联系人姓名';
+
+  @override
+  String get emergencyContactPhoneLabel => '紧急联系人电话';
+
+  @override
+  String get emergencyContactRelationshipLabel => '与您的关系';
+
+  @override
+  String get saveProfileButton => '保存更改';
+
+  @override
+  String get profileUpdatedSnack => '您的个人资料已更新。';
+
+  @override
+  String get profileUpdateFailedGeneric => '无法更新您的个人资料。请再试一次。';
+
+  @override
+  String get missingProfileBannerText => '您的个人资料尚未完善——点按以完善资料。';
+
+  @override
+  String get dismiss => '关闭';
+
+  @override
+  String get unexpectedErrorGeneric => '出现问题，请再试一次。';
 }

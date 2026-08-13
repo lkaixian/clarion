@@ -79,6 +79,38 @@ class AppLocalizationsTa extends AppLocalizations {
       'நோயாளிகளுக்கு மட்டும். உங்கள் சுகாதார பதிவில் உள்ளபடி உங்கள் அடையாள அட்டை எண் மற்றும் பிறந்த தேதியை உள்ளிட்டு, புதிய கடவுச்சொல்லைத் தேர்ந்தெடுக்கவும்.';
 
   @override
+  String get forgotPasswordStep1Desc =>
+      'நோயாளிகளுக்கு மட்டும். உங்கள் அடையாள அட்டை எண்ணை உள்ளிடவும்; உங்கள் கணக்கில் மின்னஞ்சல் பதிவு செய்யப்பட்டிருந்தால், அதற்கு சரிபார்ப்பு குறியீட்டை அனுப்புவோம்.';
+
+  @override
+  String get sendCodeButton => 'குறியீட்டை அனுப்பு';
+
+  @override
+  String get otpRequestedGenericSnack =>
+      'இந்த அடையாள அட்டை எண்ணிற்கு மின்னஞ்சல் பதிவு செய்யப்பட்டிருந்தால், சரிபார்ப்பு குறியீடு அனுப்பப்பட்டுள்ளது.';
+
+  @override
+  String get otpCodeLabel => 'சரிபார்ப்பு குறியீடு';
+
+  @override
+  String get forgotPasswordStep2Desc =>
+      'நாங்கள் அனுப்பிய 6 இலக்க குறியீட்டை உள்ளிட்டு, புதிய கடவுச்சொல்லைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get resendCodeButton => 'குறியீடு கிடைக்கவில்லையா? மீண்டும் அனுப்பு';
+
+  @override
+  String get resendCodeSentSnack =>
+      'இந்த அடையாள அட்டை எண்ணிற்கு மின்னஞ்சல் பதிவு செய்யப்பட்டிருந்தால், புதிய சரிபார்ப்பு குறியீடு அனுப்பப்பட்டுள்ளது.';
+
+  @override
+  String get useDifferentNricButton => 'வேறு அடையாள அட்டை எண்ணைப் பயன்படுத்து';
+
+  @override
+  String get requestOtpFailedGeneric =>
+      'சரிபார்ப்பு குறியீட்டைக் கோர முடியவில்லை. உங்கள் அடையாள அட்டை எண் அல்லது அமைப்புகளில் உள்ள API முகவரியை சரிபார்க்கவும்.';
+
+  @override
   String get nricLabel => 'அடையாள அட்டை எண்';
 
   @override
@@ -557,4 +589,56 @@ class AppLocalizationsTa extends AppLocalizations {
   String nfcCardRevokedLine(String uid) {
     return 'அட்டை $uid — ரத்து செய்யப்பட்டது';
   }
+
+  @override
+  String get editProfileTitle => 'சுயவிவரத்தைத் திருத்து';
+
+  @override
+  String get readOnlyFieldsNote =>
+      'உங்கள் பெயர், பிறந்த தேதி, மற்றும் அடையாள அட்டை எண்ணை இங்கே மாற்ற முடியாது. இவற்றைத் திருத்த உங்கள் மருத்துவமனையைத் தொடர்பு கொள்ளவும்.';
+
+  @override
+  String get fullNameLabel => 'முழுப் பெயர்';
+
+  @override
+  String get editableProfileSectionTitle => 'தொடர்பு விவரங்கள்';
+
+  @override
+  String get profileEmailLabel => 'மின்னஞ்சல்';
+
+  @override
+  String get profilePhoneLabel => 'தொலைபேசி';
+
+  @override
+  String get emergencyContactSectionTitle => 'அவசர தொடர்பு';
+
+  @override
+  String get emergencyContactNameLabel => 'அவசர தொடர்பு பெயர்';
+
+  @override
+  String get emergencyContactPhoneLabel => 'அவசர தொடர்பு தொலைபேசி';
+
+  @override
+  String get emergencyContactRelationshipLabel => 'உங்களுடனான உறவு';
+
+  @override
+  String get saveProfileButton => 'மாற்றங்களைச் சேமி';
+
+  @override
+  String get profileUpdatedSnack => 'உங்கள் சுயவிவரம் புதுப்பிக்கப்பட்டது.';
+
+  @override
+  String get profileUpdateFailedGeneric =>
+      'உங்கள் சுயவிவரத்தைப் புதுப்பிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get missingProfileBannerText =>
+      'உங்கள் சுயவிவரத்தில் சில விவரங்கள் இல்லை — அதை முடிக்க தட்டவும்.';
+
+  @override
+  String get dismiss => 'நிராகரி';
+
+  @override
+  String get unexpectedErrorGeneric =>
+      'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.';
 }

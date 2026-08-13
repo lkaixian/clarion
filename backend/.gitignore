@@ -51,3 +51,11 @@ medibridge.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Original files uploaded via POST /ai/digitise/{patient_id}, persisted to
+# disk so GET /patients/{id}/documents/{id}/file can serve them back. Real
+# (potentially sensitive) patient documents -- never committed.
+uploads/
+
+# Pre-migration SQLite backups (see main.py's _backup_sqlite_file_before_migration)
+backups/

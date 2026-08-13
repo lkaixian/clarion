@@ -152,8 +152,11 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       if (!mounted) return;
       setState(() => _error = e.message);
     } catch (e) {
+      // Deliberately not e.toString() here — never interpolate a raw
+      // error object into user-facing text (see api_exception.dart's
+      // hardening against the same class of problem for backend errors).
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(() => _error = AppLocalizations.of(context).unexpectedErrorGeneric);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

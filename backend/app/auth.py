@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -18,17 +20,38 @@ SECRET_KEY = "medibridge-dev-secret-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
 
-# Self-service password-reset (POST /auth/forgot-password) lockout policy.
-RESET_MAX_ATTEMPTS = 5
-RESET_LOCKOUT_MINUTES = 20
-
-# POST /auth/login lockout policy. Mirrors the forgot-password thresholds
-# above (same "reasonable human typo tolerance vs. brute-force resistance"
-# tradeoff) — 5 wrong passwords in a row is well past plausible fat-fingering
+# POST /auth/login lockout policy (same "reasonable human typo tolerance vs.
+# brute-force resistance" tradeoff as the email-OTP reset limits below)
+# — 5 wrong passwords in a row is well past plausible fat-fingering
 # (esp. for a temp password patients type once) but still cheap for a
 # legitimate user to recover from after a 20 minute cooldown.
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 20
+
+# Email-OTP password reset (POST /auth/request-password-reset-otp,
+# POST /auth/reset-password-with-otp) policy. Two independent limits, same
+# "persist on the row, survive restarts" discipline as the lockout columns
+# above:
+#   - OTP_MAX_VERIFY_ATTEMPTS: wrong-code guesses against one live OTP.
+#     Exceeding it invalidates that OTP outright (must request a fresh one)
+#     rather than extending a cooldown indefinitely.
+#   - OTP_MAX_REQUESTS_PER_WINDOW / OTP_REQUEST_WINDOW_MINUTES: how many
+#     *new* OTPs can be requested for one NRIC in a rolling window, so an
+#     attacker can't email-bomb a patient's inbox by repeatedly hitting
+#     request-password-reset-otp.
+OTP_LENGTH = 6
+OTP_EXPIRY_MINUTES = 10
+OTP_MAX_VERIFY_ATTEMPTS = 5
+OTP_MAX_REQUESTS_PER_WINDOW = 3
+OTP_REQUEST_WINDOW_MINUTES = 15
+
+# HMAC key for hashing OTP codes at rest -- deliberately NOT bcrypt
+# (pwd_context.hash below): bcrypt is tuned to be slow, which is the right
+# tradeoff for a long-lived login password but wasted cost for a 6-digit,
+# 10-minute-lived, rate-limited code. A keyed HMAC-SHA256 is fast, fixed
+# time-cost, and just as unrecoverable without this key. Same
+# demo-appropriate secret-management caveat as SECRET_KEY above.
+_OTP_HMAC_KEY = b"medibridge-dev-otp-hmac-key-change-me"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -45,6 +68,23 @@ def generate_temp_password(length: int = 14) -> str:
     random/uuid4). Used both when staff issue a brand-new patient login and
     when staff regenerate/reset an existing one."""
     return "".join(secrets.choice(_TEMP_PASSWORD_ALPHABET) for _ in range(length))
+
+
+def generate_otp_code(length: int = OTP_LENGTH) -> str:
+    """Cryptographically random numeric OTP (secrets module, not random).
+    Zero-padded so e.g. "004821" is a valid 6-digit code, not "4821"."""
+    return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+def hash_otp_code(code: str) -> str:
+    """Keyed HMAC-SHA256 hex digest -- see _OTP_HMAC_KEY comment above for
+    why this isn't bcrypt. Only ever the hash is persisted (User.otp_code_hash);
+    the plaintext code exists only transiently in memory to email it out."""
+    return hmac.new(_OTP_HMAC_KEY, code.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verify_otp_code(code: str, code_hash: str) -> bool:
+    return hmac.compare_digest(hash_otp_code(code), code_hash)
 
 
 def verify_password(plain: str, hashed: str) -> bool:

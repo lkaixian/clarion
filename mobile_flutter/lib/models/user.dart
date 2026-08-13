@@ -12,6 +12,16 @@ class MBUser {
   // their own password. Defaults to false so older cached user JSON
   // (saved before the backend added this field) still parses fine.
   final bool mustChangePassword;
+  // Informational only (not a hard gate like mustChangePassword) — a list
+  // of PatientOut-side field names (e.g. "email", "phone",
+  // "emergency_contact_name", "emergency_contact_phone") still blank on
+  // this patient's profile. Empty for non-patient roles or a patient with
+  // a complete profile. Drives the dismissible "complete your profile"
+  // banner on Home/SeniorHome — see AuthProvider.missingProfileFields.
+  // Defaults to empty so older cached user JSON (saved before the backend
+  // added this field) still parses fine, same reasoning as
+  // mustChangePassword above.
+  final List<String> missingProfileFields;
 
   const MBUser({
     required this.id,
@@ -21,6 +31,7 @@ class MBUser {
     this.facility,
     this.patientId,
     this.mustChangePassword = false,
+    this.missingProfileFields = const [],
   });
 
   factory MBUser.fromJson(Map<String, dynamic> json) => MBUser(
@@ -31,9 +42,12 @@ class MBUser {
         facility: json['facility'] as String?,
         patientId: json['patient_id'] as String?,
         mustChangePassword: json['must_change_password'] as bool? ?? false,
+        missingProfileFields: (json['missing_profile_fields'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .toList(),
       );
 
-  MBUser copyWith({bool? mustChangePassword}) => MBUser(
+  MBUser copyWith({bool? mustChangePassword, List<String>? missingProfileFields}) => MBUser(
         id: id,
         email: email,
         fullName: fullName,
@@ -41,6 +55,7 @@ class MBUser {
         facility: facility,
         patientId: patientId,
         mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+        missingProfileFields: missingProfileFields ?? this.missingProfileFields,
       );
 
   Map<String, dynamic> toJson() => {
@@ -51,5 +66,6 @@ class MBUser {
         'facility': facility,
         'patient_id': patientId,
         'must_change_password': mustChangePassword,
+        'missing_profile_fields': missingProfileFields,
       };
 }

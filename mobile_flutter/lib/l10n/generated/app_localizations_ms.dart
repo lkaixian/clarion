@@ -78,6 +78,38 @@ class AppLocalizationsMs extends AppLocalizations {
       'Hanya untuk pesakit. Masukkan No. Kad Pengenalan dan tarikh lahir anda seperti yang tertera pada rekod kesihatan anda, kemudian pilih kata laluan baharu.';
 
   @override
+  String get forgotPasswordStep1Desc =>
+      'Hanya untuk pesakit. Masukkan No. Kad Pengenalan anda dan, jika terdapat e-mel dalam rekod akaun anda, kami akan menghantar kod pengesahan kepadanya.';
+
+  @override
+  String get sendCodeButton => 'Hantar kod';
+
+  @override
+  String get otpRequestedGenericSnack =>
+      'Jika No. Kad Pengenalan ini mempunyai e-mel dalam rekod, kod pengesahan telah dihantar kepadanya.';
+
+  @override
+  String get otpCodeLabel => 'Kod pengesahan';
+
+  @override
+  String get forgotPasswordStep2Desc =>
+      'Masukkan kod 6 digit yang kami hantar, kemudian pilih kata laluan baharu.';
+
+  @override
+  String get resendCodeButton => 'Tidak menerima kod? Hantar semula';
+
+  @override
+  String get resendCodeSentSnack =>
+      'Jika No. Kad Pengenalan ini mempunyai e-mel dalam rekod, kod pengesahan baharu telah dihantar.';
+
+  @override
+  String get useDifferentNricButton => 'Guna No. Kad Pengenalan lain';
+
+  @override
+  String get requestOtpFailedGeneric =>
+      'Tidak dapat meminta kod pengesahan. Semak No. Kad Pengenalan anda atau alamat asas API dalam Tetapan.';
+
+  @override
   String get nricLabel => 'No. Kad Pengenalan';
 
   @override
@@ -553,4 +585,55 @@ class AppLocalizationsMs extends AppLocalizations {
   String nfcCardRevokedLine(String uid) {
     return 'Kad $uid — dibatalkan';
   }
+
+  @override
+  String get editProfileTitle => 'Sunting Profil';
+
+  @override
+  String get readOnlyFieldsNote =>
+      'Nama, tarikh lahir, dan No. Kad Pengenalan anda tidak boleh diubah di sini. Hubungi klinik anda untuk membetulkannya.';
+
+  @override
+  String get fullNameLabel => 'Nama penuh';
+
+  @override
+  String get editableProfileSectionTitle => 'Butiran Hubungan';
+
+  @override
+  String get profileEmailLabel => 'E-mel';
+
+  @override
+  String get profilePhoneLabel => 'Telefon';
+
+  @override
+  String get emergencyContactSectionTitle => 'Kenalan Kecemasan';
+
+  @override
+  String get emergencyContactNameLabel => 'Nama kenalan kecemasan';
+
+  @override
+  String get emergencyContactPhoneLabel => 'Telefon kenalan kecemasan';
+
+  @override
+  String get emergencyContactRelationshipLabel => 'Hubungan dengan anda';
+
+  @override
+  String get saveProfileButton => 'Simpan Perubahan';
+
+  @override
+  String get profileUpdatedSnack => 'Profil anda telah dikemas kini.';
+
+  @override
+  String get profileUpdateFailedGeneric =>
+      'Tidak dapat mengemas kini profil anda. Sila cuba lagi.';
+
+  @override
+  String get missingProfileBannerText =>
+      'Profil anda belum lengkap — ketik untuk melengkapkannya.';
+
+  @override
+  String get dismiss => 'Tolak';
+
+  @override
+  String get unexpectedErrorGeneric => 'Sesuatu tidak kena. Sila cuba lagi.';
 }

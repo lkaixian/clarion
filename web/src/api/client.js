@@ -33,6 +33,15 @@ export function getCurrentUser() {
   return raw ? JSON.parse(raw) : null;
 }
 
+// Re-fetches the current user (e.g. after a profile edit changes
+// missing_profile_fields) and refreshes the cached copy so getCurrentUser()
+// reflects it without requiring a fresh login.
+export async function refreshCurrentUser() {
+  const { data } = await client.get("/auth/me");
+  localStorage.setItem("mb_user", JSON.stringify(data));
+  return data;
+}
+
 export const listPatients = () => client.get("/patients").then((r) => r.data);
 export const createPatient = (payload) => client.post("/patients", payload).then((r) => r.data);
 export const getPatient = (id) => client.get(`/patients/${id}`).then((r) => r.data);
@@ -78,5 +87,24 @@ export const revokeNfcCard = (nfcUid) => client.post(`/emergency/nfc/revoke/${nf
 // password exactly once; the backend never stores or logs it in plaintext.
 export const issuePatientAccount = (patientId) =>
   client.post(`/auth/patients/${patientId}/issue-account`).then((r) => r.data);
+
+// Self-service reset, patient-only. Two steps: request a one-time code
+// emailed to whatever contact email the patient has on file (step 1
+// always responds the same way regardless of whether an account/email
+// actually exists — don't treat a 200 as proof either way), then submit
+// the code + new password (step 2). NRIC is accepted with or without
+// dashes; the backend normalizes it.
+export const requestPasswordResetOtp = (nationalId) =>
+  axios.post(`${API_BASE}/auth/request-password-reset-otp`, { national_id: nationalId }).then((r) => r.data);
+export const resetPasswordWithOtp = (nationalId, otpCode, newPassword) =>
+  axios.post(`${API_BASE}/auth/reset-password-with-otp`, {
+    national_id: nationalId, otp_code: otpCode, new_password: newPassword,
+  }).then((r) => r.data);
+
+// Patient self-service profile edit. Only email/phone/emergency-contact
+// fields are accepted — full_name/date_of_birth/national_id are immutable
+// via this endpoint and the backend 400s if they're present in the body.
+export const updateOwnProfile = (patientId, payload) =>
+  client.patch(`/patients/${patientId}/profile`, payload).then((r) => r.data);
 
 export default client;

@@ -7,14 +7,26 @@ from sqlalchemy.orm import Session
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
+from ..email_service import send_password_reset_otp_email
+from ..nric import normalize_nric
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Generic message for every self-service reset failure mode (unknown NRIC,
-# DOB mismatch, no linked login yet). Deliberately identical in all three
-# cases so the response can't be used to enumerate which NRICs exist in the
-# system or which patients have a login yet.
-_RESET_GENERIC_ERROR = "Unable to reset password with the details provided."
+# Generic response for EVERY outcome of POST /auth/request-password-reset-otp
+# except the rate-limit lockout (see its own docstring) -- unknown NRIC, a
+# real NRIC with no linked login, or a real NRIC/login with no email on
+# file, and an NRIC that really did just get a fresh code emailed to it,
+# all look identical from the outside. Same enumeration-safety discipline
+# this codebase already applied to the old DOB-based forgot-password flow.
+_REQUEST_OTP_GENERIC_RESPONSE = {
+    "status": "ok",
+    "detail": "If this NRIC has a registered account with an email on file, a verification code has been sent.",
+}
+
+# Generic message for every failure mode of POST /auth/reset-password-with-otp
+# (unknown NRIC, no pending OTP, expired OTP, wrong code) -- deliberately
+# identical so the response can't be used to distinguish any of those cases.
+_RESET_WITH_OTP_GENERIC_ERROR = "Invalid or expired verification code."
 
 
 @router.post("/register", response_model=schemas.UserOut)
@@ -49,24 +61,67 @@ def register(
     return user
 
 
+def _resolve_patient_by_nric(db: Session, national_id: str) -> models.Patient | None:
+    """Dash-tolerant NRIC -> Patient lookup, used everywhere an NRIC is
+    accepted as input (login, both OTP-reset endpoints). Normalizes BOTH
+    the caller's input and each stored Patient.national_id (which may
+    still have dashes, e.g. "520314-01-1234") before comparing, so
+    "520314-01-1234" and "520314011234" resolve to the same record without
+    needing a data migration to reformat existing rows. The patient table
+    is tiny at this project's scale, so a fetch-and-compare-in-Python loop
+    is simpler and just as fast in practice as a func.replace(...) SQL
+    expression; revisit if the table ever grows large."""
+    normalized_input = normalize_nric(national_id)
+    if not normalized_input:
+        return None
+
+    for patient in db.query(models.Patient).filter(models.Patient.national_id.isnot(None)).all():
+        if normalize_nric(patient.national_id) == normalized_input:
+            return patient
+    return None
+
+
 def _resolve_login_user(db: Session, identifier: str) -> models.User | None:
     """Resolve the OAuth2 `username` field to a User, accepting either an
-    email or a patient's NRIC (Patient.national_id). Tries email first
-    (the common case), then falls back to an NRIC -> Patient -> User lookup.
-    Returns None if neither resolves, so callers can fall through to the
-    existing generic "incorrect credentials" response.
+    email or a patient's NRIC (Patient.national_id, dash-tolerant -- see
+    _resolve_patient_by_nric). Tries email first (the common case), then
+    falls back to an NRIC -> Patient -> User lookup. Returns None if
+    neither resolves, so callers can fall through to the existing generic
+    "incorrect credentials" response.
     """
     user = db.query(models.User).filter(models.User.email == identifier).first()
     if user:
         return user
 
-    patient = db.query(models.Patient).filter(models.Patient.national_id == identifier).first()
+    patient = _resolve_patient_by_nric(db, identifier)
     if patient:
         user = db.query(models.User).filter(models.User.patient_id == patient.id).first()
         if user:
             return user
 
     return None
+
+
+def _missing_profile_fields(user: models.User) -> list:
+    """Informational-only data-completeness signal for schemas.UserOut
+    (see models.PATIENT_PROFILE_FIELDS_TO_PROMPT). Always [] for non-patient
+    roles -- this is never a security gate, just a soft client-side prompt."""
+    if user.role != "patient" or not user.patient:
+        return []
+    return [
+        field for field in models.PATIENT_PROFILE_FIELDS_TO_PROMPT
+        if not getattr(user.patient, field, None)
+    ]
+
+
+def _with_missing_profile_fields(user: models.User) -> models.User:
+    """Stashes the computed list as a plain (unmapped, non-persisted)
+    instance attribute so schemas.UserOut's from_attributes conversion
+    picks it up -- same technique this ORM already relies on for nested
+    relationship attributes, just for a computed value instead of a
+    mapped column."""
+    user.missing_profile_fields = _missing_profile_fields(user)
+    return user
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -109,7 +164,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
                 db.add(user)
                 db.commit()
             token = auth.create_access_token({"sub": user.id, "role": user.role})
-            return schemas.Token(access_token=token, user=user)
+            return schemas.Token(access_token=token, user=_with_missing_profile_fields(user))
 
         user.login_failed_count = (user.login_failed_count or 0) + 1
         if user.login_failed_count >= auth.LOGIN_MAX_ATTEMPTS:
@@ -125,7 +180,7 @@ def me(current_user: models.User = Depends(auth.get_current_user_allow_pending_c
     # Deliberately exempt from the must_change_password block below (see
     # auth.get_current_user_allow_pending_change) -- clients need this to
     # discover the flag is set in the first place.
-    return current_user
+    return _with_missing_profile_fields(current_user)
 
 
 def _apply_new_password(db: Session, user: models.User, new_password: str, must_change: bool) -> None:
@@ -197,46 +252,142 @@ def issue_patient_account(
     )
 
 
-@router.post("/forgot-password")
-def forgot_password(payload: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
-    """Public, unauthenticated self-service reset via NRIC + date of birth.
+@router.post("/request-password-reset-otp")
+def request_password_reset_otp(payload: schemas.PasswordResetOtpRequest, db: Session = Depends(get_db)):
+    """Public, unauthenticated. Step 1 of the two-step email-OTP reset
+    (replaces the old NRIC+DOB single-step /auth/forgot-password — DOB is
+    guessable/knowable PII, same weakness as the NRIC it was meant to
+    supplement, so the product decision was to drop it entirely and prove
+    identity via a code sent to the patient's own registered email
+    instead).
 
-    Account-enumeration tradeoff (deliberate): every failure — unknown
-    NRIC, correct NRIC but wrong DOB, or an NRIC with no linked login yet —
-    returns the exact same generic 400 message, so this endpoint can't be
-    used to probe which NRICs are registered in the system. The one
-    exception is the lockout response, which is a distinct message; we
-    judged that acceptable because "this NRIC is temporarily locked" only
-    confirms a *login exists*, not medical data, and a determined attacker
-    already gets that same signal for free after enough attempts anyway
-    (the generic error keeps coming back forever for a truly unknown NRIC,
-    only ever locking out NRICs that *do* have an account).
+    Account-enumeration tradeoff (deliberate, carried over from the old
+    forgot-password design): unknown NRIC, an NRIC with no linked login
+    yet, and an NRIC/login with no registered email on file all return the
+    exact identical generic success-shaped response as an NRIC that really
+    did just get a code emailed to it — a caller cannot distinguish any of
+    these four cases from the response alone. Whether Mailgun is even
+    configured is folded into the same non-signal (see email_service.py) —
+    a misconfigured deployment must not become externally detectable
+    either.
+
+    The one exception is the request-rate-limit response, a distinct 429 —
+    same accepted tradeoff this codebase already made for login lockout
+    and the old forgot-password lockout: "this NRIC is temporarily rate
+    limited" only confirms a login exists, not medical data or whether an
+    email is on file, and only ever fires for identifiers that already
+    resolve to a real account (an unknown NRIC just keeps getting the
+    generic response forever).
     """
-    patient = db.query(models.Patient).filter(models.Patient.national_id == payload.national_id).first()
-    if not patient:
-        raise HTTPException(status_code=400, detail=_RESET_GENERIC_ERROR)
+    patient = _resolve_patient_by_nric(db, payload.national_id)
+    user = db.query(models.User).filter(models.User.patient_id == patient.id).first() if patient else None
 
-    user = db.query(models.User).filter(models.User.patient_id == patient.id).first()
     if not user:
-        raise HTTPException(status_code=400, detail=_RESET_GENERIC_ERROR)
+        return _REQUEST_OTP_GENERIC_RESPONSE
 
     now = datetime.utcnow()
-    if user.reset_locked_until and now < user.reset_locked_until:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many failed attempts. Try again after {user.reset_locked_until.isoformat()}Z.",
-        )
 
-    if patient.date_of_birth != payload.date_of_birth:
-        user.reset_attempt_count = (user.reset_attempt_count or 0) + 1
-        if user.reset_attempt_count >= auth.RESET_MAX_ATTEMPTS:
-            user.reset_locked_until = now + timedelta(minutes=auth.RESET_LOCKOUT_MINUTES)
+    # OTP *request* rate limiting -- separate rolling-window counter from
+    # the per-OTP verify-attempt counter below. Applies uniformly to every
+    # resolvable NRIC/account regardless of whether it has an email on
+    # file, so hitting the limit is never itself a signal about email
+    # presence (only about "this NRIC resolves to an account", the same
+    # thing the login/forgot-password lockouts already reveal).
+    window_start = user.otp_request_window_start
+    if not window_start or now - window_start > timedelta(minutes=auth.OTP_REQUEST_WINDOW_MINUTES):
+        user.otp_request_window_start = now
+        user.otp_request_count = 0
+
+    if user.otp_request_count >= auth.OTP_MAX_REQUESTS_PER_WINDOW:
         db.add(user)
         db.commit()
-        raise HTTPException(status_code=400, detail=_RESET_GENERIC_ERROR)
+        retry_after = user.otp_request_window_start + timedelta(minutes=auth.OTP_REQUEST_WINDOW_MINUTES)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many verification code requests. Try again after {retry_after.isoformat()}Z.",
+        )
+
+    user.otp_request_count = (user.otp_request_count or 0) + 1
+
+    if not patient.email:
+        db.add(user)
+        db.commit()
+        log_access(
+            db, patient.id, "system", None, "password_reset_otp_requested",
+            detail="no email on file",
+        )
+        return _REQUEST_OTP_GENERIC_RESPONSE
+
+    otp_code = auth.generate_otp_code()
+    user.otp_code_hash = auth.hash_otp_code(otp_code)
+    user.otp_expires_at = now + timedelta(minutes=auth.OTP_EXPIRY_MINUTES)
+    user.otp_attempt_count = 0
+    db.add(user)
+    db.commit()
+
+    # send_password_reset_otp_email degrades gracefully (logs, returns
+    # False) if Mailgun isn't configured or the call fails -- deliberately
+    # NOT branching the response on its return value (see docstring above).
+    send_password_reset_otp_email(patient.email, otp_code, patient.full_name)
+
+    log_access(db, patient.id, "system", None, "password_reset_otp_requested")
+    return _REQUEST_OTP_GENERIC_RESPONSE
+
+
+@router.post("/reset-password-with-otp")
+def reset_password_with_otp(payload: schemas.PasswordResetWithOtpRequest, db: Session = Depends(get_db)):
+    """Public, unauthenticated. Step 2 of the two-step email-OTP reset.
+
+    Enumeration tradeoff mirrors request-password-reset-otp above: unknown
+    NRIC, no pending OTP, an expired OTP, and a simply-wrong code all
+    return the exact same generic 400 -- a caller can't tell "no such
+    account" from "right account, wrong code" from the response alone.
+    """
+    patient = _resolve_patient_by_nric(db, payload.national_id)
+    user = db.query(models.User).filter(models.User.patient_id == patient.id).first() if patient else None
+
+    if not user or not user.otp_code_hash or not user.otp_expires_at:
+        raise HTTPException(status_code=400, detail=_RESET_WITH_OTP_GENERIC_ERROR)
+
+    now = datetime.utcnow()
+    if now > user.otp_expires_at:
+        # Expired -- clear it out rather than leaving a stale hash a client
+        # could keep guessing against indefinitely; caller must request a
+        # fresh code.
+        user.otp_code_hash = None
+        user.otp_expires_at = None
+        user.otp_attempt_count = 0
+        db.add(user)
+        db.commit()
+        raise HTTPException(status_code=400, detail=_RESET_WITH_OTP_GENERIC_ERROR)
+
+    if not auth.verify_otp_code(payload.otp_code, user.otp_code_hash):
+        user.otp_attempt_count = (user.otp_attempt_count or 0) + 1
+        if user.otp_attempt_count >= auth.OTP_MAX_VERIFY_ATTEMPTS:
+            # 5 wrong tries -> invalidate the OTP entirely rather than just
+            # keep counting forever; forces a fresh request-password-reset-otp
+            # call, same "cheap for a legitimate user, expensive for an
+            # attacker" tradeoff as the login/reset lockouts elsewhere.
+            user.otp_code_hash = None
+            user.otp_expires_at = None
+            user.otp_attempt_count = 0
+        db.add(user)
+        db.commit()
+        raise HTTPException(status_code=400, detail=_RESET_WITH_OTP_GENERIC_ERROR)
 
     _apply_new_password(db, user, payload.new_password, must_change=False)
-    log_access(db, patient.id, user.id, user.role, "self_service_password_reset")
+    # _apply_new_password already clears reset_attempt_count/reset_locked_until
+    # and login_failed_count/login_locked_until (see its docstring). Also
+    # invalidate the now-used OTP and its request-rate-limit window.
+    user.otp_code_hash = None
+    user.otp_expires_at = None
+    user.otp_attempt_count = 0
+    user.otp_request_count = 0
+    user.otp_request_window_start = None
+    db.add(user)
+    db.commit()
+
+    log_access(db, patient.id, user.id, user.role, "password_reset_via_otp")
     return {"status": "ok", "detail": "Password reset successfully."}
 
 

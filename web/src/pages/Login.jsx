@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login } from "../api/client";
 
 export default function Login() {
@@ -8,6 +8,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -40,18 +41,32 @@ export default function Login() {
         <h1 className="text-2xl font-bold text-blue-900 mb-1">MediBridge</h1>
         <p className="text-sm text-slate-500 mb-6">Hospital Staff Console</p>
 
+        {location.state?.resetSuccess && (
+          <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-4">
+            Password reset. Sign in with your new password.
+          </div>
+        )}
         {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-4">{error}</div>}
 
-        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Email or NRIC</label>
         <input
           className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={email} onChange={(e) => setEmail(e.target.value)} type="email"
+          value={email} onChange={(e) => setEmail(e.target.value)}
+          // Deliberately type="text", not type="email" — a patient logs in
+          // with their NRIC (e.g. 520314-01-1234), which native browser
+          // email-format validation would block from ever submitting.
+          type="text"
+          autoComplete="username"
         />
 
-        <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-slate-700">Password</label>
+          <Link to="/forgot-password" className="text-xs text-blue-700 hover:underline">Forgot password?</Link>
+        </div>
         <input
           className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={password} onChange={(e) => setPassword(e.target.value)} type="password"
+          autoComplete="current-password"
         />
 
         <button
@@ -64,7 +79,7 @@ export default function Login() {
         <p className="text-xs text-slate-400 mt-4">
           Demo (staff): clinician@medibridge.demo / clinician123
           <br />
-          Demo (patient): patient@medibridge.demo / patient123
+          Demo (patient): patient@medibridge.demo / patient123 (or NRIC 520314-01-1234)
         </p>
       </form>
     </div>

@@ -67,6 +67,14 @@ class Patient {
   final List<Medication> medications;
   final List<Allergy> allergies;
   final List<Encounter> encounters;
+  // Patient-owned contact/profile fields, editable via
+  // PATCH /patients/{id}/profile (see ApiClient.updatePatientProfile /
+  // EditProfileScreen). Distinct from the User account's login email — see
+  // backend/app/models.py::Patient for the same distinction server-side.
+  final String? email;
+  final String? emergencyContactName;
+  final String? emergencyContactPhone;
+  final String? emergencyContactRelationship;
 
   const Patient({
     required this.id,
@@ -81,9 +89,45 @@ class Patient {
     required this.medications,
     required this.allergies,
     required this.encounters,
+    this.email,
+    this.emergencyContactName,
+    this.emergencyContactPhone,
+    this.emergencyContactRelationship,
   });
 
   List<Medication> get activeMedications => medications.where((m) => m.active).toList();
+
+  /// Merges in just the editable contact/profile fields (the subset
+  /// `PATCH /patients/{id}/profile` can change) — used by
+  /// PatientProvider.updateProfile to fold the PATCH response back into an
+  /// already-loaded full record without losing conditions/medications/
+  /// allergies/encounters, which that endpoint's response (PatientOut-
+  /// shaped, not the full record) doesn't include.
+  Patient copyWith({
+    String? phone,
+    String? email,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? emergencyContactRelationship,
+  }) =>
+      Patient(
+        id: id,
+        fullName: fullName,
+        dateOfBirth: dateOfBirth,
+        gender: gender,
+        nationalId: nationalId,
+        bloodType: bloodType,
+        phone: phone ?? this.phone,
+        seniorCitizenMode: seniorCitizenMode,
+        conditions: conditions,
+        medications: medications,
+        allergies: allergies,
+        encounters: encounters,
+        email: email ?? this.email,
+        emergencyContactName: emergencyContactName ?? this.emergencyContactName,
+        emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
+        emergencyContactRelationship: emergencyContactRelationship ?? this.emergencyContactRelationship,
+      );
 
   factory Patient.fromJson(Map<String, dynamic> json) => Patient(
         id: json['id'] as String,
@@ -106,5 +150,9 @@ class Patient {
         encounters: (json['encounters'] as List<dynamic>? ?? [])
             .map((e) => Encounter.fromJson(e as Map<String, dynamic>))
             .toList(),
+        email: json['email'] as String?,
+        emergencyContactName: json['emergency_contact_name'] as String?,
+        emergencyContactPhone: json['emergency_contact_phone'] as String?,
+        emergencyContactRelationship: json['emergency_contact_relationship'] as String?,
       );
 }
