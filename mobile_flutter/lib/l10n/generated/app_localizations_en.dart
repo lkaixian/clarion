@@ -44,6 +44,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Login failed. Check your credentials or the API base URL in Settings.';
 
   @override
+  String get sessionExpiredSnackbar =>
+      'You were signed out — please log in again.';
+
+  @override
   String get seniorPrompt => 'Older adult or first-time user?';
 
   @override
@@ -361,6 +365,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get clinicAppointmentsSection => 'From Your Clinic';
+
+  @override
+  String get noClinicAppointments =>
+      'No upcoming appointments from your clinic on file yet.';
+
+  @override
+  String get clinicAppointmentBadge => 'Set by your clinic';
+
+  @override
+  String fastingRequiredNote(int hours) {
+    return '⚠ Fasting required: ${hours}h before your appointment';
+  }
+
+  @override
+  String get fastingRequiredNoteUnspecified =>
+      '⚠ Fasting is required before your appointment — check with your clinic for how long.';
+
+  @override
+  String appointmentReasonLabel(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
   String get upcomingAppointments => 'Upcoming Appointments';
 
   @override
@@ -488,6 +516,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get auditActorSystemFallback => 'system';
+
+  @override
+  String get auditActorEmergencyResponderUnverified =>
+      'emergency responder — self-reported, unverified';
+
+  @override
   String get responderScanTitle => 'Scan Emergency Card';
 
   @override
@@ -548,6 +583,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nfcStarting => 'Starting NFC…';
+
+  @override
+  String get scanResultFoundTitle => 'Patient Found';
+
+  @override
+  String scanResultDobValue(String date) {
+    return 'Date of birth: $date';
+  }
+
+  @override
+  String get scanResultBloodTypeUnknown => 'Not on file';
+
+  @override
+  String scanResultOmittedMedications(int count) {
+    return '+$count more medications on file, not shown here — not flagged as emergency-critical.';
+  }
+
+  @override
+  String scanResultOmittedConditions(int count) {
+    return '+$count more conditions on file, not shown here — not flagged as emergency-critical.';
+  }
+
+  @override
+  String scanResultOmittedAllergies(int count) {
+    return '+$count more allergies on file, not shown here — not flagged as emergency-critical.';
+  }
 
   @override
   String seniorBloodType(String type) {

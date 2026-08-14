@@ -9,6 +9,7 @@ from ..database import get_db
 from ..audit import log_access
 from ..email_service import send_password_reset_otp_email
 from ..nric import normalize_nric
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -125,6 +126,11 @@ def _with_missing_profile_fields(user: models.User) -> models.User:
 
 
 @router.post("/login", response_model=schemas.Token)
+@limiter.exempt  # exempt from the global per-IP default -- see auth.LOGIN_MAX_ATTEMPTS
+# / login_locked_until docstring below: this endpoint already has its own
+# stricter, persisted-in-DB, per-ACCOUNT lockout, which shouldn't be
+# double-limited (or accidentally superseded) by a coarser global per-IP
+# rate limit.
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Account-enumeration tradeoff mirrors POST /auth/forgot-password (see
     its docstring above): every failure -- unknown email/NRIC or a wrong
@@ -163,7 +169,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
                 user.login_locked_until = None
                 db.add(user)
                 db.commit()
-            token = auth.create_access_token({"sub": user.id, "role": user.role})
+            token = auth.create_access_token(
+                {"sub": user.id, "role": user.role},
+                password_changed_at=user.password_changed_at,
+            )
             return schemas.Token(access_token=token, user=_with_missing_profile_fields(user))
 
         user.login_failed_count = (user.login_failed_count or 0) + 1
@@ -196,6 +205,10 @@ def _apply_new_password(db: Session, user: models.User, new_password: str, must_
     # being brute-forced no longer works), so clear that bookkeeping too.
     user.login_failed_count = 0
     user.login_locked_until = None
+    # JWT revocation watermark -- any token issued before this moment now
+    # fails auth._resolve_current_user's pwd_changed_at check (see that
+    # function's docstring / models.User.password_changed_at's comment).
+    user.password_changed_at = datetime.utcnow()
     db.add(user)
     db.commit()
 
@@ -242,7 +255,7 @@ def issue_patient_account(
     # Audit the event itself, never the plaintext password.
     log_access(
         db, patient.id, current_user.id, current_user.role, action,
-        detail=f"login email={user.email}",
+        detail=f"login email={user.email}", actor_facility=current_user.facility,
     )
 
     return schemas.IssueAccountResponse(
@@ -253,6 +266,9 @@ def issue_patient_account(
 
 
 @router.post("/request-password-reset-otp")
+@limiter.exempt  # already has its own bespoke, persisted-in-DB rate limiting
+# (OTP_MAX_REQUESTS_PER_WINDOW / OTP_REQUEST_WINDOW_MINUTES, per-account) --
+# see the global-default rationale on POST /auth/login above.
 def request_password_reset_otp(payload: schemas.PasswordResetOtpRequest, db: Session = Depends(get_db)):
     """Public, unauthenticated. Step 1 of the two-step email-OTP reset
     (replaces the old NRIC+DOB single-step /auth/forgot-password — DOB is
@@ -335,6 +351,9 @@ def request_password_reset_otp(payload: schemas.PasswordResetOtpRequest, db: Ses
 
 
 @router.post("/reset-password-with-otp")
+@limiter.exempt  # already has its own bespoke, persisted-in-DB rate limiting
+# (OTP_MAX_VERIFY_ATTEMPTS, per-account) -- see the global-default rationale
+# on POST /auth/login above.
 def reset_password_with_otp(payload: schemas.PasswordResetWithOtpRequest, db: Session = Depends(get_db)):
     """Public, unauthenticated. Step 2 of the two-step email-OTP reset.
 
@@ -407,5 +426,6 @@ def change_password(
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     _apply_new_password(db, current_user, payload.new_password, must_change=False)
-    log_access(db, current_user.patient_id, current_user.id, current_user.role, "change_password")
+    log_access(db, current_user.patient_id, current_user.id, current_user.role, "change_password",
+               actor_facility=current_user.facility)
     return {"status": "ok", "detail": "Password changed successfully."}

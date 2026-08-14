@@ -9,6 +9,7 @@ import {
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
   issuePatientAccount, updateOwnProfile, refreshCurrentUser,
   digitiseDocument, getDocumentDetail, getDocumentFileBlob,
+  getAppointments, createAppointment, updateAppointment,
 } from "../api/client";
 
 const PROFILE_FIELD_LABELS = {
@@ -376,6 +377,349 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
   );
 }
 
+// Staff-only "book an appointment" form. Deliberately NOT plugged into the
+// generic RecordModal/RECORD_FIELD_CONFIG machinery above (conditions/
+// medications/allergies/encounters): this form needs a conditional field
+// (fasting hours only when "fasting required" is checked), a datetime-local
+// <-> ISO conversion, and a variable-length list field (extra reminder
+// offsets) — none of which RecordModal's flat, one-input-per-field config
+// supports. Bolting those onto RecordModal would complicate it for its four
+// existing, much simpler callers, so this is a dedicated component instead.
+// It still mirrors RecordModal's shell/classes so it doesn't look like a
+// different app bolted on.
+function AppointmentModal({ patientId, onClose, onSaved }) {
+  const [facilityName, setFacilityName] = useState("");
+  const [venue, setVenue] = useState("");
+  const [scheduledAt, setScheduledAt] = useState(""); // raw <input type="datetime-local"> value
+  const [reason, setReason] = useState("");
+  const [fastingRequired, setFastingRequired] = useState(false);
+  const [fastingHours, setFastingHours] = useState("");
+  const [precautionNotes, setPrecautionNotes] = useState("");
+  // Extra reminders beyond the backend's auto-computed default set — an
+  // edge-case field, kept collapsed behind a toggle so it doesn't clutter
+  // the primary "book an appointment" flow.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [extraReminders, setExtraReminders] = useState([]); // array of string hour values
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function addReminderField() {
+    setExtraReminders((r) => [...r, ""]);
+  }
+  function updateReminderField(idx, value) {
+    setExtraReminders((r) => r.map((v, i) => (i === idx ? value : v)));
+  }
+  function removeReminderField(idx) {
+    setExtraReminders((r) => r.filter((_, i) => i !== idx));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!facilityName.trim()) {
+      setError("Facility name is required.");
+      return;
+    }
+    if (!scheduledAt) {
+      setError("Date & time is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const payload = {
+      facility_name: facilityName.trim(),
+      venue: venue.trim() || undefined,
+      // datetime-local carries no timezone suffix, so both the browser and
+      // this Date constructor treat it as local time — toISOString() then
+      // hands the backend the correct absolute instant regardless of what
+      // timezone the server itself runs in.
+      scheduled_at: new Date(scheduledAt).toISOString(),
+      reason: reason.trim() || undefined,
+      fasting_required: fastingRequired,
+      precaution_notes: precautionNotes.trim() || undefined,
+    };
+    // Only send fasting_hours when fasting is actually required — the
+    // backend 422s on fasting_hours being set without fasting_required.
+    if (fastingRequired && fastingHours) {
+      payload.fasting_hours = Number(fastingHours);
+    }
+    const reminderHours = extraReminders
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (reminderHours.length > 0) {
+      payload.extra_reminder_hours_before = reminderHours;
+    }
+    try {
+      await createAppointment(patientId, payload);
+      onSaved();
+    } catch (err) {
+      // Surfaces the backend's 422s (scheduled_at in the past, fasting_hours
+      // without fasting_required) as an inline form error — same convention
+      // RecordModal uses above, instead of a bare alert().
+      setError(err?.response?.data?.detail || "Failed to save. Check the fields and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Facility name<span className="text-red-600"> *</span>
+            </label>
+            <input
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              value={facilityName}
+              onChange={(e) => setFacilityName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Venue</label>
+            <input
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              placeholder="e.g. Clinic 3B, Level 2"
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Date &amp; time<span className="text-red-600"> *</span>
+            </label>
+            <input
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+            <input
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              placeholder="e.g. Follow-up, blood test"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={fastingRequired}
+                onChange={(e) => setFastingRequired(e.target.checked)}
+              />
+              Fasting required
+            </label>
+            {fastingRequired && (
+              <div className="mt-2 pl-6">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Fast for how many hours before?</label>
+                <input
+                  className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type="number"
+                  min="1"
+                  value={fastingHours}
+                  onChange={(e) => setFastingHours(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Precaution notes</label>
+            <textarea
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={2}
+              placeholder="e.g. bring previous scan results, stop blood thinners 2 days prior"
+              value={precautionNotes}
+              onChange={(e) => setPrecautionNotes(e.target.value)}
+            />
+          </div>
+
+          {/* Reminder timing is auto-computed by the backend from
+              scheduled_at/fasting_hours (see AppointmentOut.reminders) —
+              this is only for bolting on EXTRA reminders beyond that
+              default set, an edge case, so it's tucked behind a toggle
+              instead of cluttering the primary form above. */}
+          <div className="pt-1">
+            <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-xs text-blue-700">
+              {showAdvanced ? "Hide" : "Show"} extra reminder options
+            </button>
+            {showAdvanced && (
+              <div className="mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <p className="text-xs text-slate-400">
+                  Extra reminders on top of the default schedule (hours before the appointment).
+                </p>
+                {extraReminders.map((v, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      type="number"
+                      min="1"
+                      value={v}
+                      onChange={(e) => updateReminderField(idx, e.target.value)}
+                    />
+                    <span className="text-xs text-slate-400">hours before</span>
+                    <button type="button" onClick={() => removeReminderField(idx)} className="text-xs text-red-700">
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={addReminderField} className="text-xs text-blue-700">
+                  + add another reminder
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// No date library in this codebase (see the low-dependency style
+// throughout this file) — a plain toLocaleString() matches every other
+// timestamp here that's rendered straight from whatever the browser's
+// locale settings produce, rather than a raw ISO string.
+function formatAppointmentTime(iso) {
+  return new Date(iso).toLocaleString();
+}
+
+// List + staff add/cancel for scheduled appointments. Patients see their
+// own list read-only (GET is patient-own-record + staff); add/cancel are
+// staff-only on the backend, so isStaff gates both actions here too.
+function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  // Reminders are metadata, not the main content of a row — collapsed by
+  // default per-appointment, expandable on demand.
+  const [expandedReminders, setExpandedReminders] = useState({});
+  const [busyId, setBusyId] = useState(null);
+
+  async function cancelAppointment(appt) {
+    if (!confirm(`Cancel the appointment at ${appt.facility_name} on ${formatAppointmentTime(appt.scheduled_at)}?`)) return;
+    setBusyId(appt.id);
+    try {
+      await updateAppointment(patientId, appt.id, { status: "cancelled" });
+      onChanged();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to cancel appointment.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Section
+      title="Appointments"
+      action={isStaff && <button onClick={() => setShowAddModal(true)} className="text-xs text-blue-700">+ Add</button>}
+    >
+      {appointments.length === 0 ? (
+        <p className="text-sm text-slate-400">No appointments scheduled.</p>
+      ) : (
+        <div className="space-y-2">
+          {appointments.map((a) => {
+            const cancelled = a.status === "cancelled";
+            return (
+              <div
+                key={a.id}
+                // Same "dim it but keep it visible, with an explicit label"
+                // treatment as a revoked emergency card elsewhere in this
+                // file (see the Emergency Access Card section) — reused
+                // here rather than inventing a different cancelled-state
+                // convention.
+                className={`bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 ${cancelled ? "opacity-50" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-sm text-slate-700">
+                    {cancelled && (
+                      <p className="text-xs font-semibold text-red-700 uppercase mb-0.5">Cancelled</p>
+                    )}
+                    <p className={cancelled ? "line-through" : ""}>
+                      {a.facility_name}{a.venue && ` — ${a.venue}`}
+                    </p>
+                    <p className="text-xs text-slate-400">{formatAppointmentTime(a.scheduled_at)}</p>
+                    {a.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {a.reason}</p>}
+                    {a.fasting_required && (
+                      <p className="text-xs text-amber-700 font-medium mt-0.5">
+                        ⚠ Fasting required{a.fasting_hours ? `: ${a.fasting_hours}h before` : ""}
+                      </p>
+                    )}
+                    {a.precaution_notes && (
+                      <p className="text-xs text-slate-500 mt-0.5">Note: {a.precaution_notes}</p>
+                    )}
+                  </div>
+                  {isStaff && !cancelled && (
+                    <button
+                      onClick={() => cancelAppointment(a)}
+                      disabled={busyId === a.id}
+                      className="text-xs text-red-700 whitespace-nowrap"
+                    >
+                      {busyId === a.id ? "Cancelling..." : "Cancel"}
+                    </button>
+                  )}
+                </div>
+
+                {/* reminders is server-computed (from scheduled_at /
+                    fasting_hours / extra_reminder_hours_before) — displayed
+                    verbatim, never recalculated client-side. */}
+                {a.reminders && a.reminders.length > 0 && (
+                  <div className="mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedReminders((s) => ({ ...s, [a.id]: !s[a.id] }))}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      {expandedReminders[a.id]
+                        ? "Hide reminders"
+                        : `${a.reminders.length} reminder${a.reminders.length === 1 ? "" : "s"} scheduled`}
+                    </button>
+                    {expandedReminders[a.id] && (
+                      <ul className="mt-1 pl-3 text-xs text-slate-400 list-disc list-inside">
+                        {a.reminders.map((r, idx) => (
+                          <li key={idx}>{r.label} — {formatAppointmentTime(r.fires_at)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showAddModal && (
+        <AppointmentModal
+          patientId={patientId}
+          onClose={() => setShowAddModal(false)}
+          onSaved={() => { setShowAddModal(false); onChanged(); }}
+        />
+      )}
+    </Section>
+  );
+}
+
 function Section({ title, children, action }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
@@ -386,6 +730,74 @@ function Section({ title, children, action }) {
       {children}
     </div>
   );
+}
+
+// The page used to be one long vertical scroll of every section below —
+// fine for a single patient looked at once, but a clinician working through
+// ~50 patients a day was scrolling past NFC/audit-log/QR chrome every time
+// just to reach Conditions/Medications. Split into in-page tabs (plain
+// useState, no router involvement — see module docstring-equivalent in the
+// task notes) so "what does this patient have" stays the default view and
+// the secondary/administrative sections are one click away instead of
+// always in the way.
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "documents", label: "Documents" },
+  { key: "ai", label: "AI & Interactions" },
+  { key: "access", label: "Emergency & Access" },
+];
+
+function TabBar({ active, onChange }) {
+  return (
+    <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">
+      {TABS.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
+            active === t.key
+              ? "border-blue-800 text-blue-800"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Access audit log rows: actor_name resolves live (so it's null for a
+// system-originated row, or an account that's since been deleted) and
+// actor_facility is a point-in-time snapshot taken when the access
+// happened — both are additive/nullable, so fall back gracefully rather
+// than ever rendering "· null" or an empty facility chip.
+function formatAuditActor(l) {
+  // Emergency-responder rows have no actor_name (they're never a real
+  // users.id -- see get_audit_log's docstring) but the name the responder
+  // typed in is still recoverable from the raw `actor` string, and their
+  // claimed org from `detail` -- see backend/app/routers/emergency.py's
+  // scan_emergency_card/scan_nfc_card: actor=f"emergency_responder:{name}",
+  // detail=f"org={org}". Neither is verified against any account (there's
+  // no login on this path at all), so this is deliberately labeled
+  // "self-reported, unverified" rather than shown the same way as a real
+  // staff actor_name -- a patient reading this shouldn't mistake a typed
+  // name for an authenticated one. `detail` can literally be the string
+  // "org=None" when the responder left the org field blank (an f-string
+  // over Optional[str] on the backend) -- treat that the same as "no org
+  // given", not as a literal value to display.
+  if (l.actor && l.actor.startsWith("emergency_responder:")) {
+    const respName = l.actor.slice("emergency_responder:".length) || "unidentified";
+    const orgMatch = typeof l.detail === "string" ? l.detail.match(/^org=(.*)$/) : null;
+    const org = orgMatch && orgMatch[1] && orgMatch[1] !== "None" ? orgMatch[1] : null;
+    const who = `${respName} (emergency responder — self-reported, unverified)`;
+    return org ? `${who} · ${org}` : who;
+  }
+
+  const who = l.actor_name
+    ? `${l.actor_name}${l.actor_role ? ` (${l.actor_role})` : ""}`
+    : (l.actor_role || "system");
+  return l.actor_facility ? `${who} · ${l.actor_facility}` : who;
 }
 
 export default function PatientDetail() {
@@ -422,6 +834,7 @@ export default function PatientDetail() {
   const [cardStatus, setCardStatus] = useState(null); // {active, card_reference, scope, grant_valid_until} | null (not loaded yet)
   const [auditLog, setAuditLog] = useState([]);
   const [nfcCards, setNfcCards] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   // Set once, right after a successful issue/reset call — holds the ONLY
   // moment the plaintext temp password is ever visible anywhere (the
   // backend never stores or logs it in plaintext). Cleared when the staff
@@ -430,6 +843,9 @@ export default function PatientDetail() {
   const [busy, setBusy] = useState("");
   // { kind: 'condition'|'medication'|'allergy'|'encounter', mode: 'add'|'edit', initial } | null
   const [recordModal, setRecordModal] = useState(null);
+  // In-page tab state (see TABS/TabBar above) — "overview" is the default
+  // since that's what a clinician needs first when opening a patient.
+  const [activeTab, setActiveTab] = useState("overview");
   const emergencyCardRef = useRef(null);
   emergencyCardRef.current = emergencyCard;
 
@@ -437,6 +853,7 @@ export default function PatientDetail() {
     getPatient(id).then(setPatient);
     getAuditLog(id).then(setAuditLog);
     listNfcCards(id).then(setNfcCards);
+    getAppointments(id).then(setAppointments);
     refreshCardStatus();
   }
 
@@ -623,162 +1040,310 @@ export default function PatientDetail() {
         </div>
       )}
 
-      {isOwnRecord && (
-        <Section title="My Contact Info" action={
-          !editingProfile && <button onClick={startEditingProfile} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">Edit</button>
-        }>
-          <p className="text-xs text-slate-400 mb-3">
-            Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
-          </p>
-          {editingProfile ? (
-            <form onSubmit={saveProfile} className="space-y-3">
-              {profileError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{profileError}</div>}
-              {[
-                ["email", "Contact email", "email"],
-                ["phone", "Phone number", "tel"],
-                ["emergency_contact_name", "Emergency contact name", "text"],
-                ["emergency_contact_phone", "Emergency contact phone", "tel"],
-                ["emergency_contact_relationship", "Relationship", "text"],
-              ].map(([key, label, type]) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                  <input
-                    className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    type={type}
-                    value={profileForm[key]}
-                    onChange={(e) => setProfileForm((f) => ({ ...f, [key]: e.target.value }))}
-                  />
+      <TabBar active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === "overview" && (
+        <>
+          {isOwnRecord && (
+            <Section title="My Contact Info" action={
+              !editingProfile && <button onClick={startEditingProfile} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">Edit</button>
+            }>
+              <p className="text-xs text-slate-400 mb-3">
+                Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
+              </p>
+              {editingProfile ? (
+                <form onSubmit={saveProfile} className="space-y-3">
+                  {profileError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{profileError}</div>}
+                  {[
+                    ["email", "Contact email", "email"],
+                    ["phone", "Phone number", "tel"],
+                    ["emergency_contact_name", "Emergency contact name", "text"],
+                    ["emergency_contact_phone", "Emergency contact phone", "tel"],
+                    ["emergency_contact_relationship", "Relationship", "text"],
+                  ].map(([key, label, type]) => (
+                    <div key={key}>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                      <input
+                        className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        type={type}
+                        value={profileForm[key]}
+                        onChange={(e) => setProfileForm((f) => ({ ...f, [key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                  <div className="flex gap-2 pt-1">
+                    <button disabled={profileSaving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+                      {profileSaving ? "Saving..." : "Save"}
+                    </button>
+                    <button type="button" onClick={() => setEditingProfile(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="text-sm text-slate-700 space-y-1">
+                  <p>Email: {patient.email || <span className="text-slate-400">not set</span>}</p>
+                  <p>Phone: {patient.phone || <span className="text-slate-400">not set</span>}</p>
+                  <p>Emergency contact: {patient.emergency_contact_name
+                    ? `${patient.emergency_contact_name} (${patient.emergency_contact_relationship || "relationship not set"}) — ${patient.emergency_contact_phone || "no phone on file"}`
+                    : <span className="text-slate-400">not set</span>}
+                  </p>
+                </div>
+              )}
+            </Section>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Section title="Conditions" action={isStaff && <button onClick={() => openAddRecord("condition")} className="text-xs text-blue-700">+ Add</button>}>
+              {patient.conditions.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+              {patient.conditions.map((c) => (
+                <div key={c.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                  <div className="text-sm text-slate-700">
+                    <p>
+                      {c.name}{" "}
+                      {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}{" "}
+                      <span className="text-xs text-slate-400">{c.status}</span>
+                    </p>
+                    {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
+                  </div>
+                  {isStaff && <button onClick={() => openEditRecord("condition", c)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
                 </div>
               ))}
-              <div className="flex gap-2 pt-1">
-                <button disabled={profileSaving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
-                  {profileSaving ? "Saving..." : "Save"}
-                </button>
-                <button type="button" onClick={() => setEditingProfile(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
-                  Cancel
-                </button>
+            </Section>
+            <Section title="Medications" action={isStaff && <button onClick={() => openAddRecord("medication")} className="text-xs text-blue-700">+ Add</button>}>
+              {patient.medications.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+              {patient.medications.map((m) => (
+                <div key={m.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                  <div className="text-sm text-slate-700">
+                    <p>
+                      {m.drug_name}{" "}
+                      {!m.active && <span className="text-xs text-slate-400">(inactive)</span>}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
+                      {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
+                    </p>
+                  </div>
+                  {isStaff && <button onClick={() => openEditRecord("medication", m)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                </div>
+              ))}
+            </Section>
+            <Section title="Allergies" action={isStaff && <button onClick={() => openAddRecord("allergy")} className="text-xs text-blue-700">+ Add</button>}>
+              {patient.allergies.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+              {patient.allergies.map((a) => (
+                <div key={a.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                  <div className="text-sm text-slate-700">
+                    <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
+                    {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
+                  </div>
+                  {isStaff && <button onClick={() => openEditRecord("allergy", a)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                </div>
+              ))}
+            </Section>
+            <Section title="Visit / Transfer Timeline" action={isStaff && <button onClick={() => openAddRecord("encounter")} className="text-xs text-blue-700">+ Add</button>}>
+              {patient.encounters.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {[...patient.encounters]
+                  .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+                  .map((e) => (
+                    <div key={e.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                      <div className="text-sm text-slate-700">
+                        <p>
+                          {e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span>
+                        </p>
+                        <p className="text-xs text-slate-400">{e.started_at}</p>
+                        {e.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {e.reason}</p>}
+                        {e.notes && <p className="text-xs text-slate-500 mt-0.5">Notes: {e.notes}</p>}
+                      </div>
+                      {isStaff && <button onClick={() => openEditRecord("encounter", e)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                    </div>
+                  ))}
               </div>
-            </form>
-          ) : (
-            <div className="text-sm text-slate-700 space-y-1">
-              <p>Email: {patient.email || <span className="text-slate-400">not set</span>}</p>
-              <p>Phone: {patient.phone || <span className="text-slate-400">not set</span>}</p>
-              <p>Emergency contact: {patient.emergency_contact_name
-                ? `${patient.emergency_contact_name} (${patient.emergency_contact_relationship || "relationship not set"}) — ${patient.emergency_contact_phone || "no phone on file"}`
-                : <span className="text-slate-400">not set</span>}
-              </p>
-            </div>
-          )}
-        </Section>
+            </Section>
+          </div>
+
+          {/* Forward-looking/basic-info-adjacent, same reasoning that put
+              "My Contact Info" in Overview during the tab split — this is
+              day-to-day "what's coming up for this patient" info, not an
+              administrative/secondary concern like Documents or Access. */}
+          <AppointmentsSection
+            patientId={id}
+            appointments={appointments}
+            isStaff={isStaff}
+            onChanged={refresh}
+          />
+        </>
       )}
 
-      <Section title="AI Clinical Handover Brief" action={
-        isStaff ? (
-          <button onClick={loadBrief} disabled={busy === "brief"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
-            {busy === "brief" ? "Generating..." : "Generate"}
-          </button>
-        ) : null
-      }>
-        {/* GET /ai/summary/{id} is staff-only on the backend (admin/records_officer/clinician) —
-            a patient viewer would get a 403 clicking Generate, so the button is hidden above and
-            this note is shown instead of a dead-end action. */}
-        {!isStaff ? <p className="text-sm text-slate-400">Available to clinical staff.</p>
-          : brief ? <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">{brief}</pre>
-          : <p className="text-sm text-slate-400">Generate a 30-second orientation brief for a receiving clinician.</p>}
-      </Section>
+      {activeTab === "documents" && (
+        <DocumentsSection
+          patientId={id}
+          documents={patient.documents || []}
+          isStaff={isStaff}
+          onUploaded={refresh}
+        />
+      )}
 
-      <Section title="Medication Interaction Check" action={
-        isStaff ? (
-          <button onClick={loadInteractions} disabled={busy === "interactions"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
-            {busy === "interactions" ? "Checking..." : "Run Check"}
-          </button>
-        ) : null
-      }>
-        {!isStaff ? (
-          <p className="text-sm text-slate-400">Available to clinical staff.</p>
-        ) : interactions ? (
-          <div className="space-y-2">
-            {interactions.interactions.length === 0 && interactions.cross_facility_duplicates.length === 0 && (
-              <p className="text-sm text-green-700">No interactions or duplicates found.</p>
-            )}
-            {interactions.interactions.map((i, idx) => (
-              <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-                <span className="font-semibold text-red-700 uppercase text-xs">{i.severity}</span>
-                <p className="text-red-800">{i.drug_a} + {i.drug_b}: {i.explanation}</p>
+      {activeTab === "ai" && (
+        <>
+          <Section title="AI Clinical Handover Brief" action={
+            isStaff ? (
+              <button onClick={loadBrief} disabled={busy === "brief"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+                {busy === "brief" ? "Generating..." : "Generate"}
+              </button>
+            ) : null
+          }>
+            {/* GET /ai/summary/{id} is staff-only on the backend (admin/records_officer/clinician) —
+                a patient viewer would get a 403 clicking Generate, so the button is hidden above and
+                this note is shown instead of a dead-end action. */}
+            {!isStaff ? <p className="text-sm text-slate-400">Available to clinical staff.</p>
+              : brief ? <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">{brief}</pre>
+              : <p className="text-sm text-slate-400">Generate a 30-second orientation brief for a receiving clinician.</p>}
+          </Section>
+
+          <Section title="Medication Interaction Check" action={
+            isStaff ? (
+              <button onClick={loadInteractions} disabled={busy === "interactions"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+                {busy === "interactions" ? "Checking..." : "Run Check"}
+              </button>
+            ) : null
+          }>
+            {!isStaff ? (
+              <p className="text-sm text-slate-400">Available to clinical staff.</p>
+            ) : interactions ? (
+              <div className="space-y-2">
+                {interactions.interactions.length === 0 && interactions.cross_facility_duplicates.length === 0 && (
+                  <p className="text-sm text-green-700">No interactions or duplicates found.</p>
+                )}
+                {interactions.interactions.map((i, idx) => (
+                  <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
+                    <span className="font-semibold text-red-700 uppercase text-xs">{i.severity}</span>
+                    <p className="text-red-800">{i.drug_a} + {i.drug_b}: {i.explanation}</p>
+                  </div>
+                ))}
+                {interactions.cross_facility_duplicates.map((d, idx) => (
+                  <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">{d}</div>
+                ))}
               </div>
-            ))}
-            {interactions.cross_facility_duplicates.map((d, idx) => (
-              <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">{d}</div>
-            ))}
-          </div>
-        ) : <p className="text-sm text-slate-400">Check for dangerous combinations across all prescribing facilities.</p>}
-      </Section>
+            ) : <p className="text-sm text-slate-400">Check for dangerous combinations across all prescribing facilities.</p>}
+          </Section>
+        </>
+      )}
 
-      <Section title="Emergency Access Card / QR" action={
-        <div className="flex gap-2">
-          {emergencyCard && !emergencyCard.revoked && (
-            <button onClick={revokeCard} disabled={busy === "card"} className="text-sm border border-red-700 text-red-700 px-3 py-1.5 rounded-lg">
-              Revoke
-            </button>
-          )}
-          <button onClick={issueCard} disabled={busy === "card"} className="text-sm bg-red-700 text-white px-3 py-1.5 rounded-lg">
-            {busy === "card" ? "Issuing..." : "Issue Card"}
-          </button>
-        </div>
-      }>
-        {emergencyCard ? (
-          <div className="flex items-center gap-4">
-            <img
-              src={emergencyCard.qr_code_base64}
-              alt="Emergency QR"
-              className={`w-32 h-32 border rounded-lg ${emergencyCard.revoked ? "opacity-30" : ""}`}
-            />
-            <div className="text-sm text-slate-600">
-              {emergencyCard.revoked && (
-                <p className="text-xs font-semibold text-red-700 uppercase mb-1">
-                  Revoked — this QR code no longer works
-                </p>
+      {activeTab === "access" && (
+        <>
+          <Section title="Emergency Access Card / QR" action={
+            <div className="flex gap-2">
+              {emergencyCard && !emergencyCard.revoked && (
+                <button onClick={revokeCard} disabled={busy === "card"} className="text-sm border border-red-700 text-red-700 px-3 py-1.5 rounded-lg">
+                  Revoke
+                </button>
               )}
-              <p>Card reference: <code className="bg-slate-100 px-1 rounded">{emergencyCard.card_reference}</code></p>
-              <p className="text-xs text-slate-400 mt-1">Scope: {emergencyCard.scope.join(", ")}</p>
-              <p className="text-xs text-slate-400">Print this for a physical senior-citizen card.</p>
+              <button onClick={issueCard} disabled={busy === "card"} className="text-sm bg-red-700 text-white px-3 py-1.5 rounded-lg">
+                {busy === "card" ? "Issuing..." : "Issue Card"}
+              </button>
             </div>
-          </div>
-        ) : cardStatus?.active ? (
-          <div className="flex items-center gap-4">
-            <img
-              src={cardStatus.qr_code_base64}
-              alt="Emergency QR"
-              className="w-32 h-32 border rounded-lg"
-            />
-            <div className="text-sm text-slate-600">
-              <p>Card reference: <code className="bg-slate-100 px-1 rounded">{cardStatus.card_reference}</code></p>
-              <p className="text-xs text-slate-400 mt-1">Scope: {cardStatus.scope.join(", ")}</p>
-              <p className="text-xs text-slate-400">
-                Issued from elsewhere (e.g. the patient's phone). Click "Issue Card" to generate a
-                new one you can view/print here (this will automatically revoke the one above).
-              </p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
-        )}
-      </Section>
+          }>
+            {emergencyCard ? (
+              <div className="flex items-center gap-4">
+                <img
+                  src={emergencyCard.qr_code_base64}
+                  alt="Emergency QR"
+                  className={`w-32 h-32 border rounded-lg ${emergencyCard.revoked ? "opacity-30" : ""}`}
+                />
+                <div className="text-sm text-slate-600">
+                  {emergencyCard.revoked && (
+                    <p className="text-xs font-semibold text-red-700 uppercase mb-1">
+                      Revoked — this QR code no longer works
+                    </p>
+                  )}
+                  <p>Card reference: <code className="bg-slate-100 px-1 rounded">{emergencyCard.card_reference}</code></p>
+                  <p className="text-xs text-slate-400 mt-1">Scope: {emergencyCard.scope.join(", ")}</p>
+                  <p className="text-xs text-slate-400">Print this for a physical senior-citizen card.</p>
+                </div>
+              </div>
+            ) : cardStatus?.active ? (
+              <div className="flex items-center gap-4">
+                <img
+                  src={cardStatus.qr_code_base64}
+                  alt="Emergency QR"
+                  className="w-32 h-32 border rounded-lg"
+                />
+                <div className="text-sm text-slate-600">
+                  <p>Card reference: <code className="bg-slate-100 px-1 rounded">{cardStatus.card_reference}</code></p>
+                  <p className="text-xs text-slate-400 mt-1">Scope: {cardStatus.scope.join(", ")}</p>
+                  <p className="text-xs text-slate-400">
+                    Issued from elsewhere (e.g. the patient's phone). Click "Issue Card" to generate a
+                    new one you can view/print here (this will automatically revoke the one above).
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
+            )}
+          </Section>
 
-      {canManageLogins && (
-        <Section title="Patient Login Account" action={
-          <button onClick={issueAccount} disabled={busy === "account"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
-            {busy === "account" ? "Working..." : "Issue / Reset Login"}
-          </button>
-        }>
-          <p className="text-xs text-slate-400">
-            Patients don't self-register — NRIC alone isn't secret in Malaysia (it's on every IC
-            and form), so anyone claiming an account with just an NRIC would be a takeover risk.
-            Verify identity in person, then issue a one-time temporary password here; the patient
-            sets their own password on first login. Also use this to reset a forgotten password
-            for a patient who can't self-serve via NRIC + date of birth in the app.
-          </p>
-        </Section>
+          {canManageLogins && (
+            <Section title="Patient Login Account" action={
+              <button onClick={issueAccount} disabled={busy === "account"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+                {busy === "account" ? "Working..." : "Issue / Reset Login"}
+              </button>
+            }>
+              <p className="text-xs text-slate-400">
+                Patients don't self-register — NRIC alone isn't secret in Malaysia (it's on every IC
+                and form), so anyone claiming an account with just an NRIC would be a takeover risk.
+                Verify identity in person, then issue a one-time temporary password here; the patient
+                sets their own password on first login. Also use this to reset a forgotten password
+                for a patient who can't self-serve via NRIC + date of birth in the app.
+              </p>
+            </Section>
+          )}
+
+          <Section title="NFC Physical Card (senior citizens / no smartphone)" action={
+            isStaff ? (
+              <button onClick={registerNfc} disabled={busy === "nfc"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+                {busy === "nfc" ? "Registering..." : "Register NFC Card"}
+              </button>
+            ) : null
+          }>
+            <p className="text-xs text-slate-400 mb-2">
+              For patients who cannot use the mobile app: tap a blank NFC card/sticker against a
+              reader to get its UID, register it here against this patient, then hand the physical
+              card to them. A responder taps it against any NFC-capable phone — no login, no app
+              install required on the responder's side (same trust model as the QR flow).
+            </p>
+            {nfcCards.length === 0 ? (
+              <p className="text-sm text-slate-400">No NFC card registered for this patient yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {nfcCards.map((n) => (
+                  <div key={n.nfc_uid} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <div className="text-sm">
+                      <code className="bg-slate-100 px-1 rounded">{n.nfc_uid}</code>
+                      <span className={`ml-2 text-xs ${n.revoked ? "text-red-600" : "text-green-700"}`}>
+                        {n.revoked ? "REVOKED" : "active"}
+                      </span>
+                      <p className="text-xs text-slate-400 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
+                    </div>
+                    {!n.revoked && isStaff && (
+                      <button onClick={() => revokeNfc(n.nfc_uid)} className="text-xs text-red-700">Revoke</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          <Section title="Access Audit Log (who viewed this record)">
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {auditLog.map((l, i) => (
+                <p key={i} className="text-xs text-slate-500">
+                  <span className="font-mono">{l.timestamp}</span> — {formatAuditActor(l)} — {l.action}
+                </p>
+              ))}
+            </div>
+          </Section>
+        </>
       )}
 
       {issuedAccount && (
@@ -804,127 +1369,6 @@ export default function PatientDetail() {
           </div>
         </div>
       )}
-
-      <Section title="NFC Physical Card (senior citizens / no smartphone)" action={
-        isStaff ? (
-          <button onClick={registerNfc} disabled={busy === "nfc"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
-            {busy === "nfc" ? "Registering..." : "Register NFC Card"}
-          </button>
-        ) : null
-      }>
-        <p className="text-xs text-slate-400 mb-2">
-          For patients who cannot use the mobile app: tap a blank NFC card/sticker against a
-          reader to get its UID, register it here against this patient, then hand the physical
-          card to them. A responder taps it against any NFC-capable phone — no login, no app
-          install required on the responder's side (same trust model as the QR flow).
-        </p>
-        {nfcCards.length === 0 ? (
-          <p className="text-sm text-slate-400">No NFC card registered for this patient yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {nfcCards.map((n) => (
-              <div key={n.nfc_uid} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                <div className="text-sm">
-                  <code className="bg-slate-100 px-1 rounded">{n.nfc_uid}</code>
-                  <span className={`ml-2 text-xs ${n.revoked ? "text-red-600" : "text-green-700"}`}>
-                    {n.revoked ? "REVOKED" : "active"}
-                  </span>
-                  <p className="text-xs text-slate-400 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
-                </div>
-                {!n.revoked && isStaff && (
-                  <button onClick={() => revokeNfc(n.nfc_uid)} className="text-xs text-red-700">Revoke</button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Section title="Conditions" action={isStaff && <button onClick={() => openAddRecord("condition")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.conditions.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
-          {patient.conditions.map((c) => (
-            <div key={c.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
-              <div className="text-sm text-slate-700">
-                <p>
-                  {c.name}{" "}
-                  {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}{" "}
-                  <span className="text-xs text-slate-400">{c.status}</span>
-                </p>
-                {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
-              </div>
-              {isStaff && <button onClick={() => openEditRecord("condition", c)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
-            </div>
-          ))}
-        </Section>
-        <Section title="Medications" action={isStaff && <button onClick={() => openAddRecord("medication")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.medications.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
-          {patient.medications.map((m) => (
-            <div key={m.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
-              <div className="text-sm text-slate-700">
-                <p>
-                  {m.drug_name}{" "}
-                  {!m.active && <span className="text-xs text-slate-400">(inactive)</span>}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
-                  {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
-                </p>
-              </div>
-              {isStaff && <button onClick={() => openEditRecord("medication", m)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
-            </div>
-          ))}
-        </Section>
-        <Section title="Allergies" action={isStaff && <button onClick={() => openAddRecord("allergy")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.allergies.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
-          {patient.allergies.map((a) => (
-            <div key={a.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
-              <div className="text-sm text-slate-700">
-                <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
-                {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
-              </div>
-              {isStaff && <button onClick={() => openEditRecord("allergy", a)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
-            </div>
-          ))}
-        </Section>
-        <Section title="Visit / Transfer Timeline" action={isStaff && <button onClick={() => openAddRecord("encounter")} className="text-xs text-blue-700">+ Add</button>}>
-          {patient.encounters.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
-          <div className="space-y-2 max-h-72 overflow-y-auto">
-            {[...patient.encounters]
-              .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
-              .map((e) => (
-                <div key={e.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
-                  <div className="text-sm text-slate-700">
-                    <p>
-                      {e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span>
-                    </p>
-                    <p className="text-xs text-slate-400">{e.started_at}</p>
-                    {e.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {e.reason}</p>}
-                    {e.notes && <p className="text-xs text-slate-500 mt-0.5">Notes: {e.notes}</p>}
-                  </div>
-                  {isStaff && <button onClick={() => openEditRecord("encounter", e)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
-                </div>
-              ))}
-          </div>
-        </Section>
-      </div>
-
-      <DocumentsSection
-        patientId={id}
-        documents={patient.documents || []}
-        isStaff={isStaff}
-        onUploaded={refresh}
-      />
-
-      <Section title="Access Audit Log (who viewed this record)">
-        <div className="space-y-1 max-h-48 overflow-y-auto">
-          {auditLog.map((l, i) => (
-            <p key={i} className="text-xs text-slate-500">
-              <span className="font-mono">{l.timestamp}</span> — {l.actor_role || "system"} — {l.action}
-            </p>
-          ))}
-        </div>
-      </Section>
 
       {recordModal && (
         <RecordModal

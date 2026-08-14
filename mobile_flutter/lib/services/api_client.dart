@@ -4,6 +4,7 @@ import '../config/app_config.dart';
 import '../models/emergency_card.dart';
 import '../models/patient.dart';
 import '../models/audit_log_entry.dart';
+import '../models/server_appointment.dart';
 import 'api_exception.dart';
 import 'token_storage.dart';
 
@@ -32,6 +33,36 @@ class ApiClient {
           }
           handler.next(options);
         },
+        onError: (error, handler) {
+          // The backend now actually revokes previously-issued JWTs (e.g. on
+          // a password change from another device/console), so a 401 here
+          // can mean "this token is dead", not just "you never logged in".
+          // `onUnauthorized` lets whoever owns the session (AuthProvider,
+          // wired up in main.dart) react by clearing local state and
+          // bouncing back to the login screen. This is deliberately just an
+          // extra side effect — `handler.next(error)` below still runs
+          // unconditionally so the original caller's existing try/catch and
+          // ApiException.fromDioException mapping keeps working exactly as
+          // it did before this was added.
+          //
+          // Excluded on purpose: `/auth/login` (a 401 there is a normal
+          // "wrong password" outcome the login screen already handles
+          // itself — treating it as "session expired" would be wrong and
+          // would fight with LoginScreen's own error display), and the two
+          // password-reset-OTP endpoints, which are public/unauthenticated
+          // and can 401 for reasons (bad/expired OTP, rate limiting) that
+          // have nothing to do with an existing session.
+          final path = error.requestOptions.path;
+          const exemptPaths = {
+            '/auth/login',
+            '/auth/request-password-reset-otp',
+            '/auth/reset-password-with-otp',
+          };
+          if (error.response?.statusCode == 401 && !exemptPaths.contains(path)) {
+            onUnauthorized?.call();
+          }
+          handler.next(error);
+        },
       ),
     );
   }
@@ -39,6 +70,16 @@ class ApiClient {
   final AppConfig _config;
   final TokenStorage _tokenStorage;
   final Dio _dio;
+
+  /// Fired whenever any non-exempt request comes back 401, meaning the
+  /// current session's token is no longer valid (expired, or revoked
+  /// server-side by a password change elsewhere). Left unset (no-op) by
+  /// default to avoid a circular constructor dependency — `ApiClient` is
+  /// built before `AuthProvider` in main.dart, so it can't take an
+  /// `AuthProvider` in its own constructor. main.dart wires this up as
+  /// `apiClient.onUnauthorized = () => authProvider.forceLogout();` once
+  /// both exist.
+  void Function()? onUnauthorized;
 
   Future<T> _guard<T>(Future<T> Function() body) async {
     try {
@@ -186,6 +227,25 @@ class ApiClient {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>('/ai/summary/$patientId');
       return response.data?['handover_brief'] as String?;
+    });
+  }
+
+  /// `GET /patients/{patient_id}/appointments` — a patient reads only their
+  /// own (staff may read any patient's, but that path isn't needed by this
+  /// app). Returns clinic-published appointments ordered by `scheduled_at`
+  /// ascending, each carrying a server-computed, future-only `reminders`
+  /// list (see [ServerAppointment] / [AppointmentReminderInfo] doc
+  /// comments for why this app deliberately doesn't reimplement that
+  /// offset calculation client-side). Used by
+  /// RemindersProvider.syncServerAppointments to (re)schedule local
+  /// notifications for these, distinct from the patient's own
+  /// device-local, self-added appointment reminders.
+  Future<List<ServerAppointment>> getAppointments(String patientId) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/patients/$patientId/appointments');
+      return (response.data ?? [])
+          .map((e) => ServerAppointment.fromJson(e as Map<String, dynamic>))
+          .toList();
     });
   }
 

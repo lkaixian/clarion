@@ -26,6 +26,28 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
 
   @override
+  void initState() {
+    super.initState();
+    // If we landed here because ApiClient.onUnauthorized fired
+    // (AuthProvider.forceLogout — see its doc comment) rather than a
+    // deliberate Sign Out, `auth.sessionExpired` will be true exactly once.
+    // Show a one-time explanatory snackbar instead of silently dumping the
+    // user back on the login form. Scheduled for after the first frame
+    // since ScaffoldMessenger.of(context) needs a built Scaffold, and
+    // reading/mutating AuthProvider during initState's own build is unsafe.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (auth.sessionExpired) {
+        auth.acknowledgeSessionExpired();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).sessionExpiredSnackbar)),
+        );
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _identifierController.dispose();
     _passwordController.dispose();

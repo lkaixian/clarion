@@ -43,6 +43,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loginFailedGeneric => '登录失败。请检查您的账号密码，或在设置中检查 API 地址。';
 
   @override
+  String get sessionExpiredSnackbar => '您已被登出，请重新登录。';
+
+  @override
   String get seniorPrompt => '长者或初次使用者？';
 
   @override
@@ -348,6 +351,28 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get clinicAppointmentsSection => '来自您的诊所';
+
+  @override
+  String get noClinicAppointments => '暂无来自您诊所的即将到来的预约。';
+
+  @override
+  String get clinicAppointmentBadge => '由您的诊所设置';
+
+  @override
+  String fastingRequiredNote(int hours) {
+    return '⚠ 需要禁食：预约前 $hours 小时';
+  }
+
+  @override
+  String get fastingRequiredNoteUnspecified => '⚠ 此预约前需要禁食——具体时长请咨询您的诊所。';
+
+  @override
+  String appointmentReasonLabel(String reason) {
+    return '原因：$reason';
+  }
+
+  @override
   String get upcomingAppointments => '即将到来的预约';
 
   @override
@@ -467,6 +492,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get auditActorSystemFallback => '系统';
+
+  @override
+  String get auditActorEmergencyResponderUnverified => '急救人员 — 自行填报，未经核实';
+
+  @override
   String get responderScanTitle => '扫描紧急卡';
 
   @override
@@ -523,6 +554,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get nfcStarting => '正在启动 NFC…';
+
+  @override
+  String get scanResultFoundTitle => '已找到病患';
+
+  @override
+  String scanResultDobValue(String date) {
+    return '出生日期：$date';
+  }
+
+  @override
+  String get scanResultBloodTypeUnknown => '记录中无此信息';
+
+  @override
+  String scanResultOmittedMedications(int count) {
+    return '另有 $count 项药物记录未在此显示——未被标记为紧急重要信息。';
+  }
+
+  @override
+  String scanResultOmittedConditions(int count) {
+    return '另有 $count 项病症记录未在此显示——未被标记为紧急重要信息。';
+  }
+
+  @override
+  String scanResultOmittedAllergies(int count) {
+    return '另有 $count 项过敏记录未在此显示——未被标记为紧急重要信息。';
+  }
 
   @override
   String seniorBloodType(String type) {

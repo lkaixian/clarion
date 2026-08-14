@@ -4,12 +4,13 @@ import secrets
 from datetime import datetime, timedelta
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/emergency", tags=["emergency"])
 
@@ -31,8 +32,27 @@ def _render_qr_base64(card_reference: str) -> str:
 
 def _scoped_fields(patient: models.Patient, scope: set) -> dict:
     """Shared by /emergency/scan and /emergency/nfc/scan so both a QR-code
-    scan and an NFC tap return exactly the same shape for the same scope."""
+    scan and an NFC tap return exactly the same shape for the same scope.
+
+    Only `critical_for_emergency` items are ever included per category
+    (a deliberate "show less, but trustworthy" tradeoff for an
+    unauthenticated, first-responder-facing endpoint) -- `medications` is
+    additionally filtered to `active` items only, same as elsewhere in this
+    API. `medications` entries are `{"drug_name", "dosage", "frequency"}`
+    objects, not bare strings: a responder seeing "Warfarin" with no dose
+    is meaningfully less useful (and more dangerous to act on) than seeing
+    "Warfarin -- 5mg, once daily". `dosage`/`frequency` are nullable columns,
+    so either may come through as `null` for an older/incomplete record --
+    that's expected, not an error.
+
+    `omitted_non_critical` surfaces a count of items that were filtered out
+    per category (only for categories actually in `scope`, and only when
+    at least one item was filtered) -- without this, a responder has no way
+    to tell "this patient truly has nothing else on file" apart from "there
+    IS more, it's just not flagged critical for this view", which is a real
+    safety gap for an emergency-facing screen."""
     result = {"full_name": patient.full_name, "date_of_birth": patient.date_of_birth}
+    omitted_non_critical = {}
 
     if "blood_type" in scope:
         result["blood_type"] = patient.blood_type
@@ -41,14 +61,28 @@ def _scoped_fields(patient: models.Patient, scope: set) -> dict:
             {"substance": a.substance, "severity": a.severity, "reaction": a.reaction}
             for a in patient.allergies if a.critical_for_emergency
         ]
+        non_critical_count = sum(1 for a in patient.allergies if not a.critical_for_emergency)
+        if non_critical_count:
+            omitted_non_critical["allergies"] = non_critical_count
     if "medications" in scope:
         result["medications"] = [
-            m.drug_name for m in patient.medications if m.active and m.critical_for_emergency
+            {"drug_name": m.drug_name, "dosage": m.dosage, "frequency": m.frequency}
+            for m in patient.medications if m.active and m.critical_for_emergency
         ]
+        non_critical_count = sum(
+            1 for m in patient.medications if m.active and not m.critical_for_emergency
+        )
+        if non_critical_count:
+            omitted_non_critical["medications"] = non_critical_count
     if "conditions" in scope:
         result["conditions"] = [
             c.name for c in patient.conditions if c.critical_for_emergency
         ]
+        non_critical_count = sum(1 for c in patient.conditions if not c.critical_for_emergency)
+        if non_critical_count:
+            omitted_non_critical["conditions"] = non_critical_count
+
+    result["omitted_non_critical"] = omitted_non_critical
     return result
 
 
@@ -110,7 +144,7 @@ def issue_emergency_card(
 
     log_access(
         db, payload.patient_id, current_user.id, current_user.role, "issue_emergency_card",
-        detail=f"auto_revoked={len(previous)}",
+        detail=f"auto_revoked={len(previous)}", actor_facility=current_user.facility,
     )
 
     return {
@@ -126,7 +160,12 @@ def issue_emergency_card(
 
 
 @router.post("/scan")
-def scan_emergency_card(payload: schemas.EmergencyScanRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")  # per-IP -- unauthenticated by design, so this is
+# the only thing standing between a legitimate fumbled scan and a
+# card_reference brute-force loop. Generous enough for a real responder
+# mistyping/rescanning a few times, tight enough to make guessing
+# infeasible (see also the failed-scan audit-log entries below).
+def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest, db: Session = Depends(get_db)):
     """
     Called by an emergency responder's device after scanning the QR or
     keying in the physical card's printed reference. No login required —
@@ -139,10 +178,30 @@ def scan_emergency_card(payload: schemas.EmergencyScanRequest, db: Session = Dep
         .first()
     )
     if not grant or grant.revoked or grant.expires_at < datetime.utcnow():
+        # Failed scan (invalid/expired/revoked card_reference) -- no
+        # patient_id available since the lookup itself failed
+        # (AuditLog.patient_id is nullable for exactly this reason). Only
+        # successful scans used to leave a trace here; a brute-force probe
+        # against card_reference values (now also rate-limited above) was
+        # previously invisible in the audit log.
+        log_access(
+            db, None,
+            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
+            actor_role="emergency_responder",
+            action="emergency_access_failed",
+            detail=f"card_reference={payload.card_reference} org={payload.responder_org}",
+        )
         raise HTTPException(status_code=404, detail="Invalid or expired emergency card")
 
     patient = db.query(models.Patient).filter(models.Patient.id == grant.patient_id).first()
     if not patient:
+        log_access(
+            db, None,
+            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
+            actor_role="emergency_responder",
+            action="emergency_access_failed",
+            detail=f"card_reference={payload.card_reference} org={payload.responder_org} (grant found, patient missing)",
+        )
         raise HTTPException(status_code=404, detail="Patient not found")
 
     scope = set(grant.scope or [])
@@ -280,7 +339,8 @@ def register_nfc_card(
     db.commit()
     db.refresh(grant)
 
-    log_access(db, payload.patient_id, current_user.id, current_user.role, action, detail=payload.nfc_uid)
+    log_access(db, payload.patient_id, current_user.id, current_user.role, action, detail=payload.nfc_uid,
+               actor_facility=current_user.facility)
 
     return {
         "nfc_uid": grant.nfc_uid,
@@ -291,7 +351,8 @@ def register_nfc_card(
 
 
 @router.post("/nfc/scan")
-def scan_nfc_card(payload: schemas.NfcScanRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")  # per-IP -- same rationale as POST /emergency/scan above.
+def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session = Depends(get_db)):
     """No login required — same design as /emergency/scan, but keyed by the
     physical card's NFC UID instead of a QR-encoded card_reference."""
     grant = (
@@ -300,10 +361,26 @@ def scan_nfc_card(payload: schemas.NfcScanRequest, db: Session = Depends(get_db)
         .first()
     )
     if not grant or grant.revoked or grant.expires_at < datetime.utcnow():
+        # Failed scan -- see POST /emergency/scan above for why this is
+        # logged with patient_id=None.
+        log_access(
+            db, None,
+            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
+            actor_role="emergency_responder",
+            action="emergency_access_failed",
+            detail=f"nfc_uid={payload.nfc_uid} org={payload.responder_org}",
+        )
         raise HTTPException(status_code=404, detail="This NFC card is not registered, revoked, or expired")
 
     patient = db.query(models.Patient).filter(models.Patient.id == grant.patient_id).first()
     if not patient:
+        log_access(
+            db, None,
+            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
+            actor_role="emergency_responder",
+            action="emergency_access_failed",
+            detail=f"nfc_uid={payload.nfc_uid} org={payload.responder_org} (grant found, patient missing)",
+        )
         raise HTTPException(status_code=404, detail="Patient not found")
 
     scope = set(grant.scope or [])
@@ -331,7 +408,8 @@ def revoke_nfc_card(
         raise HTTPException(status_code=404, detail="NFC card not found")
     grant.revoked = True
     db.commit()
-    log_access(db, grant.patient_id, current_user.id, current_user.role, "revoke_nfc_card", detail=nfc_uid)
+    log_access(db, grant.patient_id, current_user.id, current_user.role, "revoke_nfc_card", detail=nfc_uid,
+               actor_facility=current_user.facility)
     return {"status": "revoked"}
 
 

@@ -1,10 +1,12 @@
 import hashlib
 import hmac
+import os
 import secrets
 import string
 from datetime import datetime, timedelta
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -14,9 +16,29 @@ from sqlalchemy.orm import Session
 from . import models
 from .database import get_db
 
-# NOTE FOR TEAM: this secret is fine for a symposium demo. Before any real
-# deployment, move it to an environment variable and rotate it.
-SECRET_KEY = "medibridge-dev-secret-change-me"
+# Defensive/idempotent: app/main.py already calls load_dotenv() as early as
+# possible (before importing this module, in every real entry point --
+# `uvicorn app.main:app`), so this is normally a no-op. It's here purely as
+# a safety net for any hypothetical alternate entry point that imports
+# auth.py before main.py has run (e.g. a standalone script/REPL/test that
+# imports `app.auth` directly without going through `app.main` first) --
+# load_dotenv() is safe to call more than once.
+load_dotenv()
+
+# SECRET_KEY / OTP_HMAC_KEY are read from the environment (see
+# backend/.env.example) -- there is deliberately NO hardcoded fallback
+# here. A guessable, shared, checked-into-git-history default secret
+# defeats the entire point of JWT signing / OTP hashing (anyone with the
+# source can forge tokens / OTP hashes). Fail loudly and immediately at
+# import time instead of silently running with a known-bad secret.
+try:
+    SECRET_KEY = os.environ["SECRET_KEY"]
+except KeyError as exc:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. Copy backend/.env.example "
+        "to backend/.env and set SECRET_KEY to a real, high-entropy value "
+        "(generate one with: python -c \"import secrets; print(secrets.token_hex(32))\")."
+    ) from exc
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
 
@@ -50,8 +72,16 @@ OTP_REQUEST_WINDOW_MINUTES = 15
 # tradeoff for a long-lived login password but wasted cost for a 6-digit,
 # 10-minute-lived, rate-limited code. A keyed HMAC-SHA256 is fast, fixed
 # time-cost, and just as unrecoverable without this key. Same
-# demo-appropriate secret-management caveat as SECRET_KEY above.
-_OTP_HMAC_KEY = b"medibridge-dev-otp-hmac-key-change-me"
+# environment-sourced secret-management treatment as SECRET_KEY above --
+# no hardcoded fallback, fail loudly at import time if unset.
+try:
+    _OTP_HMAC_KEY = os.environ["OTP_HMAC_KEY"].encode("utf-8")
+except KeyError as exc:
+    raise RuntimeError(
+        "OTP_HMAC_KEY environment variable is not set. Copy backend/.env.example "
+        "to backend/.env and set OTP_HMAC_KEY to a real, high-entropy value "
+        "(generate one with: python -c \"import secrets; print(secrets.token_hex(32))\")."
+    ) from exc
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -95,17 +125,57 @@ def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    password_changed_at: Optional[datetime] = None,
+) -> str:
+    """`password_changed_at` should be the issuing user's CURRENT
+    `User.password_changed_at` at the moment the token is minted (the
+    caller already has the full User row -- see auth_router.py::login).
+    Embedded as the `pwd_changed_at` claim (epoch seconds, so it survives
+    JSON/JWT round-tripping without a datetime-parsing dependency on the
+    decode side) so _resolve_current_user below can detect and reject a
+    token issued BEFORE a subsequent password change. Omitted entirely
+    when `password_changed_at` is None (user has no watermark yet -- either
+    they've never changed their password since this feature shipped, or
+    this call site doesn't have one to embed), which is exactly the
+    backward-compatible "don't reject" case on the decode side."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
+    if password_changed_at is not None:
+        to_encode["pwd_changed_at"] = password_changed_at.timestamp()
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def _resolve_current_user(token: str, db: Session) -> models.User:
     """Shared identity resolution for both get_current_user variants below:
     decode the JWT, look up the user, 401 if either fails. Does NOT check
-    must_change_password -- that's layered on top by get_current_user."""
+    must_change_password -- that's layered on top by get_current_user.
+
+    Also enforces JWT revocation-on-password-change. The ONLY thing that
+    gates whether this check runs at all is the user's CURRENT
+    `password_changed_at` on the DB row:
+      - If it's still None (this user has never gone through
+        _apply_new_password since the migration landed -- no watermark
+        exists yet to compare against), skip the check entirely and accept
+        the token regardless of whether it carries a `pwd_changed_at`
+        claim. This is what keeps the migration itself from mass-logging
+        out every existing session the moment it lands.
+      - Once it's set (an ACTUAL password change has happened at some
+        point), every token is held to it: a token with no `pwd_changed_at`
+        claim at all necessarily predates that first-ever password change
+        (create_access_token only ever omits the claim when
+        password_changed_at was still None at issuance time -- see its
+        docstring) and is rejected outright; a token that DOES carry the
+        claim is rejected only if the DB value is strictly newer than the
+        claim (i.e. the password was changed AFTER this particular token
+        was issued). A token issued at/after the most recent change (claim
+        equals the current DB value) is accepted, same 401 used for every
+        other invalid-token case, so a stolen/leaked token stops working
+        the moment the legitimate user changes their password.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -116,12 +186,23 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
+        token_pwd_changed_at = payload.get("pwd_changed_at")
     except JWTError:
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise credentials_exception
+
+    if user.password_changed_at is not None:
+        if token_pwd_changed_at is None:
+            # A password change has happened at some point, but this token
+            # carries no watermark at all -- it necessarily predates that
+            # change (see docstring above). Stale, reject.
+            raise credentials_exception
+        if user.password_changed_at.timestamp() > float(token_pwd_changed_at):
+            raise credentials_exception
+
     return user
 
 

@@ -27,6 +27,14 @@ class AuthProvider extends ChangeNotifier {
   String? error;
   bool prefersSeniorMode = false;
 
+  /// Set by [forceLogout] (never by the deliberate [logout]) so LoginScreen
+  /// can show a one-time "you were signed out" message instead of silently
+  /// dumping the user back on the login form with no explanation. LoginScreen
+  /// reads this once on its first frame and immediately clears it via
+  /// [acknowledgeSessionExpired] — it is not meant to persist across a
+  /// subsequent login/forceLogout cycle beyond that single display.
+  bool sessionExpired = false;
+
   bool get isAuthenticated => status == AuthStatus.authenticated && user != null;
 
   /// True right after a login where the backend flagged this account as
@@ -132,6 +140,31 @@ class AuthProvider extends ChangeNotifier {
     user = null;
     status = AuthStatus.unauthenticated;
     notifyListeners();
+  }
+
+  /// Same effect as [logout], but for the *involuntary* case: `ApiClient`
+  /// calls this (wired up in main.dart as `apiClient.onUnauthorized`)
+  /// whenever a request comes back 401 for a token that used to be valid —
+  /// most commonly because the backend revoked it after a password change
+  /// on another device/console. Sets [sessionExpired] so LoginScreen (which
+  /// `_AuthGate` in app.dart already routes to automatically the moment
+  /// `status` flips to `unauthenticated` — no manual navigation needed here)
+  /// can surface a one-time explanatory message, unlike the deliberate
+  /// Sign Out button on Home, which goes through plain [logout] and shows
+  /// nothing extra.
+  Future<void> forceLogout() async {
+    await _tokenStorage.clear();
+    user = null;
+    status = AuthStatus.unauthenticated;
+    sessionExpired = true;
+    notifyListeners();
+  }
+
+  /// Called once by LoginScreen after it has displayed the "you were signed
+  /// out" snackbar, so the message doesn't reappear on a later cold start or
+  /// after the user logs back in and out again deliberately.
+  void acknowledgeSessionExpired() {
+    sessionExpired = false;
   }
 
   Future<void> setPrefersSeniorMode(bool value) async {

@@ -32,6 +32,24 @@ class NotificationService {
     return 100000 + (appointmentId.hashCode.abs() % 90000);
   }
 
+  /// Server-published appointments (RemindersProvider.syncServerAppointments)
+  /// get their own disjoint ID namespace, well above 1,000,000 — deliberately
+  /// far clear of both ranges above, since [medicationNotificationId]'s `* 10`
+  /// term actually lets it produce values up to ~900,009 despite the
+  /// "[0, 100000)" comment on it, which already overlaps
+  /// [appointmentNotificationId]'s stated [100000, 200000) range. Rather than
+  /// also try to fit into that already-crowded space (and risk a *third*
+  /// scheme colliding too), this starts a full million above everything
+  /// else. One appointment can have several reminders (see
+  /// AppointmentReminderInfo — "1 day before", "start fasting", "3 hours
+  /// before", …), so [reminderIndex] (that reminder's position in the
+  /// server's `reminders` array for this appointment) is folded into the id
+  /// too, keeping each (appointment, reminder) pair independently
+  /// schedulable/cancellable.
+  static int serverAppointmentNotificationId(String serverAppointmentId, int reminderIndex) {
+    return 1000000 + (serverAppointmentId.hashCode.abs() % 90000) * 10 + (reminderIndex % 10);
+  }
+
   Future<void> init() async {
     if (_initialized) return;
 
@@ -152,6 +170,41 @@ class NotificationService {
   Future<void> cancelAppointmentReminder(String appointmentId) async {
     await init();
     await _plugin.cancel(appointmentNotificationId(appointmentId));
+  }
+
+  /// Schedules a one-off reminder for a single server-computed reminder
+  /// window ([reminderIndex]) belonging to a clinic-published
+  /// [serverAppointmentId] (see models/server_appointment.dart). Reuses the
+  /// same Android channel as [scheduleAppointmentReminder] — both are
+  /// "appointment reminder" notifications from the user's point of view,
+  /// just from two different sources (self-added vs. clinic-published).
+  /// Does nothing if [firesAt] is already in the past — shouldn't normally
+  /// happen since the backend only ever sends future `fires_at` values, but
+  /// this stays defensive rather than trusting that invariant blindly.
+  Future<void> scheduleServerAppointmentReminder({
+    required String serverAppointmentId,
+    required int reminderIndex,
+    required DateTime firesAt,
+    required String title,
+    required String body,
+  }) async {
+    await init();
+    if (firesAt.isBefore(DateTime.now())) return;
+    final id = serverAppointmentNotificationId(serverAppointmentId, reminderIndex);
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(firesAt, tz.local),
+      const NotificationDetails(android: _appointmentChannel, iOS: DarwinNotificationDetails()),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  Future<void> cancelServerAppointmentReminder(String serverAppointmentId, int reminderIndex) async {
+    await init();
+    await _plugin.cancel(serverAppointmentNotificationId(serverAppointmentId, reminderIndex));
   }
 
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {

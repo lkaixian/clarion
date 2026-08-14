@@ -130,7 +130,8 @@ def create_patient(
             detail="This NRIC is already registered to another patient.",
         )
     db.refresh(patient)
-    log_access(db, patient.id, current_user.id, current_user.role, "create_patient")
+    log_access(db, patient.id, current_user.id, current_user.role, "create_patient",
+               actor_facility=current_user.facility)
     return patient
 
 
@@ -157,7 +158,7 @@ def get_patient_full_record(
         raise HTTPException(status_code=403, detail="Cannot view another patient's record")
 
     log_access(db, patient_id, current_user.id, current_user.role, "view_full_record",
-               fields=["all"])
+               fields=["all"], actor_facility=current_user.facility)
     return _serialize_patient(patient)
 
 
@@ -197,10 +198,15 @@ def add_condition(
     patient_id: str, payload: schemas.ConditionCreate, db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     condition = models.Condition(patient_id=patient_id, **payload.model_dump())
     db.add(condition)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_condition", detail=payload.name)
+    log_access(db, patient_id, current_user.id, current_user.role, "add_condition", detail=payload.name,
+               actor_facility=current_user.facility)
     return {"status": "ok"}
 
 
@@ -229,6 +235,7 @@ def update_condition(
     log_access(
         db, patient_id, current_user.id, current_user.role, "update_condition",
         fields=sorted(submitted_fields.keys()), detail=condition_id,
+        actor_facility=current_user.facility,
     )
     return _serialize_condition(condition)
 
@@ -238,10 +245,15 @@ def add_medication(
     patient_id: str, payload: schemas.MedicationCreate, db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     med = models.MedicationStatement(patient_id=patient_id, **payload.model_dump())
     db.add(med)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_medication", detail=payload.drug_name)
+    log_access(db, patient_id, current_user.id, current_user.role, "add_medication", detail=payload.drug_name,
+               actor_facility=current_user.facility)
     return {"status": "ok"}
 
 
@@ -270,6 +282,7 @@ def update_medication(
     log_access(
         db, patient_id, current_user.id, current_user.role, "update_medication",
         fields=sorted(submitted_fields.keys()), detail=medication_id,
+        actor_facility=current_user.facility,
     )
     return _serialize_medication(med)
 
@@ -279,10 +292,15 @@ def add_allergy(
     patient_id: str, payload: schemas.AllergyCreate, db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     allergy = models.AllergyIntolerance(patient_id=patient_id, **payload.model_dump())
     db.add(allergy)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_allergy", detail=payload.substance)
+    log_access(db, patient_id, current_user.id, current_user.role, "add_allergy", detail=payload.substance,
+               actor_facility=current_user.facility)
     return {"status": "ok"}
 
 
@@ -311,6 +329,7 @@ def update_allergy(
     log_access(
         db, patient_id, current_user.id, current_user.role, "update_allergy",
         fields=sorted(submitted_fields.keys()), detail=allergy_id,
+        actor_facility=current_user.facility,
     )
     return _serialize_allergy(allergy)
 
@@ -322,10 +341,15 @@ def add_encounter(
 ):
     """Recording a transfer/visit here is what powers the 'what changed since
     last visit' transfer view on the web console."""
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
     encounter = models.Encounter(patient_id=patient_id, **payload.model_dump())
     db.add(encounter)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_encounter", detail=payload.facility_name)
+    log_access(db, patient_id, current_user.id, current_user.role, "add_encounter", detail=payload.facility_name,
+               actor_facility=current_user.facility)
     return {"status": "ok"}
 
 
@@ -357,6 +381,7 @@ def update_encounter(
     log_access(
         db, patient_id, current_user.id, current_user.role, "update_encounter",
         fields=sorted(submitted_fields.keys()), detail=encounter_id,
+        actor_facility=current_user.facility,
     )
     return _serialize_encounter(encounter)
 
@@ -412,7 +437,7 @@ def update_own_profile(
     # more exposed place (the audit log) than the field already lives.
     log_access(
         db, patient_id, current_user.id, current_user.role, "update_own_profile",
-        fields=changed_fields,
+        fields=changed_fields, actor_facility=current_user.facility,
     )
     return patient
 
@@ -423,7 +448,24 @@ def get_audit_log(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     """Patients (and staff) can review exactly who accessed the record and
-    when — this is the transparency half of the PDPA-aligned design."""
+    when — this is the transparency half of the PDPA-aligned design.
+
+    `actor_name` is resolved via a LIVE join against `users.full_name`
+    (not a value stored/snapshotted on the AuditLog row itself) -- see
+    models.AuditLog's class docstring for the reasoning: a later name
+    correction (typo fix, legal name change) should be reflected in old
+    history too, not stay frozen/wrong. `actor_facility`, in contrast, IS a
+    snapshot straight off the row (no join needed) -- same docstring covers
+    why those two fields are deliberately handled differently.
+
+    `actor` is only ever a real `users.id` for a staff/patient action --
+    the "system" actor and the unauthenticated emergency-scan endpoints'
+    "emergency_responder:<name>" actor have no matching `User` row at all,
+    so the join is skipped for those (and for a staff `User` account that
+    has since been deleted, the lookup just degrades to `actor_name=None`
+    rather than a 500 -- "who" for that row is still available via the raw
+    `actor` id, just not resolvable to a live display name anymore).
+    """
     if current_user.role == "patient" and current_user.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Cannot view another patient's audit log")
 
@@ -433,11 +475,33 @@ def get_audit_log(
         .order_by(models.AuditLog.timestamp.desc())
         .all()
     )
+
+    # Batch-resolve actor -> full_name in one query instead of one query per
+    # row -- skip "system" and "emergency_responder:*" actors up front since
+    # neither is ever a real users.id, so there's no point even trying them
+    # against the User table.
+    real_user_actor_ids = {
+        l.actor for l in logs
+        if l.actor != "system" and not l.actor.startswith("emergency_responder:")
+    }
+    actor_names = {}
+    if real_user_actor_ids:
+        for user_id, full_name in (
+            db.query(models.User.id, models.User.full_name)
+            .filter(models.User.id.in_(real_user_actor_ids))
+            .all()
+        ):
+            actor_names[user_id] = full_name
+
     return [
         {
             "actor": l.actor, "actor_role": l.actor_role, "action": l.action,
             "fields_accessed": l.fields_accessed, "timestamp": str(l.timestamp),
             "detail": l.detail,
+            # Additive fields -- existing web/mobile clients that only read
+            # the keys above keep working unchanged.
+            "actor_name": actor_names.get(l.actor),  # None if unresolvable (system/emergency/deleted account)
+            "actor_facility": l.actor_facility,
         }
         for l in logs
     ]
@@ -477,7 +541,8 @@ def get_document_detail(
     this pass."""
     document = _get_document_or_404(db, patient_id, document_id)
 
-    log_access(db, patient_id, current_user.id, current_user.role, "view_document", detail=document_id)
+    log_access(db, patient_id, current_user.id, current_user.role, "view_document", detail=document_id,
+               actor_facility=current_user.facility)
     return {
         "id": document.id,
         "doc_type": document.doc_type,
@@ -509,7 +574,8 @@ def get_document_file(
     if not document.file_path or not os.path.isfile(document.file_path):
         raise HTTPException(status_code=404, detail="Original file not available for this document")
 
-    log_access(db, patient_id, current_user.id, current_user.role, "view_document_file", detail=document_id)
+    log_access(db, patient_id, current_user.id, current_user.role, "view_document_file", detail=document_id,
+               actor_facility=current_user.facility)
 
     # Content-Type is guessed from the sanitized on-disk filename
     # (document.file_path is written as "{document_id}_{safe_basename}" by

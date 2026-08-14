@@ -8,12 +8,26 @@ export default function PatientList() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false });
   const [loading, setLoading] = useState(true);
+  // Client-side only — listPatients() already fetches the whole array, and
+  // at this project's demo/hackathon scale (a clinic's patient list, not a
+  // national registry) a dedicated backend search endpoint would be scope
+  // creep. Filters as-you-type; no debounce needed since it's just an
+  // in-memory Array.filter, not a network call.
+  const [search, setSearch] = useState("");
 
   function refresh() {
     listPatients().then(setPatients).finally(() => setLoading(false));
   }
 
   useEffect(refresh, []);
+
+  const filteredPatients = (() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter((p) =>
+      p.full_name?.toLowerCase().includes(q) || p.national_id?.toLowerCase().includes(q)
+    );
+  })();
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -25,14 +39,23 @@ export default function PatientList() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-4">
         <h1 className="text-xl font-bold text-slate-800">Patients</h1>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium"
-        >
-          {showForm ? "Cancel" : "+ New Patient (One-Click Intake)"}
-        </button>
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search by name or NRIC..."
+            className="border rounded-lg px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+          >
+            {showForm ? "Cancel" : "+ New Patient (One-Click Intake)"}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -56,8 +79,15 @@ export default function PatientList() {
         <p className="text-slate-400">Loading...</p>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y">
-          {patients.length === 0 && <p className="p-5 text-slate-400 text-sm">No patients yet — create one above.</p>}
-          {patients.map((p) => (
+          {patients.length === 0 ? (
+            <p className="p-5 text-slate-400 text-sm">No patients yet — create one above.</p>
+          ) : filteredPatients.length === 0 ? (
+            // Distinct from the "zero patients in the system" state above —
+            // this means the search just didn't match anything, not that
+            // the clinic has no patients on file.
+            <p className="p-5 text-slate-400 text-sm">No patients match "{search}".</p>
+          ) : null}
+          {filteredPatients.map((p) => (
             <Link key={p.id} to={`/patients/${p.id}`} className="flex items-center justify-between p-4 hover:bg-slate-50">
               <div>
                 <p className="font-medium text-slate-800">{p.full_name}</p>

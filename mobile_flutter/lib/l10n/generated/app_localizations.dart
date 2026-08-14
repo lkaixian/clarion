@@ -168,6 +168,12 @@ abstract class AppLocalizations {
   /// **'Login failed. Check your credentials or the API base URL in Settings.'**
   String get loginFailedGeneric;
 
+  /// Shown once on the login screen after an involuntary sign-out (e.g. a token revoked by a password change elsewhere), not after a deliberate Sign Out.
+  ///
+  /// In en, this message translates to:
+  /// **'You were signed out — please log in again.'**
+  String get sessionExpiredSnackbar;
+
   /// No description provided for @seniorPrompt.
   ///
   /// In en, this message translates to:
@@ -732,6 +738,42 @@ abstract class AppLocalizations {
   /// **'Prescribed by {facility}'**
   String prescribedBy(String facility);
 
+  /// No description provided for @clinicAppointmentsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'From Your Clinic'**
+  String get clinicAppointmentsSection;
+
+  /// No description provided for @noClinicAppointments.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming appointments from your clinic on file yet.'**
+  String get noClinicAppointments;
+
+  /// No description provided for @clinicAppointmentBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Set by your clinic'**
+  String get clinicAppointmentBadge;
+
+  /// No description provided for @fastingRequiredNote.
+  ///
+  /// In en, this message translates to:
+  /// **'⚠ Fasting required: {hours}h before your appointment'**
+  String fastingRequiredNote(int hours);
+
+  /// No description provided for @fastingRequiredNoteUnspecified.
+  ///
+  /// In en, this message translates to:
+  /// **'⚠ Fasting is required before your appointment — check with your clinic for how long.'**
+  String get fastingRequiredNoteUnspecified;
+
+  /// No description provided for @appointmentReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String appointmentReasonLabel(String reason);
+
   /// No description provided for @upcomingAppointments.
   ///
   /// In en, this message translates to:
@@ -948,6 +990,18 @@ abstract class AppLocalizations {
   /// **'Fields: {fields}'**
   String fieldsLabel(String fields);
 
+  /// No description provided for @auditActorSystemFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'system'**
+  String get auditActorSystemFallback;
+
+  /// No description provided for @auditActorEmergencyResponderUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'emergency responder — self-reported, unverified'**
+  String get auditActorEmergencyResponderUnverified;
+
   /// No description provided for @responderScanTitle.
   ///
   /// In en, this message translates to:
@@ -1061,6 +1115,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Starting NFC…'**
   String get nfcStarting;
+
+  /// No description provided for @scanResultFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Patient Found'**
+  String get scanResultFoundTitle;
+
+  /// No description provided for @scanResultDobValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth: {date}'**
+  String scanResultDobValue(String date);
+
+  /// No description provided for @scanResultBloodTypeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not on file'**
+  String get scanResultBloodTypeUnknown;
+
+  /// No description provided for @scanResultOmittedMedications.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more medications on file, not shown here — not flagged as emergency-critical.'**
+  String scanResultOmittedMedications(int count);
+
+  /// No description provided for @scanResultOmittedConditions.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more conditions on file, not shown here — not flagged as emergency-critical.'**
+  String scanResultOmittedConditions(int count);
+
+  /// No description provided for @scanResultOmittedAllergies.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more allergies on file, not shown here — not flagged as emergency-critical.'**
+  String scanResultOmittedAllergies(int count);
 
   /// No description provided for @seniorBloodType.
   ///

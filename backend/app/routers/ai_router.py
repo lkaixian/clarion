@@ -41,7 +41,8 @@ def get_handover_brief(
 
     record = _serialize_patient(patient)
     brief = generate_handover_brief(record)
-    log_access(db, patient_id, current_user.id, current_user.role, "generate_handover_brief")
+    log_access(db, patient_id, current_user.id, current_user.role, "generate_handover_brief",
+               actor_facility=current_user.facility)
     return {"handover_brief": brief}
 
 
@@ -62,7 +63,8 @@ async def get_interaction_check(
     duplicates = await check_duplicate_prescriptions(med_dicts)
     medication_support = await get_medication_support(drug_names)
 
-    log_access(db, patient_id, current_user.id, current_user.role, "run_interaction_check")
+    log_access(db, patient_id, current_user.id, current_user.role, "run_interaction_check",
+               actor_facility=current_user.facility)
     return {
         "interactions": interactions,
         "cross_facility_duplicates": duplicates,
@@ -140,7 +142,8 @@ async def digitise_document(
     except OSError:
         db.rollback()
 
-    log_access(db, patient_id, current_user.id, current_user.role, "upload_document", detail=doc_type)
+    log_access(db, patient_id, current_user.id, current_user.role, "upload_document", detail=doc_type,
+               actor_facility=current_user.facility)
 
     return {
         "document_id": doc.id,

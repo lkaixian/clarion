@@ -7,26 +7,46 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/appointment_reminder.dart';
 import '../models/patient.dart';
+import '../models/server_appointment.dart';
+import '../services/api_client.dart';
 import '../services/notification_service.dart';
 
 /// Drives the Reminders screen: which active medications currently have a
-/// local reminder scheduled, plus a small list of user-added appointment
-/// reminders. Everything here is device-local (SharedPreferences +
-/// flutter_local_notifications) — there is no backend endpoint for
-/// reminders in this MVP.
+/// local reminder scheduled, a small list of user-added appointment
+/// reminders, and (since the backend grew a real appointments concept) a
+/// separate, read-only list of clinic-published appointments synced from
+/// the server. The medication/self-added-appointment halves of this class
+/// are entirely device-local (SharedPreferences + flutter_local_notifications)
+/// — only [_serverAppointments] talks to the backend, and even then only to
+/// read; there is still no way for the patient to create/edit/delete a
+/// server appointment from this app.
 class RemindersProvider extends ChangeNotifier {
   static const _mutedMedsKey = 'mb_muted_medication_reminders';
   static const _appointmentsKey = 'mb_appointment_reminders';
   static const _permissionAskedKey = 'mb_notif_permission_asked';
+  // Tracks which (server appointment id, reminder index) pairs currently
+  // have a local notification scheduled for them, so the next sync can
+  // diff against this set and cancel anything that's no longer current
+  // (appointment cancelled server-side, or a reminder window's `fires_at`
+  // passed and the backend stopped sending it) instead of only ever adding.
+  // See syncServerAppointments.
+  static const _serverReminderKeysKey = 'mb_server_appointment_reminder_keys';
 
   Set<String> _mutedMedications = {};
   List<AppointmentReminder> _appointments = [];
+  List<ServerAppointment> _serverAppointments = [];
   bool _notificationsGranted = false;
   bool _notificationsPermanentlyDenied = false;
   bool _loaded = false;
 
   Set<String> get mutedMedications => _mutedMedications;
   List<AppointmentReminder> get appointments => List.unmodifiable(_appointments);
+  /// Clinic-published appointments as last fetched from
+  /// `GET /patients/{id}/appointments` (see [syncServerAppointments]) —
+  /// includes all statuses; screens that want only the actionable ones
+  /// should filter on `status == 'scheduled'` themselves (mirrors how
+  /// [Patient.activeMedications] filters at the call site rather than here).
+  List<ServerAppointment> get serverAppointments => List.unmodifiable(_serverAppointments);
   bool get notificationsGranted => _notificationsGranted;
   /// True once Android has permanently denied the notification-permission
   /// prompt (i.e. the user said no before, possibly by accident, or during
@@ -168,6 +188,95 @@ class RemindersProvider extends ChangeNotifier {
       } catch (e) {
         debugPrint('RemindersProvider: failed to sync reminder for $drugName ($e)');
       }
+    }
+  }
+
+  /// Re-syncs the clinic-published appointment list from the backend and
+  /// reconciles local notifications against it — call whenever the record
+  /// (re)loads (app open, pull-to-refresh), same trigger as
+  /// [syncWithActiveMedications]. This is the entire "delivery mechanism"
+  /// for server appointment reminders in this MVP: there is no push
+  /// infrastructure, so instead this just polls-and-reconciles on every
+  /// record load, using the server's own future-only `reminders` list (see
+  /// [ServerAppointment]) as the source of truth each time.
+  ///
+  /// Safe to call repeatedly/idempotently: every call fully recomputes
+  /// which (appointment, reminder) pairs *should* have a notification
+  /// scheduled right now and diffs that against what was scheduled last
+  /// time (persisted in [_serverReminderKeysKey]), so a re-sync replaces
+  /// stale schedules rather than piling up duplicates — covering both "this
+  /// appointment got cancelled server-side" and "this reminder's
+  /// `fires_at` already passed, so the backend stopped including it".
+  ///
+  /// Wrapped defensively throughout (mirrors [syncWithActiveMedications]'s
+  /// per-item try/catch, plus an outer guard around the network call
+  /// itself) — a failure here must never crash the app or block anything
+  /// else in this provider.
+  Future<void> syncServerAppointments(String patientId, ApiClient api) async {
+    List<ServerAppointment> fetched;
+    try {
+      fetched = await api.getAppointments(patientId);
+    } catch (e) {
+      debugPrint('RemindersProvider: failed to fetch server appointments ($e)');
+      return; // Leave whatever was previously loaded/scheduled untouched.
+    }
+
+    try {
+      _serverAppointments = fetched..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+      notifyListeners();
+
+      final prefs = await SharedPreferences.getInstance();
+      final previousKeys = (prefs.getStringList(_serverReminderKeysKey) ?? []).toSet();
+      final newKeys = <String>{};
+
+      if (_notificationsGranted) {
+        for (final appt in fetched) {
+          // Never schedule for a cancelled/completed appointment, and
+          // nothing to schedule if every reminder window for this one has
+          // already passed (empty list, per the backend's future-only
+          // contract).
+          if (appt.status != 'scheduled' || appt.reminders.isEmpty) continue;
+
+          for (var i = 0; i < appt.reminders.length; i++) {
+            final reminder = appt.reminders[i];
+            final key = '${appt.id}#$i';
+            newKeys.add(key);
+            try {
+              await NotificationService.instance.scheduleServerAppointmentReminder(
+                serverAppointmentId: appt.id,
+                reminderIndex: i,
+                firesAt: reminder.firesAt,
+                title: reminder.label,
+                body: appt.venue != null && appt.venue!.trim().isNotEmpty
+                    ? '${appt.facilityName} — ${appt.venue}'
+                    : appt.facilityName,
+              );
+            } catch (e) {
+              debugPrint('RemindersProvider: failed to schedule server appointment reminder ($e)');
+            }
+          }
+        }
+      }
+
+      // Anything that was scheduled last sync but isn't part of this fresh
+      // fetch's key set no longer applies — cancel it explicitly, since
+      // flutter_local_notifications won't do this on its own.
+      final staleKeys = previousKeys.difference(newKeys);
+      for (final key in staleKeys) {
+        final parts = key.split('#');
+        if (parts.length != 2) continue;
+        final reminderIndex = int.tryParse(parts[1]);
+        if (reminderIndex == null) continue;
+        try {
+          await NotificationService.instance.cancelServerAppointmentReminder(parts[0], reminderIndex);
+        } catch (e) {
+          debugPrint('RemindersProvider: failed to cancel stale server appointment reminder ($e)');
+        }
+      }
+
+      await prefs.setStringList(_serverReminderKeysKey, newKeys.toList());
+    } catch (e) {
+      debugPrint('RemindersProvider: failed to sync server appointments ($e)');
     }
   }
 

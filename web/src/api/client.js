@@ -11,6 +11,58 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// Any 401 that comes back through this client means the bearer token we
+// just sent is no longer good — either it genuinely expired, or (now that
+// changing a password revokes every other already-issued token for that
+// account, see the backend JWT revocation work) it was invalidated by a
+// password change on some other device/console. Whatever page triggered
+// the call has no way to recover from that by itself, so we handle it once
+// here globally: drop the stale token and send the user back to sign-in,
+// instead of leaving every page on its own to keep re-hitting the same
+// request and showing its own generic error forever.
+//
+// EXCEPTION: POST /auth/login returns a 401 for the completely ordinary
+// "wrong email/NRIC or password" case — that is NOT a session problem, and
+// Login.jsx's own try/catch already turns it into a proper on-page error
+// message. If this interceptor fired for that response too, the user would
+// never see that message; they'd just get silently bounced back to the
+// login page they're already sitting on. The two OTP password-reset
+// endpoints get the same exclusion defensively: they require no bearer
+// token to begin with and 400 (not 401) on bad input per the backend, so a
+// 401 from them shouldn't normally happen, but it's still not a "your
+// session expired" case if it ever does.
+const UNAUTHENTICATED_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/request-password-reset-otp",
+  "/auth/reset-password-with-otp",
+];
+
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const requestUrl = error.config?.url || "";
+    const isUnauthenticatedAuthCall = UNAUTHENTICATED_AUTH_PATHS.some((path) => requestUrl.includes(path));
+
+    if (error.response?.status === 401 && !isUnauthenticatedAuthCall) {
+      logout();
+      // Full page reload (not react-router's useNavigate) is deliberate: this
+      // module is plain JS imported outside the React tree, so there is no
+      // navigate function reachable from here to call, and no component to
+      // hook a redirect effect into. A hard reload also guarantees any
+      // in-memory state left over from the now-dead session (cached user
+      // object, component state, in-flight requests assuming the old token)
+      // gets thrown away along with it, which a client-side-only redirect
+      // wouldn't. Don't "simplify" this into useNavigate later — it isn't
+      // reachable from a non-component module like this one.
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export async function login(email, password) {
   const form = new URLSearchParams();
   form.append("username", email);
@@ -126,5 +178,65 @@ export const resetPasswordWithOtp = (nationalId, otpCode, newPassword) =>
 // via this endpoint and the backend 400s if they're present in the body.
 export const updateOwnProfile = (patientId, payload) =>
   client.patch(`/patients/${patientId}/profile`, payload).then((r) => r.data);
+
+// Scheduled appointments. GET is patient(own)+staff; POST/create and
+// PATCH/update are staff-only on the backend (a patient viewer gets a 403,
+// so the UI hides those actions rather than showing a dead-end button).
+// scheduled_at is an ISO datetime string both ways — the caller is
+// responsible for converting to/from whatever local input control it uses.
+// `reminders` on the returned object is server-computed; never recompute it
+// client-side.
+export const getAppointments = (patientId) =>
+  client.get(`/patients/${patientId}/appointments`).then((r) => r.data);
+export const createAppointment = (patientId, payload) =>
+  client.post(`/patients/${patientId}/appointments`, payload).then((r) => r.data);
+// Partial update — {"status": "cancelled"} is how the UI cancels one.
+export const updateAppointment = (patientId, appointmentId, payload) =>
+  client.patch(`/patients/${patientId}/appointments/${appointmentId}`, payload).then((r) => r.data);
+
+// Facility-scoped admin console (routers/admin.py) — every one of these is
+// `role === "admin"`-only on the backend, and every response is already
+// scoped server-side to the admin's own facility; the client never sends a
+// facility_name anywhere below because there is nowhere in these payloads
+// to put one (create schemas deliberately have no such field).
+//
+// Appointments dashboard — read-only monitoring across every patient at
+// this admin's hospital. include_all mirrors the backend's default
+// (status="scheduled" only) vs. the full history view.
+export const getAdminAppointments = (includeAll) =>
+  client.get("/admin/appointments", { params: { include_all: !!includeAll } }).then((r) => r.data);
+
+// Medicine inventory. is_low_stock on each row is server-computed (see
+// MedicineInventoryOut) — never re-derive it client-side.
+export const getAdminInventory = (lowStockOnly) =>
+  client.get("/admin/inventory", { params: { low_stock_only: !!lowStockOnly } }).then((r) => r.data);
+export const createInventoryItem = (payload) => client.post("/admin/inventory", payload).then((r) => r.data);
+// Partial update — used both for the full edit modal and the quick +/-
+// restock stepper (which sends just {quantity_on_hand}).
+export const updateInventoryItem = (itemId, payload) => client.patch(`/admin/inventory/${itemId}`, payload).then((r) => r.data);
+export const deleteInventoryItem = (itemId) => client.delete(`/admin/inventory/${itemId}`).then((r) => r.data);
+
+// Ward / bed capacity. occupancy_pct and available_beds are server-computed
+// (see WardOut) — never re-derive them client-side.
+export const getWards = () => client.get("/admin/wards").then((r) => r.data);
+export const createWard = (payload) => client.post("/admin/wards", payload).then((r) => r.data);
+// Partial update — used both for the full edit modal and the quick +/-
+// occupied-beds stepper (which sends just {occupied_beds}).
+export const updateWard = (wardId, payload) => client.patch(`/admin/wards/${wardId}`, payload).then((r) => r.data);
+export const deleteWard = (wardId) => client.delete(`/admin/wards/${wardId}`).then((r) => r.data);
+
+// Staff clock-in/out. Any staff role (admin/clinician/records_officer) —
+// not available to a patient account. All three return the same
+// ClockStatusOut shape, so callers can just setState() straight from the
+// response instead of re-fetching status separately after a mutation.
+export const getClockStatus = () => client.get("/staff/clock-status").then((r) => r.data);
+export const clockIn = () => client.post("/staff/clock-in").then((r) => r.data);
+export const clockOut = () => client.post("/staff/clock-out").then((r) => r.data);
+
+// Admin-only facility staff roster + per-staff clock history. History is
+// fetched on demand per staff member (not eagerly for the whole roster) —
+// callers should only call this when a row is actually expanded.
+export const getStaffRoster = () => client.get("/admin/staff").then((r) => r.data);
+export const getStaffClockHistory = (userId) => client.get(`/admin/staff/${userId}/clock-history`).then((r) => r.data);
 
 export default client;

@@ -82,6 +82,19 @@ class User(Base):
     otp_request_count = Column(Integer, nullable=False, default=0)
     otp_request_window_start = Column(DateTime, nullable=True)
 
+    # JWT revocation-on-password-change watermark. Set by
+    # auth_router._apply_new_password every time a password is actually
+    # changed (staff-issued temp password, self-service OTP reset, or a
+    # voluntary authenticated change). Nullable/defaulted to None so
+    # existing rows from before this column existed have no watermark --
+    # auth._resolve_current_user treats None as "nothing to compare
+    # against, don't reject" rather than retroactively invalidating every
+    # already-issued token the moment this migration lands. A token's
+    # embedded `pwd_changed_at` claim (see auth.create_access_token) is
+    # only ever rejected once an ACTUAL subsequent password change sets
+    # this to a newer timestamp than what the token was issued with.
+    password_changed_at = Column(DateTime, nullable=True)
+
     patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
 
 
@@ -115,6 +128,7 @@ class Patient(Base):
     allergies = relationship("AllergyIntolerance", back_populates="patient", cascade="all, delete-orphan")
     encounters = relationship("Encounter", back_populates="patient", cascade="all, delete-orphan")
     documents = relationship("ClinicalDocument", back_populates="patient", cascade="all, delete-orphan")
+    appointments = relationship("Appointment", back_populates="patient", cascade="all, delete-orphan")
 
 
 class Encounter(Base):
@@ -199,6 +213,90 @@ class ClinicalDocument(Base):
     patient = relationship("Patient", back_populates="documents")
 
 
+class Appointment(Base):
+    """A doctor-published appointment (follow-up, procedure, etc.) for a
+    patient. Reminder timing is deliberately NOT stored here as concrete
+    scheduled rows -- it's computed on read from this row's own fields
+    (scheduled_at, fasting_required/fasting_hours, extra_reminder_hours_before)
+    via appointments.compute_reminder_offsets, so there's a single source of
+    truth for "when do reminders fire" that can't drift out of sync with an
+    edited appointment (e.g. a PATCH that reschedules scheduled_at
+    automatically shifts every computed reminder with it -- no separate rows
+    to reconcile)."""
+    __tablename__ = "appointments"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    facility_name = Column(String, nullable=False)
+    venue = Column(String, nullable=True)             # room/building detail beyond facility_name
+    scheduled_at = Column(DateTime, nullable=False)
+    reason = Column(String, nullable=True)             # e.g. "Follow-up: diabetes review"
+    precaution_notes = Column(Text, nullable=True)      # free-text, e.g. "bring prior scan results"
+    fasting_required = Column(Boolean, default=False)
+    fasting_hours = Column(Integer, nullable=True)      # meaningful only if fasting_required
+    extra_reminder_hours_before = Column(JSON, nullable=True)  # list[int], doctor-added reminder offsets beyond the computed defaults, e.g. [72] for a 3-day-before reminder
+    status = Column(String, default="scheduled")         # scheduled | cancelled | completed
+    created_by = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    patient = relationship("Patient", back_populates="appointments")
+
+
+class MedicineInventoryItem(Base):
+    """Facility-scoped medicine stock row, managed by that facility's own
+    `admin` user (see routers/admin.py for the "manager admin, not super
+    admin" scoping this and Ward both exist to demonstrate -- every
+    query/write here is filtered/forced to the acting admin's own
+    `User.facility`). Deliberately has NO relationship to `Patient` --
+    this is inventory bookkeeping for a hospital, not clinical history tied
+    to any one patient, so it doesn't belong under a patient record at all."""
+    __tablename__ = "medicine_inventory"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    facility_name = Column(String, nullable=False, index=True)
+    drug_name = Column(String, nullable=False)
+    quantity_on_hand = Column(Integer, nullable=False, default=0)
+    unit = Column(String, nullable=False, default="units")  # e.g. "tablets", "vials", "boxes"
+    reorder_threshold = Column(Integer, nullable=True)  # null = no low-stock tracking for this item
+    notes = Column(Text, nullable=True)
+    last_restocked_at = Column(DateTime, nullable=True)
+    updated_by = Column(String, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Ward(Base):
+    """Facility-scoped bed/ward capacity row -- same "manager admin" scoping
+    as MedicineInventoryItem above, and likewise has no relationship to
+    `Patient` (bed occupancy here is an aggregate count, not a per-patient
+    bed assignment -- this app doesn't model that level of detail)."""
+    __tablename__ = "wards"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    facility_name = Column(String, nullable=False, index=True)
+    ward_name = Column(String, nullable=False)
+    ward_type = Column(String, nullable=True)  # general | icu | pediatric | maternity | emergency | other -- validated in schemas.py, not a free enum in the DB
+    total_beds = Column(Integer, nullable=False)
+    occupied_beds = Column(Integer, nullable=False, default=0)
+    updated_by = Column(String, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StaffClockEvent(Base):
+    """One clock-in/clock-out shift record for a staff member. `facility_name`
+    is SNAPSHOTTED at clock-in time (not a live join to User.facility) --
+    same reasoning as AuditLog.actor_facility: a staff transfer to a
+    different hospital later shouldn't rewrite which facility a past shift
+    was actually worked at."""
+    __tablename__ = "staff_clock_events"
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    facility_name = Column(String, nullable=False, index=True)
+    clock_in_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    clock_out_at = Column(DateTime, nullable=True)  # null while the shift is still open
+
+
 class EmergencyToken(Base):
     """A short-lived, single-scope token bound to a QR code / physical card
     reference. Never stores the actual medical data — just the grant.
@@ -227,13 +325,33 @@ class EmergencyToken(Base):
 
 
 class AuditLog(Base):
-    """Append-only-in-spirit log of every access to patient data."""
+    """Append-only-in-spirit log of every access to patient data.
+
+    Deliberate design split on "who" vs "where" for a staff actor:
+      - `actor` stores the stable `User.id` (never a display name), and the
+        actor's human-readable name is resolved via a LIVE join to
+        `users.full_name` at read time (see patients.py::get_audit_log) --
+        a later name correction (typo fix, legal name change) should not
+        stay frozen/wrong in years-old history.
+      - `actor_facility`, by contrast, IS snapshotted onto the row at
+        write time (not live-joined), because `User.facility` can change
+        later (a transfer, multi-site staff) and the entire point of an
+        audit log is "who accessed this, from where, at that moment" -- a
+        live join here would silently rewrite history every time a staff
+        member's facility changes, which defeats the purpose.
+    Nullable because: (a) rows written before this column existed have no
+    value for it, and (b) `actor` isn't always a staff `User` row at all --
+    it's sometimes "system", or "emergency_responder:<name>" for the two
+    unauthenticated emergency-scan endpoints, which have no `User`/facility
+    to snapshot in the first place (those already fold org into `detail`).
+    """
     __tablename__ = "audit_logs"
 
     id = Column(String, primary_key=True, default=gen_id)
     patient_id = Column(String, ForeignKey("patients.id"), nullable=True)
     actor = Column(String, nullable=False)          # user id, "emergency_token:<id>", or "system"
     actor_role = Column(String, nullable=True)
+    actor_facility = Column(String, nullable=True)  # snapshot at access time -- see class docstring
     action = Column(String, nullable=False)         # e.g. "view_record", "emergency_access", "upload_document"
     fields_accessed = Column(JSON, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)

@@ -3,8 +3,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../models/server_appointment.dart';
 import '../providers/patient_provider.dart';
 import '../providers/reminders_provider.dart';
+import '../services/api_client.dart';
 import '../services/mysejahtera_launcher.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
@@ -13,9 +15,13 @@ import '../widgets/loading_view.dart';
 /// record (active medications become dose reminders), and schedules **real
 /// local notifications** for them via [RemindersProvider] /
 /// flutter_local_notifications — not just a static list. Also supports
-/// user-added appointment reminders (purely local; the backend has no
-/// appointments concept in this MVP) and a best-effort deep link out to
-/// MySejahtera to actually book one.
+/// user-added appointment reminders (purely local — there's still no way to
+/// create/edit one from this app) and a best-effort deep link out to
+/// MySejahtera to actually book one. Separately, now also displays
+/// clinic-published appointments synced from the backend (see
+/// [RemindersProvider.syncServerAppointments] /
+/// [RemindersProvider.serverAppointments]) — read-only, staff-owned data,
+/// rendered in its own visually distinct section above the self-added list.
 class RemindersScreen extends StatefulWidget {
   const RemindersScreen({super.key});
 
@@ -37,6 +43,8 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
       final patient = context.read<PatientProvider>().patient;
       if (patient != null) {
         await reminders.syncWithActiveMedications(patient.activeMedications);
+        if (!mounted) return;
+        await reminders.syncServerAppointments(patient.id, context.read<ApiClient>());
       }
     });
   }
@@ -252,6 +260,29 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                     );
                   }),
                 const SizedBox(height: 20),
+                // Clinic-published appointments (server-owned, read-only for
+                // the patient) — deliberately rendered ABOVE and visually
+                // distinct from the patient's own self-added appointments
+                // below: no delete/edit affordance at all, since staff (not
+                // the patient) own this data. Only ever shows `scheduled`
+                // ones — a cancelled server appointment is omitted entirely
+                // here rather than shown de-emphasized like the web
+                // console's staff-facing history view, since this screen is
+                // action-oriented, not a historical record.
+                Text(l10n.clinicAppointmentsSection,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 8),
+                Builder(builder: (context) {
+                  final upcoming =
+                      remindersState.serverAppointments.where((a) => a.status == 'scheduled').toList();
+                  if (upcoming.isEmpty) {
+                    return Text(l10n.noClinicAppointments, style: const TextStyle(fontSize: 13, color: AppColors.textFaint));
+                  }
+                  return Column(
+                    children: upcoming.map((a) => _ClinicAppointmentCard(appointment: a, l10n: l10n)).toList(),
+                  );
+                }),
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -316,6 +347,104 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                 Text(l10n.mySejahteraNote, style: const TextStyle(fontSize: 11, color: AppColors.textFaint)),
               ],
             ),
+    );
+  }
+}
+
+/// One clinic-published appointment card. Deliberately styled to read as
+/// "official" rather than "just another list item" — a filled, tinted
+/// background (vs. the plain white cards used for the patient's own
+/// self-added appointments below it) and a small "set by your clinic" tag
+/// instead of a delete icon, since there is no affordance to edit/remove
+/// this data from the app at all (it's staff-owned).
+class _ClinicAppointmentCard extends StatelessWidget {
+  const _ClinicAppointmentCard({required this.appointment, required this.l10n});
+
+  final ServerAppointment appointment;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final venue = appointment.venue;
+    final reason = appointment.reason;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.chipBg.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.local_hospital_outlined, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      venue != null && venue.trim().isNotEmpty
+                          ? '${appointment.facilityName} — $venue'
+                          : appointment.facilityName,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary),
+                    ),
+                    Text(
+                      DateFormat('d MMM yyyy, h:mm a').format(appointment.scheduledAt),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                    if (reason != null && reason.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.appointmentReasonLabel(reason),
+                        style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: AppColors.chipBg, borderRadius: BorderRadius.circular(8)),
+                child: Text(
+                  l10n.clinicAppointmentBadge,
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
+          // Fasting-precaution callout — reuses this app's established
+          // "critical warning" visual convention (emergencyBg fill,
+          // emergency-red icon/text, see the notifications-disabled banner
+          // above and EmergencyScannerScreen's allergy card) rather than
+          // inventing a new warning style just for this.
+          if (appointment.fastingRequired) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AppColors.emergencyBg, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.emergency, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      appointment.fastingHours != null
+                          ? l10n.fastingRequiredNote(appointment.fastingHours!)
+                          : l10n.fastingRequiredNoteUnspecified,
+                      style: const TextStyle(fontSize: 12, color: AppColors.emergency, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -22,13 +22,30 @@ medibridge/
 cd backend
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install fastapi "uvicorn[standard]" sqlalchemy pydantic[email] \
-            "python-jose[cryptography]" "passlib[bcrypt]" bcrypt==4.0.1 \
-            python-multipart qrcode pillow python-dotenv requests
+pip install -r requirements.txt   # exact pinned versions -- see requirements.txt
 
+cp .env.example .env              # then edit .env, see below -- REQUIRED, not optional
 python seed.py                    # creates demo admin/clinician/patient logins
 uvicorn app.main:app --reload --port 8000
 ```
+
+**`.env` is now required, not optional.** Before `seed.py`/`uvicorn` will even
+start, `backend/.env` must set `SECRET_KEY` and `OTP_HMAC_KEY` (there is
+deliberately no hardcoded fallback for either — a shared, guessable secret
+baked into the source defeats the point of JWT signing / OTP hashing).
+Generate a real value for each with:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Paste the result into `SECRET_KEY=` and run it again for a *different*
+`OTP_HMAC_KEY=` value in `backend/.env` (copied from `.env.example` — see
+that file for the full list of variables, including the optional Mailgun
+and CORS settings). Rotating either value later invalidates every
+previously-issued JWT / any in-flight password-reset OTP — expected and
+correct, just means everyone (including the demo accounts) has to log in
+again.
 
 Visit `http://localhost:8000/docs` — full interactive API documentation
 (Swagger UI), generated automatically by FastAPI. This is genuinely useful
@@ -133,12 +150,20 @@ Both devices must be on the same Wi-Fi network.
 
 ## 6. If something breaks
 
-- **bcrypt error on `pip install`**: pin `bcrypt==4.0.1` (already in the
-  install command above) — newer bcrypt versions conflict with passlib.
+- **bcrypt error on `pip install`**: `requirements.txt` already pins
+  `bcrypt==4.0.1` — newer bcrypt versions conflict with passlib. If you're
+  installing packages manually instead of via `requirements.txt`, add
+  `bcrypt==4.0.1` explicitly.
 - **`email-validator` import error**: `pip install pydantic[email]`
-  (included above).
-- **CORS errors in the browser console**: the backend already allows all
-  origins for the demo (`app/main.py`) — if you still see errors, confirm
-  the backend is actually running on port 8000.
+  (included in `requirements.txt`).
+- **Backend won't start / `RuntimeError` about `SECRET_KEY`**: `backend/.env`
+  is required now (see step 1 above) — copy `.env.example` to `.env` and set
+  `SECRET_KEY` / `OTP_HMAC_KEY`.
+- **CORS errors in the browser console**: by default (unset `APP_ENV` /
+  `CORS_ALLOWED_ORIGINS` in `.env`) the backend allows all origins for the
+  demo (`app/main.py`) — if you still see errors, confirm the backend is
+  actually running on port 8000. If you've set `APP_ENV`/`CORS_ALLOWED_ORIGINS`
+  to lock CORS down, make sure your web/mobile origin is actually in that
+  comma-separated list.
 - **Mobile app can't reach the backend**: almost always the `localhost` vs
   LAN-IP issue described in step 3 above.

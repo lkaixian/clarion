@@ -45,6 +45,10 @@ class AppLocalizationsMs extends AppLocalizations {
       'Log masuk gagal. Semak kelayakan anda atau alamat API dalam Tetapan.';
 
   @override
+  String get sessionExpiredSnackbar =>
+      'Anda telah log keluar — sila log masuk semula.';
+
+  @override
   String get seniorPrompt => 'Warga emas atau pengguna baharu?';
 
   @override
@@ -363,6 +367,30 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
+  String get clinicAppointmentsSection => 'Daripada Klinik Anda';
+
+  @override
+  String get noClinicAppointments =>
+      'Tiada temu janji akan datang daripada klinik anda buat masa ini.';
+
+  @override
+  String get clinicAppointmentBadge => 'Ditetapkan oleh klinik anda';
+
+  @override
+  String fastingRequiredNote(int hours) {
+    return '⚠ Berpuasa diperlukan: $hours jam sebelum temu janji anda';
+  }
+
+  @override
+  String get fastingRequiredNoteUnspecified =>
+      '⚠ Berpuasa diperlukan sebelum temu janji anda — sila semak dengan klinik anda mengenai tempohnya.';
+
+  @override
+  String appointmentReasonLabel(String reason) {
+    return 'Sebab: $reason';
+  }
+
+  @override
   String get upcomingAppointments => 'Temu Janji Akan Datang';
 
   @override
@@ -490,6 +518,13 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
+  String get auditActorSystemFallback => 'sistem';
+
+  @override
+  String get auditActorEmergencyResponderUnverified =>
+      'responden kecemasan — dilaporkan sendiri, belum disahkan';
+
+  @override
   String get responderScanTitle => 'Imbas Kad Kecemasan';
 
   @override
@@ -551,6 +586,32 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get nfcStarting => 'Memulakan NFC…';
+
+  @override
+  String get scanResultFoundTitle => 'Pesakit Ditemui';
+
+  @override
+  String scanResultDobValue(String date) {
+    return 'Tarikh lahir: $date';
+  }
+
+  @override
+  String get scanResultBloodTypeUnknown => 'Tiada dalam rekod';
+
+  @override
+  String scanResultOmittedMedications(int count) {
+    return '+$count lagi ubat dalam rekod, tidak dipaparkan di sini — tidak ditanda sebagai kritikal kecemasan.';
+  }
+
+  @override
+  String scanResultOmittedConditions(int count) {
+    return '+$count lagi keadaan dalam rekod, tidak dipaparkan di sini — tidak ditanda sebagai kritikal kecemasan.';
+  }
+
+  @override
+  String scanResultOmittedAllergies(int count) {
+    return '+$count lagi alahan dalam rekod, tidak dipaparkan di sini — tidak ditanda sebagai kritikal kecemasan.';
+  }
 
   @override
   String seniorBloodType(String type) {

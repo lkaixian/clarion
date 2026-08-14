@@ -1,3 +1,4 @@
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -14,11 +15,15 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import inspect, text
 
 from . import models
 from .database import engine
-from .routers import auth_router, patients, emergency, ai_router
+from .rate_limit import limiter
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -79,6 +84,10 @@ def _migrate_lightweight():
     if "clinical_documents" in inspector.get_table_names():
         existing_document_columns = {col["name"] for col in inspector.get_columns("clinical_documents")}
 
+    existing_audit_log_columns = set()
+    if "audit_logs" in inspector.get_table_names():
+        existing_audit_log_columns = {col["name"] for col in inspector.get_columns("audit_logs")}
+
     pending = (
         ("emergency_tokens" in inspector.get_table_names() and (
             "nfc_uid" not in existing_columns or "registered_by" not in existing_columns
@@ -95,6 +104,7 @@ def _migrate_lightweight():
             or "otp_attempt_count" not in existing_user_columns
             or "otp_request_count" not in existing_user_columns
             or "otp_request_window_start" not in existing_user_columns
+            or "password_changed_at" not in existing_user_columns
         ))
         or ("patients" in inspector.get_table_names() and (
             "email" not in existing_patient_columns
@@ -104,6 +114,9 @@ def _migrate_lightweight():
         ))
         or ("clinical_documents" in inspector.get_table_names() and (
             "file_path" not in existing_document_columns
+        ))
+        or ("audit_logs" in inspector.get_table_names() and (
+            "actor_facility" not in existing_audit_log_columns
         ))
     )
     if pending:
@@ -172,6 +185,15 @@ def _migrate_lightweight():
                 ))
             if "otp_request_window_start" not in existing_user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN otp_request_window_start DATETIME"))
+            # Added for JWT revocation-on-password-change (POST /auth/login,
+            # auth._resolve_current_user). Nullable/additive -- existing rows
+            # get password_changed_at=NULL, which auth._resolve_current_user
+            # treats as "no watermark, don't reject" so this migration itself
+            # doesn't force-logout every already-issued token; only an
+            # actual subsequent password change (via _apply_new_password)
+            # starts revoking tokens issued before it.
+            if "password_changed_at" not in existing_user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_changed_at DATETIME"))
 
     # Added for patient self-service profile editing (PATCH
     # /patients/{id}/profile). All nullable — additive/safe ALTER TABLE
@@ -200,6 +222,17 @@ def _migrate_lightweight():
             if "file_path" not in existing_document_columns:
                 conn.execute(text("ALTER TABLE clinical_documents ADD COLUMN file_path VARCHAR"))
 
+    # Added so GET /patients/{id}/audit-log can show WHERE a staff actor
+    # accessed from, snapshotted at access time (see AuditLog's class
+    # docstring for why this is a snapshot and not a live join, unlike the
+    # actor's display name). Nullable/additive; existing rows just get
+    # actor_facility=NULL (no snapshot exists for accesses logged before
+    # this column existed).
+    if "audit_logs" in inspector.get_table_names():
+        with engine.begin() as conn:
+            if "actor_facility" not in existing_audit_log_columns:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_facility VARCHAR"))
+
 
 _migrate_lightweight()
 
@@ -209,13 +242,84 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# CORS_ALLOWED_ORIGINS: comma-separated list of real origins (e.g.
+# "https://app.example.com,https://staff.example.com") to lock this down
+# before any real deployment. Left unset (or APP_ENV=demo), this defaults
+# to allow_origins=["*"] -- the "just works for judging" convenience this
+# project has always had, appropriate for a not-yet-deployed hackathon/demo
+# app but NOT for anything handling real patient data on the open internet.
+# Once you deploy for real: set CORS_ALLOWED_ORIGINS to your actual web/
+# mobile origins AND set APP_ENV to anything other than "demo" (or leave it
+# unset -- see the condition below), so a forgotten/blank env var doesn't
+# silently fall back to wide-open CORS in production.
+_app_env = os.environ.get("APP_ENV", "").strip().lower()
+_demo_mode = os.environ.get("DEMO_MODE", "").strip().lower()
+_cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+
+if _cors_origins_env:
+    allow_origins = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+elif _app_env == "demo" or _demo_mode == "demo" or (not _app_env and not _demo_mode):
+    # Preserves today's default behavior: unset APP_ENV/DEMO_MODE (this
+    # project's status quo -- not yet deployed) or an explicit "demo" value
+    # both mean "wide open, judging-friendly".
+    allow_origins = ["*"]
+else:
+    # APP_ENV/DEMO_MODE explicitly set to something other than "demo" but no
+    # CORS_ALLOWED_ORIGINS provided -- fail safe to "no origins allowed"
+    # rather than silently falling back to "*" in what's been flagged as a
+    # non-demo environment.
+    allow_origins = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten to your web/mobile origins before any real deployment
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    # No cookies are used anywhere in this app (JWT is sent via the
+    # Authorization header, never a cookie) -- allow_credentials=True bought
+    # nothing here and is exactly what forces Starlette's CORS middleware
+    # into permissive origin-reflection behavior even when allow_origins is
+    # locked down to a real list. False is correct and strictly tighter.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting (slowapi -- see app/rate_limit.py for the shared Limiter
+# instance and default-limit rationale). Individual routes opt out via
+# @limiter.exempt (the three password/lockout endpoints in auth_router.py
+# that already have their own stricter, persisted-in-DB lockout logic) or
+# override with their own @limiter.limit(...) (the two unauthenticated
+# emergency-scan endpoints in emergency.py, tighter than the 60/minute
+# default).
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def _security_headers_middleware(request, call_next):
+    """Minimal, framework-agnostic security headers on every response.
+    Deliberately does NOT set a Content-Security-Policy here -- this API
+    returns JSON for almost every route (a CSP is meant to constrain a
+    browser rendering HTML/JS/CSS from this origin, which basically never
+    happens here); a CSP is far more relevant to web/'s own hosting layer
+    (the React app's index.html), which is out of scope for this
+    backend-only pass."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # HSTS only makes sense (and is only safe) over an actual HTTPS
+    # connection -- sending it over plain HTTP local dev would tell a
+    # browser to force HTTPS for this host, which is actively harmful when
+    # there's no HTTPS dev server to redirect to. Checks both the direct
+    # connection scheme and X-Forwarded-Proto (set by a reverse proxy/load
+    # balancer terminating TLS in front of a plain-HTTP backend process,
+    # the common real-deployment shape).
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
+    is_https = request.url.scheme == "https" or forwarded_proto == "https"
+    if is_https:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -248,6 +352,9 @@ app.include_router(auth_router.router)
 app.include_router(patients.router)
 app.include_router(emergency.router)
 app.include_router(ai_router.router)
+app.include_router(appointments.router)
+app.include_router(admin.router)
+app.include_router(staff.router)
 
 
 @app.get("/")

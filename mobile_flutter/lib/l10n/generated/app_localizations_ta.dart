@@ -45,6 +45,10 @@ class AppLocalizationsTa extends AppLocalizations {
       'உள்நுழைவு தோல்வியடைந்தது. உங்கள் விவரங்களை அல்லது அமைப்புகளில் உள்ள API முகவரியை சரிபார்க்கவும்.';
 
   @override
+  String get sessionExpiredSnackbar =>
+      'நீங்கள் வெளியேற்றப்பட்டீர்கள் — மீண்டும் உள்நுழையவும்.';
+
+  @override
   String get seniorPrompt => 'மூத்த குடிமகனா அல்லது புதிய பயனரா?';
 
   @override
@@ -365,6 +369,30 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String get clinicAppointmentsSection => 'உங்கள் மருத்துவமனையிலிருந்து';
+
+  @override
+  String get noClinicAppointments =>
+      'உங்கள் மருத்துவமனையிலிருந்து வரவிருக்கும் சந்திப்புகள் இதுவரை இல்லை.';
+
+  @override
+  String get clinicAppointmentBadge => 'உங்கள் மருத்துவமனையால் அமைக்கப்பட்டது';
+
+  @override
+  String fastingRequiredNote(int hours) {
+    return '⚠ உண்ணாவிரதம் தேவை: உங்கள் சந்திப்புக்கு $hours மணி நேரத்திற்கு முன்பு';
+  }
+
+  @override
+  String get fastingRequiredNoteUnspecified =>
+      '⚠ உங்கள் சந்திப்புக்கு முன் உண்ணாவிரதம் தேவை — எவ்வளவு நேரம் என்பதை உங்கள் மருத்துவமனையிடம் சரிபார்க்கவும்.';
+
+  @override
+  String appointmentReasonLabel(String reason) {
+    return 'காரணம்: $reason';
+  }
+
+  @override
   String get upcomingAppointments => 'வரவிருக்கும் சந்திப்புகள்';
 
   @override
@@ -494,6 +522,13 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String get auditActorSystemFallback => 'கணினி';
+
+  @override
+  String get auditActorEmergencyResponderUnverified =>
+      'அவசர பதிலளிப்பாளர் — சுய-அறிவிப்பு, சரிபார்க்கப்படவில்லை';
+
+  @override
   String get responderScanTitle => 'அவசர அட்டையை ஸ்கேன் செய்';
 
   @override
@@ -554,6 +589,32 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get nfcStarting => 'NFC தொடங்குகிறது…';
+
+  @override
+  String get scanResultFoundTitle => 'நோயாளி கண்டறியப்பட்டார்';
+
+  @override
+  String scanResultDobValue(String date) {
+    return 'பிறந்த தேதி: $date';
+  }
+
+  @override
+  String get scanResultBloodTypeUnknown => 'பதிவில் இல்லை';
+
+  @override
+  String scanResultOmittedMedications(int count) {
+    return '+$count மேலும் மருந்துகள் பதிவில் உள்ளன, இங்கே காட்டப்படவில்லை — அவசரகால முக்கியமானதாகக் குறிக்கப்படவில்லை.';
+  }
+
+  @override
+  String scanResultOmittedConditions(int count) {
+    return '+$count மேலும் நோய் நிலைகள் பதிவில் உள்ளன, இங்கே காட்டப்படவில்லை — அவசரகால முக்கியமானதாகக் குறிக்கப்படவில்லை.';
+  }
+
+  @override
+  String scanResultOmittedAllergies(int count) {
+    return '+$count மேலும் ஒவ்வாமைகள் பதிவில் உள்ளன, இங்கே காட்டப்படவில்லை — அவசரகால முக்கியமானதாகக் குறிக்கப்படவில்லை.';
+  }
 
   @override
   String seniorBloodType(String type) {

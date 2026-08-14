@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../models/emergency_scan_result.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../services/nfc_service.dart';
@@ -46,7 +47,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
 
   bool _loading = false;
   String? _error;
-  Map<String, dynamic>? _result;
+  EmergencyScanResult? _result;
 
   @override
   void initState() {
@@ -135,7 +136,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     });
     try {
       final api = context.read<ApiClient>();
-      final result = cardReference != null
+      final raw = cardReference != null
           ? await api.scanEmergencyCard(
               cardReference: cardReference,
               responderName: _nameController.text.trim(),
@@ -147,7 +148,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
               responderOrg: _orgController.text.trim(),
             );
       if (!mounted) return;
-      setState(() => _result = result);
+      setState(() => _result = EmergencyScanResult.fromJson(raw));
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
@@ -213,29 +214,105 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
               ),
             if (_result != null) ...[
               const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _result!.entries
-                      .map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text('${e.key}: ${e.value}',
-                                style: const TextStyle(fontSize: 13, color: AppColors.textBody)),
-                          ))
-                      .toList(),
-                ),
-              ),
+              _buildResultCard(l10n, _result!),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Renders a successful scan lookup as a structured, category-per-card
+  /// layout instead of the old flat `key: value` text dump -- deliberately
+  /// mirrors the visual language HomeScreen uses for "my own record"
+  /// (SectionCard + bulleted lines) so a responder scanning someone else's
+  /// card and the patient viewing their own record see the same product,
+  /// not two unrelated designs. Distinct colouring per category comes
+  /// entirely from the existing AppColors palette (no new colours
+  /// invented): allergies use the app's established emergency red, since
+  /// that's already the "urgent" colour everywhere else in this app.
+  Widget _buildResultCard(AppLocalizations l10n, EmergencyScanResult result) {
+    final omitted = result.omittedNonCritical;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            l10n.scanResultFoundTitle,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.5),
+          ),
+        ),
+        _ScanResultHeader(result: result, l10n: l10n),
+        const SizedBox(height: 16),
+        // Allergies first and in the app's established "urgent" red -- the
+        // single highest-stakes category for a responder about to
+        // administer anything.
+        _CategorySection(
+          title: l10n.allergiesTitle,
+          icon: Icons.warning_amber_rounded,
+          iconColor: AppColors.emergency,
+          backgroundColor: AppColors.emergencyBg,
+          borderColor: AppColors.emergency,
+          omittedNotice: (omitted['allergies'] ?? 0) > 0 ? l10n.scanResultOmittedAllergies(omitted['allergies']!) : null,
+          child: result.allergies.isEmpty
+              ? _EmptyText(l10n.noAllergies)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.allergies.map((a) {
+                    final reaction = a.reaction;
+                    final title = (reaction != null && reaction.trim().isNotEmpty)
+                        ? '${a.substance} (${a.severity}) — $reaction'
+                        : '${a.substance} (${a.severity})';
+                    return _ScanBulletLine(title);
+                  }).toList(),
+                ),
+        ),
+        _CategorySection(
+          title: l10n.currentMedicationsTitle,
+          icon: Icons.medication_outlined,
+          iconColor: AppColors.primary,
+          backgroundColor: AppColors.chipBg,
+          borderColor: AppColors.primaryLight,
+          omittedNotice:
+              (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
+          child: result.medications.isEmpty
+              ? _EmptyText(l10n.noActiveMedications)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.medications.map((m) {
+                    // Dosage/frequency shown alongside the drug name --
+                    // this is the whole point of the backend shape change
+                    // this screen is built on top of (medications used to
+                    // be bare name strings).
+                    final doseFreq = _joinNonEmpty([m.dosage, m.frequency], ', ');
+                    final title = doseFreq.isEmpty ? m.drugName : '${m.drugName} — $doseFreq';
+                    return _ScanBulletLine(title);
+                  }).toList(),
+                ),
+        ),
+        _CategorySection(
+          title: l10n.activeConditionsTitle,
+          icon: Icons.medical_information_outlined,
+          iconColor: AppColors.primary,
+          backgroundColor: AppColors.surface,
+          borderColor: AppColors.border,
+          omittedNotice: (omitted['conditions'] ?? 0) > 0 ? l10n.scanResultOmittedConditions(omitted['conditions']!) : null,
+          child: result.conditions.isEmpty
+              ? _EmptyText(l10n.noConditions)
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: result.conditions
+                      .map((c) => Chip(
+                            label: Text(c, style: const TextStyle(fontSize: 12, color: AppColors.textBody)),
+                            backgroundColor: AppColors.chipBg,
+                            side: BorderSide.none,
+                          ))
+                      .toList(),
+                ),
+        ),
+      ],
     );
   }
 
@@ -361,5 +438,188 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         ),
       ],
     );
+  }
+}
+
+/// Joins the non-empty entries of [parts] with [separator] -- used to fold
+/// optional dosage/frequency fields into a single display string without
+/// stray separators when one is missing. Mirrors the identically-named
+/// private helper in home_screen.dart (not shared/imported since that one
+/// is file-private) so medication lines read the same way on both
+/// "my own record" and "what a responder sees".
+String _joinNonEmpty(List<String?> parts, String separator) {
+  return parts.where((p) => p != null && p.trim().isNotEmpty).join(separator);
+}
+
+/// Name / date-of-birth / blood-type header for a scan result -- blood
+/// type is deliberately the most visually prominent element here (large,
+/// boxed, high-contrast against the primary-coloured header) since that's
+/// exactly the kind of at-a-glance fact a first responder scans a card
+/// for, before reading anything else.
+class _ScanResultHeader extends StatelessWidget {
+  const _ScanResultHeader({required this.result, required this.l10n});
+
+  final EmergencyScanResult result;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  result.fullName,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.scanResultDobValue(result.dateOfBirth),
+                  style: const TextStyle(fontSize: 13, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _BloodTypeBadge(bloodType: result.bloodType, l10n: l10n),
+        ],
+      ),
+    );
+  }
+}
+
+class _BloodTypeBadge extends StatelessWidget {
+  const _BloodTypeBadge({required this.bloodType, required this.l10n});
+
+  final String? bloodType;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasType = bloodType != null && bloodType!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            l10n.scopeBloodType.toUpperCase(),
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted, letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            hasType ? bloodType! : l10n.scanResultBloodTypeUnknown,
+            style: TextStyle(
+              fontSize: hasType ? 24 : 12,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One category card (Allergies / Medications / Conditions) in the scan
+/// result -- structurally the same idea as widgets/section_card.dart's
+/// `SectionCard`, but with per-category icon/colour and an optional
+/// omitted-items notice, neither of which SectionCard supports, so this is
+/// a sibling widget rather than a forced reuse of that one.
+class _CategorySection extends StatelessWidget {
+  const _CategorySection({
+    required this.title,
+    required this.icon,
+    required this.iconColor,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.child,
+    this.omittedNotice,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color iconColor;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Widget child;
+  final String? omittedNotice;
+
+  @override
+  Widget build(BuildContext context) {
+    final notice = omittedNotice;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: iconColor),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: iconColor, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          child,
+          // Deliberately secondary styling (small, muted, italic) -- this
+          // is a "the list might be incomplete" caveat, not itself a piece
+          // of clinical data, so it must never visually compete with the
+          // actual allergy/medication/condition entries above it.
+          if (notice != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              notice,
+              style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontStyle: FontStyle.italic, height: 1.3),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScanBulletLine extends StatelessWidget {
+  const _ScanBulletLine(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text('•  $text', style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
+    );
+  }
+}
+
+class _EmptyText extends StatelessWidget {
+  const _EmptyText(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textFaint));
   }
 }

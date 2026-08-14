@@ -7,6 +7,22 @@ class AuditLogEntry {
   final String timestamp;
   final String? detail;
 
+  /// Resolved LIVE against `users.full_name` at request time (not
+  /// snapshotted) -- so it reflects e.g. a display-name change made after
+  /// the access happened, and reads as `null` for the "system" actor, the
+  /// unauthenticated emergency-scan endpoints' `"emergency_responder:name"`
+  /// actor (neither has a matching `User` row), or a user account that's
+  /// since been deleted. [actor] itself is still the raw stored actor id
+  /// in all of those cases -- this field is purely a nicer display name
+  /// layered on top, additive alongside the existing fields.
+  final String? actorName;
+
+  /// Point-in-time snapshot of the actor's facility taken when the access
+  /// happened (unlike [actorName], this does NOT change retroactively if
+  /// the actor later moves facilities). Also nullable/omitted for
+  /// system/emergency-responder rows.
+  final String? actorFacility;
+
   const AuditLogEntry({
     required this.actor,
     this.actorRole,
@@ -14,6 +30,8 @@ class AuditLogEntry {
     required this.fieldsAccessed,
     required this.timestamp,
     this.detail,
+    this.actorName,
+    this.actorFacility,
   });
 
   factory AuditLogEntry.fromJson(Map<String, dynamic> json) => AuditLogEntry(
@@ -25,5 +43,7 @@ class AuditLogEntry {
             .toList(),
         timestamp: json['timestamp'] as String? ?? '',
         detail: json['detail'] as String?,
+        actorName: json['actor_name'] as String?,
+        actorFacility: json['actor_facility'] as String?,
       );
 }
