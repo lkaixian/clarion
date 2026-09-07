@@ -658,7 +658,10 @@ def add_condition(
     )
     db.add(condition)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_condition", detail=payload.name,
+    # Security Audit M8: log the new row's id, never the clinical value
+    # (diagnosis name) -- the audit store must not become a second, less-
+    # controlled copy of clinical data. Same as the update_* endpoints.
+    log_access(db, patient_id, current_user.id, current_user.role, "add_condition", detail=condition.id,
                actor_facility=current_user.facility)
     return {"status": "ok"}
 
@@ -723,7 +726,8 @@ def add_medication(
     )
     db.add(med)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_medication", detail=payload.drug_name,
+    # Security Audit M8: log the row id, not the drug name.
+    log_access(db, patient_id, current_user.id, current_user.role, "add_medication", detail=med.id,
                actor_facility=current_user.facility)
     return {"status": "ok"}
 
@@ -776,7 +780,8 @@ def add_allergy(
     )
     db.add(allergy)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_allergy", detail=payload.substance,
+    # Security Audit M8: log the row id, not the allergen substance.
+    log_access(db, patient_id, current_user.id, current_user.role, "add_allergy", detail=allergy.id,
                actor_facility=current_user.facility)
     return {"status": "ok"}
 
@@ -834,7 +839,9 @@ def add_encounter(
     encounter = models.Encounter(patient_id=patient_id, **enc_data)
     db.add(encounter)
     db.commit()
-    log_access(db, patient_id, current_user.id, current_user.role, "add_encounter", detail=enc_data["facility_name"],
+    # Security Audit M8: log the row id (the authoring facility is already
+    # captured as actor_facility), not free-text pulled from the payload.
+    log_access(db, patient_id, current_user.id, current_user.role, "add_encounter", detail=encounter.id,
                actor_facility=current_user.facility)
     return {"status": "ok"}
 
