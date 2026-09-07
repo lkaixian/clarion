@@ -1103,12 +1103,24 @@ def _get_admission_for_staff(admission_id: str, current_user: models.User, db: S
     return adm
 
 
-def _serialize_admission(db: Session, adm: models.Admission) -> dict:
-    patient = db.query(models.Patient).filter(models.Patient.id == adm.patient_id).first()
-    ward = db.query(models.Ward).filter(models.Ward.id == adm.ward_id).first()
+def _serialize_admission(db: Session, adm: models.Admission, *, patients=None, wards=None, floors=None) -> dict:
+    # A list caller passes prebuilt {id: row} maps (see list_admissions) so
+    # this is zero queries per row; a single-row caller passes nothing and
+    # gets the per-row lookups. Code-review follow-up 2026-09-07.
+    patient = (
+        patients.get(adm.patient_id) if patients is not None
+        else db.query(models.Patient).filter(models.Patient.id == adm.patient_id).first()
+    )
+    ward = (
+        wards.get(adm.ward_id) if wards is not None
+        else db.query(models.Ward).filter(models.Ward.id == adm.ward_id).first()
+    )
     floor = None
     if ward is not None and ward.floor_id:
-        floor = db.query(models.Floor).filter(models.Floor.id == ward.floor_id).first()
+        floor = (
+            floors.get(ward.floor_id) if floors is not None
+            else db.query(models.Floor).filter(models.Floor.id == ward.floor_id).first()
+        )
     return {
         "id": adm.id,
         "patient_id": adm.patient_id,
@@ -1337,7 +1349,24 @@ def list_admissions(
     if active:
         query = query.filter(models.Admission.discharged_at.is_(None))
     admissions = query.order_by(models.Admission.admitted_at.desc()).all()
-    return [_serialize_admission(db, a) for a in admissions]
+    if not admissions:
+        return []
+    patients = {
+        p.id: p for p in db.query(models.Patient)
+        .filter(models.Patient.id.in_({a.patient_id for a in admissions})).all()
+    }
+    wards = {
+        w.id: w for w in db.query(models.Ward)
+        .filter(models.Ward.id.in_({a.ward_id for a in admissions})).all()
+    }
+    floor_ids = {w.floor_id for w in wards.values() if w.floor_id}
+    floors = {
+        f.id: f for f in db.query(models.Floor).filter(models.Floor.id.in_(floor_ids)).all()
+    } if floor_ids else {}
+    return [
+        _serialize_admission(db, a, patients=patients, wards=wards, floors=floors)
+        for a in admissions
+    ]
 
 
 @router.get("/ward-map", response_model=schemas.WardMapOut)

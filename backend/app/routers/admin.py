@@ -42,7 +42,7 @@ from ..storage import BUCKET_MEDICINE, ObjectStoreError, apply_object_meta, get_
 from ..imaging import ImageProcessingError, normalise_image, sniff_image_mime
 from ..derived import prime_thumbnail
 from ._uploads import enforce_upload_size
-from .staff import _get_clock_status
+from .staff import _get_clock_status, batch_clock_status
 from .reception import _malaysia_today
 from ..directory import resolve_user_names
 
@@ -194,7 +194,26 @@ def _has_pending_delete_request(db: Session, item_id: str) -> bool:
     )
 
 
-def _serialize_inventory_item(db: Session, item: models.MedicineInventoryItem) -> dict:
+def _pending_delete_item_ids(db: Session, item_ids) -> set:
+    """Batch form for the list serializers -- one query for "which of these
+    items have a pending delete request", instead of _has_pending_delete_request
+    per row (code-review follow-up 2026-09-07)."""
+    ids = [i for i in item_ids if i]
+    if not ids:
+        return set()
+    return {
+        r for (r,) in db.query(models.InventoryDeleteRequest.item_id)
+        .filter(
+            models.InventoryDeleteRequest.item_id.in_(ids),
+            models.InventoryDeleteRequest.status == "pending",
+        )
+        .all()
+    }
+
+
+def _serialize_inventory_item(
+    db: Session, item: models.MedicineInventoryItem, pending_delete_ids=None
+) -> dict:
     has_image = bool(item.image_object_key)
     return {
         "id": item.id,
@@ -212,7 +231,10 @@ def _serialize_inventory_item(db: Session, item: models.MedicineInventoryItem) -
         "updated_at": item.updated_at,
         "created_at": item.created_at,
         "is_low_stock": item.reorder_threshold is not None and item.quantity_on_hand <= item.reorder_threshold,
-        "pending_delete_request": _has_pending_delete_request(db, item.id),
+        "pending_delete_request": (
+            item.id in pending_delete_ids if pending_delete_ids is not None
+            else _has_pending_delete_request(db, item.id)
+        ),
         "has_image": has_image,
         # Points at the pharmacy GET endpoint (admins are in _PHARMACY_ROLES,
         # so one endpoint serves both consoles). Never exposes the raw
@@ -444,7 +466,8 @@ def list_inventory(
         )
     query = _apply_inventory_search(query, q)
     items = query.order_by(models.MedicineInventoryItem.drug_name.asc()).all()
-    return [_serialize_inventory_item(db, i) for i in items]
+    pending = _pending_delete_item_ids(db, [i.id for i in items])
+    return [_serialize_inventory_item(db, i, pending) for i in items]
 
 
 @router.post("/inventory/{item_id}/image", response_model=schemas.MedicineInventoryOut)
@@ -1853,13 +1876,12 @@ def list_staff_roster(
         .all()
     )
 
+    clock = batch_clock_status(db, [u.id for u in staff])
     results = []
     for u in staff:
-        # Reuse staff.py's shared status-derivation logic rather than
-        # re-querying StaffClockEvent inline here -- see this router's
-        # import of _get_clock_status and staff.py's module docstring for
-        # why.
-        status = _get_clock_status(db, u.id)
+        # staff.py's shared status-derivation logic, batched for the roster
+        # (2 queries total instead of 2 per row).
+        status = clock[u.id]
         results.append(
             schemas.StaffRosterEntryOut(
                 id=u.id,
@@ -2081,11 +2103,24 @@ def revoke_waiting_room_display(
 # any single-facility admin mint a mapping that provisions (or resyncs) a
 # user at a DIFFERENT facility -- exactly the cross-tenant escalation
 # `auth_router.register()` is already hardened against elsewhere in this
-# codebase. `_check_mapping_facility` below enforces the same rule this
+# codebase. `_check_mapping_authz` below enforces the same rule this
 # router applies everywhere else: a `facility` value must be either absent
 # (a facility-agnostic mapping) or equal to the ACTING admin's own
 # `current_user.facility` -- never client-chosen independently of that.
-def _check_mapping_facility(current_user: models.User, facility: Optional[str]) -> None:
+#
+# It ALSO blocks a facility-scoped admin from pointing ANY mapping at
+# `role="admin"` (code-review follow-up 2026-09-07). A facility admin who
+# could map an AD group to `admin` -- and, via a facility-omitted mapping,
+# to a `facility=None` GLOBAL admin -- would be a facility-admin ->
+# platform-admin privilege-escalation path. Only a platform/bootstrap admin
+# (no facility of their own) may create an admin-granting mapping. This is a
+# deliberate tightening of the earlier "an IT/Helpdesk AD group -> admin is
+# a normal use" stance; the normal use is still available, it just has to be
+# configured by a platform admin. Reverse by deleting the `role == "admin"`
+# check if the University decides facility admins should self-provision admins.
+def _check_mapping_authz(
+    current_user: models.User, facility: Optional[str], role: str
+) -> None:
     if facility is not None and facility != current_user.facility:
         raise HTTPException(
             status_code=403,
@@ -2093,6 +2128,14 @@ def _check_mapping_facility(current_user: models.User, facility: Optional[str]) 
                 "facility must be omitted or match your own facility "
                 f"({current_user.facility or 'none assigned'}) -- an admin cannot "
                 "assign an LDAP role mapping's facility to a hospital other than their own."
+            ),
+        )
+    if role == "admin" and current_user.facility:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only a platform admin (one with no facility assigned) may create an "
+                "LDAP role mapping that grants the admin role."
             ),
         )
 
@@ -2115,7 +2158,7 @@ def create_ldap_role_mapping(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin")),
 ):
-    _check_mapping_facility(current_user, payload.facility)
+    _check_mapping_authz(current_user, payload.facility, payload.role)
 
     existing = (
         db.query(models.LdapRoleMapping)
@@ -2163,7 +2206,7 @@ def update_ldap_role_mapping(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin")),
 ):
-    _check_mapping_facility(current_user, payload.facility)
+    _check_mapping_authz(current_user, payload.facility, payload.role)
     row = _get_ldap_role_mapping_or_404(db, mapping_id)
 
     duplicate = (

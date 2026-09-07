@@ -16,6 +16,22 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Code-review follow-up, third pass (closing the "still
+  open" list).** LDAP facility-admin→admin-role mapping: made the secure
+  call -- only a platform admin (no facility) may create an admin-granting
+  LDAP mapping (`_check_mapping_authz`), reversible if the University disagrees.
+  `PatientDetail.jsx` `exhaustive-deps` fixed properly (`useCallback`), no
+  render loop -- **oxlint now 0 warnings**. Grace-window residual: every
+  graced refresh race now logs a WARNING so it's detectable post-hoc (full
+  device binding stays a tender-grade follow-up). Lower-sev N+1 +
+  pagination: `_serialize_inventory_item` / `_serialize_admission` /
+  `list_staff_roster` batch their per-row lookups; `GET
+  /patients/{id}/audit-log` + `/annotations` gained `skip`/`limit` (default
+  500). **Verified 159/159, build + oxlint clean.** Genuinely still open:
+  the god-file splits + cross-router coupling (`admin.py`↔`pharmacy.py`
+  inventory helpers, `consultation.py` calling `reception.py` route handlers
+  directly) -- a dedicated reviewed refactor, plan in
+  [[Security Audit#Third pass (2026-09-07) — closing the "still open" items]].
 - **2026-09-07** — **Code-review follow-up, second pass (the deferred
   items).** CR9: refresh cookie `Path` was `/auth`, never sent on the
   documented `/api/auth/refresh` proxy path -> silent refresh dead ->

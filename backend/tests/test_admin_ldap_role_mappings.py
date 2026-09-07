@@ -119,17 +119,28 @@ def test_emergency_responder_role_rejected(test_client, make_user, auth_headers)
     assert resp.status_code == 422
 
 
-def test_admin_role_is_assignable(test_client, make_user, auth_headers, db_session):
-    """Unlike patient/emergency_responder, "admin" IS a legitimate
-    LDAP-assignable role (e.g. an IT/Helpdesk AD group)."""
-    admin = make_user(role="admin", facility="Main Hospital")
-    resp = test_client.post(
+def test_admin_role_mapping_requires_a_platform_admin(test_client, make_user, auth_headers, db_session):
+    """Code-review follow-up 2026-09-07: "admin" IS a legitimate
+    LDAP-assignable role (an IT/Helpdesk AD group), but only a PLATFORM
+    admin (no facility of their own) may create such a mapping -- a
+    facility-scoped admin doing so would be a facility-admin ->
+    platform-admin escalation path."""
+    facility_admin = make_user(role="admin", facility="Main Hospital")
+    denied = test_client.post(
         "/admin/ldap-role-mappings",
-        headers=auth_headers(admin),
+        headers=auth_headers(facility_admin),
         json={"group_dn": "cn=Helpdesk,dc=example,dc=com", "role": "admin"},
     )
-    assert resp.status_code == 201, resp.text
-    db_session.query(models.LdapRoleMapping).filter_by(id=resp.json()["id"]).delete()
+    assert denied.status_code == 403
+
+    platform_admin = make_user(role="admin", facility=None)
+    allowed = test_client.post(
+        "/admin/ldap-role-mappings",
+        headers=auth_headers(platform_admin),
+        json={"group_dn": "cn=Helpdesk,dc=example,dc=com", "role": "admin"},
+    )
+    assert allowed.status_code == 201, allowed.text
+    db_session.query(models.LdapRoleMapping).filter_by(id=allowed.json()["id"]).delete()
     db_session.commit()
 
 

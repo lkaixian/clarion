@@ -57,6 +57,47 @@ def _get_clock_status(db: Session, user_id: str) -> schemas.ClockStatusOut:
     )
 
 
+def batch_clock_status(db: Session, user_ids) -> dict:
+    """`{user_id: ClockStatusOut}` for many users in TWO queries total --
+    the roster form of `_get_clock_status`, which is 2 queries per user.
+    Code-review follow-up 2026-09-07."""
+    ids = [u for u in user_ids if u]
+    if not ids:
+        return {}
+
+    # ORDER BY ... ASC + dict-overwrite => the last row kept per user is the
+    # most recent one (same "latest wins" as the single-row `.first()` with
+    # DESC).
+    open_by_user: dict = {}
+    for ev in (
+        db.query(models.StaffClockEvent)
+        .filter(models.StaffClockEvent.user_id.in_(ids), models.StaffClockEvent.clock_out_at.is_(None))
+        .order_by(models.StaffClockEvent.clock_in_at.asc())
+        .all()
+    ):
+        open_by_user[ev.user_id] = ev
+
+    last_closed_by_user: dict = {}
+    for ev in (
+        db.query(models.StaffClockEvent)
+        .filter(models.StaffClockEvent.user_id.in_(ids), models.StaffClockEvent.clock_out_at.isnot(None))
+        .order_by(models.StaffClockEvent.clock_out_at.asc())
+        .all()
+    ):
+        last_closed_by_user[ev.user_id] = ev
+
+    out: dict = {}
+    for uid in ids:
+        oe = open_by_user.get(uid)
+        lc = last_closed_by_user.get(uid)
+        out[uid] = schemas.ClockStatusOut(
+            clocked_in=oe is not None,
+            since=oe.clock_in_at if oe else None,
+            last_clock_out_at=lc.clock_out_at if lc else None,
+        )
+    return out
+
+
 @router.post("/clock-in", response_model=schemas.ClockStatusOut)
 def clock_in(
     db: Session = Depends(get_db),

@@ -481,26 +481,74 @@ raised follow-ups, now applied:
 regression given HttpOnly + SameSite=Strict + Secure; `/api/auth` is not a
 valid universal default because the direct-origin topology needs `/auth`).
 
-### Still open — needs a decision, not just code
-- **LDAP facility-admin → admin-role mapping.** A facility-scoped admin can
-  create an `role="admin"` (and, via a facility-omitted mapping, a
-  `facility=None` GLOBAL admin) LDAP role mapping. This is currently
-  *deliberate and tested* (`test_admin_role_is_assignable`, "an IT/Helpdesk
-  AD group mapping to admin is a normal use"). Tightening it (only a
-  platform admin may point a mapping at `admin`) is a product/security
-  policy call for the University -- a one-liner in `_check_mapping_facility` once
-  decided. Only reachable with `LDAP_ENABLED` + control of AD group
-  membership.
-- **God-file splits** (`AdminConsole.jsx` 2.4k, `admin.py` 2.2k,
-  `reception.py` 1.4k) and the cross-router private-name imports
-  (`pharmacy.py`←`admin.py`, `consultation.py`←`reception.py` calling route
-  handlers directly). Genuinely large, interconnected refactors -- best
-  done as a dedicated pass with the build watched at each step, not a
-  fire-and-forget delegation. `PatientDetail.jsx:1447` `exhaustive-deps`
-  warning left alone for the same reason (a wrong fix loops the effect).
-- Lower-severity N+1 in the admin/reception list serializers +
-  `skip`/`limit` on the remaining unbounded list endpoints (audit log,
-  inventory, annotations, purchase proposals).
+---
+
+## Third pass (2026-09-07) — closing the "still open" items
+
+Full backend suite **159/159**, `npm run build` + `oxlint` clean (oxlint now
+**0 warnings**).
+
+### LDAP facility-admin → admin-role mapping — **decided + fixed**
+Made the secure call: `_check_mapping_authz` now blocks a facility-scoped
+admin from pointing ANY LDAP role mapping at `role="admin"`. Only a
+platform/bootstrap admin (no `facility` of their own) may create an
+admin-granting mapping -- closing the facility-admin → platform-admin
+escalation path. The normal "IT/Helpdesk AD group → admin" use is still
+available, it just has to be configured by a platform admin. Reversible by
+deleting the `role == "admin"` check if the University wants facility admins to
+self-provision admins. `test_admin_role_mapping_requires_a_platform_admin`
+replaces the old `test_admin_role_is_assignable`.
+
+### `PatientDetail.jsx` `exhaustive-deps` — **fixed**
+`refresh` and `refreshCardStatus` wrapped in `useCallback([id])`; the two
+effects now list honest deps and the `eslint-disable` is gone. No render
+loop -- every dep is stable (module-import getters, `useState` setters, a
+`useRef`). oxlint is fully clean.
+
+### Grace-window residual — **partly addressed**
+Full device/fingerprint binding not built (needs a schema column + threading
+the request through `issue_refresh_token`; marginal against an attacker who
+also has the token). Instead every graced race now logs a WARNING
+(`clarion.auth`, user id + token row) -- the residual is at least detectable
+post-hoc (a burst for one user id is the signal). Full binding stays a
+tender-grade follow-up.
+
+### Lower-severity N+1 + pagination — **fixed**
+- `_serialize_inventory_item` gained an optional `pending_delete_ids` set;
+  `list_inventory` (admin) + both pharmacy inventory lists now batch that
+  lookup once (`_pending_delete_item_ids`) instead of per row.
+- `_serialize_admission` takes prebuilt `{id: row}` maps; `list_admissions`
+  batch-loads patients/wards/floors (3 queries total, was 3 per row).
+- `staff.batch_clock_status` -- `list_staff_roster` derives clock status in
+  2 queries total instead of 2 per roster row.
+- `GET /patients/{id}/audit-log` and `/annotations` gained `skip`/`limit`
+  (default 500, max 2000) -- generous enough that the current "fetch all"
+  web client is unaffected, but the unbounded growth is capped.
+
+### Still genuinely open — a dedicated refactor, not this pass
+**God-file splits + cross-router coupling.** `admin.py` (2.2k) exports ~12
+`_private` inventory helpers that `pharmacy.py` imports; `consultation.py`
+imports 11 names from `reception.py` and calls three of its **route
+handlers** (`claim_room`, `call_ticket`, `cancel_ticket`) directly as
+functions. `AdminConsole.jsx` (2.4k) / `reception.py` (1.4k) each hold
+several independent domains in one file. The code works and the tests cover
+it, but this is real structural debt.
+
+Recommended plan (own reviewed PR, build + suite green at each step):
+1. `app/inventory.py` -- move the medicine-inventory service helpers out of
+   `admin.py`; `admin.py` and `pharmacy.py` both import from it (kills the
+   router→router import + the load-order coupling).
+2. Extract `claim_room` / `call_ticket` / `cancel_ticket` bodies into plain
+   `*_logic(db, current_user, ...)` helpers in a `reception_service` module;
+   the routes and `consultation.py` both call the helper (removes the
+   route-handler-as-function fragility -- it silently breaks the day one of
+   those endpoints gains a `Depends`).
+3. Split `reception.py` into queue / rooms / wards sub-modules (they are
+   already comment-delimited) and `AdminConsole.jsx` into
+   `pages/admin/*Tab.jsx`.
+
+Deferred with eyes open: the demo works, and a rushed split risks the
+queue/room-claim flow that judging depends on.
 
 ---
 

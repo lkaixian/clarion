@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import Watermark from "../components/Watermark";
@@ -1439,25 +1439,11 @@ export default function PatientDetail() {
   const emergencyCardRef = useRef(null);
   emergencyCardRef.current = emergencyCard;
 
-  function refresh() {
-    getPatient(id).then(setPatient);
-    getAuditLog(id).then(setAuditLog);
-    listNfcCards(id).then(setNfcCards);
-    getAppointments(id).then(setAppointments);
-    refreshCardStatus();
-  }
-
-  // FIX (previously reported: "revoke/replace a card from the app, but the
-  // web console doesn't reflect it until I refresh the page"): the web
-  // console used to have no way at all to find out about a card issued or
-  // revoked somewhere else — it only ever showed whatever *it itself* had
-  // issued in the current browser tab. It now polls the read-only
-  // GET /emergency/current/{id} status endpoint, and reconciles the
-  // locally-displayed QR image against it: if the currently-active card's
-  // reference no longer matches what's on screen (revoked, or replaced by
-  // a newer one issued elsewhere), the on-screen card is marked revoked
-  // without requiring a manual refresh.
-  function refreshCardStatus() {
+  // Both memoized on `id` only (every getter is a stable module import, every
+  // setter is a stable useState setter, emergencyCardRef is a stable ref) so
+  // the effects below can list honest dependencies instead of an
+  // exhaustive-deps disable.
+  const refreshCardStatus = useCallback(() => {
     getCurrentCardStatus(id)
       .then((status) => {
         setCardStatus(status);
@@ -1471,15 +1457,32 @@ export default function PatientDetail() {
       .catch(() => {
         /* transient poll failure — try again next interval */
       });
-  }
+  }, [id]);
 
-  useEffect(refresh, [id]);
+  const refresh = useCallback(() => {
+    getPatient(id).then(setPatient);
+    getAuditLog(id).then(setAuditLog);
+    listNfcCards(id).then(setNfcCards);
+    getAppointments(id).then(setAppointments);
+    refreshCardStatus();
+  }, [id, refreshCardStatus]);
+
+  // FIX (previously reported: "revoke/replace a card from the app, but the
+  // web console doesn't reflect it until I refresh the page"): the web
+  // console used to have no way at all to find out about a card issued or
+  // revoked somewhere else — it only ever showed whatever *it itself* had
+  // issued in the current browser tab. It now polls the read-only
+  // GET /emergency/current/{id} status endpoint, and reconciles the
+  // locally-displayed QR image against it: if the currently-active card's
+  // reference no longer matches what's on screen (revoked, or replaced by
+  // a newer one issued elsewhere), the on-screen card is marked revoked
+  // without requiring a manual refresh.
+  useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
     const interval = setInterval(refreshCardStatus, CARD_STATUS_POLL_MS);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [refreshCardStatus]);
 
   async function loadBrief() {
     setBusy("brief");
