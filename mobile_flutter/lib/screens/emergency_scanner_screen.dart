@@ -484,7 +484,9 @@ class _ScanResultHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  l10n.scanResultDobValue(result.dateOfBirth),
+                  l10n.scanResultAgeValue(
+                    result.age?.toString() ?? l10n.scanResultBloodTypeUnknown,
+                  ),
                   style: const TextStyle(fontSize: 13, color: Colors.white70),
                 ),
               ],

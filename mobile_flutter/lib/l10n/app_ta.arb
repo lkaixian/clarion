@@ -233,7 +233,7 @@
   "nfcStarting": "NFC தொடங்குகிறது…",
 
   "scanResultFoundTitle": "நோயாளி கண்டறியப்பட்டார்",
-  "scanResultDobValue": "பிறந்த தேதி: {date}",
+  "scanResultAgeValue": "வயது: {age}",
   "scanResultBloodTypeUnknown": "பதிவில் இல்லை",
   "scanResultOmittedMedications": "+{count} மேலும் மருந்துகள் பதிவில் உள்ளன, இங்கே காட்டப்படவில்லை — அவசரகால முக்கியமானதாகக் குறிக்கப்படவில்லை.",
   "scanResultOmittedConditions": "+{count} மேலும் நோய் நிலைகள் பதிவில் உள்ளன, இங்கே காட்டப்படவில்லை — அவசரகால முக்கியமானதாகக் குறிக்கப்படவில்லை.",

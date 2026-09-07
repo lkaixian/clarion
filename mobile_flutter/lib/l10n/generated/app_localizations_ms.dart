@@ -726,8 +726,8 @@ class AppLocalizationsMs extends AppLocalizations {
   String get scanResultFoundTitle => 'Pesakit Ditemui';
 
   @override
-  String scanResultDobValue(String date) {
-    return 'Tarikh lahir: $date';
+  String scanResultAgeValue(String age) {
+    return 'Umur: $age';
   }
 
   @override

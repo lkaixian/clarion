@@ -226,7 +226,7 @@
   "nfcStarting": "Memulakan NFC…",
 
   "scanResultFoundTitle": "Pesakit Ditemui",
-  "scanResultDobValue": "Tarikh lahir: {date}",
+  "scanResultAgeValue": "Umur: {age}",
   "scanResultBloodTypeUnknown": "Tiada dalam rekod",
   "scanResultOmittedMedications": "+{count} lagi ubat dalam rekod, tidak dipaparkan di sini — tidak ditanda sebagai kritikal kecemasan.",
   "scanResultOmittedConditions": "+{count} lagi keadaan dalam rekod, tidak dipaparkan di sini — tidak ditanda sebagai kritikal kecemasan.",
