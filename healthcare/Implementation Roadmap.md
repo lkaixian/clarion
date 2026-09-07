@@ -16,6 +16,31 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Security Audit M7a + M7c (NFC emergency-card
+  hardening).** `EmergencyToken.nfc_uid` now stores `auth.hash_nfc_uid` (keyed
+  HMAC-SHA256; `auth.canonical_nfc_uid` normalises case + separators first so
+  every reader format agrees); new cleartext `nfc_uid_last4` display column;
+  `list`/`register` return `{id, nfc_uid_last4}`, `revoke` by grant id — the
+  raw UID never leaves the server and never lands in an audit `detail`. **M7c:**
+  `_flag_nfc_scan_anomaly_if_needed` — ≥8 scans of one card/hour → one
+  debounced `emergency_card_scan_anomaly` audit row; two `.count()` queries on
+  the new `audit_logs.timestamp` index (no row materialisation on the
+  life-safety path); `patient_id=None` when triggered off failed scans.
+  `_validated_nfc_uid` schema validator rejects blank/non-hex UIDs (can't
+  register a catch-all grant). Alembic `f3a9d21c5e88` (hashes existing rows +
+  index + `nfc_uid`→NULL on downgrade; **hard-fails on missing `OTP_HMAC_KEY`**
+  with rows to migrate). Clients: web `PatientDetail.jsx`/`client.js` +
+  Flutter `home_screen.dart` → `id`+`last4`. **Two-agent `/code-review`**
+  (security + code): actioned canonicalisation, migration key hard-fail,
+  `.count()` rewrite + index, failed-scan `patient_id=None`, schema UID
+  validation, downgrade NULL, moved the last4 helper to `auth`, migration↔auth
+  helper-parity test, anomaly boundary test. New
+  `test_emergency_nfc_hardening.py` (9). **Verified 185/185, `check_schema`
+  PASS, web build + oxlint + `flutter analyze` clean.** Left open: **M7b**
+  (minimise `_scoped_fields` payload / DOB→age) is its own part; 1-yr default
+  expiry kept per the user's choice; `register`/`revoke_nfc_card` still lack
+  the `_require_patient_present_for_staff` facility scope (pre-existing, has
+  senior-citizen-registration workflow implications — flagged for a follow-up).
 - **2026-09-07** — **Security Audit M6 (emergency-scan audit identity).**
   New `auth.get_optional_current_user` (public-endpoint identity: valid
   token → real user, missing/broken/expired → `None`, never a 401). The two

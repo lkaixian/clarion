@@ -895,9 +895,14 @@ class EmergencyToken(Base):
       - `card_reference`: the pointer encoded in the QR code, issued by the
         patient from the app (see /emergency/issue). Meant to be reissued
         often; short-lived by default.
-      - `nfc_uid`: the UID of a physical NFC card/tag, registered by staff
-        via /emergency/nfc/register (e.g. for a senior citizen without a
+      - `nfc_uid`: a physical NFC card/tag, registered by staff via
+        /emergency/nfc/register (e.g. for a senior citizen without a
         smartphone). Longer-lived by default, admin-managed, admin-revocable.
+        Security Audit M7: the column stores `auth.hash_nfc_uid(raw)` (keyed
+        HMAC-SHA256 hex), NOT the raw MIFARE UID -- every lookup hashes the
+        presented UID first. `nfc_uid_last4` keeps a 4-char tail of the raw
+        UID in the clear so staff can still tell two registered cards apart
+        in the console (the grant `id` is the handle for revoke, not the UID).
     A grant may have either, both, or (rarely) be created with just one.
     """
     __tablename__ = "emergency_tokens"
@@ -906,7 +911,8 @@ class EmergencyToken(Base):
     patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
     token = Column(String(64), unique=True, nullable=False)
     card_reference = Column(String(64), unique=True, nullable=True)  # printed on physical card / encoded in QR
-    nfc_uid = Column(String(64), unique=True, nullable=True)  # UID of a registered physical NFC tag/card
+    nfc_uid = Column(String(64), unique=True, nullable=True)  # M7: HMAC of the UID, never the raw UID
+    nfc_uid_last4 = Column(String(8), nullable=True)  # cleartext tail of the raw UID, display only
     scope = Column(JSON, default=lambda: ["allergies", "medications", "conditions", "blood_type"])
     expires_at = Column(TZDateTime, nullable=False)
     revoked = Column(Boolean, default=False)
@@ -1118,7 +1124,9 @@ class AuditLog(Base):
     actor_facility = Column(String(255), nullable=True)  # snapshot at access time -- see class docstring
     action = Column(String(64), nullable=False)         # e.g. "view_record", "emergency_access", "upload_document"
     fields_accessed = Column(JSON, nullable=True)
-    timestamp = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    # Indexed: the M7c NFC-scan anomaly check and the patient audit-log read
+    # both window on recent rows (WHERE timestamp >= now() - interval).
+    timestamp = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), index=True)
     detail = Column(Text, nullable=True)
 
 

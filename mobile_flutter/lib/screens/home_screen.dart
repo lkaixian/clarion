@@ -445,10 +445,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: patientState.nfcCards.map((n) {
                         final revoked = n['revoked'] == true;
+                        // The raw UID is stored hashed server-side (Security
+                        // Audit M7) and never sent back; show the last-4 tail.
+                        final label = 'card ••${n['nfc_uid_last4'] ?? '????'}';
                         return _BulletLine(
                           revoked
-                              ? l10n.nfcCardRevokedLine(n['nfc_uid'].toString())
-                              : l10n.nfcCardActiveLine(n['nfc_uid'].toString()),
+                              ? l10n.nfcCardRevokedLine(label)
+                              : l10n.nfcCardActiveLine(label),
                         );
                       }).toList(),
                     ),

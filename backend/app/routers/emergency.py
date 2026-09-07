@@ -52,6 +52,49 @@ def _render_qr_base64(card_reference: str) -> str:
     return f"data:image/png;base64,{qr_base64}"
 
 
+# Security Audit M7c: a legitimate emergency is a handful of scans of one
+# card; many scans of the SAME card in a short window is the signature of a
+# cloned/dumped card being probed. We can't block it (life-safety), so we
+# make it conspicuous.
+_NFC_SCAN_ANOMALY_WINDOW = timedelta(hours=1)
+_NFC_SCAN_ANOMALY_THRESHOLD = 8
+
+
+def _flag_nfc_scan_anomaly_if_needed(
+    db: Session, nfc_hash: str, patient_id: "str | None"
+) -> None:
+    """M7c: once per hour per card, if this card's scan count over the last
+    hour crosses the threshold, drop one `emergency_card_scan_anomaly` audit
+    row. Every NFC scan carries `nfc_hash=<hash16>` in its detail so this
+    can find them -- it's an HMAC prefix, never a usable key.
+
+    Runs on the (life-safety) scan path, so both queries are `.count()`
+    (no row materialisation) and windowed on the indexed `timestamp`
+    column."""
+    since = datetime.utcnow() - _NFC_SCAN_ANOMALY_WINDOW
+    marker = f"nfc_hash={nfc_hash[:16]}"
+    windowed = db.query(models.AuditLog).filter(
+        models.AuditLog.timestamp >= since,
+        models.AuditLog.detail.like(f"%{marker}%"),
+    )
+    scans = windowed.filter(
+        models.AuditLog.action.in_(("emergency_access_nfc", "emergency_access_failed"))
+    ).count()
+    if scans < _NFC_SCAN_ANOMALY_THRESHOLD:
+        return
+    if windowed.filter(models.AuditLog.action == "emergency_card_scan_anomaly").count():
+        return  # already flagged this card within the window -- debounce
+    log_access(
+        db, patient_id,
+        actor="system", actor_role="system",
+        action="emergency_card_scan_anomaly",
+        # The `nfc_hash=` marker below is load-bearing: the debounce query
+        # above finds this row by the same `marker` LIKE. Keep it as the
+        # detail prefix.
+        detail=f"{marker} count={scans} window=1h -- possible cloned/dumped card",
+    )
+
+
 class _ResponderAudit(NamedTuple):
     actor: str
     actor_role: str
@@ -491,9 +534,11 @@ def register_nfc_card(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    # M7: the raw UID is hashed for storage + lookup and never persisted.
+    uid_hash = auth.hash_nfc_uid(payload.nfc_uid)
     existing = (
         db.query(models.EmergencyToken)
-        .filter(models.EmergencyToken.nfc_uid == payload.nfc_uid)
+        .filter(models.EmergencyToken.nfc_uid == uid_hash)
         .first()
     )
     if existing and existing.patient_id != payload.patient_id:
@@ -508,13 +553,15 @@ def register_nfc_card(
         existing.expires_at = datetime.utcnow() + timedelta(minutes=payload.valid_minutes)
         existing.revoked = False
         existing.registered_by = current_user.id
+        existing.nfc_uid_last4 = auth.nfc_uid_last4(payload.nfc_uid)
         grant = existing
         action = "update_nfc_card"
     else:
         grant = models.EmergencyToken(
             patient_id=payload.patient_id,
             token=secrets.token_urlsafe(32),
-            nfc_uid=payload.nfc_uid,
+            nfc_uid=uid_hash,
+            nfc_uid_last4=auth.nfc_uid_last4(payload.nfc_uid),
             scope=payload.scope,
             expires_at=datetime.utcnow() + timedelta(minutes=payload.valid_minutes),
             registered_by=current_user.id,
@@ -525,11 +572,14 @@ def register_nfc_card(
     db.commit()
     db.refresh(grant)
 
-    log_access(db, payload.patient_id, current_user.id, current_user.role, action, detail=payload.nfc_uid,
+    # detail = the grant id + last4, never the raw UID (M7 / M8).
+    log_access(db, payload.patient_id, current_user.id, current_user.role, action,
+               detail=f"card_id={grant.id} last4={grant.nfc_uid_last4}",
                actor_facility=current_user.facility)
 
     return {
-        "nfc_uid": grant.nfc_uid,
+        "id": grant.id,
+        "nfc_uid_last4": grant.nfc_uid_last4,
         "scope": grant.scope,
         "grant_valid_until": grant.expires_at.isoformat(),
         "revoked": grant.revoked,
@@ -548,21 +598,28 @@ def scan_nfc_card(
     physical card's NFC UID instead of a QR-encoded card_reference. A
     logged-in staff caller is bound to the audit entry (M6)."""
     ident = _responder_audit(current_user, payload)
+    uid_hash = auth.hash_nfc_uid(payload.nfc_uid)
+    hash_marker = f"nfc_hash={uid_hash[:16]}"  # M7c anomaly-count marker
     grant = (
         db.query(models.EmergencyToken)
-        .filter(models.EmergencyToken.nfc_uid == payload.nfc_uid)
+        .filter(models.EmergencyToken.nfc_uid == uid_hash)
         .first()
     )
     if not grant or grant.revoked or grant.expires_at < datetime.utcnow():
         # Failed scan -- see POST /emergency/scan above for why this is
-        # logged with patient_id=None.
+        # logged with patient_id=None. The raw UID is never logged (M7).
         log_access(
             db, None,
             actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"nfc_uid={payload.nfc_uid} {ident.detail_suffix}",
+            detail=f"{hash_marker} {ident.detail_suffix}",
             actor_facility=ident.actor_facility,
         )
+        # patient_id=None on this branch too -- same reasoning as the
+        # failed-scan row above: don't correlate a probe of a revoked/
+        # expired card to the patient. The nfc_hash marker identifies the
+        # card for a reviewer.
+        _flag_nfc_scan_anomaly_if_needed(db, uid_hash, None)
         raise HTTPException(status_code=404, detail="This NFC card is not registered, revoked, or expired")
 
     patient = db.query(models.Patient).filter(models.Patient.id == grant.patient_id).first()
@@ -571,7 +628,7 @@ def scan_nfc_card(
             db, None,
             actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"nfc_uid={payload.nfc_uid} {ident.detail_suffix} (grant found, patient missing)",
+            detail=f"{hash_marker} {ident.detail_suffix} (grant found, patient missing)",
             actor_facility=ident.actor_facility,
         )
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -585,25 +642,33 @@ def scan_nfc_card(
         actor=ident.actor, actor_role=ident.actor_role,
         action="emergency_access_nfc",
         fields=list(scope),
-        detail=ident.detail_suffix,
+        detail=f"{hash_marker} {ident.detail_suffix}",
         actor_facility=ident.actor_facility,
     )
     _audit_sharing_bypass_if_any(db, patient, ident)
+    _flag_nfc_scan_anomaly_if_needed(db, uid_hash, patient.id)
 
     return result
 
 
-@router.post("/nfc/revoke/{nfc_uid}")
+@router.post("/nfc/revoke/{token_id}")
 def revoke_nfc_card(
-    nfc_uid: str, db: Session = Depends(get_db),
+    token_id: str, db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
-    grant = db.query(models.EmergencyToken).filter(models.EmergencyToken.nfc_uid == nfc_uid).first()
+    """Revoke by the grant's id (from GET /emergency/nfc/{patient_id}) -- the
+    raw NFC UID is no longer round-trippable to the client (M7)."""
+    grant = (
+        db.query(models.EmergencyToken)
+        .filter(models.EmergencyToken.id == token_id, models.EmergencyToken.nfc_uid.isnot(None))
+        .first()
+    )
     if not grant:
         raise HTTPException(status_code=404, detail="NFC card not found")
     grant.revoked = True
     db.commit()
-    log_access(db, grant.patient_id, current_user.id, current_user.role, "revoke_nfc_card", detail=nfc_uid,
+    log_access(db, grant.patient_id, current_user.id, current_user.role, "revoke_nfc_card",
+               detail=f"card_id={grant.id} last4={grant.nfc_uid_last4}",
                actor_facility=current_user.facility)
     return {"status": "revoked"}
 
@@ -629,7 +694,8 @@ def list_nfc_cards(
     )
     return [
         {
-            "nfc_uid": g.nfc_uid,
+            "id": g.id,
+            "nfc_uid_last4": g.nfc_uid_last4,
             "scope": g.scope,
             "grant_valid_until": g.expires_at.isoformat(),
             "revoked": g.revoked,
