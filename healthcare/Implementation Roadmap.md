@@ -16,6 +16,30 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Code-review fifth pass (verify the delegated splits) +
+  Security Audit M8.** Ran the full parallel-agent `/code-review` over
+  `HEAD~2..HEAD` — the two voltagent-delegated god-file splits (`AdminConsole.jsx`
+  → `web/src/pages/admin/*`, `admin.py` → `app/inventory.py`) that the fourth
+  pass had only hand-verified. **Verdict: clean / ready to merge** — tests
+  160/160, `npm build` + `oxlint` + `pyflakes` all clean, security agent
+  confirmed no auth guard / role check / `require_page_access` / facility
+  scoping dropped (all 12 moved backend fns byte-identical, React render body
+  character-identical), code-review agent confirmed both "mechanical split"
+  claims by AST + line-multiset diff. Only follow-ups surfaced (all optional,
+  logged not done): `inventory.py`'s 9 cross-router helpers keep leading-`_`
+  names despite now being that module's public API (`imaging`/`storage`/
+  `directory` don't); minor dup in the new tab files (active-section-names
+  fetch ×3, occupancy-bar `<div>` ×2); `DisplaysTab.jsx` exports
+  `WaitingRoomDisplaysTab` (file/component name mismatch).
+  Then fixed **[[Security Audit#M8]]**: `add_condition` / `add_medication` /
+  `add_allergy` / `add_encounter` in `patients.py` now log the new row's `id`
+  in `audit_logs.detail`, never the diagnosis name / drug name / allergen /
+  payload free-text — the audit store must not be a second copy of clinical
+  data (the `update_*` endpoints already did this). Swept the other routers'
+  `log_access` calls — clean. New `test_audit_no_clinical_values.py` (5).
+  **Verified 165/165, `pyflakes` clean.** **M6/M7** (self-asserted responder
+  identity; NFC card entropy/HMAC/default-expiry) still open — both need a
+  design call, not just code.
 - **2026-09-07** — **Code-review follow-up, fourth pass (delegated
   refactors + device binding).** Refresh-token device binding built
   (`client_fingerprint` column, migration `e7c1a9b3f2d4`): a reuse from a
@@ -951,7 +975,7 @@ has a forward dependency on a later one. Backbone:
 | P2.3 | Fix H3 — random seed passwords + `must_change_password`; real staff password policy | S | | ✅ 2026-09-07 |
 | P2.4 | Fix M1/M2 — per-IP login + OTP throttle; indexed normalized-NRIC column | S | | ✅ 2026-09-07 |
 | P2.5 | Fix M4 — short access-token TTL + refresh in `HttpOnly` cookie + `jti` deny-list; strict CSP | M | | ✅ 2026-09-07 (CSP residual — see log) |
-| P2.6 | Fix M5/M6/M7/M8 — upload magic-byte + AV hook; verified responder credential; HMAC card key + PIN; stop logging clinical values into `audit_logs.detail` | M | | — |
+| P2.6 | Fix M5/M6/M7/M8 — upload magic-byte + AV hook; verified responder credential; HMAC card key + PIN; stop logging clinical values into `audit_logs.detail` | M | | 🟡 M5 ✅ 2026-09-07 · M8 ✅ 2026-09-07 (add_* endpoints log row id not clinical value) · **M6/M7 open** (need a design call) |
 | P2.7 | Encryption at rest — MariaDB encrypted tablespaces + on-prem key management | M | | — |
 | P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | — |
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | — |

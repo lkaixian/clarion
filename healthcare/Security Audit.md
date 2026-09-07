@@ -262,6 +262,20 @@ Resolved by the MariaDB move — [[On-Prem Architecture]].
 - **M8 — clinical data written into `audit_logs.detail`.** `patients.py:524` (diagnosis
   name), `:589` (drug name), `:642` (allergen). The audit store becomes a second,
   less-controlled copy of clinical data.
+  ✅ **RESOLVED 2026-09-07 (P2.6).** `add_condition` / `add_medication` /
+  `add_allergy` now log the new row's `id` in `detail`, never `payload.name` /
+  `payload.drug_name` / `payload.substance` — matching what the `update_*`
+  endpoints already did (`detail=<record_id>`, `fields=[...]`). `add_encounter`
+  likewise switched from `enc_data["facility_name"]` to `encounter.id` (the
+  authoring facility is already captured as `actor_facility`). Swept
+  `consultation.py` / `reception.py` / `emergency.py` / `ai_router.py` for the
+  same pattern — clean (their `detail=` values are `room_id` / `queue_number` /
+  `encounter_id` / `doc_type` / the NFC UID, none of which is clinical content;
+  the NFC UID is a separate concern tracked under M7). New
+  `backend/tests/test_audit_no_clinical_values.py` (5 tests — each add_* path
+  logs the id not the value, plus a belt-and-braces "no clinical string in ANY
+  `audit_logs.detail` row for the patient"). **Verified: 165/165 pass**,
+  `pyflakes` clean. **M6/M7 still open.**
 - **M9 — `_migrate_lightweight()` auto-runs DDL at every startup.** ✅ **RESOLVED
   2026-08-30 (P1.5).** `_migrate_lightweight()` + `create_all()` deleted from
   `main.py`; Alembic is now the only schema path. `_ensure_schema()` auto-migrates
