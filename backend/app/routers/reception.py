@@ -437,6 +437,62 @@ def _get_ticket_for_staff(ticket_id: str, current_user: models.User, db: Session
     return ticket
 
 
+# The `_impl` functions below hold the queue/room logic that BOTH a reception
+# route and consultation.py need. consultation.py imports and calls these
+# directly -- never the route handlers -- so a route gaining a new
+# `Depends(...)` can't silently change what consultation.py runs
+# (code-review follow-up 2026-09-07).
+def _call_ticket_impl(ticket_id: str, db: Session, current_user: models.User) -> models.QueueTicket:
+    """See call_ticket's docstring. Returns the mutated ticket row."""
+    ticket = _get_ticket_for_staff(ticket_id, current_user, db)
+    if ticket.status not in ("waiting", "called"):
+        raise HTTPException(status_code=400, detail=f"Cannot call a ticket with status '{ticket.status}'")
+
+    previously_called_q = db.query(models.QueueTicket).filter(
+        models.QueueTicket.facility_name == current_user.facility,
+        models.QueueTicket.status == "called",
+        models.QueueTicket.id != ticket.id,
+    )
+    if ticket.department is not None:
+        previously_called_q = previously_called_q.filter(models.QueueTicket.department == ticket.department)
+    else:
+        previously_called_q = previously_called_q.filter(models.QueueTicket.department.is_(None))
+    previously_called = previously_called_q.all()
+    now = datetime.utcnow()
+    for other in previously_called:
+        other.status = "done"
+        other.completed_at = now
+
+    ticket.status = "called"
+    ticket.called_at = now
+    db.commit()
+    db.refresh(ticket)
+
+    log_access(
+        db, ticket.patient_id, current_user.id, current_user.role, "reception_call_ticket",
+        detail=f"queue_number={ticket.queue_number} auto_completed={len(previously_called)}",
+        actor_facility=current_user.facility,
+    )
+    return ticket
+
+
+def _cancel_ticket_impl(ticket_id: str, db: Session, current_user: models.User) -> models.QueueTicket:
+    ticket = _get_ticket_for_staff(ticket_id, current_user, db)
+    if ticket.status in ("done", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Ticket is already '{ticket.status}'")
+
+    ticket.status = "cancelled"
+    ticket.completed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(ticket)
+
+    log_access(
+        db, ticket.patient_id, current_user.id, current_user.role, "reception_cancel_ticket",
+        detail=f"queue_number={ticket.queue_number}", actor_facility=current_user.facility,
+    )
+    return ticket
+
+
 @router.post("/queue/{ticket_id}/call", response_model=schemas.QueueTicketOut)
 def call_ticket(
     ticket_id: str,
@@ -464,47 +520,14 @@ def call_ticket(
     it naturally drops off every future day's board on its own, and staff
     can still manually complete/cancel it at any time via the endpoints
     below. Deliberately not building an "auto-close stale tickets"
-    mechanism for this -- out of scope for this feature."""
-    ticket = _get_ticket_for_staff(ticket_id, current_user, db)
-    if ticket.status not in ("waiting", "called"):
-        raise HTTPException(status_code=400, detail=f"Cannot call a ticket with status '{ticket.status}'")
+    mechanism for this -- out of scope for this feature.
 
-    # "Now serving" is per QUEUE LINE, and a section IS a queue line: calling
-    # the General counter's next number must not auto-close the Emergency
-    # counter's currently-serving patient. So the auto-close only sweeps
-    # tickets in the SAME department as the one being called. A facility that
-    # doesn't use sections/departments at all (every ticket department=NULL)
-    # still gets the old facility-wide behaviour via the `IS NULL` match.
-    previously_called_q = db.query(models.QueueTicket).filter(
-        models.QueueTicket.facility_name == current_user.facility,
-        models.QueueTicket.status == "called",
-        models.QueueTicket.id != ticket.id,
-    )
-    if ticket.department is not None:
-        previously_called_q = previously_called_q.filter(
-            models.QueueTicket.department == ticket.department
-        )
-    else:
-        previously_called_q = previously_called_q.filter(
-            models.QueueTicket.department.is_(None)
-        )
-    previously_called = previously_called_q.all()
-    now = datetime.utcnow()
-    for other in previously_called:
-        other.status = "done"
-        other.completed_at = now
-
-    ticket.status = "called"
-    ticket.called_at = now
-    db.commit()
-    db.refresh(ticket)
-
-    log_access(
-        db, ticket.patient_id, current_user.id, current_user.role, "reception_call_ticket",
-        detail=f"queue_number={ticket.queue_number} auto_completed={len(previously_called)}",
-        actor_facility=current_user.facility,
-    )
-    return schemas.QueueTicketOut.model_validate(ticket)
+    "Now serving" is per QUEUE LINE, and a section IS a queue line: calling
+    the General counter's next number must not auto-close the Emergency
+    counter's currently-serving patient -- the auto-close only sweeps
+    tickets in the SAME department (a facility not using sections has every
+    ticket department=NULL and gets the old facility-wide behaviour)."""
+    return schemas.QueueTicketOut.model_validate(_call_ticket_impl(ticket_id, db, current_user))
 
 
 @router.post("/queue/{ticket_id}/complete", response_model=schemas.QueueTicketOut)
@@ -535,20 +558,7 @@ def cancel_ticket(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles(*STAFF_ROLES)),
 ):
-    ticket = _get_ticket_for_staff(ticket_id, current_user, db)
-    if ticket.status in ("done", "cancelled"):
-        raise HTTPException(status_code=400, detail=f"Ticket is already '{ticket.status}'")
-
-    ticket.status = "cancelled"
-    ticket.completed_at = datetime.utcnow()
-    db.commit()
-    db.refresh(ticket)
-
-    log_access(
-        db, ticket.patient_id, current_user.id, current_user.role, "reception_cancel_ticket",
-        detail=f"queue_number={ticket.queue_number}", actor_facility=current_user.facility,
-    )
-    return schemas.QueueTicketOut.model_validate(ticket)
+    return schemas.QueueTicketOut.model_validate(_cancel_ticket_impl(ticket_id, db, current_user))
 
 
 @router.post("/queue/{ticket_id}/assign-room", response_model=schemas.QueueTicketOut)
@@ -922,16 +932,9 @@ def list_reception_rooms(
     return out
 
 
-@router.post("/rooms/{room_id}/claim", response_model=schemas.RoomClaimOut)
-def claim_room(
-    room_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles(*CONSULT_ROOM_ROLES)),
-):
-    """Take a Bilik. Requires the caller to be currently clocked in (the
-    claim is meaningless off-shift and would just be dead state to clean
-    up). Claiming releases any room this user was already holding, so a
-    clinician always holds at most one. 409 if someone else holds the room."""
+def _claim_room_impl(room_id: str, db: Session, current_user: models.User):
+    """See claim_room's docstring. Returns the RoomClaimOut. Shared with
+    consultation.py's "start session" (code-review follow-up 2026-09-07)."""
     if not current_user.facility:
         raise HTTPException(status_code=400, detail="Your account has no facility assigned — contact a system administrator.")
     if not _get_clock_status(db, current_user.id).clocked_in:
@@ -988,6 +991,19 @@ def claim_room(
         detail=f"room={room.room_name}", actor_facility=current_user.facility,
     )
     return _claim_out(db, claim, room.room_name)
+
+
+@router.post("/rooms/{room_id}/claim", response_model=schemas.RoomClaimOut)
+def claim_room(
+    room_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*CONSULT_ROOM_ROLES)),
+):
+    """Take a Bilik. Requires the caller to be currently clocked in (the
+    claim is meaningless off-shift and would just be dead state to clean
+    up). Claiming releases any room this user was already holding, so a
+    clinician always holds at most one. 409 if someone else holds the room."""
+    return _claim_room_impl(room_id, db, current_user)
 
 
 @router.post("/rooms/release", response_model=schemas.MyRoomOut)
