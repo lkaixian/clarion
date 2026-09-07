@@ -16,6 +16,20 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Security Audit M6 (emergency-scan audit identity).**
+  New `auth.get_optional_current_user` (public-endpoint identity: valid
+  token → real user, missing/broken/expired → `None`, never a 401). The two
+  `/emergency/*/scan` endpoints stay unauthenticated but now bind the real
+  staff identity to the audit row when a token is present (`detail` marked
+  `verified` + `self_asserted=<typed name>`); with no token the row is the
+  unchanged pre-M6 shape (`emergency_responder:<name>` / role
+  `emergency_responder`) so the web + Flutter audit screens and the
+  `patients.py` actor-resolution skip all keep working. **Parallel-agent
+  `/code-review` (security + code)** flagged that my first draft changed the
+  actor/role strings and broke 3 consumers → reverted to the unchanged
+  shape mid-review; re-verified. Audit *action* strings untouched
+  (audit_log_screen.dart switches on them). New
+  `test_emergency_scan_audit_identity.py` (6). **Verified 176/176.**
 - **2026-09-07** — **`reception.py` sub-module split (the last "still open"
   refactor).** `backend/app/routers/reception.py` (1456 lines, one
   `APIRouter`, ~21 endpoints) → package `backend/app/routers/reception/`:

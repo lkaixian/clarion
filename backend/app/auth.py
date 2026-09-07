@@ -124,6 +124,11 @@ except KeyError as exc:
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# auto_error=False: no 401 when the Authorization header is absent -- used
+# by the deliberately-public emergency scan endpoints, which stay reachable
+# without a token but bind (and mark "verified") the real staff identity
+# when one IS presented. See get_optional_current_user below.
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 # Ambiguous-looking characters excluded so a human can reliably read/type a
 # temp password off a screen or printed slip: 0/O, 1/l/I.
@@ -458,6 +463,25 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             },
         )
     return user
+
+
+def get_optional_current_user(
+    token: "str | None" = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+) -> "models.User | None":
+    """Identity for endpoints that are reachable WITHOUT authentication but
+    behave better with it -- currently only the emergency scan endpoints
+    (Security Audit M6): no token -> None (the endpoint still runs); a valid
+    token -> the real user; an invalid/expired/stale token -> None as well,
+    never a 401 (a broken token must not turn a life-safety scan into an
+    error). Deliberately does NOT enforce must_change_password -- that user
+    is still a known, authenticated person for audit-attribution purposes."""
+    if not token:
+        return None
+    try:
+        return _resolve_current_user(token, db)
+    except HTTPException:
+        return None
 
 
 def require_roles(*roles: str):
