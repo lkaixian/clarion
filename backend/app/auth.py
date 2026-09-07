@@ -13,7 +13,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from . import models
+from . import models, permissions
 from .database import get_db
 
 # Defensive/idempotent: app/main.py already calls load_dotenv() as early as
@@ -40,7 +40,21 @@ except KeyError as exc:
         "(generate one with: python -c \"import secrets; print(secrets.token_hex(32))\")."
     ) from exc
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
+# P2.5 (Security Audit M4): down from 60*8 (8 hours). A short-lived access
+# token bounds the damage window of a stolen JWT (XSS, a leaked log line, a
+# shared/public machine) to minutes, not most of a workday. Staying logged
+# in beyond this is now POST /auth/refresh's job (a separate, longer-lived
+# refresh token -- see REFRESH_TOKEN_EXPIRE_DAYS, issue/rotate/revoke_
+# refresh_token below), not a long-lived access token.
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+# How long a refresh token stays valid without being used at all (a client
+# that never calls POST /auth/refresh -- e.g. abandoned overnight -- can't
+# silently resurrect a session past this). Each successful refresh ROTATES
+# the token (revokes this one, issues a new one with a fresh clock), so an
+# actively-used session's effective lifetime is unbounded until logout /
+# password change / a detected-reuse compromise signal, not capped at this
+# value -- see models.RefreshToken's docstring.
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 # POST /auth/login lockout policy (same "reasonable human typo tolerance vs.
 # brute-force resistance" tradeoff as the email-OTP reset limits below)
@@ -149,6 +163,103 @@ def create_access_token(
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+# ---------- Refresh tokens (P2.5, Security Audit M4) ----------
+def _hash_refresh_token(token: str) -> str:
+    """Keyed HMAC-SHA256, same discipline as hash_otp_code -- only ever the
+    hash is persisted (models.RefreshToken.token_hash). Reuses SECRET_KEY
+    (already this app's general auth secret, used for JWT signing) rather
+    than adding a third secret to backend/.env.example; the "refresh:"
+    prefix domain-separates this HMAC's input space from anything else
+    that might ever key off the same secret, so a collision in one context
+    can't be replayed as a valid value in the other."""
+    return hmac.new(SECRET_KEY.encode("utf-8"), b"refresh:" + token.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _generate_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def issue_refresh_token(db: Session, user: "models.User") -> tuple[str, "models.RefreshToken"]:
+    """Mints a new refresh token for `user`. Returns (plaintext, row) --
+    the plaintext is the caller's ONE chance to see it (set it as the
+    HttpOnly cookie / return it to a native client); it is never stored or
+    logged anywhere after this call returns."""
+    plaintext = _generate_refresh_token()
+    row = models.RefreshToken(
+        user_id=user.id,
+        token_hash=_hash_refresh_token(plaintext),
+        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return plaintext, row
+
+
+def revoke_all_refresh_tokens_for_user(db: Session, user: "models.User") -> None:
+    """Called on logout-everywhere triggers: a password change
+    (auth_router._apply_new_password) and detected refresh-token reuse
+    (see rotate_refresh_token below). Bulk UPDATE, not a Python loop -- a
+    user could plausibly have many rows (one per device that ever logged
+    in and was never cleanly logged out)."""
+    db.query(models.RefreshToken).filter(
+        models.RefreshToken.user_id == user.id,
+        models.RefreshToken.revoked_at.is_(None),
+    ).update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+    db.commit()
+
+
+def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.User", str]]:
+    """The core of POST /auth/refresh: validates `raw_token`, and on
+    success ROTATES it (revokes this row, issues a brand new one) rather
+    than just re-validating it repeatedly -- a caller that goes on to
+    present the OLD token again after this is either replaying a stale
+    request or is a stolen/duplicated copy of a token the legitimate
+    client has already moved past. That specific case (a row that exists
+    and matches, but is ALREADY revoked) is treated as a compromise
+    signal: every refresh token for that user is revoked, forcing a fresh
+    login on every device rather than trusting the chain further.
+
+    Returns (user, new_plaintext_refresh_token), or None if `raw_token`
+    doesn't match any row, is expired, or was itself the reuse-of-revoked
+    case just described (already logged/handled internally)."""
+    token_hash = _hash_refresh_token(raw_token)
+    row = db.query(models.RefreshToken).filter(models.RefreshToken.token_hash == token_hash).first()
+    if row is None:
+        return None
+    if row.revoked_at is not None:
+        # Reuse of a token that was already rotated away -- see docstring.
+        revoke_all_refresh_tokens_for_user(db, row.user)
+        return None
+    if row.expires_at < datetime.utcnow():
+        return None
+
+    user = row.user
+    if user is None:
+        return None
+
+    new_plaintext, new_row = issue_refresh_token(db, user)
+    row.revoked_at = datetime.utcnow()
+    row.replaced_by_id = new_row.id
+    db.add(row)
+    db.commit()
+    return user, new_plaintext
+
+
+def revoke_refresh_token(db: Session, raw_token: str) -> None:
+    """POST /auth/logout: revokes exactly the one presented token (not
+    every session on every device -- a deliberate "log out THIS device"
+    semantics, unlike revoke_all_refresh_tokens_for_user's "everywhere").
+    A no-op (not an error) if the token is unknown or already revoked --
+    logout should never fail loudly over a stale/already-cleared cookie."""
+    token_hash = _hash_refresh_token(raw_token)
+    row = db.query(models.RefreshToken).filter(models.RefreshToken.token_hash == token_hash).first()
+    if row is not None and row.revoked_at is None:
+        row.revoked_at = datetime.utcnow()
+        db.add(row)
+        db.commit()
+
+
 def _resolve_current_user(token: str, db: Session) -> models.User:
     """Shared identity resolution for both get_current_user variants below:
     decode the JWT, look up the user, 401 if either fails. Does NOT check
@@ -245,5 +356,45 @@ def require_roles(*roles: str):
     def checker(user: models.User = Depends(get_current_user)) -> models.User:
         if user.role not in roles:
             raise HTTPException(status_code=403, detail=f"Requires one of roles: {roles}")
+        return user
+    return checker
+
+
+def require_page_access(page: str):
+    """Dependency factory for the per-facility, admin-configurable
+    page-access layer (see app/permissions.py and models.RolePagePermission).
+
+    This is an ADDITIONAL layer on top of each endpoint's own
+    require_roles(...) gate, NOT a replacement -- it's applied at ROUTER
+    level in app/main.py (include_router(..., dependencies=[...])) so every
+    endpoint on a page-scoped router is covered without touching each route.
+
+    Enforcement rules:
+      - admin: every page, always -> pass.
+      - a role OUTSIDE permissions.CONFIGURABLE_STAFF_ROLES (patient /
+        emergency_responder / anything unexpected): NOT page-gated here --
+        governed only by the endpoint's own require_roles(...). This is what
+        keeps a patient reachable on the patient-facing/self-service routes
+        that live on the otherwise staff-scoped patients/reception routers
+        (GET /patients/{id}, PATCH /patients/{id}/profile, self-checkin...).
+      - a configurable staff role (clinician / records_officer /
+        receptionist / pharmacist): allowed only if `page` is in that
+        (facility, role)'s allowed_pages -- lazily defaulted if the facility
+        has no row yet. 403 otherwise.
+    """
+    def checker(
+        user: models.User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> models.User:
+        if user.role == "admin":
+            return user
+        if user.role not in permissions.CONFIGURABLE_STAFF_ROLES:
+            return user
+        allowed = permissions.allowed_pages_for(db, user.facility, user.role)
+        if page not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Your role does not have access to the {page} area.",
+            )
         return user
     return checker

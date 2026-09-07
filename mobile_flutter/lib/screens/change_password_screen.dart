@@ -74,7 +74,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       // required — this screen must not be escapable except via Sign out.
       canPop: false,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.palette.background,
         appBar: AppBar(
           title: Text(l10n.changePasswordTitle),
           automaticallyImplyLeading: false,
@@ -89,12 +89,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.chipBg,
+                    color: context.palette.chipBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     l10n.changePasswordRequiredNotice,
-                    style: const TextStyle(fontSize: 13, color: AppColors.primary, height: 1.4),
+                    style: TextStyle(fontSize: 13, color: context.palette.primary, height: 1.4),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -154,7 +154,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 Center(
                   child: TextButton(
                     onPressed: auth.isBusy ? null : () => auth.logout(),
-                    child: Text(l10n.signOut, style: const TextStyle(color: AppColors.textMuted)),
+                    child: Text(l10n.signOut, style: TextStyle(color: context.palette.textMuted)),
                   ),
                 ),
               ],

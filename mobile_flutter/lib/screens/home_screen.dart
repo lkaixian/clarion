@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
+import '../providers/reminders_provider.dart';
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
+import '../widgets/expandable_item_list.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/missing_profile_banner.dart';
 import '../widgets/section_card.dart';
@@ -12,7 +16,9 @@ import 'audit_log_screen.dart';
 import 'edit_profile_screen.dart';
 import 'emergency_scanner_screen.dart';
 import 'emergency_screen.dart';
+import 'queue_status_screen.dart';
 import 'reminders_screen.dart';
+import 'scan_checkin_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -39,6 +45,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final patientId = auth.user?.patientId;
     if (patientId != null) {
       context.read<PatientProvider>().loadRecord(patientId);
+      // FIX for "web-published appointments never show up / update in the
+      // app": this doesn't need to wait for the full record load — it's an
+      // independent endpoint keyed only on patientId — so it's fired here
+      // too (in addition to RemindersScreen's own polling) so a clinic
+      // -published appointment is visible right on Home without the user
+      // having to open Reminders at all. Errors are swallowed inside
+      // syncServerAppointments itself (leaves whatever was last loaded
+      // untouched), so this is safe to fire-and-forget.
+      context.read<RemindersProvider>().syncServerAppointments(
+        patientId,
+        context.read<ApiClient>(),
+      );
     }
   }
 
@@ -51,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = AppLocalizations.of(context);
     final auth = context.watch<AuthProvider>();
     final patientState = context.watch<PatientProvider>();
+    final remindersState = context.watch<RemindersProvider>();
     final patientId = auth.user?.patientId;
 
     return Scaffold(
@@ -66,8 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: l10n.scanSomeoneElsesCardTooltip,
             icon: const Icon(Icons.qr_code_scanner),
-            onPressed: () =>
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmergencyScannerScreen())),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EmergencyScannerScreen()),
+            ),
           ),
           // Only meaningful for patient-role accounts — staff/clinician
           // accounts don't have a Patient record of their own to edit here.
@@ -75,231 +95,418 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               tooltip: l10n.editProfileTitle,
               icon: const Icon(Icons.person_outline),
-              onPressed: () =>
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+              ),
             ),
           IconButton(
             tooltip: l10n.apiSettingsTooltip,
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ],
       ),
-      body: Builder(builder: (context) {
-        if (patientId == null) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(child: Text(l10n.noPatientRecord)),
-          );
-        }
-        if (patientState.isLoadingRecord && patientState.patient == null) {
-          return const LoadingView();
-        }
-        if (patientState.recordError != null && patientState.patient == null) {
-          return ErrorRetryView(message: patientState.recordError!, onRetry: _load);
-        }
-        final patient = patientState.patient;
-        if (patient == null) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(child: Text(l10n.noPatientRecord)),
-          );
-        }
+      body: Builder(
+        builder: (context) {
+          if (patientId == null) {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text(l10n.noPatientRecord)),
+            );
+          }
+          if (patientState.isLoadingRecord && patientState.patient == null) {
+            return const LoadingView();
+          }
+          if (patientState.recordError != null &&
+              patientState.patient == null) {
+            return ErrorRetryView(
+              message: patientState.recordError!,
+              onRetry: _load,
+              showLogout: true,
+            );
+          }
+          final patient = patientState.patient;
+          if (patient == null) {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text(l10n.noPatientRecord)),
+            );
+          }
 
-        final activeMeds = patient.activeMedications;
-        final recentEncounters = patient.encounters.take(5).toList();
+          final activeMeds = patient.activeMedications;
+          final upcomingAppointments = remindersState.serverAppointments
+              .where((a) => a.status == 'scheduled')
+              .toList();
 
-        return RefreshIndicator(
-          onRefresh: () async => context.read<PatientProvider>().loadRecord(patientId),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(patient.fullName,
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                        Text(l10n.bloodTypeLabel(patient.bloodType ?? '—'),
-                            style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
-                      ],
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<PatientProvider>().loadRecord(patientId);
+              await context.read<RemindersProvider>().syncServerAppointments(
+                patientId,
+                context.read<ApiClient>(),
+              );
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            patient.fullName,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: context.palette.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            l10n.bloodTypeLabel(patient.bloodType ?? '—'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: context.palette.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: _signOut,
-                    child: Text(l10n.signOut, style: const TextStyle(color: AppColors.textFaint, fontSize: 13)),
+                    TextButton(
+                      onPressed: _signOut,
+                      child: Text(
+                        l10n.signOut,
+                        style: TextStyle(
+                          color: context.palette.textFaint,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!_profileBannerDismissed &&
+                    auth.missingProfileFields.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  MissingProfileBanner(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EditProfileScreen(),
+                      ),
+                    ),
+                    onDismiss: () =>
+                        setState(() => _profileBannerDismissed = true),
                   ),
                 ],
-              ),
-              if (!_profileBannerDismissed && auth.missingProfileFields.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                MissingProfileBanner(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                const SizedBox(height: 16),
+                // "Quick actions" groups the Emergency button together with
+                // Reminders / Scan Check-in / Queue status — previously these
+                // three lived *after* the whole run of medical-record
+                // SectionCards below, which visually orphaned them from
+                // Emergency (their nearest sibling in purpose) and made them
+                // look like an afterthought rather than a deliberate group of
+                // shortcuts.
+                _SectionHeader(l10n.quickActionsSectionTitle),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: context.palette.emergency,
+                      padding: const EdgeInsets.all(16),
+                    ),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EmergencyScreen(),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.emergencyButton,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
-                  onDismiss: () => setState(() => _profileBannerDismissed = true),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RemindersScreen(),
+                      ),
+                    ),
+                    icon: const Text('💊'),
+                    label: Text(l10n.remindersButton),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: context.palette.chipBg,
+                      foregroundColor: context.palette.primary,
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ScanCheckinScreen(),
+                      ),
+                    ),
+                    icon: Icon(Icons.qr_code_scanner, color: context.palette.primary),
+                    label: Text(l10n.scanCheckinButton),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: context.palette.chipBg,
+                      foregroundColor: context.palette.primary,
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const QueueStatusScreen(),
+                      ),
+                    ),
+                    icon: Icon(Icons.confirmation_number_outlined, color: context.palette.primary),
+                    label: Text(l10n.queueStatusButton),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: context.palette.chipBg,
+                      foregroundColor: context.palette.primary,
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // "Health record" umbrella-groups every read-only medical
+                // SectionCard below so it's visually obvious they're all
+                // facets of the same thing — the patient's own record — as
+                // opposed to the actionable shortcuts in Quick actions above.
+                // The individual SectionCards keep their own internal
+                // content/behavior unchanged; this only adds a group-level
+                // heading above them.
+                _SectionHeader(l10n.healthRecordSectionTitle),
+                const SizedBox(height: 10),
+                if (patientState.handoverBrief != null &&
+                    patientState.handoverBrief!.trim().isNotEmpty)
+                  SectionCard(
+                    title: l10n.healthSummaryTitle,
+                    child: Text(
+                      patientState.handoverBrief!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: context.palette.textBody,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                // Clinic-published appointments (see RemindersProvider /
+                // RemindersScreen for the full, dynamically-polled section) —
+                // surfaced here too, right under the emergency button, so a
+                // newly-published appointment is visible the moment Home
+                // loads without the patient having to know to open Reminders
+                // at all. Read-only here, same as on the Reminders screen.
+                SectionCard(
+                  title: l10n.clinicAppointmentsSection,
+                  child: upcomingAppointments.isEmpty
+                      ? _EmptyLine(l10n.noClinicAppointments)
+                      : ExpandableItemList(
+                          items: upcomingAppointments.map((a) {
+                            final venue = a.venue;
+                            final title =
+                                (venue != null && venue.trim().isNotEmpty)
+                                ? '${a.facilityName} — $venue'
+                                : a.facilityName;
+                            return _BulletLine(
+                              title,
+                              subtitle: DateFormat(
+                                'd MMM yyyy, h:mm a',
+                              ).format(a.scheduledAt),
+                            );
+                          }).toList(),
+                        ),
+                ),
+                SectionCard(
+                  title: l10n.activeConditionsTitle,
+                  child: patient.conditions.isEmpty
+                      ? _EmptyLine(l10n.noConditions)
+                      : ExpandableItemList(
+                          items: patient.conditions.map((c) {
+                            final diagnosedAt = c.diagnosedAt;
+                            return _BulletLine(
+                              '${c.name}${c.isChronic ? ' ${l10n.chronicSuffix}' : ''}',
+                              subtitle:
+                                  (diagnosedAt != null &&
+                                      diagnosedAt.trim().isNotEmpty)
+                                  ? l10n.diagnosedOnLabel(diagnosedAt)
+                                  : null,
+                            );
+                          }).toList(),
+                        ),
+                ),
+                SectionCard(
+                  title: l10n.currentMedicationsTitle,
+                  child: activeMeds.isEmpty
+                      ? _EmptyLine(l10n.noActiveMedications)
+                      : ExpandableItemList(
+                          items: activeMeds.map((m) {
+                            final doseFreq = _joinNonEmpty([
+                              m.dosage,
+                              m.frequency,
+                            ], ', ');
+                            final title = doseFreq.isEmpty
+                                ? m.drugName
+                                : '${m.drugName} — $doseFreq';
+                            return _BulletLine(
+                              title,
+                              subtitle: l10n.prescribedBy(
+                                m.prescribedByFacility ?? l10n.unknownFacility,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ),
+                SectionCard(
+                  title: l10n.allergiesTitle,
+                  child: patient.allergies.isEmpty
+                      ? _EmptyLine(l10n.noAllergies)
+                      : ExpandableItemList(
+                          items: patient.allergies.map((a) {
+                            final reaction = a.reaction;
+                            final title =
+                                (reaction != null && reaction.trim().isNotEmpty)
+                                ? '${a.substance} (${a.severity}) — $reaction'
+                                : '${a.substance} (${a.severity})';
+                            return _BulletLine(title);
+                          }).toList(),
+                        ),
+                ),
+                SectionCard(
+                  title: l10n.recentEncountersTitle,
+                  child: patient.encounters.isEmpty
+                      ? _EmptyLine(l10n.noEncounters)
+                      : ExpandableItemList(
+                          items: patient.encounters.map((e) {
+                            final subtitleLines = <String>[];
+                            final reason = e.reason;
+                            final notes = e.notes;
+                            if (reason != null && reason.trim().isNotEmpty) {
+                              subtitleLines.add(
+                                l10n.encounterReasonLabel(reason),
+                              );
+                            }
+                            if (notes != null && notes.trim().isNotEmpty) {
+                              subtitleLines.add(
+                                l10n.encounterNotesLabel(notes),
+                              );
+                            }
+                            return _BulletLine(
+                              '${e.encounterType} @ ${e.facilityName} — ${e.startedAt}',
+                              subtitle: subtitleLines.isEmpty
+                                  ? null
+                                  : subtitleLines.join('\n'),
+                            );
+                          }).toList(),
+                        ),
+                ),
+                SectionCard(
+                  title: l10n.documentsTitle,
+                  child: patient.documents.isEmpty
+                      ? _EmptyLine(l10n.noDocuments)
+                      : ExpandableItemList(
+                          items: patient.documents.map((d) {
+                            return _BulletLine(
+                              '${_docTypeLabel(l10n, d.docType)} — ${d.originalFilename}',
+                              subtitle: l10n.documentUploadedLine(
+                                d.uploadedByFacility ?? l10n.unknownFacility,
+                                d.uploadedAt,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ),
+                if (patientState.nfcCards.isNotEmpty)
+                  SectionCard(
+                    title: l10n.nfcCardSectionTitle,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: patientState.nfcCards.map((n) {
+                        final revoked = n['revoked'] == true;
+                        return _BulletLine(
+                          revoked
+                              ? l10n.nfcCardRevokedLine(n['nfc_uid'].toString())
+                              : l10n.nfcCardActiveLine(n['nfc_uid'].toString()),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                // Footer / secondary — kept last and visually de-emphasized
+                // (plain TextButton, muted color), same as before.
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AuditLogScreen()),
+                    ),
+                    icon: Icon(
+                      Icons.visibility_outlined,
+                      size: 18,
+                      color: context.palette.textMuted,
+                    ),
+                    label: Text(
+                      l10n.whoViewedRecord,
+                      style: TextStyle(color: context.palette.textMuted),
+                    ),
+                  ),
                 ),
               ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.emergency,
-                    padding: const EdgeInsets.all(16),
-                  ),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EmergencyScreen()),
-                  ),
-                  child: Text(l10n.emergencyButton, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (patientState.handoverBrief != null && patientState.handoverBrief!.trim().isNotEmpty)
-                SectionCard(
-                  title: l10n.healthSummaryTitle,
-                  child: Text(patientState.handoverBrief!,
-                      style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
-                ),
-              SectionCard(
-                title: l10n.activeConditionsTitle,
-                child: patient.conditions.isEmpty
-                    ? _EmptyLine(l10n.noConditions)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: patient.conditions.map((c) {
-                          final diagnosedAt = c.diagnosedAt;
-                          return _BulletLine(
-                            '${c.name}${c.isChronic ? ' ${l10n.chronicSuffix}' : ''}',
-                            subtitle: (diagnosedAt != null && diagnosedAt.trim().isNotEmpty)
-                                ? l10n.diagnosedOnLabel(diagnosedAt)
-                                : null,
-                          );
-                        }).toList(),
-                      ),
-              ),
-              SectionCard(
-                title: l10n.currentMedicationsTitle,
-                child: activeMeds.isEmpty
-                    ? _EmptyLine(l10n.noActiveMedications)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: activeMeds.map((m) {
-                          final doseFreq = _joinNonEmpty([m.dosage, m.frequency], ', ');
-                          final title = doseFreq.isEmpty ? m.drugName : '${m.drugName} — $doseFreq';
-                          return _BulletLine(
-                            title,
-                            subtitle: l10n.prescribedBy(m.prescribedByFacility ?? l10n.unknownFacility),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              SectionCard(
-                title: l10n.allergiesTitle,
-                child: patient.allergies.isEmpty
-                    ? _EmptyLine(l10n.noAllergies)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: patient.allergies.map((a) {
-                          final reaction = a.reaction;
-                          final title = (reaction != null && reaction.trim().isNotEmpty)
-                              ? '${a.substance} (${a.severity}) — $reaction'
-                              : '${a.substance} (${a.severity})';
-                          return _BulletLine(title);
-                        }).toList(),
-                      ),
-              ),
-              SectionCard(
-                title: l10n.recentEncountersTitle,
-                child: recentEncounters.isEmpty
-                    ? _EmptyLine(l10n.noEncounters)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: recentEncounters.map((e) {
-                          final subtitleLines = <String>[];
-                          final reason = e.reason;
-                          final notes = e.notes;
-                          if (reason != null && reason.trim().isNotEmpty) {
-                            subtitleLines.add(l10n.encounterReasonLabel(reason));
-                          }
-                          if (notes != null && notes.trim().isNotEmpty) {
-                            subtitleLines.add(l10n.encounterNotesLabel(notes));
-                          }
-                          return _BulletLine(
-                            '${e.encounterType} @ ${e.facilityName} — ${e.startedAt}',
-                            subtitle: subtitleLines.isEmpty ? null : subtitleLines.join('\n'),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              SectionCard(
-                title: l10n.documentsTitle,
-                child: patient.documents.isEmpty
-                    ? _EmptyLine(l10n.noDocuments)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: patient.documents.map((d) {
-                          return _BulletLine(
-                            '${_docTypeLabel(l10n, d.docType)} — ${d.originalFilename}',
-                            subtitle: l10n.documentUploadedLine(
-                              d.uploadedByFacility ?? l10n.unknownFacility,
-                              d.uploadedAt,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              if (patientState.nfcCards.isNotEmpty)
-                SectionCard(
-                  title: l10n.nfcCardSectionTitle,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: patientState.nfcCards.map((n) {
-                      final revoked = n['revoked'] == true;
-                      return _BulletLine(
-                        revoked
-                            ? l10n.nfcCardRevokedLine(n['nfc_uid'].toString())
-                            : l10n.nfcCardActiveLine(n['nfc_uid'].toString()),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RemindersScreen()),
-                  ),
-                  icon: const Text('💊'),
-                  label: Text(l10n.remindersButton),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: AppColors.chipBg,
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.all(16),
-                    side: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AuditLogScreen()),
-                  ),
-                  icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textMuted),
-                  label: Text(l10n.whoViewedRecord, style: const TextStyle(color: AppColors.textMuted)),
-                ),
-              ),
-            ],
-          ),
-        );
-      }),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Lightweight group-level heading used to visually separate Home's "Quick
+/// actions" and "Health record" zones from each other. Deliberately *not*
+/// a full [SectionCard] — these headings sit above a run of several cards
+/// (or several buttons), not above a single piece of content, so a bordered
+/// card container around the heading itself would read as an extra empty
+/// card rather than as a section label. Style matches the small-caps
+/// muted-label convention used elsewhere in the app (see e.g.
+/// EmergencyScannerScreen's field-group labels).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.title);
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: context.palette.textMuted,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 }
@@ -339,7 +546,14 @@ class _BulletLine extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('•  $text', style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
+          Text(
+            '•  $text',
+            style: TextStyle(
+              fontSize: 14,
+              color: context.palette.textBody,
+              height: 1.4,
+            ),
+          ),
           if (subtitleText != null && subtitleText.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 18, top: 1),
@@ -347,7 +561,11 @@ class _BulletLine extends StatelessWidget {
                 subtitleText,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.3),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.palette.textMuted,
+                  height: 1.3,
+                ),
               ),
             ),
         ],
@@ -362,6 +580,9 @@ class _EmptyLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textFaint));
+    return Text(
+      text,
+      style: TextStyle(fontSize: 13, color: context.palette.textFaint),
+    );
   }
 }

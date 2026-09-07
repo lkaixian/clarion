@@ -1,5 +1,8 @@
+alembic>=1.13,<2
+PyMySQL==1.1.1
 annotated-doc==0.0.5
 annotated-types==0.8.0
+anthropic==0.122.0
 anyio==4.14.2
 bcrypt==4.0.1
 certifi==2026.7.22
@@ -27,6 +30,7 @@ pyasn1==0.6.4
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
+pytesseract==0.3.13
 python-dotenv==1.2.2
 python-jose==3.5.0
 python-multipart==0.0.32
@@ -40,8 +44,22 @@ SQLAlchemy==2.0.52
 starlette==1.6.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
+tzdata==2026.3
 urllib3==2.7.0
 uvicorn==0.52.2
+gunicorn==23.0.0
+# 0.4.0+ tracks uvicorn's get_loop_factory (0.3.0 calls the removed
+# Config.setup_event_loop and crashes every worker on uvicorn >= 0.36).
+uvicorn-worker==0.4.0
 watchfiles==1.2.0
 websockets==17.0.1
 wrapt==2.3.0
+minio==7.2.15
+# P1.10: LDAP/AD auth provider (app/ldap_auth.py). Pure Python (RFC 4510) --
+# preferred over python-ldap, which needs C build tools.
+ldap3==2.9.1
+
+# Test-only dependencies live in requirements-dev.txt (pytest et al.) so they
+# are not baked into the production/runtime image. Code-review follow-up 2026-09-07 --
+# `pytest` used to be pinned here; `argon2-cffi[-bindings]` were listed but
+# never imported (auth.py hashes with bcrypt) and have been dropped.

@@ -11,18 +11,39 @@ from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
 from ..rate_limit import limiter
+from .patients import _patient_present_at
 
 router = APIRouter(prefix="/emergency", tags=["emergency"])
+
+
+def _require_patient_present_for_staff(db: Session, current_user: models.User, patient_id: str) -> None:
+    """Facility scoping (Security Audit finding H1): a staff caller (not the
+    patient themself -- their own self-service issue/revoke/view is
+    location-independent by design, e.g. from home via the mobile app) may
+    only act on a patient's emergency card when that patient is CURRENTLY
+    present at the staff member's own facility -- an active admission or an
+    open today's queue ticket, the SAME `_patient_present_at` rule
+    routers/patients.py's cross-facility clinical-record immutability guard
+    uses. No admin override, matching that guard's own precedent exactly
+    (need-to-know, not role seniority) -- see
+    `_guard_cross_facility_amend`'s docstring in patients.py."""
+    if current_user.role == "patient":
+        return
+    if not current_user.facility or not _patient_present_at(db, patient_id, current_user.facility):
+        raise HTTPException(
+            status_code=403,
+            detail="This patient is not currently checked in at your facility.",
+        )
 
 
 def _render_qr_base64(card_reference: str) -> str:
     """Render the emergency QR PNG for a given card_reference and return it
     as a `data:image/png;base64,...` string.
 
-    The QR content is fully deterministic (`MEDIBRIDGE-EMERGENCY:{card_reference}`),
+    The QR content is fully deterministic (`CLARION-EMERGENCY:{card_reference}`),
     so this can be called as many times as needed — nothing about the image
     itself is ever persisted, only the card_reference it's derived from."""
-    qr_payload = f"MEDIBRIDGE-EMERGENCY:{card_reference}"
+    qr_payload = f"CLARION-EMERGENCY:{card_reference}"
     img = qrcode.make(qr_payload)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -30,7 +51,49 @@ def _render_qr_base64(card_reference: str) -> str:
     return f"data:image/png;base64,{qr_base64}"
 
 
-def _scoped_fields(patient: models.Patient, scope: set) -> dict:
+def _audit_sharing_bypass_if_any(db: Session, patient: models.Patient, payload) -> None:
+    """The unauthenticated emergency-token scan is a life-safety override: it
+    ALWAYS ignores HospitalSetting.records_shared_publicly (unlike the
+    authenticated patient-record path in routers/patients.py, which filters
+    out records authored by a facility that opted out of cross-hospital
+    sharing). This never routes through the filtered _serialize_patient in
+    the first place -- it builds its own scoped payload via _scoped_fields --
+    but when a facility that authored any of this patient's data HAS opted
+    out, we still drop an audit line making the bypass explicit and
+    reviewable in the patient's trail."""
+    restricted = {
+        f for (f,) in (
+            db.query(models.HospitalSetting.facility_name)
+            .filter(models.HospitalSetting.records_shared_publicly.is_(False))
+            .all()
+        ) if f
+    }
+    if not restricted:
+        return
+    authored = (
+        {c.authored_by_facility for c in patient.conditions}
+        | {m.prescribed_by_facility for m in patient.medications}
+        | {a.authored_by_facility for a in patient.allergies}
+        | {e.facility_name for e in patient.encounters}
+    )
+    bypassed = sorted(f for f in authored if f in restricted)
+    if not bypassed:
+        return
+    log_access(
+        db, patient.id,
+        actor=f"emergency_responder:{getattr(payload, 'responder_name', None) or 'unidentified'}",
+        actor_role="emergency_responder",
+        action="emergency_access_sharing_bypass",
+        detail=f"life-safety override: showed records from opted-out facilities {bypassed}",
+    )
+
+
+def _scoped_fields(
+    patient: models.Patient,
+    scope: set,
+    resolved_condition_ids: "set | frozenset" = frozenset(),
+    discontinued_medication_ids: "set | frozenset" = frozenset(),
+) -> dict:
     """Shared by /emergency/scan and /emergency/nfc/scan so both a QR-code
     scan and an NFC tap return exactly the same shape for the same scope.
 
@@ -54,6 +117,14 @@ def _scoped_fields(patient: models.Patient, scope: set) -> dict:
     result = {"full_name": patient.full_name, "date_of_birth": patient.date_of_birth}
     omitted_non_critical = {}
 
+    # A `resolved` condition annotation / `discontinued` medication
+    # annotation (models.ClinicalRecordAnnotation) drops that row from the
+    # emergency view entirely -- it's neither shown nor counted as
+    # "non-critical omitted". The existing critical_for_emergency / active
+    # filters still apply on top.
+    conditions = [c for c in patient.conditions if c.id not in resolved_condition_ids]
+    medications = [m for m in patient.medications if m.id not in discontinued_medication_ids]
+
     if "blood_type" in scope:
         result["blood_type"] = patient.blood_type
     if "allergies" in scope:
@@ -67,18 +138,18 @@ def _scoped_fields(patient: models.Patient, scope: set) -> dict:
     if "medications" in scope:
         result["medications"] = [
             {"drug_name": m.drug_name, "dosage": m.dosage, "frequency": m.frequency}
-            for m in patient.medications if m.active and m.critical_for_emergency
+            for m in medications if m.active and m.critical_for_emergency
         ]
         non_critical_count = sum(
-            1 for m in patient.medications if m.active and not m.critical_for_emergency
+            1 for m in medications if m.active and not m.critical_for_emergency
         )
         if non_critical_count:
             omitted_non_critical["medications"] = non_critical_count
     if "conditions" in scope:
         result["conditions"] = [
-            c.name for c in patient.conditions if c.critical_for_emergency
+            c.name for c in conditions if c.critical_for_emergency
         ]
-        non_critical_count = sum(1 for c in patient.conditions if not c.critical_for_emergency)
+        non_critical_count = sum(1 for c in conditions if not c.critical_for_emergency)
         if non_critical_count:
             omitted_non_critical["conditions"] = non_critical_count
 
@@ -86,11 +157,61 @@ def _scoped_fields(patient: models.Patient, scope: set) -> dict:
     return result
 
 
+def _resolved_discontinued_ids(db: Session, patient_id: str) -> "tuple[set, set]":
+    """(resolved_condition_ids, discontinued_medication_ids) from the
+    patient's append-only ClinicalRecordAnnotation rows -- threaded into
+    _scoped_fields so a resolved condition / discontinued med drops out of
+    the emergency view WITHOUT the underlying row ever being mutated.
+
+    SAFETY GATE: only an annotation authored by the SAME facility that
+    recorded the target row suppresses it here. Anyone (admin/records_officer/
+    clinician at any facility) can file a `resolved`/`discontinued`
+    annotation, and the normal record view honours it via
+    `effective_status`/`effective_active` -- but a random other-facility
+    opinion must NOT silently remove a `critical_for_emergency` condition or
+    an active drug from the unauthenticated first-responder card. Only the
+    authoritative source (the recording facility) discontinuing its own
+    entry does that. Legacy rows with a NULL author are never suppressed
+    (nothing can match), which is the safe default."""
+    ann_rows = (
+        db.query(models.ClinicalRecordAnnotation)
+        .filter(
+            models.ClinicalRecordAnnotation.patient_id == patient_id,
+            models.ClinicalRecordAnnotation.kind.in_(("resolved", "discontinued")),
+        )
+        .all()
+    )
+    if not ann_rows:
+        return set(), set()
+
+    cond_author = {
+        c.id: c.authored_by_facility
+        for c in db.query(models.Condition).filter(models.Condition.patient_id == patient_id).all()
+    }
+    med_author = {
+        m.id: m.recorded_by_facility
+        for m in db.query(models.MedicationStatement).filter(models.MedicationStatement.patient_id == patient_id).all()
+    }
+
+    resolved_conditions: set = set()
+    discontinued_meds: set = set()
+    for row in ann_rows:
+        if row.kind == "resolved":
+            author = cond_author.get(row.target_id)
+            if author and row.facility_name == author:
+                resolved_conditions.add(row.target_id)
+        elif row.kind == "discontinued":
+            author = med_author.get(row.target_id)
+            if author and row.facility_name == author:
+                discontinued_meds.add(row.target_id)
+    return resolved_conditions, discontinued_meds
+
+
 @router.post("/issue")
 def issue_emergency_card(
     payload: schemas.EmergencyProfileRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
     """
     Called from the patient app (or a guardian acting for a senior citizen)
@@ -112,6 +233,7 @@ def issue_emergency_card(
     """
     if current_user.role == "patient" and current_user.patient_id != payload.patient_id:
         raise HTTPException(status_code=403, detail="Cannot issue a card for another patient")
+    _require_patient_present_for_staff(db, current_user, payload.patient_id)
 
     previous = (
         db.query(models.EmergencyToken)
@@ -205,7 +327,8 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
         raise HTTPException(status_code=404, detail="Patient not found")
 
     scope = set(grant.scope or [])
-    result = _scoped_fields(patient, scope)
+    resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, patient.id)
+    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids)
 
     log_access(
         db, patient.id,
@@ -215,6 +338,7 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
         fields=list(scope),
         detail=f"org={payload.responder_org}",
     )
+    _audit_sharing_bypass_if_any(db, patient, payload)
 
     return result
 
@@ -222,13 +346,14 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
 @router.post("/revoke/{card_reference}")
 def revoke_card(
     card_reference: str, db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
     grant = db.query(models.EmergencyToken).filter(models.EmergencyToken.card_reference == card_reference).first()
     if not grant:
         raise HTTPException(status_code=404, detail="Card not found")
     if current_user.role == "patient" and current_user.patient_id != grant.patient_id:
         raise HTTPException(status_code=403, detail="Not your card")
+    _require_patient_present_for_staff(db, current_user, grant.patient_id)
     grant.revoked = True
     db.commit()
     return {"status": "revoked"}
@@ -237,7 +362,7 @@ def revoke_card(
 @router.get("/current/{patient_id}")
 def get_current_card_status(
     patient_id: str, db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
     """
     Read-only status check: "does this patient currently have a live QR
@@ -247,7 +372,7 @@ def get_current_card_status(
     When active, the response also includes `qr_code_base64` — the QR image
     is never stored anywhere; it's cheaply re-rendered on every call from
     the grant's `card_reference` via `_render_qr_base64`, since the image
-    content is fully deterministic (`MEDIBRIDGE-EMERGENCY:{card_reference}`).
+    content is fully deterministic (`CLARION-EMERGENCY:{card_reference}`).
     This is what lets a viewer that *didn't* itself issue the card actually
     display it, not just know it exists.
 
@@ -260,6 +385,7 @@ def get_current_card_status(
     """
     if current_user.role == "patient" and current_user.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Cannot view another patient's card status")
+    _require_patient_present_for_staff(db, current_user, patient_id)
 
     grant = (
         db.query(models.EmergencyToken)
@@ -384,7 +510,8 @@ def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session
         raise HTTPException(status_code=404, detail="Patient not found")
 
     scope = set(grant.scope or [])
-    result = _scoped_fields(patient, scope)
+    resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, patient.id)
+    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids)
 
     log_access(
         db, patient.id,
@@ -394,6 +521,7 @@ def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session
         fields=list(scope),
         detail=f"org={payload.responder_org}",
     )
+    _audit_sharing_bypass_if_any(db, patient, payload)
 
     return result
 
@@ -416,12 +544,15 @@ def revoke_nfc_card(
 @router.get("/nfc/{patient_id}")
 def list_nfc_cards(
     patient_id: str, db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
-    """Staff can see every registered card; a patient can see (read-only)
-    the cards registered to their own record."""
+    """Staff can see every registered card (scoped to their own facility's
+    currently-present patients -- see _require_patient_present_for_staff);
+    a patient can see (read-only) the cards registered to their own
+    record."""
     if current_user.role == "patient" and current_user.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Cannot view another patient's NFC cards")
+    _require_patient_present_for_staff(db, current_user, patient_id)
 
     grants = (
         db.query(models.EmergencyToken)

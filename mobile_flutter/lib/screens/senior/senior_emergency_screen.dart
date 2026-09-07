@@ -66,21 +66,30 @@ class _SeniorEmergencyScreenState extends State<SeniorEmergencyScreen> {
 
   Future<void> _issueIfNeeded() async {
     final patientState = context.read<PatientProvider>();
-    if (patientState.emergencyCard != null && !patientState.emergencyCard!.revoked) return;
+    if (patientState.emergencyCard != null && !patientState.emergencyCard!.revoked) {
+      return;
+    }
     final patientId = context.read<AuthProvider>().user?.patientId;
     if (patientId == null) return;
-    await patientState.issueEmergencyCard(patientId: patientId, scope: kScopeKeys);
+    await patientState.issueEmergencyCard(
+      patientId: patientId,
+      scope: kScopeKeys,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final patientState = context.watch<PatientProvider>();
+    final isDark = context.watch<AuthProvider>().seniorIsDark;
+    final background = isDark ? SeniorColors.background : SeniorColorsLight.background;
+    final text = isDark ? SeniorColors.text : SeniorColorsLight.text;
+    final accent = isDark ? SeniorColors.accent : SeniorColorsLight.accent;
     final card = patientState.emergencyCard;
     final imageBytes = card?.qrImageBytes;
 
     return Scaffold(
-      backgroundColor: SeniorColors.background,
+      backgroundColor: background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -90,13 +99,21 @@ class _SeniorEmergencyScreenState extends State<SeniorEmergencyScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 32),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: text,
+                      size: 32,
+                    ),
                   ),
                   Expanded(
                     child: Text(
                       l10n.seniorEmergencyTitle,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 48),
@@ -106,12 +123,25 @@ class _SeniorEmergencyScreenState extends State<SeniorEmergencyScreen> {
               Expanded(
                 child: Center(
                   child: patientState.isIssuingCard
-                      ? const CircularProgressIndicator(color: SeniorColors.accent)
+                      ? CircularProgressIndicator(
+                          color: accent,
+                        )
                       : patientState.emergencyError != null
-                          ? _ErrorState(message: patientState.emergencyError!, onRetry: _issueIfNeeded)
-                          : imageBytes != null
-                              ? _CardView(imageBytes: imageBytes, card: card!)
-                              : Text(l10n.preparingCard, style: const TextStyle(color: Colors.white70, fontSize: 18)),
+                      ? _ErrorState(
+                          message: patientState.emergencyError!,
+                          isDark: isDark,
+                          onRetry: _issueIfNeeded,
+                          onLogout: () => context.read<AuthProvider>().logout(),
+                        )
+                      : imageBytes != null
+                      ? _CardView(imageBytes: imageBytes, card: card!)
+                      : Text(
+                          l10n.preparingCard,
+                          style: TextStyle(
+                            color: text.withValues(alpha: 0.7),
+                            fontSize: 18,
+                          ),
+                        ),
                 ),
               ),
               if (card != null && imageBytes != null) ...[
@@ -120,10 +150,15 @@ class _SeniorEmergencyScreenState extends State<SeniorEmergencyScreen> {
                   height: 72,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: SeniorColors.accent,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      backgroundColor: accent,
+                      foregroundColor: isDark ? Colors.black : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     onPressed: () async {
                       await patientState.revokeCurrentCard();
@@ -153,7 +188,10 @@ class _CardView extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -162,10 +200,18 @@ class _CardView extends StatelessWidget {
           Text(
             l10n.showToResponder,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold, height: 1.3),
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+            ),
           ),
           const SizedBox(height: 8),
-          Text(l10n.refLabel(card.cardReference), style: const TextStyle(color: Colors.black54, fontSize: 14)),
+          Text(
+            l10n.refLabel(card.cardReference),
+            style: const TextStyle(color: Colors.black54, fontSize: 14),
+          ),
         ],
       ),
     );
@@ -173,25 +219,59 @@ class _CardView extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({
+    required this.message,
+    required this.isDark,
+    required this.onRetry,
+    required this.onLogout,
+  });
 
   final String message;
+  final bool isDark;
   final VoidCallback onRetry;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final text = isDark ? SeniorColors.text : SeniorColorsLight.text;
+    final accent = isDark ? SeniorColors.accent : SeniorColorsLight.accent;
+    final emergency = isDark ? SeniorColors.emergency : SeniorColorsLight.emergency;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.error_outline, color: SeniorColors.emergency, size: 48),
+        Icon(
+          Icons.error_outline,
+          color: emergency,
+          size: 48,
+        ),
         const SizedBox(height: 12),
-        Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: text, fontSize: 18),
+        ),
         const SizedBox(height: 16),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: SeniorColors.accent, foregroundColor: Colors.black),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: isDark ? Colors.black : Colors.white,
+          ),
           onPressed: onRetry,
           child: Text(l10n.tryAgain, style: const TextStyle(fontSize: 18)),
+        ),
+        // FIX for "no way to log out after 'session expired'": a
+        // full-screen error here (e.g. a dead/expired session) used to
+        // only offer Retry, which re-fails the same way forever if the
+        // real problem is the session itself, not a transient network
+        // blip. Always give a working way back to Login.
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: onLogout,
+          child: Text(
+            l10n.signOutSenior,
+            style: TextStyle(color: text.withValues(alpha: 0.7), fontSize: 16),
+          ),
         ),
       ],
     );

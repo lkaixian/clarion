@@ -20,11 +20,16 @@ import 'package:mobile_flutter/services/api_client.dart';
 import 'package:mobile_flutter/services/token_storage.dart';
 
 void main() {
-  testWidgets('LoginScreen renders title, fields and sign-in button', (WidgetTester tester) async {
+  testWidgets('LoginScreen renders title, fields and sign-in button', (
+    WidgetTester tester,
+  ) async {
     final appConfig = AppConfig();
     final tokenStorage = TokenStorage();
     final apiClient = ApiClient(config: appConfig, tokenStorage: tokenStorage);
-    final authProvider = AuthProvider(api: apiClient, tokenStorage: tokenStorage);
+    final authProvider = AuthProvider(
+      api: apiClient,
+      tokenStorage: tokenStorage,
+    );
 
     await tester.pumpWidget(
       MultiProvider(
@@ -47,8 +52,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('MediBridge'), findsOneWidget);
+    expect(find.text('CLARION'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
-    expect(find.text('Demo login: patient@medibridge.demo / patient123'), findsOneWidget);
+    // NOTE: kept in sync with lib/l10n/app_en.arb's `demoLoginHint` — this
+    // was found failing (pre-existing, unrelated to this round's bug
+    // fixes) because that ARB string grew an "(or NRIC ...)" suffix in an
+    // earlier round without this assertion being updated to match.
+    expect(
+      find.text(
+        'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)',
+      ),
+      findsOneWidget,
+    );
   });
 }

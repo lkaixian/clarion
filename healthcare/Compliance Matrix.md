@@ -1,0 +1,155 @@
+---
+title: Compliance Matrix
+type: assessment
+updated: 2026-08-30
+tags: [compliance, tender, clarion, matrix]
+---
+
+# Compliance Matrix — CLARION vs [[Tender Clauses Section 10]]
+
+Status: **Have** (works today) · **Partial** · **Gap** (new build) · **Port** (exists,
+PHP rewrite must redo) · **N/A** (contractual / process). *Demo?* = worth showing on
+stage. Judged on functional behaviour in the codebase, not polish.
+
+Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.**
+None of the four platform pillars (on-prem AI, PACS, FHIR, MariaDB) exist yet.
+
+## 10.2.1 Modules
+
+| Clause        | Requirement                                                                    | Status  | Work                                                                                                     | Demo?                  |
+| ------------- | ------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 10.2.1.1.1    | Dashboard: queue/attended/availability/wait KPIs                               | Partial | Build a management dashboard over `queue_tickets`, `staff_clock_events`, `room_claims`                   | Yes                    |
+| 10.2.1.1.2    | Patient-flow **prediction** engine                                             | Gap     | EWMA / gradient-boosted over historical queue + appointments                                             | Yes (flagship)         |
+| 10.2.1.1.3    | Real-time **operational health score**                                         | Gap     | Composite index; cheap once referrals exist                                                              | Yes                    |
+| 10.2.1.2.1    | Frontdesk ↔ SMP/SMS/e-klinik; Registrar eligibility                            | Gap     | Mock adapter + documented integration layer                                                              | Mock                   |
+| 10.2.1.2.2    | Pre-registration (self-register before visit)                                  | Have    | `self_registration.py` + Flutter self_register                                                           | Yes                    |
+| 10.2.1.2.3    | Patient mgmt: CRUD, assign physician, payment method                           | Partial | CRUD + room/queue assign present; payment-method setting = Gap                                           | Yes                    |
+| 10.2.1.2.4    | Appointments: manage, reminders, history, reschedule                           | Have    | `appointments.py` + reschedule requests; reminder *delivery* job = Gap                                   | Yes                    |
+| 10.2.1.2.5    | Staff mgmt: available physician & room, logged-in users                        | Have    | `reception.py` Rooms + `staff.py` + `consultation.py` my-room                                            | Yes                    |
+| 10.2.1.2.6    | Frontdesk **Billing**: invoice, receipt, payment tracking                      | Gap     | Billing module                                                                                           | Yes                    |
+| 10.2.1.2.7    | Report & Analysis: demography + charges                                        | Partial | Some admin reporting; demography + charges = Gap                                                         | —                      |
+| 10.2.1.3.1    | Consultation **sign** feature                                                  | Have    | Signed Encounter + `ClinicalRecordAnnotation` + signature pad                                            | Yes                    |
+| 10.2.1.3.2    | Physician views queues, sets appointments                                      | Have    | `consultation.py` my-room worklist                                                                       | Yes                    |
+| 10.2.1.3.3    | Progress notes, diagnosis, treatment plan, follow-up                           | Partial | Encounters + conditions exist; structured treatment plan / SOAP / follow-up = Gap                        | Yes                    |
+| 10.2.1.3.4    | **References** — refer to physio/X-ray/lab/outsource, review results           | Gap     | No referral entity; `service_requests` table + the ancillary modules                                     | Yes                    |
+| 10.2.1.3.5    | Medication: prescribe/edit/delete/update                                       | Partial | `medication_statements` + dispense; prescribing UI in consultation = Gap; immutability model vs "delete" | Yes                    |
+| 10.2.1.3.6    | Reporting: lab/X-ray/physio reports, Digital MC, Referral Letter, Timeslip     | Gap     | PDF document generation                                                                                  | Yes (Digital MC)       |
+| 10.2.1.3.7    | Consultation fees                                                              | Gap     | Billing module                                                                                           | —                      |
+| 10.2.1.3.8    | **Clinical decision support layer**                                            | Partial | `ai/summarize.py` + `ai/interactions.py` exist but cloud + rule table → [[On-Prem Clinical AI]]          | Yes (flagship)         |
+| 10.2.1.3.9    | **Medication safety engine** (allergy/med/dx screening)                        | Partial | `ai/interactions.py` + RxNorm; not wired as pre-prescription real-time alert                             | Yes (flagship)         |
+| 10.2.1.3.10   | **Voice → SOAP** transcription                                                 | Gap     | `faster-whisper` + SOAP segmentation                                                                     | Yes (flagship)         |
+| 10.2.1.4.1    | Pharmacy: view queue & appointments                                            | Have    | `pharmacy.py` + role-page access                                                                         | Yes                    |
+| 10.2.1.4.2    | Dispensing: dispense, history, update, **print label**                         | Partial | Dispense + history Have; label printing = Gap (10.2.8.2)                                                 | Yes                    |
+| 10.2.1.4.3    | Stock mgmt: Stock Master + Unit, expiry, vendor, purchasing, reorder           | Have    | `medicine_inventory` + `medicine_purchase_proposals` + budgets + low-stock                               | Yes                    |
+| 10.2.1.4.4    | Medication records: view/add/update/delete                                     | Partial | Records exist; delete constrained by immutability                                                        | —                      |
+| 10.2.1.4.5    | Pharmacy billing                                                               | Gap     | Billing module                                                                                           | —                      |
+| 10.2.1.5.1    | Admin: user/role mgmt, password reset, access monitoring, change notify        | Have    | `admin.py` roster + `permissions.py` matrix + Access Control tab; change-notification = Gap              | Yes                    |
+| 10.2.1.5.2    | Admin: patient mgmt, history/appointments                                      | Have    | `admin.py` + `patients.py`                                                                               | —                      |
+| 10.2.1.5.3    | Admin: appointment slots, reminders                                            | Partial | Dashboard exists; reminder-delivery job = Gap                                                            | —                      |
+| 10.2.1.5.4    | Admin billing + SMP/SMS/e-klinik                                               | Gap     | Billing + integrations                                                                                   | —                      |
+| 10.2.1.5.5    | Patient medical-info reports, data export                                      | Partial | Some export; comprehensive reporting = Gap                                                               | —                      |
+| 10.2.1.5.6    | System Configuration: notifications, content/text/appearance                   | Partial | `hospital_settings` + admin config; content/appearance CMS = Gap                                         | —                      |
+| 10.2.1.5.7    | Security Management: data recovery/backup, security protocol                   | Gap     | Real backup/DR (10.2.7.2)                                                                                | —                      |
+| 10.2.1.6      | **Billing Module**                                                             | Gap     | New module: `bills`, `bill_items`, `payments`, `claims`, charge master                                   | Yes                    |
+| 10.2.1.7      | **Procedure Module**                                                           | Gap     | Reference implementation of the shared ancillary pattern                                                 | Partial                |
+| 10.2.1.8      | **Laboratory Module** (+ direct reg, result-interpretation AI, trend analysis) | Gap     | New module + analyser integration + AI + longitudinal trends                                             | Yes                    |
+| 10.2.1.9      | **X-ray Module** (+ direct reg)                                                | Gap     | New module; ties to PACS                                                                                 | Yes                    |
+| 10.2.1.10     | **Physiotherapy Module** (+ direct reg)                                        | Gap     | New module                                                                                               | Partial                |
+| 10.2.1.11     | **Dental Module** (sign-off, dental chart, references, medication, reporting)  | Gap     | New module; dental chart = bespoke UI                                                                    | Partial                |
+| 10.2.1.12.1   | Reporting: admission/discharge summaries, disease-specific, TAT, PDF+Excel     | Partial | AI handover ≈ discharge summary; rest = Gap                                                              | Yes                    |
+| 10.2.1.12.2   | Operational performance reports; auto daily/weekly/monthly                     | Gap     | Reporting engine + scheduled jobs                                                                        | —                      |
+| 10.2.1.12.3   | **MOH reporting standards** + notifiable disease + anonymization               | Gap     | [[Malaysia Health Regulation]]; e-Notifikasi formats                                                     | Yes (compliance story) |
+| 10.2.1.12.4   | Financial performance reports                                                  | Gap     | Billing module                                                                                           | —                      |
+| 10.2.1.12.5   | **Custom Report Builder** (no-IT, save/share templates)                        | Gap     | Field picker across modules, filter/group, template store                                                | Yes                    |
+| 10.2.1.12.6   | Real-time interactive dashboards & analytics                                   | Partial | Overlaps 10.2.1.1; trend/comparative stats = Gap                                                         | Yes                    |
+| 10.2.1.12.7   | **Predictive analytics** (visits, disease burden, stock depletion)             | Gap     | Same engine family as 10.2.1.1.2                                                                         | Yes                    |
+| 10.2.1.12.8   | **Automated clinical insight engine** (NL summary reports)                     | Partial | `ai/summarize.py` pattern; local model + report framing                                                  | Yes (flagship)         |
+| 10.2.1.12.9   | **Population health stratification** (risk clustering)                         | Gap     | Analytics over conditions/encounters                                                                     | Yes                    |
+| 10.2.1.13.1–2 | Mobile via secure API; full API support                                        | Have    | FastAPI is API-first; Flutter consumes it                                                                | Yes                    |
+| 10.2.1.13.3   | Mobile pre-registration (location/dept/doctor, slot, confirm, reschedule)      | Partial | Flutter self_register + scan_checkin + queue_status; slot selection = Gap                                | Yes                    |
+| 10.2.1.13.4   | Mobile: view visits, vitals, notes, prescriptions, PDF summary                 | Partial | Flutter home shows record + AI brief; vitals display + PDF = Gap                                         | Yes                    |
+| 10.2.1.13.5   | Mobile real-time alerts (reminders, test results, announcements)               | Partial | Flutter local notifications; server push + announcements = Gap                                           | Yes                    |
+| 10.2.1.14.1   | Calling System: queue numbers by type, auto-assign                             | Have    | `reception.py` `queue_tickets` + per-section                                                             | Yes                    |
+| 10.2.1.14.2   | Ticket **printer**                                                             | Gap     | Printer integration (10.2.8.2); demo with ESC/POS or PDF                                                 | Demo                   |
+| 10.2.1.14.3   | Central **TV display** of queue + counters/rooms                               | Have    | `display.py` `/display/{token}` full-screen auto-refresh                                                 | Yes                    |
+| 10.2.1.14.4   | Role-based call next / hold / skip; monitor per type                           | Have    | `reception.py` call/complete/cancel/no-show                                                              | Yes                    |
+| 10.2.1.15.1–5 | **PACS / DICOM**                                                               | Gap     | Orthanc + web viewer → [[PACS and DICOM]]                                                                | Yes (impressive)       |
+
+## 10.2.2 System Technology
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.2.2.1 | PHP CodeIgniter 4 | Port | Demo FastAPI → [[Designing for the PHP Port]] |
+| 10.2.2.2 | Linux OS | Have | uvicorn on Linux |
+| 10.2.2.3 | Web responsive | Partial | React + Tailwind; audit responsiveness |
+| 10.2.2.4–6, .9–10 | UTHM provides hosting/network/AV; security via PTM | N/A | Contractual |
+| 10.2.2.7 | Integrate label printer, blood-test machine, X-ray viewer | Gap | 10.2.8.1 / 10.2.8.2 |
+| 10.2.2.8 | Integrate SMP / SMS / e-klinik | Gap | Mock adapters + integration layer |
+| 10.2.2.11–13 | DB/hosting compatibility, secure/scalable config | Partial | [[On-Prem Architecture]] |
+| 10.2.2.14 | Resize uploaded images | Gap | Pillow resize on upload (easy) |
+| 10.2.2.15 | **Embedded AI, NO cloud APIs**, offline | Gap (conflict) | [[On-Prem Clinical AI]] — biggest bet |
+| 10.2.2.16 | Federated model updating | Gap | = periodic local LoRA fine-tune |
+| 10.2.2.17 | Demonstrate proprietary/licensed AI engine (ALi.ai or equiv) | Gap | ALi.ai = MAIA; partnership vs OSS |
+
+## 10.2.3 Development Guidelines
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.2.3.1 | OWASP | Partial | [[Security Audit]] drives this |
+| 10.2.3.2–6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Partial | 30 tables; no stored procs/views (fine); schema docs = Gap |
+| 10.2.3.7–8 | UTHM hosts DB; vendor supplies no DB server | N/A | App connects to UTHM MariaDB |
+| 10.2.3.9 | AI-assisted code quality / OWASP review in pipeline | Gap | CI + SAST (Semgrep/Bandit) + LLM review step |
+| 10.2.3.10 | **FHIR-compatible schema**, MySejahtera/PADU interop | Gap | [[FHIR Schema Readiness]] — do early |
+| 10.2.3.11 | Automated data-quality monitoring | Gap | Batch validators + admin alerts (`data_quality_alerts` table) |
+
+## 10.2.4 Integration, Migration, Auth
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.2.4.1–2 | Integrate university DBs (student/staff); fully integrable | Gap | Read-only connector to UTHM identity source; mock for demo |
+| 10.2.4.3–5 | External hardware/device via REST/JSON; middleware service layer | Gap | Integration engine → [[Integration Engine and LDAP]] |
+| 10.2.4.6 | Import from existing clinical system | Gap | ETL; depends on legacy format |
+| 10.2.4.7–9 | Secure, read-only, real-time/scheduled sync | Gap | Design in architecture |
+| 10.2.4.10 | Integrate lab machines, X-ray viewers, label printers | Gap | 10.2.8 |
+
+## 10.2.5 Security
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.2.5.1 | PDPA: encryption at rest+transit, RBAC, audit, retention | Partial | RBAC + `audit_logs` Have; encryption at rest + retention = Gap |
+| 10.2.5.2 | Security control module: access by role | Have | `permissions.py` + Access Control tab |
+| 10.2.5.3 | Credentials + **LDAP** | Gap | [[Integration Engine and LDAP]] |
+| 10.2.5.6 | Intelligent anomaly detection | Gap | Login/access analytics + framing |
+| 10.2.5.7 | AI-driven audit-trail intelligence | Gap | LLM over `audit_logs` hash-chain |
+| 10.2.5.8 | Continuous automated vuln assessment of own code + APIs | Gap | CI SAST/DAST + dependency scanning |
+
+## 10.2.6 / 10.2.7 / 10.2.8
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.2.6.1 | System Admin controls access via Module facility | Have | Access Control tab |
+| 10.2.7.1.x | Dedicated DB server, on-prem, enterprise RDBMS | Gap | SQLite → MariaDB → [[On-Prem Architecture]] |
+| 10.2.7.2.x | Automated encrypted backups, 30-day, image snapshot, quarterly restore, RPO/RTO | Gap | [[On-Prem Architecture]] backup section |
+| 10.2.7.3.x | Integrate with UTHM hosting, collaborate with infra team | N/A | Contractual |
+| 10.2.7.4.1 | ≥2 onsite support staff, 2 years | N/A | Contractual / bid |
+| 10.2.8.1.x | Lab machine API integration (bidirectional, standards, test env) | Gap | HL7 v2 / ASTM → [[Integration Engine and LDAP]] |
+| 10.2.8.2.x | Label printer + calling-system printer (templates: name, IC, barcode) | Gap | ESC/POS or CUPS; label template engine |
+| 10.2.8.3.x | Calling-system TV: queue, counters, names/initials, visual + **audio** | Partial | `display.py` visual; audio + branding = Gap |
+
+## 10.1 / 10.3 (process / personnel)
+
+| Clause | Requirement | Status | Note |
+|---|---|---|---|
+| 10.1.1–1.3, 1.9 | URS sessions, work schedule, SRS report | N/A | Bid deliverables |
+| 10.1.4 | UAT | N/A | Process |
+| 10.1.5 | Security Acceptance Testing (UTHM-run) | Gap | Feeds P2 security work |
+| 10.1.6 | Source code owned by UTHM; disclose OSS vs proprietary | N/A | License inventory needed (esp. AI model licences) |
+| 10.1.7 | Linux compatible | Have | |
+| 10.1.8 | 2-yr warranty, 24h response | N/A | Contractual |
+| 10.3.2 | MBOT-registered Technologist | N/A | Risk register — does the team have one? |
+| 10.3.3 | MMC-registered Clinical Advisor | N/A | Risk register |
+| 10.3.4 | HIMSS/HL7 health-informatics competency | N/A | Risk register |
+
+---
+
+Feeds [[Implementation Roadmap]]. Big-ticket gaps ranked in [[Module Coverage]].

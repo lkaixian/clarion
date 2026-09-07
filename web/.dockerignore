@@ -1,0 +1,24 @@
+# Keep the web build context small.
+
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Caches / logs
+.vite/
+*.log
+npm-debug.log*
+
+# VCS / editor / OS
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Don't ship the Docker build files themselves
+Dockerfile
+.dockerignore

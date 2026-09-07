@@ -1,4 +1,4 @@
-# MediBridge — Flutter (Android) patient app
+# CLARION — Flutter (Android) patient app
 
 A from-scratch native Flutter port of the patient-facing app in `../mobile`
 (React Native/Expo), talking to the same FastAPI backend in `../backend`.
@@ -67,6 +67,15 @@ environment; anything not run is explicitly marked as not verified.**
   card's UID against a patient from the **web console**; a responder taps
   it against any NFC-capable Android phone in the app's Emergency Scanner,
   no login needed on either side. See "NFC end-to-end" below.
+- **Reception desk check-in + queue number system** (backend
+  `routers/reception.py`, web console's new `/reception` page,
+  `lib/screens/queue_status_screen.dart`) — a receptionist checks a walk-in
+  patient in (by QR card reference, NFC UID, or plain patient ID) from the
+  **web console**, and this app shows the patient their own live queue
+  status: ticket number, the facility's current "now serving" number,
+  people ahead, department/reason, with 5s polling and an explicit empty
+  state when there's no active ticket. See "Feature: Reception desk
+  check-in + queue number system" below.
 
 ### A backend quirk this app works around, on purpose
 
@@ -106,6 +115,8 @@ lib/
                                 polling/reconciliation against
                                 GET /emergency/current/{id}), audit log, NFC card
                                 status
+    queue_provider.dart        reception queue status (+ live polling against
+                                GET /reception/queue/status/{id})
     locale_provider.dart       persisted language choice
     reminders_provider.dart    which meds have reminders on, appointment list
   models/                      Patient, MBUser, EmergencyCard, AuditLogEntry,
@@ -119,7 +130,7 @@ lib/
 
 State management is **Provider** (not Riverpod/BLoC/GetX) — deliberately:
 smallest dependency footprint of the mainstream options, and this app only
-has a handful of screens and 4 small `ChangeNotifier`s, so anything heavier
+has a handful of screens and 6 small `ChangeNotifier`s, so anything heavier
 would be over-engineering for a hackathon-scale app (and would cost more on
 the low-end phones this app targets — see "Built for low-end devices"
 below).
@@ -167,12 +178,12 @@ as the RN app's `mobile/api/client.js`.
 
 | Role | Email | Password |
 |---|---|---|
-| Patient | `patient@medibridge.demo` | `patient123` |
+| Patient | `patient@clarion.demo` | `patient123` |
 
 (Same seeded account as the rest of the project — see `backend/seed.py`.)
 Registering an NFC card is staff-only — use the **web console**
-(`../web`) with the clinician account (`clinician@medibridge.demo` /
-`clinician123`) or admin account (`admin@medibridge.demo` / `admin123`) to
+(`../web`) with the clinician account (`clinician@clarion.demo` /
+`clinician123`) or admin account (`admin@clarion.demo` / `admin123`) to
 do that; the patient app can only view/scan cards, not create them.
 
 ---
@@ -291,7 +302,7 @@ at the same time, verified rather than assumed): `GET /emergency/current/{patien
 now also returns `qr_code_base64` whenever `active: true` — the QR image
 is never persisted, it's cheaply re-rendered on every call from the
 grant's `card_reference` (the QR content is fully deterministic:
-`MEDIBRIDGE-EMERGENCY:{card_reference}`), so a viewer that *didn't* itself
+`CLARION-EMERGENCY:{card_reference}`), so a viewer that *didn't* itself
 issue the card can still actually display it, not just know it exists.
 
 **App fix**:
@@ -482,6 +493,257 @@ format matches before relying on it.
 
 ---
 
+## Feature: Reception desk check-in + queue number system
+
+A receptionist (any existing staff role — `admin`/`clinician`/
+`records_officer`; there is deliberately **no** separate "receptionist"
+role/enum value, to avoid an RBAC ripple into `seed.py` and elsewhere)
+identifies a walk-in patient by their **existing** emergency QR code
+(`card_reference`), a registered physical NFC card (`nfc_uid`), or a direct
+`patient_id`, and the system assigns a **per-facility, reset-daily** queue
+number. Staff can then see the day's queue, call the next number, and mark
+tickets complete/cancelled. Patients see, in this app, their own ticket
+number and the facility's current "now serving" number.
+
+**Backend** (`backend/app/routers/reception.py`, `models.QueueTicket`,
+new schemas in `schemas.py`, registered in `main.py`):
+- `POST /reception/checkin` — staff-only. Resolves the patient via exactly
+  one of `patient_id`/`card_reference`/`nfc_uid` (a pydantic
+  `model_validator`, not a single-field validator, enforces "exactly one" —
+  a field-level validator wouldn't fire at all if every identifier field
+  were omitted, since pydantic v2 skips validators on untouched defaults by
+  default). `queue_number` is `1 + count of today's (UTC) tickets for this
+  facility` — a **count-based, not globally-locked, sequence**; the
+  docstring is explicit that a true multi-worker deployment has a small
+  theoretical race here, matching how this codebase already caveats
+  `EmergencyToken` issuance elsewhere.
+- **Critical constraint, verified not just claimed**: identifying a patient
+  via `card_reference`/`nfc_uid` is a **pure read lookup** against the same
+  `EmergencyToken` table `/emergency/scan`/`/emergency/nfc/scan` use — it
+  never revokes/consumes/mutates that grant. `_resolve_patient` in
+  `reception.py` deliberately does **not** hard-gate on
+  `revoked`/`expires_at` the way the emergency-scan endpoints do (documented
+  inline: that gate exists to protect *medical data* from an unauthenticated
+  responder — this endpoint is staff-authenticated already and discloses
+  nothing beyond "here is a queue ticket", so a lapsed/revoked card should
+  still be usable to *identify* someone at the front desk).
+- `GET /reception/queue` — staff-only, scoped to `current_user.facility`
+  (same "manager admin, not super admin" pattern as `MedicineInventoryItem`/
+  `Ward` in `routers/admin.py`) — today's tickets plus computed
+  `now_serving`/`waiting_count`.
+- `POST /reception/queue/{id}/call` — if another ticket is already `called`
+  at this facility, it's **auto-completed first** rather than rejecting the
+  call (documented reasoning: in real front-desk use, calling the next
+  number *is* the signal the previous one's turn ended — a hard rejection
+  would just be an extra forced click with no real benefit).
+- `POST /reception/queue/{id}/complete` / `.../cancel` — straightforward
+  status transitions.
+- `GET /reception/queue/status/{patient_id}` — patient reads only their own
+  (403 otherwise); mirrors `GET /emergency/current/{id}`'s `{"active":
+  false}` "nothing to show" convention exactly. Returns `now_serving` and
+  `people_ahead` (count of `waiting` tickets with a lower number, same
+  facility, today).
+
+**Web console** (`web/src/pages/Reception.jsx`, staff-only route
+`/reception`, nav link in `Layout.jsx` visible to non-patient roles): a
+check-in form (card reference / NFC UID / patient ID text inputs — no
+camera scanning library in the web app, that's what this Flutter app's
+scanner is for) and a queue board that polls `GET /reception/queue` every
+4s (`QUEUE_BOARD_POLL_MS`, matching `PatientDetail.jsx`'s
+`CARD_STATUS_POLL_MS` naming/pattern), with a big "Now Serving" display and
+Call Next / Complete / Cancel buttons.
+
+**This app** (`lib/models/queue_ticket.dart`, `lib/services/api_client.dart`
+`getQueueStatus`, `lib/providers/queue_provider.dart`,
+`lib/screens/queue_status_screen.dart`): a new small standalone
+`ChangeNotifier` (`QueueProvider`), matching this app's "several small
+providers, not one big store" architecture — `startPolling`/`stopPolling`
+mirror `PatientProvider.startCardPolling`/`stopCardPolling` exactly,
+including the immediate first refresh (don't wait for the first timer
+tick) and updating state + calling `notifyListeners()` **before** the
+`await`, not after (same fix documented in "Bug fix: medication reminder
+toggle not updating live" above). `QueueStatusScreen` shows "Your number:
+N" / "Now serving: N" / "N people ahead of you" prominently, ticket
+status/facility/department/reason, and an explicit empty state ("No active
+queue ticket — check in at reception") when `active: false`. Reachable from
+a new tile on the Home screen, next to the Reminders/Audit Log buttons.
+`QueueProvider` is registered in `main.dart`'s composition root and
+`app.dart`'s `MultiProvider`, alongside the existing providers.
+
+**Verified, not just reviewed** — a `TestClient` script run directly
+against the live seeded `backend/clarion.db` (see "Backend verification"
+below for the exact scenario): logged in as the seeded clinician, issued a
+fresh emergency QR card and registered an NFC card for the seeded demo
+patient, then checked that patient in via **all three** identifier types
+(`card_reference`, `nfc_uid`, bare `patient_id`) and confirmed the queue
+number incremented 1 → 2 → 3 correctly; called ticket 1, confirmed the
+patient's own `GET /reception/queue/status/{id}` reflected `now_serving`
+correctly; called ticket 2 and confirmed ticket 1 was auto-completed;
+confirmed `people_ahead` was computed correctly for the still-waiting
+ticket; completed/cancelled the remaining tickets and confirmed the
+patient's status correctly went back to `{"active": false}`; **and, the
+actual point of the exercise — confirmed the emergency QR card and the NFC
+card used to check the patient in were both still `active`/unrevoked
+afterwards** (`GET /emergency/current/{id}` still reports `active: true`
+with the *same* `card_reference`; `GET /emergency/nfc/{id}` still reports
+`revoked: false` for that UID) — proving the "must not consume the
+emergency credential" constraint actually holds, not just that the code
+reads like it should. Also confirmed a `patient`-role token gets a clean
+`403` on `POST /reception/checkin` and on `GET
+/reception/queue/status/{other_patient_id}`, and that the "exactly one
+identifier" validator correctly `422`s both zero-identifiers and
+two-identifiers requests.
+
+**What was NOT verified**: real on-device NFC/QR reception check-in flow —
+same caveat as the rest of this app's scanning story (see "Scanning and
+NFC" above). This round only exercised the backend contract via
+`TestClient` and confirmed `web/`'s build and this app's `flutter analyze`/
+`flutter build apk --debug` all succeed against the new code; nobody has
+tapped a real physical NFC card or scanned a real QR code at a reception
+desk with this feature, and the `QueueStatusScreen`'s on-device rendering
+(polling cadence feel, text wrapping for longer department/reason strings,
+CJK/Tamil glyph rendering of the new strings) has not been visually
+confirmed on a real screen, matching every other "not visually confirmed on
+a real device" item already listed under "Not verified by me in this
+sandbox" below.
+
+---
+
+## Bug fix: reception queue race condition, wrong reset timezone, and a dead status
+
+An architect-review pass on the reception/queue feature above confirmed its
+3 critical safety properties (emergency-card non-mutation, RBAC, facility
+scoping) were correct, but found 4 real issues, all fixed in the same
+session, all re-verified — not just re-read — afterward:
+
+**1. HIGH — genuine queue-number race condition, not just a theoretical
+multi-worker one.** The original `_next_queue_number` docstring claimed the
+count-then-insert race "matters for multi-worker deployments" — that was
+wrong. FastAPI runs sync `def` routes (every route in `reception.py` is
+`def`, not `async def`) in a threadpool even under a single `uvicorn`
+process, and `database.py`'s SQLite engine sets `check_same_thread: False`
+— so two concurrent `POST /reception/checkin` calls on different threads,
+in a genuinely single-worker dev setup, really could both read the same
+`COUNT(*)` before either commits and get handed the same `queue_number`.
+Fixed with a real DB-level guarantee, not just tighter application logic:
+`models.QueueTicket` gained a `UniqueConstraint(facility_name, queue_date,
+queue_number)` (see fix #2 for the new `queue_date` column this also
+required), and `routers/reception.py::_create_ticket_with_retry` replaced
+the old plain count-then-insert with a bounded (5-attempt) retry loop —
+compute the next number, attempt insert+commit, and on `IntegrityError`
+(the constraint firing) roll back and recompute. This turns a previously
+*silent* duplicate into either a correctly-serialized outcome or, in the
+pathological worst case, a clean `409`.
+
+  **Verified with a real concurrency test, not just reasoning about it**:
+  a script spun up 12 real Python threads, each independently calling
+  `_create_ticket_with_retry` for the same facility/date via its own DB
+  session, and asserted the resulting `queue_number`s were exactly `1..12`
+  with zero duplicates and zero errors — this reproduced the actual race
+  (12 threads really do interleave their `COUNT(*)` reads under the GIL's
+  I/O-release points/SQLite's own locking) and confirmed the fix resolves
+  it, not just that the code compiles. Separately, also verified the
+  constraint itself fires correctly by manually inserting two `QueueTicket`
+  rows with an identical `(facility_name, queue_date, queue_number)` tuple
+  and confirming the second raises `IntegrityError`.
+
+**2. MEDIUM — the daily reset used UTC midnight instead of Malaysia-local
+midnight.** This project's target market is Malaysia (Bahasa Melayu
+localization, MySejahtera integration) — UTC+8, no DST. The original
+`_utc_today_start()` reset the queue at UTC midnight, which is **8am
+Malaysia time** — silently resetting the day's queue numbering mid-morning
+while patients were still physically waiting. Fixed with a new
+`_malaysia_today()` (`routers/reception.py`), using stdlib
+`zoneinfo.ZoneInfo("Asia/Kuala_Lumpur")` (no new import, but see the
+`tzdata` note below) to compute Malaysia-local midnight and convert it to
+the equivalent naive-UTC instant this app's existing naive-UTC `DateTime`
+columns are stored in. `models.QueueTicket` gained a new `queue_date`
+column (Malaysia-local ISO calendar date, e.g. `"2026-08-19"`) — checked-in
+tickets are now grouped by this stored date rather than a live UTC-range
+filter, which is also what fix #1's unique constraint is keyed on. Applied
+consistently everywhere a day boundary mattered: check-in's queue-number
+computation, `GET /reception/queue`, and
+`GET /reception/queue/status/{patient_id}`. The `Asia/Kuala_Lumpur`
+timezone is hardcoded, not per-facility-configurable — the right
+hackathon-scope call for a single-country demo app today, but documented
+inline as something a real multi-region deployment would need to revisit.
+
+  **A real, this-environment-discovered wrinkle**: `zoneinfo.ZoneInfo`
+  resolves IANA timezone names from the OS's own tz database on
+  Linux/macOS, but **Windows ships no such database at all** — importing
+  `reception.py` on this Windows dev machine raised
+  `ZoneInfoNotFoundError: 'No time zone found with key Asia/Kuala_Lumpur'`
+  until the `tzdata` PyPI package (pure-Python IANA data, no C
+  dependencies) was added to `requirements.txt` and installed. This wasn't
+  inferred from documentation — it was hit directly while verifying this
+  fix, then fixed for real.
+
+  **Verified directly**: a spot-check froze "now" at `2026-08-18 17:30
+  UTC` — deliberately chosen because it's already `2026-08-19` in Malaysia
+  local time (`01:30 MYT`) while still `2026-08-18` in UTC, i.e. exactly
+  the boundary case the old UTC-based logic got wrong — and asserted
+  `_malaysia_today()` returns `queue_date == "2026-08-19"` (not
+  `"2026-08-18"`) and the correct corresponding UTC instant
+  (`2026-08-18 16:00:00`, i.e. Malaysia midnight converted to UTC).
+
+**3. LOW — dead `"serving"` status removed.** `VALID_QUEUE_TICKET_STATUSES`
+(`schemas.py`), `QueueTicket.status`'s docstring (`models.py`), and UI
+branches in both `web/src/pages/Reception.jsx` and
+`mobile_flutter/lib/screens/queue_status_screen.dart` referenced a
+`"serving"` status that no endpoint ever actually transitioned a ticket
+into — the real flow is only ever `waiting → called → done/cancelled`.
+Removed everywhere (schema enum, model docstring/column comment, both UI
+files' dead branches, and the now-unused `queueStatusServing` translation
+key dropped from all 4 ARB files) rather than leaving a half-implemented
+`call → serving → complete` step in the documented contract that the code
+never actually offered.
+
+**4. LOW — a day's last `called` ticket can be left stuck if staff never
+hit Complete (accepted, not fixed).** If staff call a ticket and then never
+call another one AND never manually complete/cancel it, it stays in
+`called` state indefinitely — there is no background job to auto-close it.
+This is genuinely harmless (fix #2's Malaysia-local `queue_date` filtering
+means it naturally drops off every future day's board on its own, and
+staff can still manually complete/cancel it any time via the existing
+endpoints), so per the review's explicit guidance, no new "auto-close
+stale tickets" mechanism was built — just a one-line code comment added
+next to `call_ticket` in `reception.py` documenting this as known, accepted
+behavior so a future maintainer doesn't mistake it for a bug.
+
+**Migration note**: `models.QueueTicket` is a brand-new table introduced
+this same session, with no real patient-facing data in it — only rows from
+this session's own `TestClient` verification runs. Rather than adding a
+`_migrate_lightweight()` entry to `main.py` for the new `queue_date` column
+(the pattern every other schema change in this project follows, to protect
+*real* seeded/demo data across restarts), the existing stale
+`queue_tickets` table was dropped by hand once from the local
+`backend/clarion.db`, and `create_all` recreated it fresh with the corrected
+schema (including the new unique constraint, which SQLite can't add via a
+plain `ALTER TABLE ADD COLUMN` anyway) on next import. This was a one-time,
+this-session-only manual step, not a new migration mechanism — documented
+inline in `main.py` right above `app.include_router(reception.router)`,
+including an explicit note that any *future* column addition to
+`QueueTicket`, once it has real data, would need a normal additive
+`_migrate_lightweight` entry like every other table in that file.
+
+**Re-verified end-to-end after all four fixes** (not just re-read): the
+full `TestClient` script from the feature's original verification (issue
+QR card → register NFC card → 403 checks → validator checks → check in via
+all 3 identifier types with incrementing queue numbers → call/auto-complete
+→ `people_ahead` → complete/cancel → confirm `{"active": false}` → confirm
+the emergency QR **and** NFC credentials used for check-in are still
+active/unrevoked) was re-run against the live seeded database and passed
+in full, alongside the new concurrency and timezone-boundary checks above.
+`web/ npm run build` — 0 errors. `flutter pub get` (gen-l10n) —
+**262/262/262/262 keys**, identical across all 4 locales (one fewer than
+before, matching the removed `queueStatusServing` key), zero
+untranslated-message warnings. `flutter analyze` — 0 errors/0 warnings,
+same 6 established `prefer_initializing_formals` info lints as before this
+round (no new lint classes introduced). `flutter build apk --debug` —
+succeeded.
+
+---
+
 ## MySejahtera booking link — honesty note (round 2: real package name)
 
 Round 1 fix (guessed package `com.mysejahtera.government` / a
@@ -592,10 +854,10 @@ shaped several concrete choices, not just Senior Mode's UI:
   iteration/readable stack traces.
 - **Shallow, simple widget trees** — screens are mostly flat
   `Column`/`ListView` structures over a handful of small stateless
-  widgets; state is scoped to 5 small `ChangeNotifier`s (`AppConfig`,
-  `AuthProvider`, `PatientProvider`, `LocaleProvider`, `RemindersProvider`
-  — not one big app-wide store), so a change in, say, the emergency card
-  doesn't rebuild the whole widget tree.
+  widgets; state is scoped to 6 small `ChangeNotifier`s (`AppConfig`,
+  `AuthProvider`, `PatientProvider`, `QueueProvider`, `LocaleProvider`,
+  `RemindersProvider` — not one big app-wide store), so a change in, say,
+  the emergency card doesn't rebuild the whole widget tree.
 - **`flutter build apk --split-per-abi`** is recommended for any real
   release build (see "Building a release APK" below) — ships a
   per-architecture APK instead of one fat multi-ABI APK, which is
@@ -604,6 +866,19 @@ shaped several concrete choices, not just Senior Mode's UI:
 ---
 
 ## Building a release APK later
+
+```bash
+flutter build apk --release --split-per-abi
+```
+
+The `--dart-define=API_BASE_URL=...` override shown in earlier revisions of
+this doc is **optional, not required** — every verified release build,
+including this round's, has been run without it, since the Settings
+screen's runtime-editable API base URL (see "Pointing at your backend"
+above) already covers pointing an already-built release APK at a different
+backend with no rebuild. Only pass `--dart-define` if you specifically want
+a *different compile-time default* baked in for users who never open
+Settings:
 
 ```bash
 flutter build apk --release --split-per-abi \
@@ -615,6 +890,34 @@ flutter build apk --release --split-per-abi \
 the one matching the target device's architecture (`arm64-v8a` for
 essentially all Android phones from the last ~8 years) instead of shipping
 one universal APK.
+
+### Release signing (P1.13)
+
+Without any setup, `flutter build apk --release` above signs with Android's
+public **debug key** — `android/app/build.gradle.kts` falls back to it and
+prints a loud Gradle warning when it does. That output is fine for local
+testing / demo installs but must **never** be distributed as the real
+release: anyone can re-sign a package with the same well-known debug key, so
+it proves nothing about provenance and Play Console will reject an upload
+signed with it anyway.
+
+To sign with a real key:
+
+```bash
+keytool -genkeypair -v -storetype JKS -keystore clarion-release.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias clarion
+```
+
+Keep the resulting `.jks` **outside this repo** (password manager / CI
+secret store — it's a credential, and losing it means you can never publish
+an update under the same `applicationId` again). Then copy
+`android/key.properties.example` to `android/key.properties` (git-ignored),
+fill in the real `storeFile` path + passwords, and rebuild — `build.gradle.kts`
+picks it up automatically and the release variant signs with it instead of
+the debug key, no warning. Verified in this environment: a throwaway test
+keystore correctly overrides the fallback (`./gradlew.bat -q :app:signingReport`
+showed `Variant: release / Config: release` pointing at the test `.jks`);
+without `key.properties` present it falls back to the debug key as designed.
 
 ---
 
@@ -668,6 +971,101 @@ working Flutter SDK and Android SDK, so more could actually be executed:
 - ✅ **Web console** (`../web`) — `npm run build` still succeeds cleanly
   (`vite build`, 0 errors) — unaffected by this round's changes, re-checked
   anyway.
+
+**Round 4 (this round): reception desk check-in + queue number system.**
+- ✅ **Backend** — new `models.QueueTicket`/`routers/reception.py` endpoints
+  exercised against the live seeded `backend/clarion.db` with `TestClient`
+  (not mocks) — see "Feature: Reception desk check-in + queue number
+  system" above for the full scenario (all 3 identifier types, queue
+  numbering, call/auto-complete, `people_ahead`, 403s, validator 422s, and
+  — the actual point of the exercise — confirming the emergency QR/NFC
+  credentials used to check the patient in were still active/unrevoked
+  afterwards).
+- ✅ **Web console** (`../web`) — `npm run build` re-run after adding
+  `pages/Reception.jsx`, the `/reception` route, the nav link, and the new
+  `api/client.js` functions — **0 errors**.
+- ✅ **`flutter pub get`** (triggers `flutter gen-l10n`) — ran successfully
+  after adding the 19 new queue-related keys to all 4 ARB files —
+  **263/263/263/263 keys**, identical across all 4 locales
+  (`grep -c "@override" lib/l10n/generated/app_localizations_*.dart`),
+  zero untranslated-message warnings.
+- ✅ **`flutter analyze`** — **0 errors, 0 warnings**. 6 `info`-level
+  lints total (up from the previously-documented baseline of 5): the same
+  5 pre-existing `prefer_initializing_formals` false-positives, **plus one
+  new instance of the identical pattern** in the new
+  `queue_provider.dart` (a public constructor parameter mapped onto a
+  private field, same reasoning as every other provider in this codebase —
+  left as-is intentionally, consistent with the existing baseline, not a
+  new class of problem). A separate, genuinely new `use_null_aware_elements`
+  info lint appeared on 4 lines of **pre-existing, untouched** code in
+  `api_client.dart` (`updatePatientProfile`'s body-building map) — not
+  caused by this round's changes, most likely a `flutter_lints`/analyzer
+  version pulled in transitively by `pub get`. Fixed anyway (rewritten
+  using Dart's null-aware map-element syntax, `'key': ?value`) since it was
+  a trivial, safe cleanup, rather than leaving an unexplained lint-count
+  regression in place.
+- ✅ **`flutter build apk --debug`** — **succeeded** (`√ Built
+  build\app\outputs\flutter-apk\app-debug.apk`), re-run after all of this
+  round's changes (new model/provider/screen/screens wiring, `main.dart`/
+  `app.dart` composition-root changes, `home_screen.dart`'s new tile). Same
+  harmless KGP-migration warning as every prior round.
+- ❌ **`flutter test`** — **could not be run this round**: both directly and
+  via the `C:\flutter_sdk` junction workaround, `flutter test` fails during
+  Dart's native-assets build-hook step (`Hook exited with a reserved exit
+  code: 64` / the same underlying `'D:\New' is not recognized...` class of
+  failure documented in "Environment notes specific to this machine" below)
+  triggered by the `objective_c` package's build hook — a macOS-only
+  transitive dependency (via `path_provider_foundation`) that has nothing
+  to do with this app's Android target or this round's actual code changes.
+  Notably, `flutter build apk --debug` does **not** hit this same failure
+  (it only resolves/builds hooks needed for the Android target), so this
+  looks like a `flutter test`-specific native-assets-hook regression in
+  this Flutter SDK version, not something introduced by the reception/queue
+  feature. Left unresolved and reported honestly rather than silently
+  dropped — `test/widget_test.dart` itself was not modified this round and
+  there is no reason to believe it would fail if this tooling issue weren't
+  in the way, but that is an inference, not a confirmed pass.
+
+**Round 5 (this round): version bump only (`1.2.0+3` → `1.2.0+4`) to give
+the already-landed round-4 reception/queue code (which shipped without a
+build-number bump alongside it) its own installable build, plus a fresh
+release build/verification pass. No app code changed this round.**
+- ✅ **`pubspec.yaml`** — `version: 1.2.0+4` (version *name* left at `1.2.0`
+  — this is a build-number-only bump for a new build of already-1.2.0
+  code, not a version-name change; flagging that judgment call explicitly
+  per the task brief rather than silently deciding it).
+- ✅ **`flutter analyze`** — ran via `C:\flutter_sdk\bin\flutter.bat analyze`
+  (the junction workaround — see "Environment notes specific to this
+  machine" below): **0 errors, 0 warnings**, the same **6** pre-existing
+  `prefer_initializing_formals` `info`-level lints as the round-4 baseline
+  above (`auth_provider.dart` ×2, `patient_provider.dart`, `queue_provider.dart`,
+  `api_client.dart` ×2) — identical count, no new lint classes, so the code
+  is unchanged from round 4 as expected.
+- ✅ **`flutter build apk --release --split-per-abi`** — ran via
+  `C:\flutter_sdk\bin\flutter.bat build apk --release --split-per-abi`
+  (no `--dart-define=API_BASE_URL=...` override, matching every prior
+  verified release build — the Settings screen's runtime override covers
+  that need). **Succeeded** in 115.3s. Real, actually-measured
+  (`ls -la build/app/outputs/flutter-apk/`) sizes — slightly larger than
+  round 3's numbers above (the round-4 reception/queue feature — new
+  model/provider/screen, 19 new ARB keys ×4 locales — added real code
+  between that measurement and this one; this round's own build has no
+  new dependencies over round 4, so the growth is attributable to that
+  already-landed feature, not to anything this round changed):
+  - `app-armeabi-v7a-release.apk` — **24,363,855 bytes ≈ 23.2 MB**
+  - `app-arm64-v8a-release.apk` — **28,428,509 bytes ≈ 27.1 MB**
+  - `app-x86_64-release.apk` — **30,886,104 bytes ≈ 29.5 MB**
+  - `android/local.properties` was regenerated by this build with
+    `flutter.versionCode=4` / `flutter.versionName=1.2.0`, confirming the
+    `pubspec.yaml` bump actually flowed through to the Android build
+    metadata Gradle used.
+- ❌ **`flutter test`** — not re-attempted this round; still expected to hit
+  the same unrelated native-assets/`objective_c` build-hook failure
+  documented under "Round 4" above (no dependency or SDK change happened
+  this round that would affect it).
+- Not re-run this round (no backend/web code changed): backend `TestClient`
+  suite, `web/ npm run build`. Both were last verified in round 4 above and
+  nothing in `backend/` or `web/` was touched this round.
 
 ### Not verified by me in this sandbox (no emulator/device attached here)
 
@@ -737,6 +1135,17 @@ detailed throughout this doc).
   necessity (no tunnel is running per the task brief); the Settings
   screen's override mechanism has been code-reviewed, not exercised
   against a real tunnel URL.
+- **(Round 4) Reception desk check-in + queue number system, on-device** —
+  the backend contract (via `TestClient`), `web/`'s console page, and this
+  app's `QueueStatusScreen`/`QueueProvider` all compile and the backend
+  behavior is genuinely verified (see the dedicated feature section
+  above), but nobody has actually checked a real patient in at a real
+  reception desk (web console) and watched their queue number/`now
+  serving`/`people ahead` appear and update live on a real phone running
+  this screen — same "not yet confirmed on real hardware" caveat as every
+  other feature in this list. The 5-second polling cadence, and text
+  wrapping for a long `reason`/`department` string on a small screen, are
+  also unconfirmed visually.
 
 ### Backend verification (actually run, not just reviewed)
 
@@ -806,6 +1215,39 @@ this environment), then exercised directly against the **existing, already
   -based permanently-denied detection, test-notification button, 6 new
   ARB keys ×4 locales) — 0 errors/warnings (same 5 pre-existing `info`
   notices), 1/1 test passing, all four build commands succeeded.
+- **(Round 4)** New reception desk check-in + queue number system, run
+  against the live seeded `clarion.db` with `TestClient`: logged in as the
+  seeded clinician and patient; as the patient, issued a fresh emergency
+  QR card (`POST /emergency/issue`); as the clinician, registered an NFC
+  card for the same patient (`POST /emergency/nfc/register`); confirmed a
+  `patient`-role token gets `403` on `POST /reception/checkin` and on
+  `GET /reception/queue/status/{other_patient_id}`, and that omitting all
+  three identifiers or supplying two at once both `422` with the exact
+  "Provide exactly one of..." message; checked the patient in three times
+  as the clinician — once via `card_reference`, once via `nfc_uid`, once
+  via bare `patient_id` — and asserted `queue_number` incremented `1 → 2 →
+  3` and `source` was recorded correctly (`qr`/`nfc`/`manual`) each time;
+  fetched `GET /reception/queue` and confirmed `waiting_count == 3` and
+  `now_serving is None` before anything was called; called ticket 1 and
+  asserted the patient's own `GET /reception/queue/status/{id}` reported
+  `now_serving` matching ticket 1's number; called ticket 2 and asserted
+  (a) ticket 1's status flipped to `done` with a `completed_at` set (the
+  documented auto-complete-on-next-call behavior) and (b) the still-waiting
+  ticket 3's `people_ahead` was correctly `0` (tickets 1/2 no longer count
+  as `waiting`); completed ticket 2 and cancelled ticket 3, then asserted
+  the patient's queue status returned to `{"active": false}`; and —
+  **the actual point of the exercise** — asserted
+  `GET /emergency/current/{patient_id}` still reported `active: true` with
+  the exact same `card_reference` used for check-in, and
+  `GET /emergency/nfc/{patient_id}` still reported `revoked: false` for
+  the same `nfc_uid`, proving reception check-in genuinely never mutates
+  the underlying `EmergencyToken` grant. All assertions passed.
+- **(Round 4)** `web npm run build`, `flutter pub get` (gen-l10n),
+  `flutter analyze`, and `flutter build apk --debug` all re-run after
+  every round-4 change — see the dedicated "Round 4" bullet list further
+  above for exact results (all passed except `flutter test`, which could
+  not be run this round due to an unrelated native-assets tooling failure
+  — see that same bullet list for details).
 
 If you're picking this up: install/verify an Android emulator or connect
 a device (`flutter devices`), start the backend

@@ -3,39 +3,38 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import PatientList from "./pages/PatientList";
 import PatientDetail from "./pages/PatientDetail";
+import Profile from "./pages/Profile";
 import AdminConsole from "./pages/AdminConsole";
+import Reception from "./pages/Reception";
+import Pharmacy from "./pages/Pharmacy";
+import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import { getCurrentUser } from "./api/client";
+import { landingPathFor } from "./lib/access";
 
 function Protected({ children }) {
   return getCurrentUser() ? children : <Navigate to="/" />;
 }
 
-// A patient account can't call GET /patients (staff-only on the backend) —
-// this guards direct navigation / a stale bookmark to that URL, on top of
-// Login.jsx and Layout.jsx already sending a patient straight to their own
-// record instead. Without this, a patient hitting /patients directly would
-// still see a raw 403 from PatientList's data fetch.
-function StaffOnly({ children }) {
+// One generic page guard, driven by the per-facility `allowed_pages` matrix
+// the backend now returns on the user object (pages:
+// "patients" | "reception" | "pharmacy" | "admin"). The backend also 403s any
+// API call into an area the role can't reach, so without this guard a stale
+// client would render the page and then show nothing but failed fetches —
+// this bounces the user somewhere they can actually use instead.
+//
+// - A patient account is sent to its own landing path (its record). It must
+//   still be able to reach /patients/:id directly, so that route is NOT
+//   wrapped in RequirePage — see the route table below.
+// - An admin implicitly has every page (its allowed_pages already lists all
+//   four, but the explicit role check keeps this correct even against an
+//   older cached user object).
+function RequirePage({ page, children }) {
   const user = getCurrentUser();
-  if (user?.role === "patient") {
-    return user.patient_id ? <Navigate to={`/patients/${user.patient_id}`} /> : <Navigate to="/" />;
-  }
-  return children;
-}
-
-// /admin (routers/admin.py) is `role === "admin"`-only on the backend —
-// mirrors StaffOnly above exactly, just for a narrower role. Without this, a
-// clinician/records_officer/patient hitting /admin directly (stale bookmark,
-// typed URL, a nav link that somehow rendered anyway) would see a raw 403
-// from AdminConsole's data fetches instead of landing somewhere useful, the
-// same UX gap StaffOnly closes for /patients.
-function AdminOnly({ children }) {
-  const user = getCurrentUser();
-  if (user?.role === "admin") return children;
-  if (user?.role === "patient") {
-    return user.patient_id ? <Navigate to={`/patients/${user.patient_id}`} /> : <Navigate to="/" />;
-  }
-  return <Navigate to="/patients" />;
+  if (!user) return <Navigate to="/" />;
+  if (user.role === "patient") return <Navigate to={landingPathFor(user)} />;
+  const pages = user.allowed_pages || [];
+  if (user.role === "admin" || pages.includes(page)) return children;
+  return <Navigate to={landingPathFor(user)} />;
 }
 
 export default function App() {
@@ -44,9 +43,22 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/patients" element={<Protected><StaffOnly><PatientList /></StaffOnly></Protected>} />
+        {/* Public big-screen waiting-room board — no auth, deliberately
+            OUTSIDE <Protected>: a lobby TV has no logged-in user. The page
+            itself calls the unauthenticated /display/{token} endpoint. */}
+        <Route path="/display/:token" element={<WaitingRoomDisplay />} />
+        <Route path="/patients" element={<Protected><RequirePage page="patients"><PatientList /></RequirePage></Protected>} />
+        {/* Not wrapped in RequirePage: a patient must be able to open their
+            own record here. Staff without "patients" access who land here
+            will just get a 403 from PatientDetail's fetch — acceptable, and
+            they have no link to it anyway. */}
         <Route path="/patients/:id" element={<Protected><PatientDetail /></Protected>} />
-        <Route path="/admin" element={<Protected><AdminOnly><AdminConsole /></AdminOnly></Protected>} />
+        {/* Any authenticated staff member — a signature isn't a console
+            "page", so it's guarded by <Protected> only, no RequirePage. */}
+        <Route path="/profile" element={<Protected><Profile /></Protected>} />
+        <Route path="/admin" element={<Protected><RequirePage page="admin"><AdminConsole /></RequirePage></Protected>} />
+        <Route path="/reception" element={<Protected><RequirePage page="reception"><Reception /></RequirePage></Protected>} />
+        <Route path="/pharmacy" element={<Protected><RequirePage page="pharmacy"><Pharmacy /></RequirePage></Protected>} />
       </Routes>
     </BrowserRouter>
   );

@@ -161,15 +161,15 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(l10n.emergencyAccessCardTitle,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.emergency)),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.palette.emergency)),
             const SizedBox(height: 8),
             Text(
               l10n.emergencyDesc,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.4),
+              style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
             ),
             const SizedBox(height: 20),
             Text(l10n.fieldsToShare,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
             const SizedBox(height: 8),
             ...kScopeKeys.map((key) {
               final checked = _selected.contains(key);
@@ -184,13 +184,13 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                         height: 22,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: checked ? AppColors.primary : AppColors.border, width: 2),
-                          color: checked ? AppColors.primary : Colors.transparent,
+                          border: Border.all(color: checked ? context.palette.primary : context.palette.border, width: 2),
+                          color: checked ? context.palette.primary : Colors.transparent,
                         ),
                         child: checked ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
                       ),
                       const SizedBox(width: 10),
-                      Text(scopeLabel(l10n, key), style: const TextStyle(fontSize: 14, color: AppColors.textBody)),
+                      Text(scopeLabel(l10n, key), style: TextStyle(fontSize: 14, color: context.palette.textBody)),
                     ],
                   ),
                 ),
@@ -199,13 +199,13 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
             const SizedBox(height: 4),
             Text(
               l10n.onlyOneLiveCardNote,
-              style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
+              style: TextStyle(fontSize: 11, color: context.palette.textFaint),
             ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emergency, padding: const EdgeInsets.all(16)),
+                style: ElevatedButton.styleFrom(backgroundColor: context.palette.emergency, padding: const EdgeInsets.all(16)),
                 onPressed: patientState.isIssuingCard || _selected.isEmpty ? null : _issue,
                 child: Text(
                   patientState.isIssuingCard ? l10n.issuing : l10n.generateButton,
@@ -214,16 +214,16 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               ),
             ),
             if (patientState.isIssuingCard)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Center(child: CircularProgressIndicator(color: context.palette.primary)),
               ),
             if (card != null) _EmergencyCardResult(onRevoke: _revoke),
             const SizedBox(height: 20),
             Center(
               child: TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text('← ${l10n.back}', style: const TextStyle(color: AppColors.textMuted)),
+                child: Text('← ${l10n.back}', style: TextStyle(color: context.palette.textMuted)),
               ),
             ),
           ],
@@ -250,6 +250,10 @@ class _EmergencyCardResult extends StatelessWidget {
         ? DateFormat('d MMM yyyy, h:mm a', Localizations.localeOf(context).toString()).format(expiry)
         : card.grantValidUntil;
 
+    // Deliberately NOT theme-aware: this is a fixed white "printable card"
+    // surface (see printNote below — the patient is meant to print/screenshot
+    // it) with a QR that needs a light quiet-zone to scan. Its contents stay
+    // on the light [AppColors] palette in both app themes for that reason.
     return Container(
       margin: const EdgeInsets.only(top: 24),
       padding: const EdgeInsets.all(20),

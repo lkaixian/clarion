@@ -9,7 +9,7 @@ class AppLocalizationsMs extends AppLocalizations {
   AppLocalizationsMs([String locale = 'ms']) : super(locale);
 
   @override
-  String get appTitle => 'MediBridge';
+  String get appTitle => 'CLARION';
 
   @override
   String get apiSettingsTooltip => 'Tetapan API';
@@ -38,7 +38,7 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      'Log masuk demo: patient@medibridge.demo / patient123 (atau No. K/P 520314-01-1234 / patient123)';
+      'Log masuk demo: patient@clarion.demo / patient123 (atau No. K/P 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -73,6 +73,12 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get forgotPasswordButton => 'Lupa kata laluan?';
+
+  @override
+  String get selfRegisterLinkPrompt => 'Pertama kali di sini?';
+
+  @override
+  String get selfRegisterLinkAction => 'Daftar';
 
   @override
   String get forgotPasswordTitle => 'Tetapkan Semula Kata Laluan';
@@ -143,6 +149,96 @@ class AppLocalizationsMs extends AppLocalizations {
       'Tidak dapat menetapkan semula kata laluan anda. Semak butiran anda atau alamat asas API dalam Tetapan.';
 
   @override
+  String get selfRegisterTitle => 'Cipta Akaun Anda';
+
+  @override
+  String get selfRegisterDetailsStepDesc =>
+      'Untuk pesakit yang belum mempunyai log masuk CLARION. Masukkan butiran anda persis seperti pada Kad Pengenalan anda — kami akan mengesahkannya dengan rekod hospital anda.';
+
+  @override
+  String get selfRegisterContinueButton => 'Teruskan';
+
+  @override
+  String get selfRegisterStartFailedGeneric =>
+      'Tidak dapat mengesahkan butiran anda. Semak apa yang anda masukkan atau alamat asas API dalam Tetapan.';
+
+  @override
+  String get selfRegisterOtpStepDesc =>
+      'Masukkan kod pengesahan 6 digit yang kami e-melkan kepada anda.';
+
+  @override
+  String get selfRegisterVerifyOtpButton => 'Sahkan Kod';
+
+  @override
+  String get selfRegisterVerifyOtpFailedGeneric =>
+      'Tidak dapat mengesahkan kod itu. Semak kod anda atau alamat asas API dalam Tetapan.';
+
+  @override
+  String get selfRegisterPhotosStepTitle => 'Sahkan Identiti Anda';
+
+  @override
+  String get selfRegisterPhotosStepDesc =>
+      'Sekarang ambil gambar yang jelas bagi bahagian hadapan dan belakang Kad Pengenalan fizikal anda. Gambar ini hanya digunakan untuk mengesahkan identiti anda dengan rekod hospital anda — kakitangan kami, bukan aplikasi ini, yang menyemak padanan.';
+
+  @override
+  String get selfRegisterFrontPhotoLabel => 'Bahagian hadapan Kad Pengenalan';
+
+  @override
+  String get selfRegisterBackPhotoLabel => 'Bahagian belakang Kad Pengenalan';
+
+  @override
+  String get selfRegisterTakePhotoButton => 'Ambil Gambar';
+
+  @override
+  String get selfRegisterRetakePhotoButton => 'Ambil Semula';
+
+  @override
+  String selfRegisterAttemptsRemaining(int count) {
+    return '$count daripada 5 percubaan berbaki';
+  }
+
+  @override
+  String get selfRegisterSubmitPhotosButton => 'Hantar Gambar';
+
+  @override
+  String get selfRegisterPhotosRequiredNote =>
+      'Sila ambil kedua-dua gambar sebelum menghantar.';
+
+  @override
+  String get selfRegisterPhotosFailedGeneric =>
+      'Tidak dapat mengesahkan gambar anda. Semak alamat asas API dalam Tetapan dan cuba lagi.';
+
+  @override
+  String get selfRegisterCameraFailed =>
+      'Tidak dapat membuka kamera. Semak kebenaran kamera dalam tetapan sistem dan cuba lagi.';
+
+  @override
+  String get selfRegisterPasswordStepDesc =>
+      'Hampir selesai. Pilih kata laluan untuk akaun baharu anda (sekurang-kurangnya 8 aksara).';
+
+  @override
+  String get selfRegisterCompleteButton => 'Cipta Akaun';
+
+  @override
+  String get selfRegisterCompleteFailedGeneric =>
+      'Tidak dapat mencipta akaun anda. Semak alamat asas API dalam Tetapan dan cuba lagi.';
+
+  @override
+  String get selfRegisterSuccessSnack =>
+      'Akaun berjaya dicipta — selamat datang ke CLARION!';
+
+  @override
+  String get selfRegisterManualRequiredTitle =>
+      'Sila Kunjungi Kaunter Pendaftaran';
+
+  @override
+  String get selfRegisterManualRequiredBody =>
+      'Kami tidak dapat mengesahkan gambar Kad Pengenalan anda selepas beberapa percubaan. Demi keselamatan anda, sila kunjungi kaunter pendaftaran secara peribadi dengan membawa Kad Pengenalan fizikal anda — kakitangan kami akan membantu menyediakan akaun anda di sana.';
+
+  @override
+  String get selfRegisterManualRequiredBackButton => 'Kembali ke Log Masuk';
+
+  @override
   String get changePasswordTitle => 'Tukar Kata Laluan';
 
   @override
@@ -160,6 +256,12 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get homeTitle => 'Rekod Kesihatan Saya';
+
+  @override
+  String get quickActionsSectionTitle => 'Tindakan Pantas';
+
+  @override
+  String get healthRecordSectionTitle => 'Rekod Perubatan Anda';
 
   @override
   String get scanSomeoneElsesCardTooltip => 'Imbas kad kecemasan orang lain';
@@ -261,6 +363,14 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get retry => 'Cuba Semula';
+
+  @override
+  String showMoreAction(int count) {
+    return 'Tunjuk $count lagi';
+  }
+
+  @override
+  String get showLessAction => 'Tunjuk kurang';
 
   @override
   String get emergencyCardTitle => 'Kad Kecemasan';
@@ -507,6 +617,18 @@ class AppLocalizationsMs extends AppLocalizations {
   String get languageLabel => 'Bahasa';
 
   @override
+  String get themeLabel => 'Tema';
+
+  @override
+  String get themeModeLight => 'Terang';
+
+  @override
+  String get themeModeDark => 'Gelap';
+
+  @override
+  String get themeModeSystem => 'Lalai sistem';
+
+  @override
   String get auditLogTitle => 'Siapa Melihat Rekod Saya';
 
   @override
@@ -523,6 +645,19 @@ class AppLocalizationsMs extends AppLocalizations {
   @override
   String get auditActorEmergencyResponderUnverified =>
       'responden kecemasan — dilaporkan sendiri, belum disahkan';
+
+  @override
+  String get auditLogLegendIntro =>
+      'Warna dan ikon menunjukkan sensitiviti setiap akses:';
+
+  @override
+  String get auditSeverityRoutine => 'Rutin';
+
+  @override
+  String get auditSeverityAttention => 'Akses kecemasan';
+
+  @override
+  String get auditSeverityCritical => 'Percubaan gagal';
 
   @override
   String get responderScanTitle => 'Imbas Kad Kecemasan';
@@ -738,4 +873,176 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get unexpectedErrorGeneric => 'Sesuatu tidak kena. Sila cuba lagi.';
+
+  @override
+  String get queueStatusButton => 'Status Giliran';
+
+  @override
+  String get queueStatusTitle => 'Status Giliran Anda';
+
+  @override
+  String yourNumberLabel(String number) {
+    return 'Nombor anda: $number';
+  }
+
+  @override
+  String nowServingLabel(String number) {
+    return 'Sedang dilayan: $number';
+  }
+
+  @override
+  String get nowServingNoneYet => 'Belum ada nombor dipanggil';
+
+  @override
+  String peopleAheadLabel(String count) {
+    return '$count orang sebelum anda';
+  }
+
+  @override
+  String get queueTicketDetailsTitle => 'Butiran Tiket';
+
+  @override
+  String get queueStatusLabel => 'Status';
+
+  @override
+  String get queueFacilityLabel => 'Kemudahan';
+
+  @override
+  String get queueDepartmentLabel => 'Jabatan';
+
+  @override
+  String get queueReasonLabel => 'Sebab';
+
+  @override
+  String get queueStatusWaiting => 'Menunggu';
+
+  @override
+  String get queueStatusCalled => 'Dipanggil';
+
+  @override
+  String get queueStatusDone => 'Selesai';
+
+  @override
+  String get queueStatusCancelled => 'Dibatalkan';
+
+  @override
+  String get noActiveQueueTicketTitle => 'Tiada tiket giliran aktif';
+
+  @override
+  String get noActiveQueueTicketDesc =>
+      'Daftar masuk di kaunter penerimaan untuk mendapatkan nombor giliran.';
+
+  @override
+  String get scanCheckinButton => 'Imbas untuk Daftar Masuk';
+
+  @override
+  String get scanCheckinTitle => 'Imbas untuk Daftar Masuk';
+
+  @override
+  String get scanCheckinDesc =>
+      'Imbas kod QR di stesen daftar masuk sendiri kaunter penerimaan, atau taip kodnya di bawah. Tiada bantuan kakitangan diperlukan — anda akan mendapat nombor giliran serta-merta.';
+
+  @override
+  String get checkinReasonLabel => 'Sebab lawatan (pilihan)';
+
+  @override
+  String get checkinReasonHint => 'cth. susulan, ujian darah';
+
+  @override
+  String get stationCodeLabel => 'Kod stesen';
+
+  @override
+  String get stationCodeHint =>
+      'cth. daripada kod bercetak di kaunter penerimaan';
+
+  @override
+  String get checkinSubmitButton => 'Daftar Masuk';
+
+  @override
+  String get checkinSubmitting => 'Mendaftar masuk…';
+
+  @override
+  String get requestRescheduleButton => 'Minta Tukar Jadual';
+
+  @override
+  String get rescheduleDialogTitle => 'Minta Penjadualan Semula';
+
+  @override
+  String get rescheduleDialogDesc =>
+      'Beritahu klinik anda jika anda tidak dapat hadir temu janji ini. Mereka akan menyemak permintaan anda dan menghubungi anda.';
+
+  @override
+  String get rescheduleReasonScheduleConflict => 'Pertindihan jadual';
+
+  @override
+  String get rescheduleReasonUnwell => 'Tidak sihat / tidak dapat bermusafir';
+
+  @override
+  String get rescheduleReasonTransport => 'Masalah pengangkutan';
+
+  @override
+  String get rescheduleReasonOther => 'Lain-lain';
+
+  @override
+  String get rescheduleOtherReasonLabel => 'Sila terangkan sebab anda';
+
+  @override
+  String get rescheduleOtherReasonRequired => 'Sila terangkan sebab anda.';
+
+  @override
+  String get rescheduleSubmitButton => 'Hantar Permintaan';
+
+  @override
+  String get rescheduleSubmitting => 'Menghantar…';
+
+  @override
+  String get reschedulePendingNote =>
+      'Permintaan tukar jadual dihantar — menunggu maklum balas klinik';
+
+  @override
+  String get rescheduleAcceptedNote =>
+      'Permintaan tukar jadual anda telah diterima.';
+
+  @override
+  String get rescheduleRejectedNote =>
+      'Permintaan tukar jadual anda telah ditolak.';
+
+  @override
+  String rescheduleClinicianNoteLabel(String note) {
+    return 'Nota klinik: $note';
+  }
+
+  @override
+  String previouslyScheduledLabel(String date) {
+    return 'Sebelum ini: $date';
+  }
+
+  @override
+  String get seniorMenuTooltip => 'Menu';
+
+  @override
+  String get seniorMenuTitle => 'Menu';
+
+  @override
+  String get seniorThemeToggleTooltip => 'Tukar tema warna';
+
+  @override
+  String get confirmSwitchToStandardTitle => 'Tukar ke Paparan Standard?';
+
+  @override
+  String get confirmSwitchToStandardBody =>
+      'Anda akan keluar daripada Mod Warga Emas dan melihat aplikasi biasa. Anda boleh menghidupkan semula Mod Warga Emas bila-bila masa daripada Tetapan.';
+
+  @override
+  String get confirmSwitchToStandardAction => 'Ya, Tukar';
+
+  @override
+  String get confirmSignOutTitle => 'Log Keluar?';
+
+  @override
+  String get confirmSignOutBody =>
+      'Anda perlu log masuk semula untuk melihat rekod kesihatan anda.';
+
+  @override
+  String get confirmSignOutAction => 'Ya, Log Keluar';
 }

@@ -1,0 +1,11 @@
+# Local bridge -- machine-specific / generated
+__pycache__/
+*.pyc
+
+# Real reader config is per-reception-PC; ship config.example.json instead
+config.json
+
+# Virtualenvs
+venv/
+.venv/
+env/

@@ -39,7 +39,7 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
-medibridge.db
+clarion.db
 
 # Environment variables & secrets
 .env
@@ -52,10 +52,22 @@ medibridge.db
 .coverage
 htmlcov/
 
-# Original files uploaded via POST /ai/digitise/{patient_id}, persisted to
-# disk so GET /patients/{id}/documents/{id}/file can serve them back. Real
-# (potentially sensitive) patient documents -- never committed.
+# Blob storage. `uploads/` is the pre-P1.6 on-disk tree; `object_store/` is
+# the LocalObjectStore root (app/storage.py) that replaced it. Both hold real
+# (potentially sensitive) patient documents / signatures / photos -- never
+# committed.
 uploads/
+object_store/
+
+# Self-registration NRIC-OCR debug dump (routers/self_registration.py's
+# _debug_save_photo, enabled only via SELF_REGISTER_DEBUG_SAVE_DIR). Holds
+# real photographed MyKad images + the OCR'd name/NRIC/address text -- must
+# never be committed. The default dump dir is backend/_debug_photos/; a
+# custom SELF_REGISTER_DEBUG_SAVE_DIR must be pointed outside the repo.
+_debug_photos/
 
 # Pre-migration SQLite backups (see main.py's _backup_sqlite_file_before_migration)
 backups/
+
+# SQLite->MariaDB migration reconciliation reports (db/migrate_sqlite_to_mariadb.py)
+db/migration_report_*.txt

@@ -20,7 +20,7 @@ from typing import Optional
 
 import requests
 
-logger = logging.getLogger("medibridge.email")
+logger = logging.getLogger("clarion.email")
 
 _REQUEST_TIMEOUT_SECONDS = 10
 
@@ -35,7 +35,7 @@ def _mailgun_config() -> Optional[dict]:
         return None
 
     base_url = os.environ.get("MAILGUN_API_BASE_URL", "https://api.mailgun.net/v3")
-    sender = os.environ.get("MAILGUN_SENDER_EMAIL") or f"MediBridge <noreply@{domain}>"
+    sender = os.environ.get("MAILGUN_SENDER_EMAIL") or f"CLARION <noreply@{domain}>"
     return {
         "api_key": api_key,
         "domain": domain,
@@ -58,20 +58,20 @@ def send_password_reset_otp_email(to_email: str, otp_code: str, patient_name: st
         )
         return False
 
-    subject = "Your MediBridge password reset code"
+    subject = "Your CLARION password reset code"
     text_body = (
         f"Hello {patient_name},\n\n"
-        f"Your MediBridge password reset code is: {otp_code}\n\n"
+        f"Your CLARION password reset code is: {otp_code}\n\n"
         "This code expires in 10 minutes. If you did not request a "
         "password reset, you can safely ignore this email.\n\n"
-        "-- MediBridge"
+        "-- CLARION"
     )
     html_body = (
         f"<p>Hello {patient_name},</p>"
-        f"<p>Your MediBridge password reset code is: <strong>{otp_code}</strong></p>"
+        f"<p>Your CLARION password reset code is: <strong>{otp_code}</strong></p>"
         "<p>This code expires in 10 minutes. If you did not request a "
         "password reset, you can safely ignore this email.</p>"
-        "<p>-- MediBridge</p>"
+        "<p>-- CLARION</p>"
     )
 
     url = f"{config['base_url']}/{config['domain']}/messages"
@@ -97,4 +97,62 @@ def send_password_reset_otp_email(to_email: str, otp_code: str, patient_name: st
         return False
     except requests.RequestException:
         logger.exception("send_password_reset_otp_email: Mailgun request failed")
+        return False
+
+
+def send_self_registration_otp_email(to_email: str, otp_code: str, patient_name: str) -> bool:
+    """Sibling of send_password_reset_otp_email above, adjusted copy for
+    the self-service registration flow (POST /auth/self-register/start) --
+    same Mailgun call shape, same "never raise, log + return False, the
+    caller's HTTP response shape must not change either way" contract (see
+    module docstring). Kept as a separate function rather than a shared one
+    with a copy-text parameter so each flow's email copy can be edited
+    independently without a risk of accidentally changing the other's."""
+    config = _mailgun_config()
+    if config is None:
+        logger.warning(
+            "send_self_registration_otp_email: Mailgun not configured "
+            "(MAILGUN_API_KEY/MAILGUN_DOMAIN unset) -- email not sent."
+        )
+        return False
+
+    subject = "Your CLARION registration verification code"
+    text_body = (
+        f"Hello {patient_name},\n\n"
+        f"Your CLARION account registration verification code is: {otp_code}\n\n"
+        "This code expires in 10 minutes. If you did not request to "
+        "register a CLARION account, you can safely ignore this email.\n\n"
+        "-- CLARION"
+    )
+    html_body = (
+        f"<p>Hello {patient_name},</p>"
+        f"<p>Your CLARION account registration verification code is: <strong>{otp_code}</strong></p>"
+        "<p>This code expires in 10 minutes. If you did not request to "
+        "register a CLARION account, you can safely ignore this email.</p>"
+        "<p>-- CLARION</p>"
+    )
+
+    url = f"{config['base_url']}/{config['domain']}/messages"
+    try:
+        response = requests.post(
+            url,
+            auth=("api", config["api_key"]),
+            data={
+                "from": config["sender"],
+                "to": to_email,
+                "subject": subject,
+                "text": text_body,
+                "html": html_body,
+            },
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        if 200 <= response.status_code < 300:
+            return True
+        logger.error(
+            "send_self_registration_otp_email: Mailgun returned status=%s body=%s",
+            response.status_code, response.text[:500],
+        )
+        return False
+    except requests.RequestException:
+        logger.exception("send_self_registration_otp_email: Mailgun request failed")
         return False

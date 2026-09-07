@@ -1,6 +1,7 @@
 """
 Self-service staff clock-in/clock-out. Any staff member (admin, clinician,
-records_officer) can clock themselves in/out here -- this router is
+records_officer, pharmacist, receptionist) can clock themselves in/out here
+-- this router is
 deliberately "for yourself only", it never accepts a target user_id from the
 client. The admin-only READ-ONLY roster view of OTHER staff's live clock
 status (GET /admin/staff, GET /admin/staff/{user_id}/clock-history) lives in
@@ -59,7 +60,7 @@ def _get_clock_status(db: Session, user_id: str) -> schemas.ClockStatusOut:
 @router.post("/clock-in", response_model=schemas.ClockStatusOut)
 def clock_in(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer")),
+    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer", "pharmacist", "receptionist")),
 ):
     if not current_user.facility:
         # Same message convention as admin.py::_require_facility's
@@ -98,7 +99,7 @@ def clock_in(
 @router.post("/clock-out", response_model=schemas.ClockStatusOut)
 def clock_out(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer")),
+    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer", "pharmacist", "receptionist")),
 ):
     open_event = (
         db.query(models.StaffClockEvent)
@@ -111,8 +112,23 @@ def clock_out(
     if not open_event:
         raise HTTPException(status_code=409, detail="You are not currently clocked in.")
 
-    open_event.clock_out_at = datetime.utcnow()
+    now = datetime.utcnow()
+    open_event.clock_out_at = now
     db.add(open_event)
+
+    # Clocking out withdraws the clinician's "My Room" worklist -- release any
+    # consultation-room claim they were holding so the Bilik frees up for the
+    # next shift (see routers/reception.py's room-claim section). Kept here
+    # rather than in reception.py so a clock-out through ANY path always does
+    # it; the reverse dependency direction (reception imports staff) means we
+    # touch models.RoomClaim directly instead of importing back.
+    for claim in (
+        db.query(models.RoomClaim)
+        .filter(models.RoomClaim.user_id == current_user.id, models.RoomClaim.released_at.is_(None))
+        .all()
+    ):
+        claim.released_at = now
+
     db.commit()
 
     log_access(
@@ -125,7 +141,7 @@ def clock_out(
 @router.get("/clock-status", response_model=schemas.ClockStatusOut)
 def get_clock_status(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer")),
+    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer", "pharmacist", "receptionist")),
 ):
     """Read-only status check, no side effects -- doesn't log an access,
     same reasoning as emergency.py::get_current_card_status's docstring

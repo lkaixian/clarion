@@ -5,7 +5,20 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  ApiException(this.message, {this.statusCode});
+  /// The raw decoded JSON response body, when the backend returned one and
+  /// it was shaped as a `Map` (e.g. `{"detail": "...", "next_step": "...",
+  /// "photo_attempts_remaining": 3}`). Most call sites only need
+  /// [message]/[statusCode] and can ignore this — it exists for the
+  /// self-service registration photo-verification step
+  /// (`ApiClient.selfRegisterVerifyPhotos`), where a failure response
+  /// carries extra structured fields (`next_step`,
+  /// `photo_attempts_remaining`) the UI needs beyond just a display
+  /// string, and there was previously no way for a caller to reach them.
+  /// `null` for non-Map bodies or when there's no response at all (e.g. a
+  /// connection error).
+  final Map<String, dynamic>? data;
+
+  ApiException(this.message, {this.statusCode, this.data});
 
   /// Shown instead of interpolating a raw/unexpectedly-shaped backend
   /// `detail` value (e.g. a List — either a FastAPI 422 validation-error
@@ -18,6 +31,7 @@ class ApiException implements Exception {
   factory ApiException.fromDioException(DioException e) {
     final status = e.response?.statusCode;
     final data = e.response?.data;
+    final responseData = data is Map<String, dynamic> ? data : null;
 
     String detail = e.message ?? 'Network error';
     final rawDetail = data is Map ? data['detail'] : null;
@@ -57,15 +71,18 @@ class ApiException implements Exception {
         );
       default:
         if (status == 401) {
-          return ApiException('Your session has expired. Please sign in again.', statusCode: status);
+          return ApiException('Your session has expired. Please sign in again.',
+              statusCode: status, data: responseData);
         }
         if (status == 403) {
-          return ApiException(detail.isNotEmpty ? detail : 'Not authorized to view this.', statusCode: status);
+          return ApiException(detail.isNotEmpty ? detail : 'Not authorized to view this.',
+              statusCode: status, data: responseData);
         }
         if (status == 404) {
-          return ApiException(detail.isNotEmpty ? detail : 'Not found.', statusCode: status);
+          return ApiException(detail.isNotEmpty ? detail : 'Not found.',
+              statusCode: status, data: responseData);
         }
-        return ApiException(detail, statusCode: status);
+        return ApiException(detail, statusCode: status, data: responseData);
     }
   }
 

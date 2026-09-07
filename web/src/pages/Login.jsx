@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login } from "../api/client";
+import { landingPathFor } from "../lib/access";
 
 export default function Login() {
-  const [email, setEmail] = useState("clinician@medibridge.demo");
+  const [email, setEmail] = useState("clinician@clarion.demo");
   const [password, setPassword] = useState("clinician123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,18 +17,13 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await login(email, password);
-      // BUG FIX: this console used to always navigate to /patients (the
-      // staff patient-list page, GET /patients on the backend requires
-      // admin/records_officer/clinician) regardless of who just logged in.
-      // A patient account would land there and immediately get a 403 from
-      // the backend, with no way to actually reach their own record. A
-      // patient's own record view is /patients/{their own patient_id},
-      // which the backend already scopes correctly for them.
-      if (data.user.role === "patient" && data.user.patient_id) {
-        navigate(`/patients/${data.user.patient_id}`);
-      } else {
-        navigate("/patients");
-      }
+      // Land each user on the first page their facility actually lets their
+      // role open (see landingPathFor / the backend's per-facility
+      // allowed_pages matrix): an admin on /admin, a receptionist on
+      // /reception, a pharmacist on /pharmacy, a clinician/records_officer on
+      // /patients, and a patient on their own record (/patients/{id}, which
+      // the backend scopes for them — they can't call the staff list).
+      navigate(landingPathFor(data.user));
     } catch (err) {
       setError("Login failed. Check credentials or that the API server is running.");
     } finally {
@@ -38,8 +34,8 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-sm border border-slate-200">
-        <h1 className="text-2xl font-bold text-blue-900 mb-1">MediBridge</h1>
-        <p className="text-sm text-slate-500 mb-6">Hospital Staff Console</p>
+        <img src="/Logo/Full Logo.png" alt="CLARION" className="w-48 mx-auto mb-2" />
+        <p className="text-sm text-slate-500 text-center mb-6">Hospital Staff Console</p>
 
         {location.state?.resetSuccess && (
           <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-4">
@@ -77,9 +73,11 @@ export default function Login() {
         </button>
 
         <p className="text-xs text-slate-400 mt-4">
-          Demo (staff): clinician@medibridge.demo / clinician123
+          Demo (staff): clinician@clarion.demo / clinician123
           <br />
-          Demo (patient): patient@medibridge.demo / patient123 (or NRIC 520314-01-1234)
+          Demo (reception): receptionist@clarion.demo / receptionist123
+          <br />
+          Demo (patient): patient@clarion.demo / patient123 (or NRIC 520314-01-1234)
         </p>
       </form>
     </div>

@@ -6,8 +6,8 @@ demo data (admin's own `facility`, medicine inventory, wards) added
 alongside the `admin` role's new "manager admin, not super admin" scoping
 (see routers/admin.py).
 
-seed.py itself won't re-apply these rows to an already-seeded medibridge.db
-(it's guarded by "does admin@medibridge.demo already exist?" and no-ops if
+seed.py itself won't re-apply these rows to an already-seeded clarion.db
+(it's guarded by "does admin@clarion.demo already exist?" and no-ops if
 so) -- this script instead finds the existing demo patient by NRIC and the
 existing demo admin by email, and adds only the specific rows/fields that
 are missing, leaving all other data (passwords, audit logs, emergency
@@ -94,7 +94,7 @@ if not _has_condition("Hyperlipidemia"):
     ))
     added.append("Condition: Hyperlipidemia")
 else:
-    # One-off fix for medibridge.db files seeded by an earlier version of
+    # One-off fix for clarion.db files seeded by an earlier version of
     # this script, which set critical_for_emergency=False here (an
     # inconsistency with seed.py's own default -- see above). Idempotent:
     # only writes/commits if the stale value is actually found, so re-running
@@ -167,7 +167,7 @@ else:
 # demo gaps above, or vice versa), so each half no-ops independently.
 admin_user = (
     db.query(models.User)
-    .filter(models.User.email == "admin@medibridge.demo")
+    .filter(models.User.email == "admin@clarion.demo")
     .first()
 )
 
@@ -180,7 +180,7 @@ if admin_user is not None and not admin_user.facility:
     # see empty lists on every new /admin/* endpoint.
     admin_user.facility = "Hospital Sejahtera"
     db.add(admin_user)
-    admin_added.append("Set admin@medibridge.demo facility -> Hospital Sejahtera")
+    admin_added.append("Set admin@clarion.demo facility -> Hospital Sejahtera")
 
 
 def _has_inventory_item(drug_name: str, facility: str) -> bool:

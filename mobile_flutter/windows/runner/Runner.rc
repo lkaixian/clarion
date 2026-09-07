@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.medibridge" "\0"
+            VALUE "CompanyName", "com.clarion" "\0"
             VALUE "FileDescription", "mobile_flutter" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "mobile_flutter" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.medibridge. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.clarion. All rights reserved." "\0"
             VALUE "OriginalFilename", "mobile_flutter.exe" "\0"
             VALUE "ProductName", "mobile_flutter" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

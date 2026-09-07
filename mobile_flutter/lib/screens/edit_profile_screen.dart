@@ -116,7 +116,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _prefill(patient);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.palette.background,
       appBar: AppBar(title: Text(l10n.editProfileTitle)),
       body: SafeArea(
         child: Builder(builder: (context) {
@@ -134,7 +134,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 Text(
                   l10n.readOnlyFieldsNote,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+                  style: TextStyle(fontSize: 12, color: context.palette.textMuted, height: 1.4),
                 ),
                 const SizedBox(height: 16),
                 _ReadOnlyField(label: l10n.fullNameLabel, value: patient.fullName),
@@ -144,7 +144,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 _ReadOnlyField(label: l10n.nricLabel, value: patient.nationalId ?? '—'),
                 const SizedBox(height: 24),
                 Text(l10n.editableProfileSectionTitle,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _emailController,
@@ -160,7 +160,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(l10n.emergencyContactSectionTitle,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _emergencyNameController,
@@ -216,15 +216,15 @@ class _ReadOnlyField extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.chipBg,
+        color: context.palette.chipBg,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+          Text(label, style: TextStyle(fontSize: 11, color: context.palette.textMuted)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 15, color: AppColors.textFaint, fontWeight: FontWeight.w600)),
+          Text(value, style: TextStyle(fontSize: 15, color: context.palette.textFaint, fontWeight: FontWeight.w600)),
         ],
       ),
     );

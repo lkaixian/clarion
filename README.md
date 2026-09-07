@@ -1,169 +1,112 @@
-# MediBridge — Full Project Starter
+# CLARION
+### *(Clinical Access, Records & Information Operations Network)*
 
-An emergency-first, interoperable health record continuity system.
-Backend, AI layer, web console, and mobile app — all wired together and
-verified working end to end.
-
-## What's in this repo
+Emergency-first, interoperable health record continuity system. Backend, AI
+layer, web console, and mobile app, wired together.
 
 ```
-medibridge/
-├── backend/     FastAPI + SQLite. FHIR-lite data model, auth, AI endpoints,
-│                emergency QR/card system, audit logging. TESTED AND WORKING.
-├── web/         React + Tailwind hospital staff console. Builds cleanly.
-└── mobile/      React Native / Expo patient app. Syntax-verified, needs
-                 `npm install` on your machine to run (network-restricted
-                 in the environment this was built in).
+clarion/
+├── backend/         FastAPI + SQLite. FHIR-lite data model, auth, AI
+│                    endpoints, emergency QR/NFC, self-registration (NRIC
+│                    OCR), audit logging.
+├── web/             React + Tailwind hospital staff / admin console.
+├── mobile_flutter/  Flutter patient app (Android) — the maintained mobile
+│                    client. See mobile_flutter/README.md for its full
+│                    architecture, feature list, and environment notes.
+└── mobile/          Legacy React Native/Expo prototype, superseded by
+                     mobile_flutter/. Kept for reference only.
 ```
 
-## 1. Backend setup (do this first — everything else depends on it)
+## 1. Backend (start here — everything else depends on it)
 
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt   # exact pinned versions -- see requirements.txt
+python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
-cp .env.example .env              # then edit .env, see below -- REQUIRED, not optional
-python seed.py                    # creates demo admin/clinician/patient logins
+cp .env.example .env   # then edit — see below, this step is required
+python seed.py         # creates demo admin/clinician/patient logins
 uvicorn app.main:app --reload --port 8000
 ```
 
-**`.env` is now required, not optional.** Before `seed.py`/`uvicorn` will even
-start, `backend/.env` must set `SECRET_KEY` and `OTP_HMAC_KEY` (there is
-deliberately no hardcoded fallback for either — a shared, guessable secret
-baked into the source defeats the point of JWT signing / OTP hashing).
-Generate a real value for each with:
+**`backend/.env` is required.** It must set `SECRET_KEY` and `OTP_HMAC_KEY`
+(no hardcoded fallback for either, by design) — generate each with:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Paste the result into `SECRET_KEY=` and run it again for a *different*
-`OTP_HMAC_KEY=` value in `backend/.env` (copied from `.env.example` — see
-that file for the full list of variables, including the optional Mailgun
-and CORS settings). Rotating either value later invalidates every
-previously-issued JWT / any in-flight password-reset OTP — expected and
-correct, just means everyone (including the demo accounts) has to log in
-again.
+Use two *different* values. Rotating either later invalidates every
+issued JWT / in-flight OTP — expected, just means everyone re-logs in.
 
-Visit `http://localhost:8000/docs` — full interactive API documentation
-(Swagger UI), generated automatically by FastAPI. This is genuinely useful
-for your demo: you can show judges the live, documented API surface.
+Swagger UI: `http://localhost:8000/docs`.
 
-**Demo logins created by seed.py:**
+**Demo logins** (`seed.py`, only with `APP_ENV=demo` — the shipped
+`.env.example` default):
 | Role | Email | Password |
 |---|---|---|
-| Admin | admin@medibridge.demo | admin123 |
-| Clinician | clinician@medibridge.demo | clinician123 |
-| Patient | patient@medibridge.demo | patient123 |
+| Admin | admin@clarion.demo | admin123 |
+| Clinician | clinician@clarion.demo | clinician123 |
+| Pharmacist | pharmacist@clarion.demo | pharmacist123 |
+| Patient | patient@clarion.demo | patient123 (or NRIC `520314-01-1234`) |
 
-**Optional — real AI summaries instead of the rule-based fallback:**
-set `ANTHROPIC_API_KEY` in your environment before starting uvicorn. Without
-it, the handover-brief endpoint still works perfectly using a deterministic
-summary generator — genuinely fine for judging, and immune to Wi-Fi issues
-at the venue.
+Outside `APP_ENV=demo` (any real deployment), `seed.py` never uses these —
+it generates a fresh random password per account, forces a password change
+on first login, and prints each one to the console exactly once
+(Security Audit finding H3).
 
-**Optional — real OCR:**
-```bash
-sudo apt-get install tesseract-ocr   # Mac: brew install tesseract
-pip install pytesseract
-```
+**Optional integrations** (all degrade gracefully if unset):
+- `ANTHROPIC_API_KEY` — real LLM handover summaries + the primary path for
+  self-registration's NRIC photo verification. Without it: summaries fall
+  back to a deterministic generator (fine), but self-registration's OCR
+  step falls back to Tesseract-only and **will not pass** unless Tesseract
+  is also installed (see below) — the identity check fails closed rather
+  than silently skipping.
+- Tesseract OCR fallback: `sudo apt-get install tesseract-ocr` (Mac:
+  `brew install tesseract`) + `pip install pytesseract` (already in
+  `requirements.txt`).
+- Mailgun (`MAILGUN_API_KEY`/`MAILGUN_DOMAIN`) — sends real OTP emails for
+  password reset and self-registration. Without it, OTPs are generated and
+  logged server-side but not emailed.
 
-## 2. Web console setup
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Visit `http://localhost:5173`. Log in with the clinician demo account above.
-The console is already wired to the backend at `http://localhost:8000` —
-change `API_BASE` in `web/src/api/client.js` if you deploy the backend
-elsewhere.
-
-## 3. Mobile app setup
+## 2. Web console
 
 ```bash
-cd mobile
-npm install -g expo-cli   # if you don't already have it
-npm install
-npx expo start
+cd web && npm install && npm run dev
 ```
 
-Scan the QR code with the **Expo Go** app on your phone (free, App
-Store/Play Store). Log in with the patient demo account above.
+`http://localhost:5173`, log in with the clinician demo account. Wired to
+`http://localhost:8000` by default — change `API_BASE` in
+`web/src/api/client.js` if the backend is deployed elsewhere.
 
-**Important:** `localhost` in `mobile/api/client.js` won't reach your
-backend from a physical phone. Replace it with your computer's LAN IP
-(find it with `ipconfig`/`ifconfig`) — e.g. `http://192.168.1.42:8000`.
-Both devices must be on the same Wi-Fi network.
+## 3. Mobile app (Flutter — `mobile_flutter/`)
 
-## 4. Verified working (already tested for you)
+```bash
+cd mobile_flutter
+flutter pub get
+flutter run -d <device-id>
+```
 
-- ✅ Backend boots, seeds demo data, all endpoints respond correctly
-- ✅ Login → view full patient record → works
-- ✅ AI handover brief generation → works (rule-based fallback verified)
-- ✅ AI medication interaction check → correctly caught a real
-  Warfarin + Aspirin conflict prescribed across two different facilities
-  in the seeded demo patient
-- ✅ Emergency QR issuance → scan with **zero login required** → returns
-  only the pre-approved scoped fields → writes an audit log entry the
-  patient can review
-- ✅ Web console builds cleanly with `npm run build`, zero errors
-- ✅ Mobile app screens pass full JSX/syntax validation (esbuild)
+Full setup (SDK path quirks, API base URL overrides, building a release
+APK, feature list) is documented in `mobile_flutter/README.md` — read that
+before touching this app. Demo login: patient account above.
 
-## 5. Your 4-week plan, mapped to this codebase
+The legacy `mobile/` (React Native/Expo) app is not actively maintained;
+use `mobile_flutter/` unless you specifically need the RN codebase.
 
-**Week 1 — Get it running on your machine, make it yours**
-- Follow steps 1–3 above. Get all three pieces running locally.
-- Swap in your own project name/branding.
-- Read through `backend/app/models.py` — this is your entire data model.
-  Understand it before you extend it.
+## If something breaks
 
-**Week 2 — Deepen the AI layer**
-- Wire real OCR (`ai/ocr.py`) — test on 3–5 actual scanned prescription
-  photos, not just typed text.
-- If you want real LLM summaries instead of the fallback, get an Anthropic
-  or OpenAI API key and set it in your environment.
-- Expand `KNOWN_INTERACTIONS` in `ai/interactions.py` with more real drug
-  pairs — this is easy, high-visible-value work.
-
-**Week 3 — Polish the demo flow + senior-citizen mode**
-- Test the full loop end to end from the mobile app: login → view record →
-  issue emergency card → scan it as if you were the responder (use the
-  `/emergency/scan` endpoint directly via curl or Postman to simulate this
-  if you don't have a second phone).
-- Build out `SeniorModeScreen.js` further — this is your differentiation
-  story, don't leave it thin.
-- Add 2–3 more synthetic patients to `seed.py` with richer, more varied
-  histories for a more convincing demo.
-
-**Week 4 — Deploy, rehearse, prepare fallbacks**
-- Deploy the backend somewhere reachable (Render/Railway free tier) so your
-  web console and phone don't depend on your laptop's Wi-Fi during judging.
-- Update `API_BASE` in both `web/src/api/client.js` and
-  `mobile/api/client.js` to point at the deployed URL.
-- Record a backup demo video in case live Wi-Fi fails at the venue.
-- Rehearse the pitch at least 3 times, timed.
-
-## 6. If something breaks
-
-- **bcrypt error on `pip install`**: `requirements.txt` already pins
-  `bcrypt==4.0.1` — newer bcrypt versions conflict with passlib. If you're
-  installing packages manually instead of via `requirements.txt`, add
-  `bcrypt==4.0.1` explicitly.
-- **`email-validator` import error**: `pip install pydantic[email]`
-  (included in `requirements.txt`).
-- **Backend won't start / `RuntimeError` about `SECRET_KEY`**: `backend/.env`
-  is required now (see step 1 above) — copy `.env.example` to `.env` and set
-  `SECRET_KEY` / `OTP_HMAC_KEY`.
-- **CORS errors in the browser console**: by default (unset `APP_ENV` /
-  `CORS_ALLOWED_ORIGINS` in `.env`) the backend allows all origins for the
-  demo (`app/main.py`) — if you still see errors, confirm the backend is
-  actually running on port 8000. If you've set `APP_ENV`/`CORS_ALLOWED_ORIGINS`
-  to lock CORS down, make sure your web/mobile origin is actually in that
-  comma-separated list.
-- **Mobile app can't reach the backend**: almost always the `localhost` vs
-  LAN-IP issue described in step 3 above.
+- **bcrypt error on `pip install`**: `requirements.txt` pins
+  `bcrypt==4.0.1` — add it explicitly if installing packages by hand.
+- **`email-validator` import error**: `pip install pydantic[email]`.
+- **`RuntimeError` about `SECRET_KEY`**: `backend/.env` is missing/incomplete
+  — see step 1.
+- **CORS errors**: unset `APP_ENV`/`CORS_ALLOWED_ORIGINS` defaults to
+  allow-all for local dev. If you've locked it down, confirm your web/mobile
+  origin is in `CORS_ALLOWED_ORIGINS`.
+- **Mobile app can't reach the backend**: `10.0.2.2` (Android emulator) or
+  `localhost` won't work from a physical phone — use your machine's LAN IP,
+  same Wi-Fi network, set it in the app's Settings screen (no rebuild
+  needed) or via `--dart-define=API_BASE_URL=...`.
+- **Self-registration always fails at the photo step**: no OCR backend is
+  configured — see "Optional integrations" above.

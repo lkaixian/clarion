@@ -1,7 +1,7 @@
 """
 Medication Reconciliation and Interaction Support.
 
-MediBridge uses this module for two related, but distinct, purposes:
+CLARION uses this module for two related, but distinct, purposes:
 
 1. A small, rule-based pairwise drug-drug interaction (DDI) demo
    (``KNOWN_INTERACTIONS`` / ``check_interactions``). A real product would
@@ -38,6 +38,7 @@ and frontend do not need to change when a production DDI provider is added.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Any
@@ -110,6 +111,62 @@ DEFAULT_TIMEOUT = 10.0
 
 
 # ---------------------------------------------------------------------------
+# Shared HTTP client + in-process response cache
+# ---------------------------------------------------------------------------
+# Code-review follow-up 2026-09-07: the interaction-check endpoint previously called
+# resolve/normalize once per medication PER top-level function (3x the work
+# for the same drug set), spun up a brand-new httpx.AsyncClient on every
+# single request (no connection reuse), and kept no cache between requests
+# -- so every button press re-hit rxnav.nlm.nih.gov / dailymed.nlm.nih.gov
+# from scratch (~6N + N external calls) with a real risk of NIH throttling
+# the deployment.
+#
+# RxNorm identity and DailyMed label availability for a given drug name are
+# effectively static, so a 1-hour process-local TTL cache is safe and
+# removes almost all repeat traffic. The cache key always includes the
+# lookup kind so the three namespaces never collide.
+
+_CACHE_TTL_SECONDS = 3600.0
+_CACHE_MAX_ENTRIES = 5000
+_MISS = object()
+_response_cache: dict[tuple[str, str], tuple[float, Any]] = {}
+
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _cache_get(key: tuple[str, str]) -> Any:
+    hit = _response_cache.get(key)
+    if hit is None:
+        return _MISS
+    stored_at, value = hit
+    if time.monotonic() - stored_at > _CACHE_TTL_SECONDS:
+        _response_cache.pop(key, None)
+        return _MISS
+    return value
+
+
+def _cache_put(key: tuple[str, str], value: Any) -> None:
+    # Crude bound -- the real drug vocabulary is a few hundred names, so this
+    # only trips under pathological/abusive input; a full clear is fine.
+    if len(_response_cache) >= _CACHE_MAX_ENTRIES:
+        _response_cache.clear()
+    _response_cache[key] = (time.monotonic(), value)
+
+
+def _get_shared_client() -> httpx.AsyncClient:
+    """One pooled AsyncClient for the process (FastAPI runs a single event
+    loop). Recreated only if it was closed."""
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(
+            timeout=DEFAULT_TIMEOUT,
+            follow_redirects=True,
+            headers={"Accept": "application/json", "User-Agent": "CLARION/1.0"},
+        )
+    return _shared_client
+
+
+# ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
 
@@ -135,7 +192,7 @@ class NormalizedMedication:
     Canonical medication identity returned by RxNorm.
 
     `rxcui` is the RxNorm concept identifier used as the canonical key
-    throughout MediBridge.
+    throughout CLARION.
     """
 
     original_name: str
@@ -191,22 +248,10 @@ class MedicationProvider:
         """
 
         try:
-            async with httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=True,
-            ) as client:
-                response = await client.get(
-                    url,
-                    params=params,
-                    headers={
-                        "Accept": "application/json",
-                        "User-Agent": "MediBridge/1.0",
-                    },
-                )
-
-                response.raise_for_status()
-
-                return response.json()
+            client = _get_shared_client()
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
 
         except httpx.HTTPStatusError as exc:
             raise MedicationProviderError(
@@ -243,6 +288,11 @@ class MedicationProvider:
         if not name:
             return None
 
+        cache_key = ("resolve_rxcui", name.casefold())
+        cached = _cache_get(cache_key)
+        if cached is not _MISS:
+            return cached
+
         url = f"{RXNORM_BASE_URL}/rxcui.json"
 
         data = await self._get(
@@ -256,10 +306,9 @@ class MedicationProvider:
         id_group = data.get("idGroup", {})
         rxnorm_ids = id_group.get("rxnormId", [])
 
-        if not rxnorm_ids:
-            return None
-
-        return str(rxnorm_ids[0])
+        result = str(rxnorm_ids[0]) if rxnorm_ids else None
+        _cache_put(cache_key, result)
+        return result
 
     async def get_rxcui_properties(
         self,
@@ -292,6 +341,11 @@ class MedicationProvider:
         if not rxcui.strip():
             return None
 
+        cache_key = ("get_rxcui_name", rxcui.strip())
+        cached = _cache_get(cache_key)
+        if cached is not _MISS:
+            return cached
+
         url = f"{RXNORM_BASE_URL}/rxcui/{rxcui}/properties.json"
 
         data = await self._get(url)
@@ -300,7 +354,9 @@ class MedicationProvider:
 
         name = properties.get("name")
 
-        return name.strip() if isinstance(name, str) else None
+        result = name.strip() if isinstance(name, str) else None
+        _cache_put(cache_key, result)
+        return result
 
     async def normalize_medication(
         self,
@@ -361,6 +417,11 @@ class MedicationProvider:
         if not name:
             return []
 
+        cache_key = ("search_dailymed", f"{name.casefold()}|{limit}")
+        cached = _cache_get(cache_key)
+        if cached is not _MISS:
+            return cached
+
         url = f"{DAILYMED_BASE_URL}/v2/spls.json"
 
         data = await self._get(
@@ -397,6 +458,7 @@ class MedicationProvider:
                 )
             )
 
+        _cache_put(cache_key, results)
         return results
 
 
@@ -877,7 +939,7 @@ async def reconcile_medications(
     provider: MedicationProvider | None = None,
 ) -> dict[str, Any]:
     """
-    Run the MediBridge medication reconciliation workflow.
+    Run the CLARION medication reconciliation workflow.
 
     Returns:
         {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../theme/app_theme.dart';
 
@@ -19,9 +20,14 @@ class SeniorLanguageScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final localeProvider = context.watch<LocaleProvider>();
+    final isDark = context.watch<AuthProvider>().seniorIsDark;
+    final background = isDark ? SeniorColors.background : SeniorColorsLight.background;
+    final surface = isDark ? SeniorColors.surface : SeniorColorsLight.surface;
+    final text = isDark ? SeniorColors.text : SeniorColorsLight.text;
+    final accent = isDark ? SeniorColors.accent : SeniorColorsLight.accent;
 
     return Scaffold(
-      backgroundColor: SeniorColors.background,
+      backgroundColor: background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -31,13 +37,13 @@ class SeniorLanguageScreen extends StatelessWidget {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 32),
+                    icon: Icon(Icons.arrow_back, color: text, size: 32),
                   ),
                   Expanded(
                     child: Text(
                       l10n.seniorLanguageTitle,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      style: TextStyle(color: text, fontSize: 26, fontWeight: FontWeight.w800),
                     ),
                   ),
                   const SizedBox(width: 48),
@@ -54,6 +60,9 @@ class SeniorLanguageScreen extends StatelessWidget {
                     return _LanguageTile(
                       label: kLocaleDisplayNames[locale.languageCode] ?? locale.languageCode,
                       selected: selected,
+                      surface: surface,
+                      accent: accent,
+                      unselectedText: text,
                       onTap: () async {
                         await localeProvider.setLocale(locale);
                         if (context.mounted) Navigator.of(context).pop();
@@ -71,19 +80,33 @@ class SeniorLanguageScreen extends StatelessWidget {
 }
 
 class _LanguageTile extends StatelessWidget {
-  const _LanguageTile({required this.label, required this.selected, required this.onTap});
+  const _LanguageTile({
+    required this.label,
+    required this.selected,
+    required this.surface,
+    required this.accent,
+    required this.unselectedText,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
+  final Color surface;
+  final Color accent;
+  final Color unselectedText;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    // The selected tile's own text/check colour is deliberately always
+    // black -- it sits on [accent] (a bright colour in both palettes), and
+    // black reads legibly against both the dark-mode yellow and the
+    // light-mode dark gold.
     return SizedBox(
       width: double.infinity,
       height: 84,
       child: Material(
-        color: selected ? SeniorColors.accent : SeniorColors.surface,
+        color: selected ? accent : surface,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
@@ -96,7 +119,7 @@ class _LanguageTile extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: selected ? Colors.black : Colors.white,
+                      color: selected ? Colors.black : unselectedText,
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
                     ),

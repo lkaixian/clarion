@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'emergency_scanner_screen.dart';
 import 'forgot_password_screen.dart';
+import 'self_register_screen.dart';
 import 'settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,7 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // email address or a patient's NRIC (Patient.national_id) — same field,
   // same endpoint, same response shape either way. Field/controller kept
   // generically named for that reason.
-  final _identifierController = TextEditingController(text: 'patient@medibridge.demo');
+  final _identifierController = TextEditingController(text: 'patient@clarion.demo');
   final _passwordController = TextEditingController(text: 'patient123');
   bool _obscure = true;
 
@@ -71,10 +72,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.palette.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textMuted,
+        foregroundColor: context.palette.textMuted,
         elevation: 0,
         actions: [
           IconButton(
@@ -92,16 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  l10n.appTitle,
-                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.primary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  l10n.loginSubtitle,
-                  style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
-                  textAlign: TextAlign.center,
+                Image.asset(
+                  'assets/images/clarion_logo_full.png',
+                  width: 200,
                 ),
                 const SizedBox(height: 24),
                 // Reachable without signing in at all — this is for
@@ -112,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.emergency,
+                      backgroundColor: context.palette.emergency,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                     ),
                     onPressed: () => Navigator.of(context)
@@ -124,26 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    l10n.scanEmergencyCardSubtitle,
-                    style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
                 const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(l10n.orSignInDivider, style: const TextStyle(fontSize: 12, color: AppColors.textFaint)),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 16),
                 TextField(
                   controller: _identifierController,
                   keyboardType: TextInputType.text,
@@ -164,15 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
-                    child: Text(l10n.forgotPasswordButton, style: const TextStyle(fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -186,52 +153,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Text(l10n.signIn),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.chipBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    l10n.demoLoginHint,
-                    style: const TextStyle(fontSize: 12, color: AppColors.primary),
-                    textAlign: TextAlign.center,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                    child: Text(l10n.forgotPasswordButton, style: const TextStyle(fontSize: 13)),
                   ),
                 ),
-                const SizedBox(height: 24),
+                // Self-service registration entry point — near, not
+                // replacing, the Forgot password link above. Today only
+                // staff can create a patient login in person via the web
+                // console; this is the self-service alternative (NRIC-OCR
+                // identity verification, see SelfRegisterScreen).
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(l10n.seniorPrompt,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
-                    ),
+                    Text(l10n.selfRegisterLinkPrompt,
+                        style: TextStyle(fontSize: 13, color: context.palette.textMuted)),
                     TextButton(
-                      onPressed: () => auth.setPrefersSeniorMode(true),
-                      child: Text(l10n.enableSeniorMode, style: const TextStyle(fontSize: 13)),
+                      onPressed: () => Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => const SelfRegisterScreen())),
+                      child: Text(l10n.selfRegisterLinkAction, style: const TextStyle(fontSize: 13)),
                     ),
                   ],
                 ),
-                if (auth.prefersSeniorMode)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_circle, size: 16, color: AppColors.primaryLight),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(l10n.seniorModeWillOpen,
-                              style: const TextStyle(fontSize: 12, color: AppColors.primaryLight)),
-                        ),
-                        TextButton(
-                          onPressed: () => auth.setPrefersSeniorMode(false),
-                          child: Text(l10n.undo, style: const TextStyle(fontSize: 12)),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
           ),

@@ -20,12 +20,20 @@ class AuthProvider extends ChangeNotifier {
   final TokenStorage _tokenStorage;
 
   static const _seniorPrefKey = 'mb_prefers_senior_mode';
+  static const _seniorIsDarkKey = 'mb_senior_is_dark';
 
   AuthStatus status = AuthStatus.unknown;
   MBUser? user;
   bool isBusy = false;
   String? error;
   bool prefersSeniorMode = false;
+
+  /// Which of [SeniorColors] (dark, default) vs [SeniorColorsLight] the
+  /// Senior Mode screens should use — persisted the same way as
+  /// [prefersSeniorMode]. Defaults to `true` (dark) so existing users see
+  /// no visual change until they explicitly toggle it via the light/dark
+  /// button on SeniorHomeScreen.
+  bool seniorIsDark = true;
 
   /// Set by [forceLogout] (never by the deliberate [logout]) so LoginScreen
   /// can show a one-time "you were signed out" message instead of silently
@@ -51,6 +59,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     prefersSeniorMode = prefs.getBool(_seniorPrefKey) ?? false;
+    seniorIsDark = prefs.getBool(_seniorIsDarkKey) ?? true;
 
     final token = await _tokenStorage.readToken();
     final userJson = await _tokenStorage.readUser();
@@ -72,6 +81,14 @@ class AuthProvider extends ChangeNotifier {
       final token = data['access_token'] as String;
       final userJson = data['user'] as Map<String, dynamic>;
       await _tokenStorage.saveToken(token);
+      // P2.5 (Security Audit M4): native clients get the refresh token as a
+      // plain JSON field (the web console's equivalent is an HttpOnly
+      // cookie instead -- see schemas.Token's docstring); stored in the OS
+      // keychain via TokenStorage, same as the access token.
+      final refreshToken = data['refresh_token'] as String?;
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _tokenStorage.saveRefreshToken(refreshToken);
+      }
       await _tokenStorage.saveUser(userJson);
       user = MBUser.fromJson(userJson);
       status = AuthStatus.authenticated;
@@ -135,7 +152,35 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Same effect as a successful [login], but for a caller that already
+  /// has a `POST /auth/login`-shaped response in hand from a *different*
+  /// endpoint — currently only `POST /auth/self-register/complete`, which
+  /// deliberately returns the identical `{access_token, token_type,
+  /// user}` shape so a freshly self-registered patient is signed straight
+  /// in, exactly like a normal login, rather than being bounced back to
+  /// the login screen to sign in again with the password they just chose.
+  /// See SelfRegisterScreen.
+  Future<void> completeWithLoginResponse(Map<String, dynamic> data) async {
+    final token = data['access_token'] as String;
+    final userJson = data['user'] as Map<String, dynamic>;
+    await _tokenStorage.saveToken(token);
+    final refreshToken = data['refresh_token'] as String?;
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await _tokenStorage.saveRefreshToken(refreshToken);
+    }
+    await _tokenStorage.saveUser(userJson);
+    user = MBUser.fromJson(userJson);
+    status = AuthStatus.authenticated;
+    error = null;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
+    // Best-effort server-side revocation (Security Audit M4) BEFORE
+    // clearing local storage -- once cleared, the refresh token this call
+    // needs is gone. Never blocks/fails the actual sign-out on a network
+    // problem; see ApiClient.logout's own doc comment.
+    await _api.logout();
     await _tokenStorage.clear();
     user = null;
     status = AuthStatus.unauthenticated;
@@ -153,6 +198,7 @@ class AuthProvider extends ChangeNotifier {
   /// Sign Out button on Home, which goes through plain [logout] and shows
   /// nothing extra.
   Future<void> forceLogout() async {
+    await _api.logout(); // best-effort -- see AuthProvider.logout's doc comment
     await _tokenStorage.clear();
     user = null;
     status = AuthStatus.unauthenticated;
@@ -171,6 +217,15 @@ class AuthProvider extends ChangeNotifier {
     prefersSeniorMode = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_seniorPrefKey, value);
+    notifyListeners();
+  }
+
+  /// Flips the Senior Mode colour palette between [SeniorColors] (dark) and
+  /// [SeniorColorsLight] — see [seniorIsDark] doc comment.
+  Future<void> setSeniorIsDark(bool value) async {
+    seniorIsDark = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_seniorIsDarkKey, value);
     notifyListeners();
   }
 }
