@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
+import Watermark from "../components/Watermark";
+import SignaturePad from "../components/SignaturePad";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
   revokeEmergencyCard, getCurrentCardStatus,
@@ -10,6 +12,9 @@ import {
   issuePatientAccount, updateOwnProfile, refreshCurrentUser,
   digitiseDocument, getDocumentDetail, getDocumentFileBlob,
   getAppointments, createAppointment, updateAppointment,
+  rescheduleAppointment, acceptRescheduleRequest, rejectRescheduleRequest,
+  addPatientAnnotation, getAnnotationSignatureBlob, getStaffSignatureBlob,
+  getMySignatureBlob,
 } from "../api/client";
 
 const PROFILE_FIELD_LABELS = {
@@ -42,6 +47,9 @@ const RECORD_FIELD_CONFIG = {
       { key: "drug_name", label: "Drug name", type: "text", required: true },
       { key: "dosage", label: "Dosage", type: "text", placeholder: "e.g. 500mg" },
       { key: "frequency", label: "Frequency", type: "text", placeholder: "e.g. twice daily" },
+      // The prescriber — often an external clinic. Informational and editable;
+      // it is NOT what governs who can edit this record (the recording facility
+      // is, tracked server-side).
       { key: "prescribed_by_facility", label: "Prescribing facility", type: "text" },
       { key: "start_date", label: "Start date", type: "date" },
       { key: "active", label: "Currently active", type: "checkbox", default: true },
@@ -62,7 +70,9 @@ const RECORD_FIELD_CONFIG = {
     label: "Visit / Transfer",
     addFn: addEncounter, updateFn: updateEncounter,
     fields: [
-      { key: "facility_name", label: "Facility name", type: "text", required: true },
+      // Authoring facility for the immutability guard — set at creation, not
+      // editable afterwards (backend rejects it on PATCH). Read-only on edit.
+      { key: "facility_name", label: "Facility name", type: "text", required: true, addOnly: true },
       { key: "encounter_type", label: "Type", type: "select", options: ["outpatient", "inpatient", "emergency", "transfer"], default: "outpatient" },
       { key: "reason", label: "Reason for visit", type: "textarea" },
       { key: "notes", label: "Notes", type: "textarea" },
@@ -74,6 +84,37 @@ const DOC_TYPE_OPTIONS = ["prescription", "discharge_summary", "lab_report", "im
 const DOC_TYPE_LABELS = {
   prescription: "Prescription", discharge_summary: "Discharge summary",
   lab_report: "Lab report", imaging: "Imaging (X-ray/scan)",
+};
+
+// Staff-side reschedule reason codes (see routers/appointments.py's
+// POST .../reschedule) — "other" requires reschedule_reason_other to be a
+// non-empty string, both here (client-side) and on the backend (422
+// otherwise).
+const STAFF_RESCHEDULE_REASON_OPTIONS = [
+  { value: "doctor_unavailable", label: "Doctor unavailable" },
+  { value: "facility_or_equipment_issue", label: "Facility or equipment issue" },
+  { value: "emergency_prioritization", label: "Emergency prioritization" },
+  { value: "patient_requested", label: "Patient requested" },
+  { value: "other", label: "Other" },
+];
+const STAFF_RESCHEDULE_REASON_LABELS = Object.fromEntries(
+  STAFF_RESCHEDULE_REASON_OPTIONS.map((o) => [o.value, o.label])
+);
+
+// Patient-side reason codes for their own reschedule *requests* (filed from
+// the mobile app, not from web) — web only ever displays these, it never
+// lets staff pick one.
+const PATIENT_RESCHEDULE_REASON_LABELS = {
+  schedule_conflict: "Schedule conflict",
+  unwell_or_cannot_travel: "Unwell or cannot travel",
+  transport_issue: "Transport issue",
+  other: "Other",
+};
+
+const RESCHEDULE_REQUEST_STATUS_BADGE_CLASSES = {
+  pending: "bg-amber-100 text-amber-700",
+  accepted: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-600",
 };
 
 // Generic add/edit form for conditions/medications/allergies/encounters —
@@ -94,7 +135,9 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const missing = config.fields.find((f) => f.required && !String(values[f.key] || "").trim());
+    const missing = config.fields.find(
+      (f) => f.required && !(mode !== "add" && f.addOnly) && !String(values[f.key] || "").trim(),
+    );
     if (missing) {
       setError(`${missing.label} is required.`);
       return;
@@ -105,10 +148,19 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
       if (mode === "add") {
         await config.addFn(initial.patientId, values);
       } else {
-        await config.updateFn(initial.patientId, initial.id, values);
+        // Drop addOnly fields (authoring-facility keys) — the backend rejects
+        // them on PATCH now that they gate cross-hospital immutability.
+        const payload = Object.fromEntries(
+          config.fields.filter((f) => !f.addOnly).map((f) => [f.key, values[f.key]]),
+        );
+        await config.updateFn(initial.patientId, initial.id, payload);
       }
       onSaved();
     } catch (err) {
+      // A PATCH can still 403 even though the row rendered an Edit control
+      // (e.g. the patient was discharged between page load and save) — the
+      // backend's `detail` explains to add a new entry instead, so surface
+      // it verbatim in this same error slot rather than a generic message.
       setError(err?.response?.data?.detail || "Failed to save. Check the fields and try again.");
     } finally {
       setSaving(false);
@@ -125,7 +177,15 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
           {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
           {config.fields.map((f) => (
             <div key={f.key}>
-              {f.type === "checkbox" ? (
+              {mode !== "add" && f.addOnly ? (
+                <>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                  <p className="text-sm text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5">
+                    {String(values[f.key] || "—")}
+                    <span className="block text-xs text-slate-400">Set when the record was created — not editable here.</span>
+                  </p>
+                </>
+              ) : f.type === "checkbox" ? (
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -598,6 +658,119 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
   );
 }
 
+// Staff-only reschedule for a single (still-"scheduled") appointment —
+// picks a new date/time and a reason code, mirroring AppointmentModal's
+// shell/classes and datetime-local <-> ISO handling above rather than
+// inventing a different look for it.
+function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
+  const [scheduledAt, setScheduledAt] = useState(""); // raw <input type="datetime-local"> value
+  const [reasonCode, setReasonCode] = useState(STAFF_RESCHEDULE_REASON_OPTIONS[0].value);
+  const [reasonOther, setReasonOther] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!scheduledAt) {
+      setError("New date & time is required.");
+      return;
+    }
+    const newDate = new Date(scheduledAt);
+    if (Number.isNaN(newDate.getTime()) || newDate.getTime() <= Date.now()) {
+      setError("New date & time must be in the future.");
+      return;
+    }
+    if (reasonCode === "other" && !reasonOther.trim()) {
+      setError("Please describe the reason when selecting \"Other\".");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await rescheduleAppointment(patientId, appointment.id, {
+        // datetime-local carries no timezone suffix, so both the browser
+        // and this Date constructor treat it as local time — toISOString()
+        // then hands the backend the correct absolute instant regardless
+        // of what timezone the server itself runs in (same convention as
+        // AppointmentModal above).
+        new_scheduled_at: newDate.toISOString(),
+        reason_code: reasonCode,
+        reason_other: reasonCode === "other" ? reasonOther.trim() : null,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to reschedule. Check the fields and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
+        <p className="text-xs text-slate-400 mb-4">
+          {appointment.facility_name}{appointment.venue && ` — ${appointment.venue}`} · currently{" "}
+          {formatAppointmentTime(appointment.scheduled_at)}
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              New date &amp; time<span className="text-red-600"> *</span>
+            </label>
+            <input
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Reason<span className="text-red-600"> *</span>
+            </label>
+            <select
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={reasonCode}
+              onChange={(e) => setReasonCode(e.target.value)}
+            >
+              {STAFF_RESCHEDULE_REASON_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {reasonCode === "other" && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Please describe<span className="text-red-600"> *</span>
+              </label>
+              <textarea
+                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={2}
+                value={reasonOther}
+                onChange={(e) => setReasonOther(e.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // No date library in this codebase (see the low-dependency style
 // throughout this file) — a plain toLocaleString() matches every other
 // timestamp here that's rendered straight from whatever the browser's
@@ -611,10 +784,19 @@ function formatAppointmentTime(iso) {
 // staff-only on the backend, so isStaff gates both actions here too.
 function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
   const [showAddModal, setShowAddModal] = useState(false);
+  // Which appointment (if any) currently has the reschedule modal open —
+  // holds the whole appointment object (RescheduleModal needs it for its
+  // header) rather than just an id.
+  const [rescheduling, setRescheduling] = useState(null);
   // Reminders are metadata, not the main content of a row — collapsed by
   // default per-appointment, expandable on demand.
   const [expandedReminders, setExpandedReminders] = useState({});
   const [busyId, setBusyId] = useState(null);
+  // Separate busy flag for accept/reject on a reschedule *request* — keyed
+  // by request id, distinct from busyId (cancel/reschedule) above since a
+  // single appointment row can show both an appointment-level action and a
+  // request-level action at once.
+  const [requestBusyId, setRequestBusyId] = useState(null);
 
   async function cancelAppointment(appt) {
     if (!confirm(`Cancel the appointment at ${appt.facility_name} on ${formatAppointmentTime(appt.scheduled_at)}?`)) return;
@@ -626,6 +808,34 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
       alert(e?.response?.data?.detail || "Failed to cancel appointment.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function acceptRequest(appt, request) {
+    setRequestBusyId(request.id);
+    try {
+      await acceptRescheduleRequest(patientId, appt.id, request.id);
+      onChanged();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to accept reschedule request.");
+    } finally {
+      setRequestBusyId(null);
+    }
+  }
+
+  async function rejectRequest(appt, request) {
+    const note = prompt("Optional note to the patient explaining why (leave blank for none):");
+    // prompt() returns null on Cancel — treat that as "don't reject after all",
+    // same as this file's other prompt()-gated flows.
+    if (note === null) return;
+    setRequestBusyId(request.id);
+    try {
+      await rejectRescheduleRequest(patientId, appt.id, request.id, { clinician_note: note || null });
+      onChanged();
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Failed to reject reschedule request.");
+    } finally {
+      setRequestBusyId(null);
     }
   }
 
@@ -659,6 +869,13 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                       {a.facility_name}{a.venue && ` — ${a.venue}`}
                     </p>
                     <p className="text-xs text-slate-400">{formatAppointmentTime(a.scheduled_at)}</p>
+                    {a.previous_scheduled_at && (
+                      <p className="text-xs text-slate-400 italic">
+                        Previously: {formatAppointmentTime(a.previous_scheduled_at)}
+                        {a.reschedule_reason_code && ` — ${STAFF_RESCHEDULE_REASON_LABELS[a.reschedule_reason_code] || a.reschedule_reason_code}`}
+                        {a.reschedule_reason_other && `: ${a.reschedule_reason_other}`}
+                      </p>
+                    )}
                     {a.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {a.reason}</p>}
                     {a.fasting_required && (
                       <p className="text-xs text-amber-700 font-medium mt-0.5">
@@ -670,13 +887,24 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                     )}
                   </div>
                   {isStaff && !cancelled && (
-                    <button
-                      onClick={() => cancelAppointment(a)}
-                      disabled={busyId === a.id}
-                      className="text-xs text-red-700 whitespace-nowrap"
-                    >
-                      {busyId === a.id ? "Cancelling..." : "Cancel"}
-                    </button>
+                    <div className="flex gap-2 whitespace-nowrap">
+                      {a.status === "scheduled" && (
+                        <button
+                          onClick={() => setRescheduling(a)}
+                          disabled={busyId === a.id}
+                          className="text-xs text-blue-700"
+                        >
+                          Reschedule
+                        </button>
+                      )}
+                      <button
+                        onClick={() => cancelAppointment(a)}
+                        disabled={busyId === a.id}
+                        className="text-xs text-red-700"
+                      >
+                        {busyId === a.id ? "Cancelling..." : "Cancel"}
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -703,6 +931,49 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                     )}
                   </div>
                 )}
+
+                {/* The PATIENT's own reschedule request (filed from the mobile
+                    app, not from web) — web's job is only to show it and let
+                    staff accept/reject while it's pending. */}
+                {a.latest_reschedule_request && (
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-medium text-slate-600">Patient requested reschedule</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${RESCHEDULE_REQUEST_STATUS_BADGE_CLASSES[a.latest_reschedule_request.status] || "bg-slate-100 text-slate-600"}`}>
+                        {a.latest_reschedule_request.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Reason: {PATIENT_RESCHEDULE_REASON_LABELS[a.latest_reschedule_request.reason_code] || a.latest_reschedule_request.reason_code}
+                      {a.latest_reschedule_request.reason_other && ` — ${a.latest_reschedule_request.reason_other}`}
+                    </p>
+
+                    {a.latest_reschedule_request.status === "pending" && isStaff ? (
+                      <div className="flex gap-3 mt-1">
+                        <button
+                          onClick={() => acceptRequest(a, a.latest_reschedule_request)}
+                          disabled={requestBusyId === a.latest_reschedule_request.id}
+                          className="text-xs text-green-700"
+                        >
+                          {requestBusyId === a.latest_reschedule_request.id ? "Working..." : "Accept"}
+                        </button>
+                        <button
+                          onClick={() => rejectRequest(a, a.latest_reschedule_request)}
+                          disabled={requestBusyId === a.latest_reschedule_request.id}
+                          className="text-xs text-red-700"
+                        >
+                          {requestBusyId === a.latest_reschedule_request.id ? "Working..." : "Reject"}
+                        </button>
+                      </div>
+                    ) : (
+                      a.latest_reschedule_request.clinician_note && (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {a.latest_reschedule_request.status === "rejected" ? "Rejected" : "Note"}: {a.latest_reschedule_request.clinician_note}
+                        </p>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -714,6 +985,15 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
           patientId={patientId}
           onClose={() => setShowAddModal(false)}
           onSaved={() => { setShowAddModal(false); onChanged(); }}
+        />
+      )}
+
+      {rescheduling && (
+        <RescheduleModal
+          patientId={patientId}
+          appointment={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onSaved={() => { setRescheduling(null); onChanged(); }}
         />
       )}
     </Section>
@@ -800,6 +1080,313 @@ function formatAuditActor(l) {
   return l.actor_facility ? `${who} · ${l.actor_facility}` : who;
 }
 
+// Edit affordance for one condition/medication/allergy/encounter row.
+// `editable` comes straight off each entry in GET /patients/{id}: it's true
+// only when the acting user's facility authored the record AND the patient
+// is currently checked in here. When it's false a PATCH to that record 403s
+// (the add-a-new-entry flow is the sanctioned way to amend), so instead of
+// a dead "Edit" button we show a subtle lock + caption naming the authoring
+// facility. A missing `editable` field (older payloads) falls back to
+// showing Edit rather than hiding it. Still gated by isStaff upstream — a
+// patient viewer never sees any edit control here.
+function RecordEditControl({ record, onEdit }) {
+  if (record.editable === false) {
+    const facility = record.authored_by_facility || "another facility";
+    return (
+      <span
+        className="inline-flex items-start gap-1 text-xs text-slate-400 max-w-[9rem] shrink-0 leading-tight"
+        title={`This record can only be edited by ${facility} while the patient is checked in there. Add a new entry to amend it.`}
+      >
+        <svg viewBox="0 0 24 24" className="w-3 h-3 mt-px shrink-0" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+        <span>Recorded by {facility} · read-only here</span>
+      </span>
+    );
+  }
+  return (
+    <button onClick={onEdit} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>
+  );
+}
+
+// Python `str(datetime)` comes back as "2026-08-27 10:15:00" (space, no
+// zone) — Chrome parses that but Safari doesn't, so fall back to the raw
+// string rather than render "Invalid Date". Same low-dependency, built-in
+// formatting approach as formatAppointmentTime above.
+function formatSignedAt(s) {
+  if (!s) return "";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleString();
+}
+
+// One glyph per annotation kind (see the backend's ANNOTATION_KINDS).
+const ANNOTATION_KIND_ICON = {
+  resolved: "✔",
+  discontinued: "⊘",
+  correction: "✎",
+  note: "🗒",
+};
+
+// Which annotation kinds a given record type can be signed off with — mirrors
+// the backend's kind/target-type cross-rules (resolved → condition only,
+// discontinued → medication only; both 400 otherwise).
+const SIGN_OFF_KINDS_BY_TYPE = {
+  condition: [
+    { value: "resolved", label: "Resolved" },
+    { value: "correction", label: "Correction" },
+    { value: "note", label: "Note" },
+  ],
+  medication: [
+    { value: "discontinued", label: "Discontinued" },
+    { value: "correction", label: "Correction" },
+    { value: "note", label: "Note" },
+  ],
+  allergy: [
+    { value: "correction", label: "Correction" },
+    { value: "note", label: "Note" },
+  ],
+  encounter: [
+    { value: "correction", label: "Correction" },
+    { value: "note", label: "Note" },
+  ],
+};
+
+// Tiny "view signature" affordance. `load` is a thunk returning a Promise of
+// an object URL (or null) — called lazily on first open so the blob is only
+// fetched if someone actually wants to see it. The URL is revoked on unmount.
+function SignatureLink({ load, label = "signature" }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const urlRef = useRef(null);
+
+  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
+
+  async function toggle() {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    if (url || failed) return;
+    try {
+      const u = await load();
+      if (u) { urlRef.current = u; setUrl(u); } else { setFailed(true); }
+    } catch {
+      setFailed(true);
+    }
+  }
+
+  return (
+    <span className="relative inline-block align-baseline">
+      <button type="button" onClick={toggle} className="text-blue-700 underline decoration-dotted">
+        {label}
+      </button>
+      {open && (
+        <span className="absolute left-0 top-full z-40 mt-1 block rounded-lg border border-slate-300 bg-white p-2 shadow-lg">
+          {failed ? (
+            <span className="whitespace-nowrap text-xs text-red-600">Signature unavailable</span>
+          ) : url ? (
+            <>
+              <img src={url} alt="signature" className="h-auto w-44 bg-white" />
+              <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-blue-700">
+                Open in new tab
+              </a>
+            </>
+          ) : (
+            <span className="whitespace-nowrap text-xs text-slate-400">Loading…</span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// The signed-off annotations stacked under one clinical-record row — one line
+// each: kind icon, note text, muted attribution, and a signature thumbnail
+// link. Newest-first ordering is whatever the backend returned.
+function AnnotationList({ patientId, annotations }) {
+  if (!annotations || annotations.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-1 border-l-2 border-slate-100 pl-2">
+      {annotations.map((a) => (
+        <div key={a.id} className="flex flex-wrap items-baseline gap-x-1 text-xs text-slate-600">
+          <span aria-hidden="true">{ANNOTATION_KIND_ICON[a.kind] || "•"}</span>
+          {a.note && <span className="text-slate-700">{a.note}</span>}
+          <span className="text-slate-400">
+            — {a.signed_by_name} ({a.signed_by_role}) · {a.facility_name} · {formatSignedAt(a.created_at)}
+          </span>
+          <SignatureLink load={() => getAnnotationSignatureBlob(patientId, a.id)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Condition status badge that respects the computed effective_status: when a
+// "resolved" sign-off exists it differs from the raw `status` column, so show
+// the raw value struck through with an arrow to the effective one.
+function ConditionStatusBadge({ condition }) {
+  const raw = condition.status;
+  const effective = condition.effective_status || raw;
+  if (effective !== raw) {
+    return (
+      <span className="text-xs">
+        <span className="text-slate-400 line-through">{raw}</span>
+        <span className="text-slate-400"> → </span>
+        <span className="font-medium text-green-700">{effective}</span>
+      </span>
+    );
+  }
+  return <span className="text-xs text-slate-400">{effective}</span>;
+}
+
+// Medication active/inactive badge. effective_active === false while the raw
+// `active` column is still true means someone signed it off as discontinued.
+function MedicationStatusBadge({ medication }) {
+  if (medication.effective_active === false && medication.active === true) {
+    return <span className="text-xs font-medium text-amber-700">(Discontinued — signed off)</span>;
+  }
+  if (!medication.active) return <span className="text-xs text-slate-400">(inactive)</span>;
+  return null;
+}
+
+// Append-only sign-off on a clinical record — POSTs a signed
+// ClinicalRecordAnnotation (never mutates the underlying row; that's the
+// whole point). The signer needs a saved signature; if they don't have one
+// the SignaturePad is shown and its PNG rides along as signature_b64, which
+// also saves it to their profile.
+function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onSaved }) {
+  const user = getCurrentUser();
+  const hasSignature = !!user?.has_signature;
+  const kinds = SIGN_OFF_KINDS_BY_TYPE[targetType];
+  const [kind, setKind] = useState(kinds[0].value);
+  const [note, setNote] = useState("");
+  const [drawn, setDrawn] = useState(null); // pad data-URL, only used when no saved signature
+  const [savedSigUrl, setSavedSigUrl] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const sigUrlRef = useRef(null);
+
+  useEffect(() => {
+    if (!hasSignature) return undefined;
+    let cancelled = false;
+    getMySignatureBlob()
+      .then((u) => {
+        if (cancelled) { if (u) URL.revokeObjectURL(u); return; }
+        sigUrlRef.current = u;
+        setSavedSigUrl(u);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [hasSignature]);
+  useEffect(() => () => { if (sigUrlRef.current) URL.revokeObjectURL(sigUrlRef.current); }, []);
+
+  // Note is optional for resolved/discontinued (the kind says it all) but
+  // required for a free-text correction/note.
+  const noteRequired = kind === "correction" || kind === "note";
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (noteRequired && !note.trim()) {
+      setError("A note is required for a correction or note sign-off.");
+      return;
+    }
+    if (!hasSignature && !drawn) {
+      setError("Draw your signature to sign off.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const body = {
+        target_type: targetType,
+        target_id: target.id,
+        kind,
+        note: note.trim() || null,
+      };
+      // Only send signature_b64 when there's nothing saved — otherwise the
+      // backend uses the profile signature and ignores this anyway.
+      if (!hasSignature && drawn) body.signature_b64 = drawn;
+      await addPatientAnnotation(patientId, body);
+      onSaved();
+    } catch (err) {
+      // 400 = illegal kind/target-type combo, 409 = no signature on file —
+      // both carry a human-readable `detail`, so surface it verbatim.
+      setError(err?.response?.data?.detail || "Failed to sign off. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold text-slate-800 mb-1">Sign off record</h3>
+        <p className="text-xs text-slate-400 mb-4">{targetLabel}</p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Kind</label>
+            <select
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+            >
+              {kinds.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Note{noteRequired
+                ? <span className="text-red-600"> *</span>
+                : <span className="text-slate-400"> (optional)</span>}
+            </label>
+            <textarea
+              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          <div className="border-t border-slate-100 pt-3">
+            <p className="text-xs text-slate-500 mb-2">Signing as {user?.full_name}</p>
+            {hasSignature ? (
+              savedSigUrl ? (
+                <img
+                  src={savedSigUrl}
+                  alt="Your signature"
+                  className="border border-slate-200 rounded-lg bg-white"
+                  style={{ width: 240, height: 94, objectFit: "contain" }}
+                />
+              ) : (
+                <p className="text-xs text-slate-400">Loading your signature…</p>
+              )
+            ) : (
+              <>
+                <p className="text-xs text-amber-700 mb-1">
+                  You have no saved signature — draw one to sign off (also saved to your profile).
+                </p>
+                <SignaturePad onChange={setDrawn} />
+              </>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {saving ? "Signing…" : "Sign off"}
+            </button>
+            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function PatientDetail() {
   const { id } = useParams();
   // The backend restricts several actions here (AI brief, interaction
@@ -843,6 +1430,9 @@ export default function PatientDetail() {
   const [busy, setBusy] = useState("");
   // { kind: 'condition'|'medication'|'allergy'|'encounter', mode: 'add'|'edit', initial } | null
   const [recordModal, setRecordModal] = useState(null);
+  // { targetType, target, targetLabel } | null — drives the append-only
+  // "Sign off…" annotation modal (separate from the in-place Edit above).
+  const [signOff, setSignOff] = useState(null);
   // In-page tab state (see TABS/TabBar above) — "overview" is the default
   // since that's what a clinician needs first when opening a patient.
   const [activeTab, setActiveTab] = useState("overview");
@@ -1024,6 +1614,7 @@ export default function PatientDetail() {
 
   return (
     <Layout>
+      <Watermark patientId={id} />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">{patient.full_name}</h1>
         <p className="text-sm text-slate-500">DOB {patient.date_of_birth} · Blood type {patient.blood_type || "unknown"}</p>
@@ -1102,11 +1693,22 @@ export default function PatientDetail() {
                     <p>
                       {c.name}{" "}
                       {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}{" "}
-                      <span className="text-xs text-slate-400">{c.status}</span>
+                      <ConditionStatusBadge condition={c} />
                     </p>
                     {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
+                    <AnnotationList patientId={id} annotations={c.annotations} />
                   </div>
-                  {isStaff && <button onClick={() => openEditRecord("condition", c)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                  {isStaff && (
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <RecordEditControl record={c} onEdit={() => openEditRecord("condition", c)} />
+                      <button
+                        onClick={() => setSignOff({ targetType: "condition", target: c, targetLabel: c.name })}
+                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                      >
+                        Sign off…
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </Section>
@@ -1117,14 +1719,25 @@ export default function PatientDetail() {
                   <div className="text-sm text-slate-700">
                     <p>
                       {m.drug_name}{" "}
-                      {!m.active && <span className="text-xs text-slate-400">(inactive)</span>}
+                      <MedicationStatusBadge medication={m} />
                     </p>
                     <p className="text-xs text-slate-400">
                       {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
                       {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
                     </p>
+                    <AnnotationList patientId={id} annotations={m.annotations} />
                   </div>
-                  {isStaff && <button onClick={() => openEditRecord("medication", m)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                  {isStaff && (
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <RecordEditControl record={m} onEdit={() => openEditRecord("medication", m)} />
+                      <button
+                        onClick={() => setSignOff({ targetType: "medication", target: m, targetLabel: m.drug_name })}
+                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                      >
+                        Sign off…
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </Section>
@@ -1135,8 +1748,19 @@ export default function PatientDetail() {
                   <div className="text-sm text-slate-700">
                     <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
                     {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
+                    <AnnotationList patientId={id} annotations={a.annotations} />
                   </div>
-                  {isStaff && <button onClick={() => openEditRecord("allergy", a)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                  {isStaff && (
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <RecordEditControl record={a} onEdit={() => openEditRecord("allergy", a)} />
+                      <button
+                        onClick={() => setSignOff({ targetType: "allergy", target: a, targetLabel: a.substance })}
+                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                      >
+                        Sign off…
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </Section>
@@ -1154,8 +1778,35 @@ export default function PatientDetail() {
                         <p className="text-xs text-slate-400">{e.started_at}</p>
                         {e.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {e.reason}</p>}
                         {e.notes && <p className="text-xs text-slate-500 mt-0.5">Notes: {e.notes}</p>}
+                        {/* Signed consultation-complete (from the clinician's
+                            "My Room" flow) — signature snapshot lives on the
+                            staff profile, not the annotation store. */}
+                        {e.signed_by_name && (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            ✔ Consultation completed — signed by {e.signed_by_name}
+                            {e.signed_by_role ? ` (${e.signed_by_role})` : ""}{" "}
+                            {e.signed_by && (
+                              <SignatureLink load={() => getStaffSignatureBlob(e.signed_by)} />
+                            )}
+                          </p>
+                        )}
+                        <AnnotationList patientId={id} annotations={e.annotations} />
                       </div>
-                      {isStaff && <button onClick={() => openEditRecord("encounter", e)} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>}
+                      {isStaff && (
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <RecordEditControl record={e} onEdit={() => openEditRecord("encounter", e)} />
+                          <button
+                            onClick={() => setSignOff({
+                              targetType: "encounter",
+                              target: e,
+                              targetLabel: `${e.facility_name} (${e.encounter_type})`,
+                            })}
+                            className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                          >
+                            Sign off…
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>
@@ -1377,6 +2028,17 @@ export default function PatientDetail() {
           initial={recordModal.initial}
           onClose={() => setRecordModal(null)}
           onSaved={handleRecordSaved}
+        />
+      )}
+
+      {signOff && (
+        <SignOffModal
+          patientId={id}
+          targetType={signOff.targetType}
+          target={signOff.target}
+          targetLabel={signOff.targetLabel}
+          onClose={() => setSignOff(null)}
+          onSaved={() => { setSignOff(null); refresh(); }}
         />
       )}
     </Layout>

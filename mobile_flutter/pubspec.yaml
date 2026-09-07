@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+2
+version: 1.3.0+5
 
 environment:
   sdk: ^3.12.1
@@ -92,6 +92,15 @@ dependencies:
   # guessing a custom URL scheme.
   external_app_launcher: ^4.0.2
 
+  # Standard, minimal package for capturing the two NRIC photos during
+  # self-service registration (lib/screens/self_register_screen.dart) via
+  # the device camera. No live camera preview is needed here (unlike
+  # mobile_scanner's QR use case) — just `ImagePicker().pickImage(source:
+  # ImageSource.camera)` returning an `XFile` to upload. The single,
+  # standard package for this exact job, same "no stacked alternatives"
+  # philosophy as every other dependency in this section.
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -102,6 +111,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -149,3 +159,27 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  assets:
+    - assets/icon/clarion_icon.png
+    - assets/images/clarion_logo_full.png
+
+# flutter_launcher_icons config: regenerates android/app/src/main/res/mipmap-*/
+# ic_launcher.png (+ the adaptive-icon XML/resources) from
+# assets/icon/clarion_icon.png (== Logo/Logo/Logo.png). Run via
+# `dart run flutter_launcher_icons`; on this machine use the space-free junction
+# `D:\flutter_sdk\bin\dart.bat run flutter_launcher_icons` (see
+# memory/android-sdk-on-d-drive.md).
+#
+# The source image is a transparent-background PNG of the bare CLARION mark.
+# `image_path` still feeds the legacy square launcher icon (transparent regions
+# show through to the launcher background). `adaptive_icon_*` additionally emits
+# an Android 8+ adaptive icon so the mark sits on a solid white tile instead of
+# floating -- the mark is dark teal/navy, which reads well on white and would
+# disappear on a navy tile. Same source PNG is reused as the foreground layer.
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon/clarion_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/clarion_icon.png"

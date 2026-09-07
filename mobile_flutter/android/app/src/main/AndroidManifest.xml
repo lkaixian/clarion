@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Required in every build variant (not just debug) because this app
-         talks to the MediBridge backend over HTTP(S) for login, patient
+         talks to the CLARION backend over HTTP(S) for login, patient
          records, and emergency card issuance. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -32,7 +32,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
-        android:label="MediBridge"
+        android:label="CLARION"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config">

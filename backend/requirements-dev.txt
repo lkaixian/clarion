@@ -1,0 +1,8 @@
+# Development / CI-only dependencies. NOT installed in the production image
+# (see backend/Dockerfile, which installs only requirements.txt).
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+-r requirements.txt
+
+pytest==9.1.1

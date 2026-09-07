@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'MediBridge';
+  String get appTitle => 'CLARION';
 
   @override
   String get apiSettingsTooltip => 'API 设置';
@@ -37,7 +37,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      '演示账号：patient@medibridge.demo / patient123（或身份证号码 520314-01-1234 / patient123）';
+      '演示账号：patient@clarion.demo / patient123（或身份证号码 520314-01-1234 / patient123）';
 
   @override
   String get loginFailedGeneric => '登录失败。请检查您的账号密码，或在设置中检查 API 地址。';
@@ -68,6 +68,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get forgotPasswordButton => '忘记密码？';
+
+  @override
+  String get selfRegisterLinkPrompt => '初次使用？';
+
+  @override
+  String get selfRegisterLinkAction => '注册';
 
   @override
   String get forgotPasswordTitle => '重设密码';
@@ -131,6 +137,88 @@ class AppLocalizationsZh extends AppLocalizations {
   String get forgotPasswordFailedGeneric => '无法重设您的密码。请检查您的资料，或在设置中检查 API 地址。';
 
   @override
+  String get selfRegisterTitle => '创建您的账号';
+
+  @override
+  String get selfRegisterDetailsStepDesc =>
+      '适用于尚未拥有 CLARION 登录账号的病患。请输入与您身份证上完全一致的资料——我们将与您的医院记录进行核对。';
+
+  @override
+  String get selfRegisterContinueButton => '继续';
+
+  @override
+  String get selfRegisterStartFailedGeneric =>
+      '无法核实您的资料。请检查您所输入的内容，或在设置中检查 API 地址。';
+
+  @override
+  String get selfRegisterOtpStepDesc => '请输入我们发送到您电邮的6位数验证码。';
+
+  @override
+  String get selfRegisterVerifyOtpButton => '验证码';
+
+  @override
+  String get selfRegisterVerifyOtpFailedGeneric =>
+      '无法验证该验证码。请检查验证码，或在设置中检查 API 地址。';
+
+  @override
+  String get selfRegisterPhotosStepTitle => '验证您的身份';
+
+  @override
+  String get selfRegisterPhotosStepDesc =>
+      '现在请拍摄您实体身份证正反两面的清晰照片。这些照片仅用于与您的医院记录核对身份——由我们的工作人员核对，而非本应用程序本身。';
+
+  @override
+  String get selfRegisterFrontPhotoLabel => '身份证正面';
+
+  @override
+  String get selfRegisterBackPhotoLabel => '身份证反面';
+
+  @override
+  String get selfRegisterTakePhotoButton => '拍照';
+
+  @override
+  String get selfRegisterRetakePhotoButton => '重新拍摄';
+
+  @override
+  String selfRegisterAttemptsRemaining(int count) {
+    return '剩余 $count/5 次尝试机会';
+  }
+
+  @override
+  String get selfRegisterSubmitPhotosButton => '提交照片';
+
+  @override
+  String get selfRegisterPhotosRequiredNote => '请先拍摄两张照片再提交。';
+
+  @override
+  String get selfRegisterPhotosFailedGeneric => '无法验证您的照片。请在设置中检查 API 地址后重试。';
+
+  @override
+  String get selfRegisterCameraFailed => '无法打开相机。请在系统设置中检查相机权限后重试。';
+
+  @override
+  String get selfRegisterPasswordStepDesc => '快完成了。请为您的新账号设置密码（至少8个字符）。';
+
+  @override
+  String get selfRegisterCompleteButton => '创建账号';
+
+  @override
+  String get selfRegisterCompleteFailedGeneric => '无法创建您的账号。请在设置中检查 API 地址后重试。';
+
+  @override
+  String get selfRegisterSuccessSnack => '账号创建成功——欢迎使用 CLARION！';
+
+  @override
+  String get selfRegisterManualRequiredTitle => '请前往登记柜台';
+
+  @override
+  String get selfRegisterManualRequiredBody =>
+      '经过多次尝试，我们仍无法核实您的身份证照片。为了您的安全，请携带实体身份证亲自前往登记柜台，我们的工作人员将协助您在现场设置账号。';
+
+  @override
+  String get selfRegisterManualRequiredBackButton => '返回登录';
+
+  @override
   String get changePasswordTitle => '更改密码';
 
   @override
@@ -148,6 +236,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get homeTitle => '我的健康记录';
+
+  @override
+  String get quickActionsSectionTitle => '快捷操作';
+
+  @override
+  String get healthRecordSectionTitle => '您的医疗记录';
 
   @override
   String get scanSomeoneElsesCardTooltip => '扫描他人的紧急卡';
@@ -248,6 +342,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get retry => '重试';
+
+  @override
+  String showMoreAction(int count) {
+    return '显示另外 $count 项';
+  }
+
+  @override
+  String get showLessAction => '收起';
 
   @override
   String get emergencyCardTitle => '紧急卡';
@@ -481,6 +583,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageLabel => '语言';
 
   @override
+  String get themeLabel => '主题';
+
+  @override
+  String get themeModeLight => '浅色';
+
+  @override
+  String get themeModeDark => '深色';
+
+  @override
+  String get themeModeSystem => '跟随系统';
+
+  @override
   String get auditLogTitle => '谁查看过我的记录';
 
   @override
@@ -496,6 +610,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get auditActorEmergencyResponderUnverified => '急救人员 — 自行填报，未经核实';
+
+  @override
+  String get auditLogLegendIntro => '颜色和图标显示每次访问的敏感程度：';
+
+  @override
+  String get auditSeverityRoutine => '常规';
+
+  @override
+  String get auditSeverityAttention => '紧急访问';
+
+  @override
+  String get auditSeverityCritical => '失败的尝试';
 
   @override
   String get responderScanTitle => '扫描紧急卡';
@@ -703,4 +829,168 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get unexpectedErrorGeneric => '出现问题，请再试一次。';
+
+  @override
+  String get queueStatusButton => '排队状态';
+
+  @override
+  String get queueStatusTitle => '您的排队状态';
+
+  @override
+  String yourNumberLabel(String number) {
+    return '您的号码：$number';
+  }
+
+  @override
+  String nowServingLabel(String number) {
+    return '现在叫号：$number';
+  }
+
+  @override
+  String get nowServingNoneYet => '尚未叫号';
+
+  @override
+  String peopleAheadLabel(String count) {
+    return '您前面还有 $count 人';
+  }
+
+  @override
+  String get queueTicketDetailsTitle => '号码详情';
+
+  @override
+  String get queueStatusLabel => '状态';
+
+  @override
+  String get queueFacilityLabel => '医疗机构';
+
+  @override
+  String get queueDepartmentLabel => '科室';
+
+  @override
+  String get queueReasonLabel => '就诊原因';
+
+  @override
+  String get queueStatusWaiting => '等候中';
+
+  @override
+  String get queueStatusCalled => '已叫号';
+
+  @override
+  String get queueStatusDone => '已完成';
+
+  @override
+  String get queueStatusCancelled => '已取消';
+
+  @override
+  String get noActiveQueueTicketTitle => '暂无排队号码';
+
+  @override
+  String get noActiveQueueTicketDesc => '请在接待处办理登记以获取排队号码。';
+
+  @override
+  String get scanCheckinButton => '扫码登记';
+
+  @override
+  String get scanCheckinTitle => '扫码登记';
+
+  @override
+  String get scanCheckinDesc => '扫描接待处自助登记站的二维码，或在下方输入代码。无需工作人员协助，您将立即获得排队号码。';
+
+  @override
+  String get checkinReasonLabel => '就诊原因（可选）';
+
+  @override
+  String get checkinReasonHint => '例如：复诊、验血';
+
+  @override
+  String get stationCodeLabel => '站点代码';
+
+  @override
+  String get stationCodeHint => '例如：接待柜台打印的代码';
+
+  @override
+  String get checkinSubmitButton => '登记';
+
+  @override
+  String get checkinSubmitting => '正在登记…';
+
+  @override
+  String get requestRescheduleButton => '申请改期';
+
+  @override
+  String get rescheduleDialogTitle => '申请改期';
+
+  @override
+  String get rescheduleDialogDesc => '让诊所知道您无法赴约。他们会审核您的申请并与您跟进。';
+
+  @override
+  String get rescheduleReasonScheduleConflict => '日程冲突';
+
+  @override
+  String get rescheduleReasonUnwell => '身体不适/无法出行';
+
+  @override
+  String get rescheduleReasonTransport => '交通问题';
+
+  @override
+  String get rescheduleReasonOther => '其他';
+
+  @override
+  String get rescheduleOtherReasonLabel => '请说明原因';
+
+  @override
+  String get rescheduleOtherReasonRequired => '请说明原因。';
+
+  @override
+  String get rescheduleSubmitButton => '提交申请';
+
+  @override
+  String get rescheduleSubmitting => '正在提交…';
+
+  @override
+  String get reschedulePendingNote => '改期申请已提交 — 等待诊所回复';
+
+  @override
+  String get rescheduleAcceptedNote => '您的改期申请已获批准。';
+
+  @override
+  String get rescheduleRejectedNote => '您的改期申请已被拒绝。';
+
+  @override
+  String rescheduleClinicianNoteLabel(String note) {
+    return '诊所备注：$note';
+  }
+
+  @override
+  String previouslyScheduledLabel(String date) {
+    return '原定时间：$date';
+  }
+
+  @override
+  String get seniorMenuTooltip => '菜单';
+
+  @override
+  String get seniorMenuTitle => '菜单';
+
+  @override
+  String get seniorThemeToggleTooltip => '切换配色主题';
+
+  @override
+  String get confirmSwitchToStandardTitle => '切换到标准视图？';
+
+  @override
+  String get confirmSwitchToStandardBody =>
+      '您将退出长者模式并查看常规应用。您可以随时在设置中重新开启长者模式。';
+
+  @override
+  String get confirmSwitchToStandardAction => '是，切换';
+
+  @override
+  String get confirmSignOutTitle => '登出？';
+
+  @override
+  String get confirmSignOutBody => '您需要重新登录才能查看您的健康记录。';
+
+  @override
+  String get confirmSignOutAction => '是，登出';
 }

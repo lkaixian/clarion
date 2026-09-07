@@ -18,7 +18,7 @@ class MissingProfileBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Material(
-      color: AppColors.chipBg,
+      color: context.palette.chipBg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -27,17 +27,17 @@ class MissingProfileBanner extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+              Icon(Icons.info_outline, color: context.palette.primary, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   l10n.missingProfileBannerText,
-                  style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500, height: 1.3),
+                  style: TextStyle(fontSize: 13, color: context.palette.primary, fontWeight: FontWeight.w500, height: 1.3),
                 ),
               ),
               IconButton(
                 tooltip: l10n.dismiss,
-                icon: const Icon(Icons.close, size: 18, color: AppColors.primary),
+                icon: Icon(Icons.close, size: 18, color: context.palette.primary),
                 onPressed: onDismiss,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),

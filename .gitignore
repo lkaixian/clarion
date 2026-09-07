@@ -1,5 +1,5 @@
 # =========================================================================
-# MediBridge Root Git Ignore
+# CLARION Root Git Ignore
 # Covers Python backend, React Native / Expo, Flutter, Vite Web, and OS / IDEs
 # =========================================================================
 
@@ -29,7 +29,7 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
-medibridge.db
+clarion.db
 
 # Expo & React Native
 .expo/
@@ -51,6 +51,19 @@ web-build/
 .env
 .env.*
 !.env.example
+!.env.docker.example
+
+# TLS material for the edge proxy (P1.9) -- never commit real keys/certs
+proxy/certs/*
+!proxy/certs/.gitkeep
+proxy/caddy_data/
+
+# Android release signing secrets (P1.13) -- never commit the real keystore
+# or its passwords. See mobile_flutter/android/key.properties.example.
+/mobile_flutter/android/key.properties
+/mobile_flutter/android/*.jks
+/mobile_flutter/android/*.keystore
+proxy/caddy_config/
 
 # Log files
 *.log
@@ -83,3 +96,21 @@ lerna-debug.log*
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# Local Claude Code workspace (per-machine commands / worktrees / settings) --
+# not shared. The .claude/worktrees/ gitlink that is already tracked stays as
+# it is; this only stops new local .claude/ contents being committed.
+.claude/
+
+# Scratch / working notes, not part of the deliverable
+gemin-text.txt
+
+# Obsidian / Claudian editor state for the healthcare/ knowledge vault -- the
+# .md notes ARE tracked, but the per-machine workspace layout, app settings,
+# and bundled plugin binaries (a ~5MB main.js) are not.
+healthcare/.obsidian/
+healthcare/.claudian/
+
+# Design source files -- large binaries, keep them out of app history
+# (use external storage / git-lfs if they must be versioned).
+*.psd

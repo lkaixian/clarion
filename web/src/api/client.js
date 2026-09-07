@@ -1,9 +1,53 @@
 import axios from "axios";
 
-// Point this at your deployed backend URL before demo day.
-export const API_BASE = "http://localhost:8000";
+// Where the backend lives. Resolved once, at load, in this order:
+//
+//   1. window.__CLARION_API_BASE__  -- written by /config.js, which the
+//      container's entrypoint.sh regenerates from the $API_BASE env var on
+//      every start (see web/entrypoint.sh, web/nginx.conf). This is how a
+//      single built image is pointed at a rotating Cloudflare-tunnel URL, or
+//      at "/api" for the same-origin nginx proxy, with no rebuild.
+//   2. import.meta.env.VITE_API_BASE  -- a build-time override for a dev who
+//      runs `npm run dev` against a non-default backend.
+//   3. http://localhost:8000  -- the local-dev default.
+//
+// A trailing slash is trimmed so `${API_BASE}/auth/login` is always clean,
+// including the "/api" proxy case ("/api/" -> "/api").
+function resolveApiBase() {
+  const candidates = [
+    typeof window !== "undefined" ? window.__CLARION_API_BASE__ : undefined,
+    import.meta.env?.VITE_API_BASE,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim().replace(/\/+$/, "");
+    }
+  }
+  // Nothing resolved. Fine in local dev; a misconfig in a real build --
+  // /config.js failed to load or shipped empty and no VITE_API_BASE was
+  // baked in. Make that loud rather than silently hitting localhost.
+  if (import.meta.env?.PROD) {
+    console.error(
+      "[CLARION] No API base configured (window.__CLARION_API_BASE__ empty, " +
+      "no VITE_API_BASE) -- falling back to http://localhost:8000. Check /config.js."
+    );
+  }
+  return "http://localhost:8000";
+}
 
-const client = axios.create({ baseURL: API_BASE });
+export const API_BASE = resolveApiBase();
+
+// P2.5 (Security Audit M4): `withCredentials: true` is what actually lets
+// the browser send/receive the HttpOnly refresh-token cookie POST
+// /auth/login sets (see backend/app/routers/auth_router.py's
+// _set_refresh_cookie) -- without it, every cookie the backend sets is
+// simply dropped by the browser on both same-origin (harmless, cookies
+// aren't required there either way) and cross-origin calls (where it
+// matters: the CORS response also needs Access-Control-Allow-Credentials,
+// which main.py now only sends when an explicit CORS_ALLOWED_ORIGINS
+// allowlist is configured -- never with the demo wildcard, which the CORS
+// spec forbids combining with credentials anyway).
+const client = axios.create({ baseURL: API_BASE, withCredentials: true });
 
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem("mb_token");
@@ -12,51 +56,100 @@ client.interceptors.request.use((config) => {
 });
 
 // Any 401 that comes back through this client means the bearer token we
-// just sent is no longer good — either it genuinely expired, or (now that
-// changing a password revokes every other already-issued token for that
-// account, see the backend JWT revocation work) it was invalidated by a
-// password change on some other device/console. Whatever page triggered
-// the call has no way to recover from that by itself, so we handle it once
-// here globally: drop the stale token and send the user back to sign-in,
-// instead of leaving every page on its own to keep re-hitting the same
-// request and showing its own generic error forever.
+// just sent is no longer good — it could genuinely be expired (now a
+// routine, frequent event: access tokens are 15 minutes, not 8 hours —
+// see the refresh handling below, which transparently recovers from this
+// exact case first) or it was invalidated some other way — a password
+// change on another device/console (which now also revokes every refresh
+// token for the account, see the backend's P2.5 work), or a real
+// server-side logout elsewhere. Whatever page triggered the call has no
+// way to recover from that by itself, so it's handled once here globally.
 //
 // EXCEPTION: POST /auth/login returns a 401 for the completely ordinary
 // "wrong email/NRIC or password" case — that is NOT a session problem, and
 // Login.jsx's own try/catch already turns it into a proper on-page error
 // message. If this interceptor fired for that response too, the user would
 // never see that message; they'd just get silently bounced back to the
-// login page they're already sitting on. The two OTP password-reset
-// endpoints get the same exclusion defensively: they require no bearer
-// token to begin with and 400 (not 401) on bad input per the backend, so a
-// 401 from them shouldn't normally happen, but it's still not a "your
-// session expired" case if it ever does.
+// login page they're already sitting on. The OTP password-reset and
+// refresh endpoints get the same exclusion defensively: the OTP ones
+// require no bearer token to begin with and 400 (not 401) on bad input per
+// the backend, and a 401 from /auth/refresh itself must fall straight
+// through to the "give up" branch below rather than trying to refresh its
+// own way out of failing.
 const UNAUTHENTICATED_AUTH_PATHS = [
   "/auth/login",
   "/auth/request-password-reset-otp",
   "/auth/reset-password-with-otp",
+  "/auth/refresh",
 ];
+
+// Single-flight refresh: if several requests 401 around the same moment
+// (e.g. a page that fires 3 API calls on mount, all with the same
+// now-expired access token), they must all await the SAME refresh call
+// rather than each independently racing the backend's single-use rotation
+// -- the second caller to actually run POST /auth/refresh would present an
+// already-rotated-away token and get treated as a reuse/compromise signal
+// (see auth.rotate_refresh_token), revoking the whole session instead of
+// just refreshing it.
+let refreshInFlight = null;
+
+function refreshAccessToken() {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+      .then(({ data }) => {
+        localStorage.setItem("mb_token", data.access_token);
+        localStorage.setItem("mb_user", JSON.stringify(data.user));
+        return data.access_token;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+function bounceToLogin() {
+  logout();
+  // Full page reload (not react-router's useNavigate) is deliberate: this
+  // module is plain JS imported outside the React tree, so there is no
+  // navigate function reachable from here to call, and no component to
+  // hook a redirect effect into. A hard reload also guarantees any
+  // in-memory state left over from the now-dead session (cached user
+  // object, component state, in-flight requests assuming the old token)
+  // gets thrown away along with it, which a client-side-only redirect
+  // wouldn't. Don't "simplify" this into useNavigate later — it isn't
+  // reachable from a non-component module like this one.
+  if (window.location.pathname !== "/") {
+    window.location.href = "/";
+  }
+}
 
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const requestUrl = error.config?.url || "";
     const isUnauthenticatedAuthCall = UNAUTHENTICATED_AUTH_PATHS.some((path) => requestUrl.includes(path));
 
     if (error.response?.status === 401 && !isUnauthenticatedAuthCall) {
-      logout();
-      // Full page reload (not react-router's useNavigate) is deliberate: this
-      // module is plain JS imported outside the React tree, so there is no
-      // navigate function reachable from here to call, and no component to
-      // hook a redirect effect into. A hard reload also guarantees any
-      // in-memory state left over from the now-dead session (cached user
-      // object, component state, in-flight requests assuming the old token)
-      // gets thrown away along with it, which a client-side-only redirect
-      // wouldn't. Don't "simplify" this into useNavigate later — it isn't
-      // reachable from a non-component module like this one.
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
+      // Try exactly once to silently recover via the refresh cookie before
+      // giving up -- `_retriedAfterRefresh` guards against retrying a
+      // request that was ALREADY retried once (refresh succeeded but the
+      // retried call itself also 401'd for some other reason -- e.g. the
+      // account was disabled between the two calls -- must not loop).
+      if (!error.config?._retriedAfterRefresh) {
+        try {
+          const newAccessToken = await refreshAccessToken();
+          error.config._retriedAfterRefresh = true;
+          error.config.headers = { ...error.config.headers, Authorization: `Bearer ${newAccessToken}` };
+          return client.request(error.config);
+        } catch {
+          // Refresh itself failed (no valid refresh token, or it was
+          // revoked) -- fall through to the same "give up" handling a
+          // pre-P2.5 expired token always got.
+        }
       }
+      bounceToLogin();
     }
 
     return Promise.reject(error);
@@ -69,15 +162,28 @@ export async function login(email, password) {
   form.append("password", password);
   const { data } = await axios.post(`${API_BASE}/auth/login`, form, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    withCredentials: true, // so the Set-Cookie refresh token is actually accepted
   });
   localStorage.setItem("mb_token", data.access_token);
   localStorage.setItem("mb_user", JSON.stringify(data.user));
+  // `data.refresh_token` is deliberately NEVER read here (or anywhere else
+  // in this file) -- it's a native-client-only field (see backend
+  // schemas.Token's docstring); the web console's refresh token lives
+  // ONLY in the HttpOnly cookie the browser already stored automatically,
+  // never in JS-reachable storage.
   return data;
 }
 
 export function logout() {
   localStorage.removeItem("mb_token");
   localStorage.removeItem("mb_user");
+  // Best-effort, fire-and-forget: revokes the refresh-token cookie
+  // server-side (Security Audit M4 -- there was no real server-side
+  // logout before P2.5). Never awaited/blocking -- the local state above
+  // is cleared unconditionally regardless of whether this succeeds, since
+  // the user-visible "am I logged out" state must never depend on a
+  // network call succeeding.
+  axios.post(`${API_BASE}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
 }
 
 export function getCurrentUser() {
@@ -94,7 +200,24 @@ export async function refreshCurrentUser() {
   return data;
 }
 
-export const listPatients = () => client.get("/patients").then((r) => r.data);
+// Backend P2.2 (Security Audit H2): GET /patients now defaults to this
+// staff member's OWN facility's known patients, paginated (limit defaults
+// to 50 server-side, capped at 200). `limit: 200` here keeps this app's
+// existing "fetch everyone, filter client-side" UI pattern working at its
+// actual demo/clinic scale without a bigger pagination rework; `skip` is
+// exposed for a future "load more" if a facility ever exceeds that.
+// `breakGlassReason` is the explicit, audited override for a genuine
+// cross-facility need (see PatientList.jsx) -- omit it to stay scoped.
+export const listPatients = ({ skip, limit = 200, breakGlassReason } = {}) =>
+  client
+    .get("/patients", {
+      params: {
+        skip,
+        limit,
+        break_glass_reason: breakGlassReason || undefined,
+      },
+    })
+    .then((r) => r.data);
 export const createPatient = (payload) => client.post("/patients", payload).then((r) => r.data);
 export const getPatient = (id) => client.get(`/patients/${id}`).then((r) => r.data);
 export const addCondition = (id, payload) => client.post(`/patients/${id}/conditions`, payload).then((r) => r.data);
@@ -207,14 +330,130 @@ export const getAdminAppointments = (includeAll) =>
   client.get("/admin/appointments", { params: { include_all: !!includeAll } }).then((r) => r.data);
 
 // Medicine inventory. is_low_stock on each row is server-computed (see
-// MedicineInventoryOut) — never re-derive it client-side.
-export const getAdminInventory = (lowStockOnly) =>
-  client.get("/admin/inventory", { params: { low_stock_only: !!lowStockOnly } }).then((r) => r.data);
+// MedicineInventoryOut) — never re-derive it client-side. `q` is the shared
+// search filter (drug-name substring OR barcode exact/prefix,
+// case-insensitive); omit it for the full list.
+export const getAdminInventory = ({ lowStockOnly = false, q } = {}) => {
+  const params = {};
+  if (lowStockOnly) params.low_stock_only = true;
+  if (q) params.q = q;
+  return client.get("/admin/inventory", { params }).then((r) => r.data);
+};
 export const createInventoryItem = (payload) => client.post("/admin/inventory", payload).then((r) => r.data);
 // Partial update — used both for the full edit modal and the quick +/-
 // restock stepper (which sends just {quantity_on_hand}).
 export const updateInventoryItem = (itemId, payload) => client.patch(`/admin/inventory/${itemId}`, payload).then((r) => r.data);
 export const deleteInventoryItem = (itemId) => client.delete(`/admin/inventory/${itemId}`).then((r) => r.data);
+
+// Pharmacy stock (routers/pharmacy.py) — pharmacist OR admin. Pharmacists
+// adjust stock volume and file catalogue-deletion requests; they cannot
+// create/edit catalogue items or open patient records. adjustStock's delta
+// is signed: > 0 restock (accrues procurement spend at unit_cost), < 0
+// dispense (no budget effect, 400 if it would go negative). unit_cost /
+// pending_delete_request on each returned item are server-computed.
+// `q` (optional): drug-name substring OR barcode exact/prefix,
+// case-insensitive — a hardware barcode scanner just types the code then
+// sends Enter into the search box. Omit for the full list.
+export const getPharmacyInventory = ({ q } = {}) =>
+  client.get("/pharmacy/inventory", { params: q ? { q } : {} }).then((r) => r.data);
+// Low-stock rows only (server-side filter — same predicate as is_low_stock).
+export const getLowStockInventory = () =>
+  client.get("/pharmacy/inventory/low-stock").then((r) => r.data);
+// { low_stock_count, pending_proposal_count } — the two counters the
+// pharmacy console badges on load.
+export const getPharmacySummary = () =>
+  client.get("/pharmacy/summary").then((r) => r.data);
+// Returns the RAW axios response (not just .data): a restock (delta > 0) on
+// an item that is NOT auto_approved comes back as HTTP 202 with a
+// PurchaseProposalOut body instead of 200 + MedicineInventoryOut, so the
+// caller has to branch on `response.status` to tell "stock changed" from
+// "proposal filed for admin approval". A duplicate identical pending
+// proposal is a 409 (rejected promise).
+export const adjustStock = (itemId, payload) =>
+  client.post(`/pharmacy/inventory/${itemId}/adjust`, payload);
+export const requestInventoryDeletion = (itemId, payload) =>
+  client.post(`/pharmacy/inventory/${itemId}/delete-request`, payload || {}).then((r) => r.data);
+
+// Purchase proposals — the pharmacist's own view (this facility's proposals,
+// newest first). status: "pending" | "approved" | "rejected" | "all".
+export const getPharmacyProposals = (status = "pending") =>
+  client.get("/pharmacy/purchase-proposals", { params: { status } }).then((r) => r.data);
+// Propose a BRAND-NEW catalogue item (restocking an existing item goes
+// through adjustStock instead). 202 + PurchaseProposalOut on success; 409 if
+// this requester already has an identical pending proposal (same name).
+export const createPurchaseProposal = (body) =>
+  client.post("/pharmacy/purchase-proposals", body).then((r) => r.data);
+
+// Admin review queue for purchase proposals (facility-scoped server-side).
+export const getAdminProposals = (status = "pending") =>
+  client.get("/admin/purchase-proposals", { params: { status } }).then((r) => r.data);
+// Approve applies the restock (existing item) or creates the item then
+// restocks it (new item) — so the inventory list must be refetched after.
+export const approvePurchaseProposal = (id) =>
+  client.post(`/admin/purchase-proposals/${id}/approve`).then((r) => r.data);
+export const rejectPurchaseProposal = (id, reason) =>
+  client.post(`/admin/purchase-proposals/${id}/reject`, { reason: reason || null }).then((r) => r.data);
+
+// Multipart medicine-photo upload (field name `file`, PNG/JPEG/WebP, ≤2MB —
+// the backend re-checks content-type + extension + magic bytes and 422s if
+// they disagree). `admin` picks the admin route vs the pharmacist one; same
+// action, different role guard. Returns the updated MedicineInventoryOut.
+export const uploadMedicineImage = (itemId, file, { admin = false } = {}) => {
+  const form = new FormData();
+  form.append("file", file);
+  const path = admin
+    ? `/admin/inventory/${itemId}/image`
+    : `/pharmacy/inventory/${itemId}/image`;
+  return client
+    .post(path, form, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
+// The medicine photo endpoint needs the same Bearer auth as everything else,
+// so it can't go straight in an <img src>. Fetch it as a blob and hand back
+// an object URL (same pattern as getDocumentFileBlob); the caller is
+// responsible for revoking that URL when the row unmounts. `imageUrl` is the
+// path straight off MedicineInventoryOut.image_url.
+export const getMedicineImageBlob = (imageUrl) =>
+  client.get(imageUrl, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+
+// Inventory deletion-request review + medicine procurement budget — both
+// admin-only (routers/admin.py). getDeleteRequests defaults to the pending
+// queue. approveDeleteRequest performs the hard delete of the item.
+export const getDeleteRequests = (status = "pending") =>
+  client.get("/admin/inventory/delete-requests", { params: { status } }).then((r) => r.data);
+export const approveDeleteRequest = (id) =>
+  client.post(`/admin/inventory/delete-requests/${id}/approve`).then((r) => r.data);
+export const rejectDeleteRequest = (id, payload) =>
+  client.post(`/admin/inventory/delete-requests/${id}/reject`, payload || {}).then((r) => r.data);
+export const getBudget = () => client.get("/admin/budget").then((r) => r.data);
+export const setBudget = (payload) => client.put("/admin/budget", payload).then((r) => r.data);
+
+// Facility profile + the CLARION network records-sharing switch
+// (routers/admin.py). The settings row is lazily created with defaults on
+// the first GET (timezone "Asia/Kuala_Lumpur", records_shared_publicly true,
+// display_name seeded to the facility name), so this never 404s. PUT accepts
+// any subset of {display_name, address, contact_phone, timezone,
+// records_shared_publicly} and rejects unknown keys — send only what changed.
+export const getHospitalSettings = () => client.get("/admin/hospital-settings").then((r) => r.data);
+export const updateHospitalSettings = (body) => client.put("/admin/hospital-settings", body).then((r) => r.data);
+
+// Per-facility role → console-page access matrix (routers/admin.py, admin-only).
+// GET returns one entry per configurable staff role (clinician, records_officer,
+// receptionist, pharmacist — each `editable: true`) plus a read-only `admin`
+// entry (`editable: false`, always full access). Each entry carries
+// `allowed_pages` (the role's current access) and `configurable_pages` (the
+// editable column set — always ["patients","reception","pharmacy"]; `admin` is
+// never an editable cell).
+//
+// PUT accepts either a single `{ role, allowed_pages }` or an array of them
+// (bulk — used by the "Save changes" button). `role` must be a configurable
+// staff role; every page must be in ["patients","reception","pharmacy"].
+// Returns the full refreshed array. 400 on an invalid role/page.
+//
+// NOTE: a user's cached `allowed_pages` only refreshes on login / GET /auth/me,
+// so edits here take effect for a given user the next time they sign in.
+export const getRolePermissions = () => client.get("/admin/role-permissions").then((r) => r.data);
+export const updateRolePermissions = (body) => client.put("/admin/role-permissions", body).then((r) => r.data);
 
 // Ward / bed capacity. occupancy_pct and available_beds are server-computed
 // (see WardOut) — never re-derive them client-side.
@@ -224,6 +463,29 @@ export const createWard = (payload) => client.post("/admin/wards", payload).then
 // occupied-beds stepper (which sends just {occupied_beds}).
 export const updateWard = (wardId, payload) => client.patch(`/admin/wards/${wardId}`, payload).then((r) => r.data);
 export const deleteWard = (wardId) => client.delete(`/admin/wards/${wardId}`).then((r) => r.data);
+
+// Floors (admin-managed, facility-scoped like wards). A floor auto-generates
+// `ward_count` uniform general wards of `beds_per_ward` beds each; the
+// backend adds/removes/resizes those child wards on PATCH. total_beds /
+// occupied_beds / ward_ids on each row are server-computed — never re-derive.
+export const getFloors = () => client.get("/admin/floors").then((r) => r.data);
+export const createFloor = (payload) => client.post("/admin/floors", payload).then((r) => r.data);
+export const updateFloor = (floorId, payload) => client.patch(`/admin/floors/${floorId}`, payload).then((r) => r.data);
+export const deleteFloor = (floorId) => client.delete(`/admin/floors/${floorId}`).then((r) => r.data);
+
+// Per-bed admissions + the nested Ward Map (routers/reception.py). Any staff
+// role (admin/clinician/records_officer), same as the rest of reception.
+// admitPatient takes exactly one of { patient_id, national_id } plus an
+// optional { floor_id } (auto-assign) or { ward_id, bed_number } (exact
+// bed). The Admission id on each ward-map bed drives discharge/move.
+export const getWardMap = () => client.get("/reception/ward-map").then((r) => r.data);
+export const getAdmissions = (active = true) =>
+  client.get("/reception/admissions", { params: { active } }).then((r) => r.data);
+export const admitPatient = (payload) => client.post("/reception/admissions", payload).then((r) => r.data);
+export const updateAdmission = (admissionId, payload) =>
+  client.patch(`/reception/admissions/${admissionId}`, payload).then((r) => r.data);
+export const dischargeAdmission = (admissionId) =>
+  client.post(`/reception/admissions/${admissionId}/discharge`).then((r) => r.data);
 
 // Staff clock-in/out. Any staff role (admin/clinician/records_officer) —
 // not available to a patient account. All three return the same
@@ -238,5 +500,175 @@ export const clockOut = () => client.post("/staff/clock-out").then((r) => r.data
 // callers should only call this when a row is actually expanded.
 export const getStaffRoster = () => client.get("/admin/staff").then((r) => r.data);
 export const getStaffClockHistory = (userId) => client.get(`/admin/staff/${userId}/clock-history`).then((r) => r.data);
+// Partial staff edit — currently only `{ section: string | null }` (pin a
+// receptionist/clinician to a front-desk counter, or null to unpin). 400 if
+// the user isn't a receptionist/clinician or the section name isn't an
+// active section at this facility. Returns the updated StaffRosterEntryOut.
+export const updateStaffMember = (userId, body) => client.patch(`/admin/staff/${userId}`, body).then((r) => r.data);
+
+// Front-desk registration sections ("counters") — admin-managed,
+// facility-scoped like rooms/wards. GET returns active + inactive,
+// name-ordered. createSection/updateSection 409 on a duplicate/clashing
+// name. deleteSection also unassigns any staff pinned to it, backend-side.
+export const getSections = () => client.get("/admin/sections").then((r) => r.data);
+export const createSection = (body) => client.post("/admin/sections", body).then((r) => r.data);
+export const updateSection = (id, body) => client.patch(`/admin/sections/${id}`, body).then((r) => r.data);
+export const deleteSection = (id) => client.delete(`/admin/sections/${id}`).then((r) => r.data);
+
+// Consultation rooms ("Bilik") — admin-managed, facility-scoped like wards.
+// waiting_today on each row is server-computed; never re-derive it.
+export const getRooms = () => client.get("/admin/rooms").then((r) => r.data);
+export const createRoom = (payload) => client.post("/admin/rooms", payload).then((r) => r.data);
+export const updateRoom = (roomId, payload) => client.patch(`/admin/rooms/${roomId}`, payload).then((r) => r.data);
+export const deleteRoom = (roomId) => client.delete(`/admin/rooms/${roomId}`).then((r) => r.data);
+
+// Reception desk check-in + queue system (routers/reception.py). Staff-only
+// (admin/clinician/records_officer) except getQueueStatus, which a patient
+// can also call for their own patient_id. checkin's payload must contain
+// exactly one of patient_id/card_reference/nfc_uid — the backend 422s
+// otherwise (see schemas.ReceptionCheckinRequest); callers here just pass
+// through whatever the form actually filled in.
+export const checkinToQueue = (payload) => client.post("/reception/checkin", payload).then((r) => r.data);
+// Today's queue for the calling staff member's own facility (server-scoped,
+// never client-supplied) — includes now_serving/waiting_count, both
+// server-computed; never re-derive them client-side.
+export const getQueue = () => client.get("/reception/queue").then((r) => r.data);
+export const callNextTicket = (ticketId) => client.post(`/reception/queue/${ticketId}/call`).then((r) => r.data);
+export const completeTicket = (ticketId) => client.post(`/reception/queue/${ticketId}/complete`).then((r) => r.data);
+export const cancelTicket = (ticketId) => client.post(`/reception/queue/${ticketId}/cancel`).then((r) => r.data);
+// `{"active": false}` when the patient has no waiting/called ticket today —
+// same convention as getCurrentCardStatus above.
+export const getQueueStatus = (patientId) => client.get(`/reception/queue/status/${patientId}`).then((r) => r.data);
+
+// Self-check-in QR "station" — a facility-scoped, staff-generated QR that
+// patients scan on-site to check themselves into today's queue without a
+// staff member typing in their identifier. Staff-only (admin/clinician/
+// records_officer), same as the rest of reception.py above. Only one
+// station can be active per facility at a time; createStation is used for
+// both first-time generation and regeneration (the backend revokes
+// whatever was previously active for the caller's facility before creating
+// the new one). qr_base64 is a ready-to-use `data:image/png;base64,...`
+// string — no extra encoding needed before putting it in an <img src=...>.
+export const getStation = () => client.get("/reception/station").then((r) => r.data);
+export const createStation = (payload) => client.post("/reception/station", payload).then((r) => r.data);
+export const revokeStation = () => client.post("/reception/station/revoke").then((r) => r.data);
+
+// Active front-desk section names for the caller's facility (any reception
+// staff, not admin-only — the admin-only /admin/sections above is the CRUD
+// surface). Returns [] when the facility has no sections defined; Reception
+// falls back to a hardcoded list in that case.
+export const getReceptionSections = () => client.get("/reception/sections").then((r) => r.data);
+
+// Manually override which consultation room a queue ticket is routed to
+// (round-robin at check-in only picks a starting room).
+export const assignTicketRoom = (ticketId, roomId) =>
+  client.post(`/reception/queue/${ticketId}/assign-room`, { room_id: roomId }).then((r) => r.data);
+
+// Clinician "My Room" worklist. getReceptionRooms lists the facility's
+// active Bilik + who holds each; claim/release manage the caller's own
+// claim (claim requires being clocked in); getMyRoom returns the room's
+// today tickets — empty unless the caller is BOTH clocked in and holds a
+// claim (the "withdrawn on clock-out" rule).
+export const getReceptionRooms = () => client.get("/reception/rooms").then((r) => r.data);
+export const claimRoom = (roomId) => client.post(`/reception/rooms/${roomId}/claim`).then((r) => r.data);
+export const releaseRoom = () => client.post("/reception/rooms/release").then((r) => r.data);
+export const getMyRoom = () => client.get("/reception/my-room").then((r) => r.data);
+
+// Appointment reschedule (staff-only) + the patient's own reschedule
+// *requests* (filed from the mobile app; web's job is only to show them and
+// let staff accept/reject while pending — see reason code comments in
+// PatientDetail.jsx's AppointmentsSection). Only valid while the
+// appointment's status is "scheduled". new_scheduled_at is an ISO datetime
+// string, same convention as createAppointment's scheduled_at above.
+export const rescheduleAppointment = (patientId, appointmentId, payload) =>
+  client.post(`/patients/${patientId}/appointments/${appointmentId}/reschedule`, payload).then((r) => r.data);
+// Accepting a request does NOT change the appointment's time by itself —
+// it only records that staff will call the patient to agree a new time;
+// staff then use rescheduleAppointment above once a time is actually agreed.
+export const acceptRescheduleRequest = (patientId, appointmentId, requestId) =>
+  client.post(`/patients/${patientId}/appointments/${appointmentId}/reschedule-requests/${requestId}/accept`).then((r) => r.data);
+export const rejectRescheduleRequest = (patientId, appointmentId, requestId, payload) =>
+  client.post(`/patients/${patientId}/appointments/${appointmentId}/reschedule-requests/${requestId}/reject`, payload).then((r) => r.data);
+
+// --- Digital signatures + clinical-record sign-off (annotations) ---------
+// Every signature GET needs the same Bearer auth as the rest of this client,
+// so a bare <img src> can't fetch it — they're pulled as blobs and handed
+// back as object URLs (same pattern as getDocumentFileBlob / medicine
+// images). The caller owns revoking that URL when its component unmounts.
+// "No signature on file" is a deliberate 404 on the backend — resolve to
+// null in that one case so callers render an empty state, not an error.
+const signatureBlobUrl = (path) =>
+  client
+    .get(path, { responseType: "blob" })
+    .then((r) => URL.createObjectURL(r.data))
+    .catch((e) => {
+      if (e?.response?.status === 404) return null;
+      throw e;
+    });
+
+export const getMySignatureBlob = () => signatureBlobUrl("/me/signature");
+
+export const uploadMySignature = (blob) => {
+  const form = new FormData();
+  // The filename MUST end .png — the backend cross-checks extension +
+  // content-type + PNG magic bytes and 400s if any of the three disagree.
+  form.append("file", blob, "signature.png");
+  return client
+    .post("/me/signature", form, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
+
+export const deleteMySignature = () => client.delete("/me/signature").then((r) => r.data);
+
+export const getStaffSignatureBlob = (userId) => signatureBlobUrl(`/staff/${userId}/signature`);
+
+export const getAnnotationSignatureBlob = (patientId, annotationId) =>
+  signatureBlobUrl(`/patients/${patientId}/annotations/${annotationId}/signature`);
+
+export const getPatientAnnotations = (patientId) =>
+  client.get(`/patients/${patientId}/annotations`).then((r) => r.data);
+
+// body: { target_type, target_id, kind, note?, signature_b64? }. Only send
+// signature_b64 as a fallback when the caller has no saved signature
+// (getCurrentUser().has_signature === false) — it also saves that drawing to
+// their profile. The backend's b64 decoder wants RAW base64, so strip any
+// "data:image/png;base64," prefix a <canvas> produced before sending.
+export const addPatientAnnotation = (patientId, body) => {
+  const payload = { ...body };
+  if (typeof payload.signature_b64 === "string" && payload.signature_b64.startsWith("data:")) {
+    const comma = payload.signature_b64.indexOf(",");
+    if (comma >= 0) payload.signature_b64 = payload.signature_b64.slice(comma + 1);
+  }
+  return client.post(`/patients/${patientId}/annotations`, payload).then((r) => r.data);
+};
+
+// --- Clinician consultation panel (routers/consultation.py) -------------
+// Roles admin/records_officer/clinician, gated by require_page_access("patients").
+// session/start clocks the caller in AND claims the room in one call;
+// session/end reverses both. tickets/{id}/complete needs a signature — the
+// caller passes signature_b64 as RAW base64 (strip the data-URL prefix)
+// only as a fallback when getCurrentUser().has_signature is false.
+export const getConsultationRooms = () => client.get("/consultation/rooms").then((r) => r.data);
+export const getMyConsultationRoom = () => client.get("/consultation/my-room").then((r) => r.data);
+export const startConsultationSession = (body) => client.post("/consultation/session/start", body).then((r) => r.data);
+export const endConsultationSession = () => client.post("/consultation/session/end").then((r) => r.data);
+export const callConsultationTicket = (id) => client.post(`/consultation/tickets/${id}/call`).then((r) => r.data);
+export const completeConsultationTicket = (id, body) =>
+  client.post(`/consultation/tickets/${id}/complete`, body || {}).then((r) => r.data);
+export const cancelConsultationTicket = (id) =>
+  client.post(`/consultation/tickets/${id}/cancel`).then((r) => r.data);
+
+// --- Waiting-room displays ---------------------------------------------
+// getWaitingRoomDisplays/create/revoke are admin-only (routers/admin.py).
+// getPublicDisplay hits the UNAUTHENTICATED, rate-limited /display/{token}
+// endpoint — it deliberately uses a bare axios call (not the shared
+// `client` instance) so the request interceptor never attaches the bearer
+// token: a public big-screen page has no logged-in user.
+export const getWaitingRoomDisplays = () => client.get("/admin/waiting-room-displays").then((r) => r.data);
+export const createWaitingRoomDisplay = (body) => client.post("/admin/waiting-room-displays", body).then((r) => r.data);
+export const revokeWaitingRoomDisplay = (id) =>
+  client.post(`/admin/waiting-room-displays/${id}/revoke`).then((r) => r.data);
+export const getPublicDisplay = (token) =>
+  axios.get(`${API_BASE}/display/${token}`).then((r) => r.data);
 
 export default client;

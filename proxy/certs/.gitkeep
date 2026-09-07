@@ -1,0 +1,4 @@
+# Place the CAMPUS-CA-issued TLS pair here for production (git-ignored):
+#   clarion.crt   (leaf + intermediate chain, PEM)
+#   clarion.key   (private key, PEM, no passphrase)
+# The demo uses Caddy's internal CA and needs nothing here.

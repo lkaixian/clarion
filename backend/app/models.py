@@ -1,23 +1,37 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer
+    Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer, Index,
+    UniqueConstraint, Float, Computed
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.dialects import mysql
+from sqlalchemy.orm import relationship, validates
 
 from .database import Base
+from .nric import normalize_nric
 
 
 def gen_id():
     return str(uuid.uuid4())
 
 
+# P1.2b: a DateTime that keeps microsecond precision on MySQL/MariaDB. The
+# plain SQLAlchemy DateTime renders there as bare `DATETIME` -- zero fractional
+# seconds, and `timezone=True` is silently ignored -- so MariaDB *rounds* a
+# sub-second value on write (can push `password_changed_at` past a JWT issued
+# in the same second) and `ORDER BY` on any timestamp column becomes unstable.
+# On SQLite this renders identically to `DateTime(timezone=True)`, so the
+# Alembic baseline generated on SQLite is unaffected. Use this everywhere a
+# timestamp column is declared.
+TZDateTime = DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), "mysql")
+
+
 # Patient-profile fields that are worth nudging a patient to fill in right
 # after login if still blank (missing_profile_fields on schemas.UserOut).
 # Deliberately a plain list, not hardcoded logic per-field, so a future
 # column addition (e.g. a 5th contact field) only ever means appending here
-# — see auth_router.py's use of this for the "informational, not a security
+# â€” see auth_router.py's use of this for the "informational, not a security
 # gate" computation.
 PATIENT_PROFILE_FIELDS_TO_PROMPT = [
     "email",
@@ -29,16 +43,31 @@ PATIENT_PROFILE_FIELDS_TO_PROMPT = [
 
 class User(Base):
     """A hospital staff account, a patient account, or an emergency-responder
-    account. `role` drives what a token can see (see auth.py / rbac.py)."""
+    account. `role` drives what a token can see (see auth.py / permissions.py)."""
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    full_name = Column(String, nullable=False)
-    role = Column(String, nullable=False)  # admin | clinician | records_officer | patient | emergency_responder
-    facility = Column(String, nullable=True)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=True, index=True)  # set if role == patient
+    id = Column(String(36), primary_key=True, default=gen_id)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    role = Column(String(64), nullable=False)  # admin | clinician | records_officer | receptionist | patient | emergency_responder | pharmacist
+    facility = Column(String(255), nullable=True)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=True, index=True)  # set if role == patient
+
+    # Per-counter reception scoping (Malaysian government hospitals split
+    # front-desk registration into specialty counters -- ICU, O&G, ortho,
+    # general registration, emergency). When set to a FacilitySection.name at
+    # this user's own facility, this receptionist/clinician's reception
+    # console is HARD-SCOPED to that section: they only see / can act on
+    # QueueTickets whose `department` matches, check-ins they run are forced
+    # to that department regardless of what the client sends, and the room
+    # board hides other sections' tagged rooms. NULL = not scoped (unchanged
+    # behaviour -- sees the whole facility's queue). Only `receptionist` and
+    # `clinician` accounts are ever assignable (admin.py enforces). It's a
+    # plain denormalised string, not an FK: historical QueueTicket.department
+    # values are point-in-time and a section rename fixes up assigned users
+    # explicitly (see routers/admin.py's PATCH /admin/sections). Additive
+    section = Column(String(64), nullable=True)
 
     # True right after a staff-issued temp password or a self-service reset,
     # cleared once the user successfully calls /auth/change-password. Lets
@@ -50,13 +79,12 @@ class User(Base):
     # the email-OTP reset (otp_* columns below). Left in place (unused by
     # any endpoint now, just zeroed by _apply_new_password for hygiene)
     # rather than dropped, since this project's migrations are additive
-    # only (see main.py's _migrate_lightweight) — a destructive column
     # drop isn't worth the risk against a live seeded DB.
     reset_attempt_count = Column(Integer, nullable=False, default=0)
-    reset_locked_until = Column(DateTime, nullable=True)
+    reset_locked_until = Column(TZDateTime, nullable=True)
 
     # POST /auth/login failed-attempt rate limiting/lockout. Deliberately
-    # separate columns from reset_attempt_count/reset_locked_until above —
+    # separate columns from reset_attempt_count/reset_locked_until above â€”
     # those were scoped to the now-removed NRIC+DOB self-service
     # forgot-password flow only; these track wrong-password attempts
     # against this account's actual login. Keeping them independent means
@@ -65,22 +93,22 @@ class User(Base):
     # Persisted (not in-memory) so it survives process restarts and works
     # correctly if the backend ever runs multiple workers.
     login_failed_count = Column(Integer, nullable=False, default=0)
-    login_locked_until = Column(DateTime, nullable=True)
+    login_locked_until = Column(TZDateTime, nullable=True)
 
     # Password-reset-via-email-OTP state (POST /auth/request-password-reset-otp
     # and POST /auth/reset-password-with-otp). Only ever the HASH of the
-    # 6-digit code is stored, never the plaintext — mirrors hashed_password.
+    # 6-digit code is stored, never the plaintext â€” mirrors hashed_password.
     # otp_attempt_count is the *verify* attempt counter (wrong codes against
     # a live OTP); it is distinct from otp_request_count/otp_request_window_start
     # below, which rate-limit how often a fresh OTP can be *requested* in the
     # first place (stops email-bombing a patient's inbox). Both persisted
     # (not in-memory) so they survive process restarts, same reasoning as
     # reset_attempt_count/login_failed_count above.
-    otp_code_hash = Column(String, nullable=True)
-    otp_expires_at = Column(DateTime, nullable=True)
+    otp_code_hash = Column(String(255), nullable=True)
+    otp_expires_at = Column(TZDateTime, nullable=True)
     otp_attempt_count = Column(Integer, nullable=False, default=0)
     otp_request_count = Column(Integer, nullable=False, default=0)
-    otp_request_window_start = Column(DateTime, nullable=True)
+    otp_request_window_start = Column(TZDateTime, nullable=True)
 
     # JWT revocation-on-password-change watermark. Set by
     # auth_router._apply_new_password every time a password is actually
@@ -93,34 +121,180 @@ class User(Base):
     # embedded `pwd_changed_at` claim (see auth.create_access_token) is
     # only ever rejected once an ACTUAL subsequent password change sets
     # this to a newer timestamp than what the token was issued with.
-    password_changed_at = Column(DateTime, nullable=True)
+    password_changed_at = Column(TZDateTime, nullable=True)
+
+    # Object key of this staff member's saved digital signature PNG in the
+    # `clarion-signatures` bucket (see app/storage.py), key
+    # `users/{user_id}.png`, set by POST /me/signature, cleared by
+    # DELETE /me/signature. Consultation / annotation sign-off COPY this
+    # object to their own per-row snapshot at signing time. sha256/bytes/mime
+    # are captured on write so the file is served + integrity-checked without
+    # touching the blob. All nullable/additive (P1.6).
+    signature_object_key = Column(String(512), nullable=True)
+    signature_sha256 = Column(String(64), nullable=True)
+    signature_bytes = Column(Integer, nullable=True)
+    signature_mime = Column(String(128), nullable=True)
+
+    # P1.10: which auth provider owns this account's credential. "local"
+    # (default) means hashed_password (above) is the real, user-chosen
+    # credential and the normal POST /auth/login password check applies.
+    # "ldap" means this row was JIT-provisioned from (or has since been
+    # matched to) a directory account -- hashed_password is a random,
+    # never-issued placeholder (see app/ldap_auth.py), and auth_router.login
+    # skips the local password check entirely in favour of an LDAP bind. A
+    # server_default keeps this NOT NULL migration additive against
+    # existing rows (all backfill to "local", their real/only behaviour).
+    # See app/ldap_auth.py and healthcare/Integration Engine and LDAP.md.
+    auth_source = Column(String(32), nullable=False, server_default="local")
+    # Cached directory DN for audit/debugging only -- never used to bypass
+    # the search-then-bind flow on a subsequent login (ldap_auth always
+    # re-searches by the configured filter, so a renamed/moved directory
+    # entry is picked up rather than silently trusted from a stale cache).
+    ldap_dn = Column(String(512), nullable=True)
+    # THE stable identity key for an auth_source="ldap" row: the EXACT raw
+    # string the person types as their login username, captured once at
+    # JIT-provision time. Deliberately NOT `email` -- `email` is populated
+    # from the directory's `mail` attribute (informational/display only),
+    # which is only guaranteed to equal the login string under the default
+    # `LDAP_USER_SEARCH_FILTER=(mail={username})`. A realistic AD deployment
+    # (the actual tender target) logs staff in by `sAMAccountName`/`uid`,
+    # which is a DIFFERENT string from their `mail` attribute -- keying
+    # lookups on `email` there breaks re-login (a second attempt can't find
+    # the row it created on first login, tries to JIT-provision again, and
+    # collides on the `email` unique constraint) and breaks the "revoked AD
+    # group takes effect on next login" resync entirely (searching the
+    # directory BY `user.email` finds nothing under a non-mail filter).
+    # `ldap_auth.authenticate_ldap` is always called with THIS value (never
+    # `user.email`) once a row exists, so the search is exactly what
+    # resolved the account in the first place. Unique (nullable-safe on
+    # both SQLite/MariaDB, same technique as RoomClaim's generated-column
+    # uniqueness) so a race between two concurrent first-logins for the
+    # same new identity fails the SECOND insert with IntegrityError instead
+    # of silently provisioning two rows for one person.
+    ldap_username = Column(String(255), unique=True, nullable=True)
 
     patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
+
+
+class LdapRoleMapping(Base):
+    """Admin-editable AD-group -> CLARION-role mapping (P1.10, tender clause
+). Read by app.ldap_auth.resolve_role_for_groups against a
+    logging-in user's `memberOf` list. `group_dn` is matched
+    case-insensitively in code (LDAP DNs are case-insensitive per RFC 4514,
+    but this column stores the literal directory casing for admin
+    readability). `priority` breaks ties when a user is in multiple mapped
+    groups -- highest wins, so e.g. an "AD-Admins" group can be given a
+    higher priority than "AD-Clinicians" for a user in both. `facility` is
+    optional: when set, it's applied to a user JIT-provisioned (or
+    re-synced) from this group, letting one AD group pin its members to a
+    specific campus/hospital; NULL leaves facility unset/unchanged."""
+    __tablename__ = "ldap_role_mappings"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    group_dn = Column(String(512), unique=True, nullable=False)
+    role = Column(String(64), nullable=False)  # validated against schemas.VALID_ROLES at the API layer
+    facility = Column(String(255), nullable=True)
+    priority = Column(Integer, nullable=False, default=0)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        TZDateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class RefreshToken(Base):
+    """P2.5 (Security Audit M4): a long-lived (REFRESH_TOKEN_EXPIRE_DAYS)
+    credential that lets a client mint a fresh short-lived access JWT
+    (ACCESS_TOKEN_EXPIRE_MINUTES, down from 8h to 15min) without a full
+    re-login -- see app/auth.py's issue/rotate/revoke_refresh_token
+    functions, the only code that ever touches this table.
+
+    Only ever the HMAC-SHA256 hash of the token is stored (`token_hash`,
+    same discipline as User.otp_code_hash) -- the plaintext exists only
+    transiently: returned once in the login/refresh response body (native
+    clients) and set once as an HttpOnly cookie (web), never persisted
+    server-side and never logged.
+
+    Rotation, not reuse: every successful POST /auth/refresh revokes THIS
+    row (`revoked_at`) and issues a brand new one (`replaced_by_id` points
+    at it, forensic-only -- nothing reads that column at auth time). A
+    caller that presents an ALREADY-revoked token is proof of either a
+    replay of an old request or a stolen/duplicated token still in use
+    after the legitimate client rotated past it -- app.auth.rotate_refresh_token
+    treats that as a compromise signal and revokes EVERY refresh token for
+    the user, forcing a fresh login on every device.
+
+    A password change (auth_router._apply_new_password) also revokes every
+    live row for that user -- "change your password" now really does mean
+    "log out everywhere", closing the other half of what Security Audit M4
+    named (the JWT-only revocation watermark did this for the 8h access
+    token; this does it for a session's ability to keep refreshing)."""
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    issued_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(TZDateTime, nullable=False, index=True)
+    revoked_at = Column(TZDateTime, nullable=True)
+    # Rotation chain pointer -- forensic/audit trail only ("what did this
+    # token get rotated into"), never read by any auth-time logic. Nullable
+    # self-FK; no ondelete action needed since a row is never hard-deleted.
+    replaced_by_id = Column(String(36), ForeignKey("refresh_tokens.id"), nullable=True)
+
+    user = relationship("User")
 
 
 class Patient(Base):
     __tablename__ = "patients"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    full_name = Column(String, nullable=False)
-    date_of_birth = Column(String, nullable=False)  # ISO date
-    gender = Column(String, nullable=True)
-    national_id = Column(String, unique=True, nullable=True)
-    blood_type = Column(String, nullable=True)
-    phone = Column(String, nullable=True)
+    id = Column(String(36), primary_key=True, default=gen_id)
+    full_name = Column(String(255), nullable=False)
+    date_of_birth = Column(String(64), nullable=False)  # ISO date
+    gender = Column(String(64), nullable=True)
+    national_id = Column(String(64), unique=True, nullable=True)
+    # Security Audit M2: dash/case-normalized mirror of national_id (see
+    # nric.normalize_nric), indexed + unique, so every NRIC lookup
+    # (auth_router._resolve_patient_by_nric, used by login, both OTP
+    # endpoints, and reused by patients.py/reception.py) is an indexed
+    # query instead of a fetch-every-patient-and-compare-in-Python loop --
+    # that loop ran on every unauthenticated login/OTP-reset attempt
+    # regardless of a per-IP limit, so its cost scaled with total patient
+    # count. Kept in sync automatically by the @validates hook below
+    # (fires on ANY assignment to national_id -- ORM construction, a
+    # later `.national_id = x`, a test fixture -- not just the one real
+    # write path today) rather than requiring every call site to remember
+    # to set it by hand; existing rows backfilled by Alembic
+    # `649f25aeb36f`. NULL when national_id is NULL/blank (normalize_nric
+    # of an empty string is "", stored as None here, never as "", so
+    # multiple NULL-NRIC patients don't collide on the unique constraint).
+    normalized_national_id = Column(String(64), unique=True, nullable=True, index=True)
+    blood_type = Column(String(64), nullable=True)
+    phone = Column(String(64), nullable=True)
     senior_citizen_mode = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     # Patient-owned contact/profile fields, editable via the self-service
     # PATCH /patients/{id}/profile endpoint. Deliberately separate from
     # User.email, which stays the internal login-identifier/synthetic-
-    # placeholder field (e.g. "patient-<id>@medibridge.local") and is never
+    # placeholder field (e.g. "patient-<id>@clarion.local") and is never
     # shown to or edited by the patient directly. `email` here is where the
     # password-reset OTP is actually sent.
-    email = Column(String, nullable=True)
-    emergency_contact_name = Column(String, nullable=True)
-    emergency_contact_phone = Column(String, nullable=True)
-    emergency_contact_relationship = Column(String, nullable=True)
+    email = Column(String(255), nullable=True)
+    emergency_contact_name = Column(String(255), nullable=True)
+    emergency_contact_phone = Column(String(64), nullable=True)
+    emergency_contact_relationship = Column(String(64), nullable=True)
+
+    @validates("national_id")
+    def _sync_normalized_national_id(self, key, value):
+        """Keeps normalized_national_id in lockstep with every assignment
+        to national_id -- see that column's docstring above. Returns
+        `value` unchanged (a SQLAlchemy @validates hook's return value is
+        what actually gets stored in the validated column)."""
+        self.normalized_national_id = normalize_nric(value) if value else None
+        return value
 
     user_account = relationship("User", back_populates="patient", uselist=False, foreign_keys=[User.patient_id])
     conditions = relationship("Condition", back_populates="patient", cascade="all, delete-orphan")
@@ -135,13 +309,32 @@ class Encounter(Base):
     """FHIR Encounter-lite: one visit / transfer event at a facility."""
     __tablename__ = "encounters"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    facility_name = Column(String, nullable=False)
-    encounter_type = Column(String, nullable=False)  # outpatient | inpatient | emergency | transfer
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Also the AUTHORING facility for cross-facility PATCH immutability (see
+    # Condition.authored_by_facility) -- add_encounter forces it from
+    # current_user.facility on create. NULL legacy rows are PATCH-immutable
+    # to everyone by design. Indexed: it's one of the
+    # _FACILITY_RELATIONSHIP_SOURCES scanned by list_patients' facility scope.
+    facility_name = Column(String(255), nullable=False, index=True)
+    encounter_type = Column(String(64), nullable=False)  # outpatient | inpatient | emergency | transfer
     reason = Column(Text, nullable=True)
-    started_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text, nullable=True)
+
+    # --- Consultation sign-off (routers/consultation.py::complete_ticket) ---
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_by_role = Column(String(64), nullable=True)
+    
+    # A COPY of the signer's profile signature PNG taken at sign-off time,
+    # `clarion-signatures` bucket, key `encounters/{id}.png` (see
+    # app/storage.py), so it stays fixed even if the clinician later
+    # changes/clears their profile signature. (P1.6)
+    signature_object_key = Column(String(512), nullable=True)
+    signature_sha256 = Column(String(64), nullable=True)
+    signature_bytes = Column(Integer, nullable=True)
+    signature_mime = Column(String(128), nullable=True)
 
     patient = relationship("Patient", back_populates="encounters")
 
@@ -149,13 +342,23 @@ class Encounter(Base):
 class Condition(Base):
     __tablename__ = "conditions"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    name = Column(String, nullable=False)
-    status = Column(String, default="active")  # active | resolved
-    diagnosed_at = Column(String, nullable=True)
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    status = Column(String(64), default="active")  # active | resolved
+    diagnosed_at = Column(String(64), nullable=True)
     is_chronic = Column(Boolean, default=False)
     critical_for_emergency = Column(Boolean, default=False)
+    # The facility whose staff AUTHORED this row (snapshot of
+    # current_user.facility at create time -- see routers/patients.py
+    # ::add_condition). Drives cross-facility PATCH immutability: a clinical
+    # sub-record may only be amended in place by its authoring facility while
+    # the patient is currently present there; everyone else must append a new
+    # entry instead. Nullable/additive: legacy rows created before this
+    # column existed have NULL here and are therefore immutable to EVERYONE
+    # via PATCH (rule #1 -- "your facility == the author facility" -- can
+    # never be satisfied against NULL), which is the intended safe default.
+    authored_by_facility = Column(String(255), nullable=True, index=True)
 
     patient = relationship("Patient", back_populates="conditions")
 
@@ -163,13 +366,25 @@ class Condition(Base):
 class MedicationStatement(Base):
     __tablename__ = "medication_statements"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    drug_name = Column(String, nullable=False)
-    dosage = Column(String, nullable=True)
-    frequency = Column(String, nullable=True)
-    prescribed_by_facility = Column(String, nullable=True)
-    start_date = Column(String, nullable=True)
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    drug_name = Column(String(255), nullable=False)
+    dosage = Column(String(64), nullable=True)
+    frequency = Column(String(64), nullable=True)
+    # The facility that PRESCRIBED this drug -- frequently an EXTERNAL one
+    # (a clinic the patient also attends), which is the whole point of the
+    # cross-facility duplicate-prescription check. Client-supplied on create,
+    # editable on PATCH. Deliberately NOT the immutability key (that would
+    # forbid recording an external prescriber and hand edit rights to a
+    # facility that never touched this record) -- see recorded_by_facility.
+    prescribed_by_facility = Column(String(255), nullable=True)
+    # The facility whose staff ACTUALLY ENTERED this row (snapshot of
+    # current_user.facility at create time). This is the authoring facility
+    # for cross-facility PATCH immutability -- same semantics as
+    # Condition.authored_by_facility. Nullable/additive: NULL legacy rows are
+    # PATCH-immutable to everyone by design.
+    recorded_by_facility = Column(String(255), nullable=True, index=True)
+    start_date = Column(String(64), nullable=True)
     active = Column(Boolean, default=True)
     critical_for_emergency = Column(Boolean, default=True)
 
@@ -179,12 +394,16 @@ class MedicationStatement(Base):
 class AllergyIntolerance(Base):
     __tablename__ = "allergy_intolerances"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    substance = Column(String, nullable=False)
-    reaction = Column(String, nullable=True)
-    severity = Column(String, default="unknown")  # mild | moderate | severe
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    substance = Column(String(255), nullable=False)
+    reaction = Column(String(255), nullable=True)
+    severity = Column(String(64), default="unknown")  # mild | moderate | severe
     critical_for_emergency = Column(Boolean, default=True)
+    # Authoring facility -- same semantics as Condition.authored_by_facility
+    # above (cross-facility PATCH immutability; NULL legacy rows are
+    # PATCH-immutable to everyone by design).
+    authored_by_facility = Column(String(255), nullable=True, index=True)
 
     patient = relationship("Patient", back_populates="allergies")
 
@@ -194,21 +413,26 @@ class ClinicalDocument(Base):
     X-ray report). `extracted_text` / `ai_summary` are filled by the AI layer."""
     __tablename__ = "clinical_documents"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    doc_type = Column(String, nullable=False)  # prescription | discharge_summary | lab_report | imaging
-    original_filename = Column(String, nullable=True)
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    doc_type = Column(String(64), nullable=False)  # prescription | discharge_summary | lab_report | imaging
+    original_filename = Column(String(255), nullable=True)
     raw_text = Column(Text, nullable=True)          # OCR output
     ai_summary = Column(Text, nullable=True)         # LLM/rule-based summary
-    uploaded_by_facility = Column(String, nullable=True)
-    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_by_facility = Column(String(255), nullable=True)
+    uploaded_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Local-disk path to the original uploaded file (backend/uploads/{patient_id}/{id}_{filename}),
-    # set by POST /ai/digitise/{patient_id} on a best-effort basis after OCR.
-    # NULL for any document uploaded before this column existed, or if the
-    # disk write failed at upload time -- always check for NULL/missing-file
-    # before assuming GET .../documents/{id}/file will succeed.
-    file_path = Column(String, nullable=True)
+    # Object key of the original uploaded file in the `clarion-documents`
+    # bucket (see app/storage.py), key
+    # `{patient_id}/{id}_{sanitized_basename}`, set by
+    # POST /ai/digitise/{patient_id} best-effort after OCR. NULL if never
+    # persisted -- always check for NULL before serving. Key is built
+    # server-side from the row id + a sanitized basename; never client input.
+    # (P1.6)
+    file_object_key = Column(String(512), nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
+    file_bytes = Column(Integer, nullable=True)
+    file_mime = Column(String(128), nullable=True)
 
     patient = relationship("Patient", back_populates="documents")
 
@@ -225,21 +449,65 @@ class Appointment(Base):
     to reconcile)."""
     __tablename__ = "appointments"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    facility_name = Column(String, nullable=False)
-    venue = Column(String, nullable=True)             # room/building detail beyond facility_name
-    scheduled_at = Column(DateTime, nullable=False)
-    reason = Column(String, nullable=True)             # e.g. "Follow-up: diabetes review"
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    venue = Column(String(255), nullable=True)             # room/building detail beyond facility_name
+    scheduled_at = Column(TZDateTime, nullable=False)
+    reason = Column(String(255), nullable=True)             # e.g. "Follow-up: diabetes review"
     precaution_notes = Column(Text, nullable=True)      # free-text, e.g. "bring prior scan results"
     fasting_required = Column(Boolean, default=False)
     fasting_hours = Column(Integer, nullable=True)      # meaningful only if fasting_required
     extra_reminder_hours_before = Column(JSON, nullable=True)  # list[int], doctor-added reminder offsets beyond the computed defaults, e.g. [72] for a 3-day-before reminder
-    status = Column(String, default="scheduled")         # scheduled | cancelled | completed
-    created_by = Column(String, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(64), default="scheduled")         # scheduled | cancelled | completed
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Reschedule tracking -- set together, only by
+    # routers/appointments.py::reschedule_appointment (staff-only). Only the
+    # single MOST RECENT reschedule is snapshotted (previous_scheduled_at is
+    # overwritten on a second reschedule, not appended to a history list) --
+    # this app has no "appointment history" screen for anything else either,
+    # so a full audit trail beyond "what was it before the latest change"
+    # would be scope with no current consumer. AuditLog already captures
+    # every reschedule event permanently if a real history is ever needed.
+    previous_scheduled_at = Column(TZDateTime, nullable=True)
+    reschedule_reason_code = Column(String(64), nullable=True)  # see schemas.STAFF_RESCHEDULE_REASON_CODES
+    reschedule_reason_other = Column(Text, nullable=True)  # only meaningful when reschedule_reason_code == "other"
 
     patient = relationship("Patient", back_populates="appointments")
+
+
+class AppointmentRescheduleRequest(Base):
+    """A patient's request to reschedule one of their own doctor-published
+    Appointments (see routers/appointments.py). Deliberately does NOT let
+    the patient propose, or the system apply, a new time directly --
+    accepting a request only records "staff will call the patient to agree
+    a new time"; the appointment's actual scheduled_at only ever moves
+    through the same staff-only reschedule action a clinician uses when
+    rescheduling unprompted (see Appointment.previous_scheduled_at above),
+    once a new time has been agreed by phone. This mirrors how the reason
+    this feature exists at all: the app is not meant to let a reschedule
+    happen without the clinic actually speaking to the patient first.
+
+    At most one PENDING request per appointment is enforced at the router
+    level (not a DB constraint, same style as ReceptionStation's
+    "one active per facility" rule) -- a patient must wait for staff to
+    accept/reject the existing one before filing another."""
+
+    __tablename__ = "appointment_reschedule_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    reason_code = Column(String(64), nullable=False)  # see schemas.PATIENT_RESCHEDULE_REASON_CODES
+    reason_other = Column(Text, nullable=True)  # only meaningful when reason_code == "other"
+    status = Column(String(64), nullable=False, default="pending")  # pending | accepted | rejected
+    clinician_note = Column(Text, nullable=True)  # optional, set on reject (or accept) to explain the decision
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(TZDateTime, nullable=True)
+    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
 
 class MedicineInventoryItem(Base):
@@ -252,17 +520,155 @@ class MedicineInventoryItem(Base):
     to any one patient, so it doesn't belong under a patient record at all."""
     __tablename__ = "medicine_inventory"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    facility_name = Column(String, nullable=False, index=True)
-    drug_name = Column(String, nullable=False)
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    drug_name = Column(String(255), nullable=False)
     quantity_on_hand = Column(Integer, nullable=False, default=0)
-    unit = Column(String, nullable=False, default="units")  # e.g. "tablets", "vials", "boxes"
+    unit = Column(String(64), nullable=False, default="units")  # e.g. "tablets", "vials", "boxes"
     reorder_threshold = Column(Integer, nullable=True)  # null = no low-stock tracking for this item
     notes = Column(Text, nullable=True)
-    last_restocked_at = Column(DateTime, nullable=True)
-    updated_by = Column(String, ForeignKey("users.id"), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    last_restocked_at = Column(TZDateTime, nullable=True)
+    # Optional scanned/keyed barcode (EAN/UPC/etc.). Nullable = "no barcode
+    # recorded". Indexed because the pharmacy/admin inventory search
+    # (?q=) does an exact/prefix match against it -- a scanner hands the
+    # console a full code and expects an instant single-row hit. NOT unique:
+    # this app doesn't police barcode collisions (a repackaged generic can
+    # legitimately share one), and a UNIQUE here would turn a data-entry
+    # typo into a hard 500 on save. Migration for already-seeded DBs is in
+    barcode = Column(String(64), nullable=True, index=True)
+    # Object key of an uploaded photo of the medicine/packaging in the
+    # `clarion-medicine` bucket (see app/storage.py), key
+    # `{item_id}_{sanitized_basename}`, best-effort by
+    # POST /pharmacy|admin/inventory/{item_id}/image. NULL = no photo.
+    # Key is built server-side from the row id + a sanitized basename. (P1.6)
+    image_object_key = Column(String(512), nullable=True)
+    image_sha256 = Column(String(64), nullable=True)
+    image_bytes = Column(Integer, nullable=True)
+    image_mime = Column(String(128), nullable=True)
+    # When True, a pharmacist restock (POST .../inventory/{id}/adjust with
+    # delta > 0) applies immediately (stock + budget move on the spot).
+    # When False (the default), that same restock instead files a
+    # MedicinePurchaseProposal for an admin to approve first -- see
+    # routers/pharmacy.py::adjust_stock and routers/admin.py's
+    # purchase-proposals section. Admin-only to toggle (PATCH
+    # /admin/inventory/{id}); deliberately NOT settable via the pharmacy
+    # router. NOT NULL DEFAULT 0 so every existing row is "needs approval"
+    # until an admin explicitly opts an item into auto-approval.
+    auto_approved = Column(Boolean, nullable=False, default=False)
+    # Procurement cost per single `unit` (RM). Nullable = "cost unknown"
+    # (counted as 0 in the budget rollup). Migration for already-seeded DBs
+    unit_cost = Column(Float, nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class MedicineBudget(Base):
+    """One row per facility -- the pharmacy procurement budget. `allocated_amount`
+    is set by that facility's admin (PUT /admin/budget); `procurement_spend`
+    accrues automatically on every restock (delta > 0) through
+    routers/pharmacy.py::adjust_stock, so "remaining" = allocated - spend can
+    be shown without re-summing the stock-event log every read. `current_stock_value`
+    (Î£ unit_cost x quantity_on_hand) is computed live in the serializer, not
+    stored here."""
+    __tablename__ = "medicine_budgets"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, unique=True, index=True)
+    allocated_amount = Column(Float, nullable=False, default=0)
+    procurement_spend = Column(Float, nullable=False, default=0)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class MedicineStockEvent(Base):
+    """Append-only audit trail of every stock movement made through the
+    pharmacy router (restock or consume). Lets the budget number be
+    reconstructed/verified and gives a per-item movement history. `cost` is
+    delta x unit_cost_at_time for a restock, 0 for a consume."""
+    __tablename__ = "medicine_stock_events"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("medicine_inventory.id"), nullable=False, index=True)
+    delta = Column(Integer, nullable=False)
+    unit_cost_at_time = Column(Float, nullable=True)
+    cost = Column(Float, nullable=False, default=0)
+    kind = Column(String(64), nullable=False)  # "restock" | "consume"
+    by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class InventoryDeleteRequest(Base):
+    """A pharmacist's request for an inventory item to be removed from the
+    catalogue -- pharmacists can adjust stock volume but catalogue delete is
+    an admin-approved action (see the approved plan's "request -> approve"
+    decision). At most one `pending` request per item (router-enforced).
+    Approval performs the hard delete; `item_name` is snapshotted so the
+    request still renders meaningfully after the item is gone."""
+    __tablename__ = "inventory_delete_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("medicine_inventory.id"), nullable=False, index=True)
+    item_name = Column(String(255), nullable=False)
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    reason = Column(Text, nullable=True)
+    status = Column(String(64), nullable=False, default="pending")  # pending | approved | rejected
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(TZDateTime, nullable=True)
+    admin_note = Column(Text, nullable=True)
+
+
+class MedicinePurchaseProposal(Base):
+    """A pharmacist's request to BUY stock -- the procurement counterpart to
+    InventoryDeleteRequest (modelled on it deliberately: same
+    request -> admin-approve -> apply shape, same facility-scoping, same
+    router-level "one identical pending per requester" 409 rule).
+
+    Two shapes, distinguished by `item_id`:
+      - item_id SET: "restock this existing catalogue item by `quantity`".
+        Created automatically when a pharmacist calls
+        POST /pharmacy/inventory/{id}/adjust with delta > 0 on an item whose
+        `auto_approved` is False. `proposed_*` fields snapshot the item's
+        name/unit/barcode at request time so the queue row still renders if
+        the item is later renamed.
+      - item_id NULL: "add this brand-new medicine to the catalogue AND
+        stock it with `quantity`". Created by POST /pharmacy/purchase-proposals.
+        Approval creates the MedicineInventoryItem (quantity_on_hand=0,
+        unit_cost=proposal.unit_cost) then runs the restock for `quantity`.
+
+    Approval (POST /admin/purchase-proposals/{id}/approve) runs the EXACT
+    same restock primitive (routers/admin.py::_apply_restock) the immediate
+    auto-approved path uses -- stock += quantity, stamp last_restocked_at,
+    write a `restock` MedicineStockEvent, accrue MedicineBudget.procurement_spend
+    -- so the two paths can never drift. `unit_cost` here is the price the
+    pharmacist expects to pay on THIS purchase (payload value, or the item's
+    stored unit_cost at request time); like the adjust endpoint it does NOT
+    overwrite the catalogue item.unit_cost on an existing item."""
+    __tablename__ = "medicine_purchase_proposals"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    # NULL => "new catalogue item request" (see class docstring). FK is
+    # intentionally nullable; no cascade -- if the target item is hard-deleted
+    # while a proposal is pending, approval detects the dangling ref and 409s
+    # rather than crashing (mirrors approve_inventory_delete_request's
+    # "item may already be gone" tolerance, inverted).
+    item_id = Column(String(36), ForeignKey("medicine_inventory.id"), nullable=True, index=True)
+    proposed_drug_name = Column(String(255), nullable=False)  # new-item name, or a snapshot of the existing item's name
+    proposed_unit = Column(String(64), nullable=False, default="units")
+    proposed_barcode = Column(String(64), nullable=True)
+    quantity = Column(Integer, nullable=False)  # units to add on approval (always > 0)
+    unit_cost = Column(Float, nullable=True)  # expected price per unit for THIS purchase; nullable = "unknown" (0 in the budget rollup)
+    reason = Column(Text, nullable=True)
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    status = Column(String(64), nullable=False, default="pending")  # pending | approved | rejected
+    reviewed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(TZDateTime, nullable=True)
+    admin_note = Column(Text, nullable=True)  # optional free-text set on reject
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Ward(Base):
@@ -272,15 +678,188 @@ class Ward(Base):
     bed assignment -- this app doesn't model that level of detail)."""
     __tablename__ = "wards"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    facility_name = Column(String, nullable=False, index=True)
-    ward_name = Column(String, nullable=False)
-    ward_type = Column(String, nullable=True)  # general | icu | pediatric | maternity | emergency | other -- validated in schemas.py, not a free enum in the DB
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    ward_name = Column(String(255), nullable=False)
+    ward_type = Column(String(64), nullable=True)  # general | icu | pediatric | maternity | emergency | other -- validated in schemas.py, not a free enum in the DB
     total_beds = Column(Integer, nullable=False)
     occupied_beds = Column(Integer, nullable=False, default=0)
-    updated_by = Column(String, ForeignKey("users.id"), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # Set when this ward was auto-generated by a Floor (see models.Floor and
+    # routers/admin.py's floors section). NULL for legacy/hand-created wards
+    # (ICU, etc.). The migration for this column on already-seeded DBs is
+    floor_id = Column(String(36), ForeignKey("floors.id"), nullable=True, index=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Floor(Base):
+    """A hospital floor/level that AUTO-GENERATES a uniform block of wards.
+
+    An admin sets `ward_count` + `beds_per_ward` as plain numbers and the
+    backend creates/adjusts exactly that many identical `Ward` rows
+    (`ward_type="general"`, `total_beds=beds_per_ward`) pointing back here
+    via `Ward.floor_id` -- see routers/admin.py's floors section.
+
+    `gender_restriction` (nullable: "male" | "female"; NULL = mixed) is a
+    SOFT routing rule applied only at admission time
+    (routers/reception.py::create_admission): changing it later never moves
+    a patient already in a bed. Same "manager admin, not super admin"
+    facility scoping as Ward / MedicineInventoryItem."""
+    __tablename__ = "floors"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    floor_label = Column(String(255), nullable=False)
+    gender_restriction = Column(String(64), nullable=True)  # "male" | "female" | None (mixed)
+    ward_count = Column(Integer, nullable=False)
+    beds_per_ward = Column(Integer, nullable=False)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class Admission(Base):
+    """A lightweight per-patient bed assignment -- the source of truth for
+    the Ward Map bed grid (routers/reception.py::get_ward_map). Active =
+    `discharged_at IS NULL`; at most one active admission per patient
+    (router-enforced, 409 otherwise).
+
+    Deliberately coexists with the legacy aggregate `Ward.occupied_beds`
+    counter and its Admin "Ward Capacity" tab stepper -- those are left
+    untouched for backward-compat (see the approved plan's assumptions).
+
+    `gender_at_admission` snapshots the patient's gender at admit time (the
+    floor's gender rule is only checked then, not re-enforced later)."""
+    __tablename__ = "admissions"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    ward_id = Column(String(36), ForeignKey("wards.id"), nullable=False, index=True)
+    bed_number = Column(Integer, nullable=False)
+    admitted_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    admitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    discharged_at = Column(TZDateTime, nullable=True)
+    discharged_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    gender_at_admission = Column(String(64), nullable=True)
+    notes = Column(Text, nullable=True)
+
+
+class ConsultationRoom(Base):
+    """A facility-scoped physical consultation room ("Bilik A".."Bilik E"),
+    managed by that facility's own `admin` user -- same "manager admin, not
+    super admin" scoping as MedicineInventoryItem / Ward (every query/write
+    forced to the acting admin's own `User.facility`).
+
+    Distinct from `QueueTicket.department` (the clinical category -- General
+    / Pharmacy / Lab / Emergency): a room is a physical space a clinician
+    sits in, a department is what kind of care is given. `department` here is
+    an optional tag so round-robin can keep e.g. Pharmacy check-ins flowing
+    to Pharmacy rooms -- see routers/reception.py::_assign_room.
+
+    `active=False` is a soft retire (same soft-invalidate pattern as
+    EmergencyToken.revoked / ReceptionStation.revoked) -- an inactive room
+    keeps its history on old QueueTickets but is skipped by round-robin and
+    can't be newly claimed."""
+    __tablename__ = "consultation_rooms"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    room_name = Column(String(255), nullable=False)
+    department = Column(String(64), nullable=True)  # optional clinical-category tag
+    active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class FacilitySection(Base):
+    """A facility-scoped front-desk registration counter ("General
+    Registration", "Emergency", "O&G", "Orthopaedics", "ICU"), managed by
+    that facility's own `admin` user -- exact same "manager admin, not super
+    admin" scoping as ConsultationRoom / Ward (every query/write forced to
+    the acting admin's own `User.facility`).
+
+    A section is an ADMINISTRATIVE grouping of the front desk, distinct from
+    ConsultationRoom (a physical space) and from QueueTicket.department (the
+    free-text clinical category). An admin defines the sections for their
+    hospital and pins each receptionist/clinician to one via
+    `User.section` -- that person's reception console is then hard-scoped to
+    tickets whose `department` equals this section's `name` (see
+    routers/reception.py). The section name IS the join key to
+    QueueTicket.department, so the two vocabularies are deliberately shared.
+
+    `active=False` is a soft retire (same soft-invalidate pattern as
+    ConsultationRoom.active): an inactive section can't be newly assigned to
+    staff, but users already pinned to it keep their assignment until an
+    admin moves or unassigns them.
+
+    BRAND-NEW table -- `create_all` picks it up on both a fresh and an
+    RolePagePermission / QueueTicket / HospitalSetting)."""
+    __tablename__ = "facility_sections"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("facility_name", "name", name="uq_facility_section_facility_name"),
+    )
+
+
+class RoomClaim(Base):
+    """A clinician's live "I am sitting in this Bilik right now" claim,
+    self-selected at (or after) clock-in and auto-released on clock-out (see
+    routers/staff.py::clock_out). Active = `released_at IS NULL`.
+
+    At most one active claim per room, and at most one active claim per
+    user -- enforced at the router level (claiming a second room releases
+    the first; see routers/reception.py::claim_room and
+    routers/staff.py::clock_out). A SQLite-only partial unique index used to
+    backstop this against a concurrent-claim race; it was removed for
+    MariaDB portability (P1.2) and is scheduled to return as a MariaDB
+    still creates the old partial index on the existing SQLite demo DB, so
+
+    This is what powers the additive "My Room" worklist
+    (GET /reception/my-room): today's QueueTickets whose room_id matches the
+    caller's active claim, shown ONLY while the caller is also clocked in.
+    It deliberately does NOT restrict the clinician's existing full
+    patient-record access -- it's an extra worklist, not a permission gate."""
+    __tablename__ = "room_claims"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    room_id = Column(String(36), ForeignKey("consultation_rooms.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    claimed_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    released_at = Column(TZDateTime, nullable=True)
+
+    active_room_key = Column(
+        String(36),
+        Computed("CASE WHEN released_at IS NULL THEN room_id END", persisted=False),
+        nullable=True,
+    )
+    active_user_key = Column(
+        String(36),
+        Computed("CASE WHEN released_at IS NULL THEN user_id END", persisted=False),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("active_room_key", name="uq_room_claims_active_room_key"),
+        UniqueConstraint("active_user_key", name="uq_room_claims_active_user_key"),
+    )
+
+    # P1.3: Restored active-claim exclusivity using virtual generated columns and a plain UniqueConstraint.
+    # Supported on SQLite 3.31+ and MariaDB 10.5+ (NULL is non-colliding in UNIQUE).
 
 
 class StaffClockEvent(Base):
@@ -290,16 +869,16 @@ class StaffClockEvent(Base):
     different hospital later shouldn't rewrite which facility a past shift
     was actually worked at."""
     __tablename__ = "staff_clock_events"
-    id = Column(String, primary_key=True, default=gen_id)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
-    facility_name = Column(String, nullable=False, index=True)
-    clock_in_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    clock_out_at = Column(DateTime, nullable=True)  # null while the shift is still open
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    clock_in_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    clock_out_at = Column(TZDateTime, nullable=True)  # null while the shift is still open
 
 
 class EmergencyToken(Base):
     """A short-lived, single-scope token bound to a QR code / physical card
-    reference. Never stores the actual medical data — just the grant.
+    reference. Never stores the actual medical data â€” just the grant.
 
     Two independent "keys" can point at the same grant:
       - `card_reference`: the pointer encoded in the QR code, issued by the
@@ -312,16 +891,190 @@ class EmergencyToken(Base):
     """
     __tablename__ = "emergency_tokens"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
-    token = Column(String, unique=True, nullable=False)
-    card_reference = Column(String, unique=True, nullable=True)  # printed on physical card / encoded in QR
-    nfc_uid = Column(String, unique=True, nullable=True)  # UID of a registered physical NFC tag/card
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    token = Column(String(64), unique=True, nullable=False)
+    card_reference = Column(String(64), unique=True, nullable=True)  # printed on physical card / encoded in QR
+    nfc_uid = Column(String(64), unique=True, nullable=True)  # UID of a registered physical NFC tag/card
     scope = Column(JSON, default=lambda: ["allergies", "medications", "conditions", "blood_type"])
-    expires_at = Column(DateTime, nullable=False)
+    expires_at = Column(TZDateTime, nullable=False)
     revoked = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    registered_by = Column(String, nullable=True)  # staff user id, for nfc_uid registrations
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    registered_by = Column(String(36), nullable=True)  # staff user id, for nfc_uid registrations
+
+
+class SelfRegistrationAttempt(Base):
+    """One row per NRIC's in-progress self-service registration (see
+    routers/self_registration.py) -- the self-service ALTERNATIVE to
+    staff-issued accounts (POST /auth/patients/{id}/issue-account),
+    replacing "verify in person" with NRIC + DOB + name + an emailed OTP +
+    OCR-verified photos of the physical NRIC, all checked against an
+    EXISTING Patient row a hospital already created. This table never
+    creates a Patient -- only ever links to one that already exists.
+
+    Unique index on patient_id -- exactly one in-flight attempt per
+    patient. A fresh POST /auth/self-register/start for a patient with an
+    existing non-"completed" row resets/reuses that same row in place
+    rather than creating a duplicate (same "re-registering updates in
+    place" pattern as EmergencyToken / NfcRegisterRequest elsewhere in this
+    codebase) -- see self_registration.py's `_get_or_reserve_attempt` for
+    the one deliberate exception (a flagged_manual_review row is NOT reset
+    by /start, so the self-service path stays a genuine dead end once flagged).
+
+    otp_code_hash / otp_expires_at / otp_attempt_count / otp_request_count /
+    otp_request_window_start mirror User's equivalent OTP columns/semantics
+    EXACTLY (see models.User's own OTP column comments above) -- only ever
+    the HASH of the OTP is stored here too, never the plaintext.
+    """
+    __tablename__ = "self_registration_attempts"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, unique=True, index=True)
+    # The address provided at /start -- becomes Patient.email on successful
+    # /complete IF Patient.email is still null (never clobbers an existing
+    # value). This is where the OTP below is actually emailed.
+    email = Column(String(255), nullable=False)
+
+    otp_code_hash = Column(String(255), nullable=True)
+    otp_expires_at = Column(TZDateTime, nullable=True)
+    otp_verified = Column(Boolean, nullable=False, default=False)
+    otp_attempt_count = Column(Integer, nullable=False, default=0)
+    otp_request_count = Column(Integer, nullable=False, default=0)
+    otp_request_window_start = Column(TZDateTime, nullable=True)
+
+    photo_verify_attempt_count = Column(Integer, nullable=False, default=0)
+    # pending_otp -> pending_photo -> photo_verified -> completed, with a
+    # possible pending_photo -> flagged_manual_review branch at 5 failed
+    # photo-verification attempts (see verify_self_registration_photos).
+    status = Column(String(64), nullable=False, default="pending_otp")
+    # Set once the OTP is verified (status -> pending_photo); a photo
+    # verification attempt after this deadline must restart from /start.
+    photo_verification_deadline = Column(TZDateTime, nullable=True)
+    # Short, internal-debugging-only note about the most recent OCR/match
+    # failure (e.g. "ic_number_mismatch", "back_ic_mismatch") -- NEVER
+    # shown verbatim to the client; see verify-photos' actionable-but-
+    # non-leaking client-facing error messages instead.
+    last_ocr_failure_reason = Column(Text, nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    patient = relationship("Patient")
+
+
+class QueueTicket(Base):
+    """A single reception-desk check-in / queue ticket. Scoped per-facility
+    and reset daily: `queue_number` only ever counts a given facility_name's
+    tickets for the same `queue_date`, so numbering restarts at 1 every day
+    without needing a separate "reset" job or a stored sequence row.
+
+    `queue_date` is the Malaysia-local (Asia/Kuala_Lumpur, UTC+8, no DST)
+    CALENDAR DATE the patient checked in on, stored as an ISO date string
+    (e.g. "2026-08-19") -- deliberately NOT the UTC date. This project's
+    target market is Malaysia; resetting the queue at UTC midnight would
+    silently reset it at 8am local time, mid-morning, while patients are
+    still waiting. See routers/reception.py's `_malaysia_today()` for where
+    this is computed -- hardcoded to a single timezone rather than made
+    per-facility-configurable, which is the right hackathon-scope call for
+    now but would need revisiting for a real multi-region deployment.
+
+    `UniqueConstraint(facility_name, queue_date, queue_number)`: this is
+    the actual concurrency-safety mechanism, not just a data-integrity nicety.
+    FastAPI runs sync `def` routes (all of this router's routes are `def`,
+    not `async def`) in a threadpool even under a single `uvicorn` process,
+    and database.py's SQLite engine sets `check_same_thread: False` -- so
+    two concurrent POST /reception/checkin calls for the same facility on
+    different threads really can both read the same COUNT(*) before either
+    commits. Without a DB-level constraint, that would silently hand out a
+    duplicate queue_number with no error anywhere. With it,
+    routers/reception.py::_next_queue_number's bounded retry loop turns
+    that race into either a correctly-serialized outcome or, in the
+    pathological worst case, a clean retry -- never a silent collision.
+
+    `facility_name` is SNAPSHOTTED from the checking-in staff member's
+    `current_user.facility` at check-in time (not a live join) -- same
+    reasoning as StaffClockEvent.facility_name / MedicineInventoryItem /
+    Ward elsewhere in this file: a receptionist's account being reassigned
+    to a different hospital later shouldn't rewrite which facility a past
+    ticket was actually issued at, and a queue is inherently a
+    point-in-time, at-this-desk concept anyway.
+
+    Deliberately reuses the existing card_reference/nfc_uid identifier
+    space from EmergencyToken to *identify* a walk-in patient (source
+    records which one was used, if either) rather than minting a new
+    identifier scheme -- but check-in is a READ-ONLY lookup against that
+    grant; see routers/reception.py::checkin for why this must never
+    revoke/consume/mutate the underlying EmergencyToken row."""
+
+    __tablename__ = "queue_tickets"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False)
+    queue_date = Column(String(64), nullable=False)  # Malaysia-local ISO date, e.g. "2026-08-19" -- see class docstring
+    queue_number = Column(Integer, nullable=False)
+    department = Column(String(64), nullable=True)  # free text, e.g. "General" | "Pharmacy" | "Lab" | "Emergency"
+    # Physical consultation room this ticket was round-robined to at check-in
+    # (see routers/reception.py::_assign_room). room_name is SNAPSHOTTED
+    # alongside room_id -- same reasoning as facility_name above: a room
+    # being renamed/retired later shouldn't rewrite which room a past ticket
+    # was sent to. Both nullable: a facility with no ConsultationRoom rows
+    # configured yet still checks patients in fine, just without a room.
+    room_id = Column(String(36), ForeignKey("consultation_rooms.id"), nullable=True, index=True)
+    room_name = Column(String(255), nullable=True)
+    reason = Column(Text, nullable=True)  # patient's stated reason for the visit
+    source = Column(String(64), nullable=False)  # "ic" | "qr" | "nfc" | "manual" | "self_qr" -- how the patient was identified
+    status = Column(String(64), nullable=False, default="waiting")  # waiting | called | done | cancelled
+    checked_in_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    called_at = Column(TZDateTime, nullable=True)
+    completed_at = Column(TZDateTime, nullable=True)
+    checked_in_by = Column(String(36), ForeignKey("users.id"), nullable=False)  # the receptionist
+
+    patient = relationship("Patient")
+
+    __table_args__ = (
+        Index("ix_queue_tickets_facility_checked_in", "facility_name", "checked_in_at"),
+        # The hot path: display.py's public board and reception's queue views
+        # all filter facility_name + queue_date (+ status). Polled up to
+        # 120x/min per screen -- ix_..._checked_in doesn't cover queue_date.
+        Index("ix_queue_tickets_facility_date", "facility_name", "queue_date"),
+        UniqueConstraint("facility_name", "queue_date", "queue_number", name="uq_queue_ticket_facility_date_number"),
+    )
+
+
+class ReceptionStation(Base):
+    """A facility's self-check-in QR target. A staff member (front desk)
+    generates one from the web Reception console; a patient then scans it
+    from the mobile app, while logged in, to check themselves into that
+    facility's queue without a receptionist keying anything in -- see
+    routers/reception.py::self_checkin. The QR itself just encodes `token`
+    (as `CLARION-STATION:{token}`, mirroring EmergencyToken/`emergency.py`'s
+    `CLARION-EMERGENCY:{card_reference}` payload convention); the app looks
+    up which facility/department that resolves to server-side, never trusts
+    a client-supplied facility name.
+
+    Deliberately modeled as long-lived and admin-revocable, like
+    EmergencyToken.nfc_uid, rather than short-lived/reissued like
+    EmergencyToken.card_reference: this QR is meant to be printed and taped
+    up at a physical front desk, so it needs to stay valid indefinitely
+    until staff explicitly retire it (`revoked`, never deleted -- same
+    soft-invalidate pattern as EmergencyToken.revoked / Appointment's
+    "cancelled" status elsewhere in this file).
+
+    At most one non-revoked row per facility_name is the intended usage,
+    enforced at the router level, not a DB constraint: regenerating a
+    facility's QR revokes the previous one first (see
+    routers/reception.py::create_or_replace_station) rather than allowing
+    active duplicates to pile up."""
+
+    __tablename__ = "reception_stations"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    token = Column(String(64), unique=True, nullable=False)
+    department = Column(String(64), nullable=True)  # optional -- pins self-checkins from this station to one department
+    revoked = Column(Boolean, default=False)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class AuditLog(Base):
@@ -347,12 +1100,165 @@ class AuditLog(Base):
     """
     __tablename__ = "audit_logs"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    patient_id = Column(String, ForeignKey("patients.id"), nullable=True)
-    actor = Column(String, nullable=False)          # user id, "emergency_token:<id>", or "system"
-    actor_role = Column(String, nullable=True)
-    actor_facility = Column(String, nullable=True)  # snapshot at access time -- see class docstring
-    action = Column(String, nullable=False)         # e.g. "view_record", "emergency_access", "upload_document"
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=True, index=True)
+    actor = Column(String(255), nullable=False)          # user id, "emergency_token:<id>", or "system"
+    actor_role = Column(String(64), nullable=True)
+    actor_facility = Column(String(255), nullable=True)  # snapshot at access time -- see class docstring
+    action = Column(String(64), nullable=False)         # e.g. "view_record", "emergency_access", "upload_document"
     fields_accessed = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
     detail = Column(Text, nullable=True)
+
+
+class HospitalSetting(Base):
+    """One row per facility (`facility_name` unique) holding that hospital's
+    own admin-editable configuration. Lazily created on first read of
+    GET /admin/hospital-settings (same create-on-read pattern as
+    routers/admin.py::get_budget / MedicineBudget), so a facility that has
+    never opened the settings screen still behaves as if it holds the
+    documented defaults.
+
+    `records_shared_publicly` (default True) is the cross-hospital record
+    sharing switch: when a facility sets it False, that facility's authored
+    clinical sub-records (Condition / MedicationStatement / AllergyIntolerance
+    / Encounter) are omitted from routers/patients.py::_serialize_patient
+    responses served to staff at OTHER facilities. It is deliberately a READ
+    filter only -- it never blocks a write, never hides data from the
+    patient's own view, and is ALWAYS ignored by the unauthenticated
+    emergency-token scan path (routers/emergency.py), which is a
+    life-safety override that must never be gated on an inter-hospital
+    data-sharing preference.
+
+    This is a BRAND-NEW table -- `create_all` picks it up on both a fresh
+    """
+    __tablename__ = "hospital_settings"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, unique=True, index=True)
+    display_name = Column(String(255), nullable=True)
+    address = Column(String(255), nullable=True)
+    contact_phone = Column(String(64), nullable=True)
+    timezone = Column(String(64), nullable=False, default="Asia/Kuala_Lumpur")
+    records_shared_publicly = Column(Boolean, nullable=False, default=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class RolePagePermission(Base):
+    """One row per `(facility_name, role)` -- which "pages" of the web
+    console that staff role is allowed to reach at that facility. Powers
+    both the server-side enforcement (auth.require_page_access, wired at
+    router level in main.py) and the web console's nav / routing / post-
+    login landing page (UserOut.allowed_pages).
+
+    `allowed_pages` is a JSON list of page keys drawn from
+    permissions.CONFIGURABLE_PAGES == ["patients", "reception", "pharmacy"].
+    The `admin` page is ALWAYS admin-only and is never a stored/configurable
+    value here.
+
+    Lazily created with documented per-role defaults on first read (see
+    permissions.get_or_create_role_permission and routers/admin.py's
+    role-permissions endpoints) -- the exact same create-on-read pattern as
+    HospitalSetting / MedicineBudget above, so a facility that has never
+    opened the permissions matrix still behaves as if it holds the
+    documented defaults:
+        clinician        -> ["patients", "reception"]
+        records_officer  -> ["patients", "reception"]
+        receptionist     -> ["reception"]
+        pharmacist       -> ["pharmacy"]
+    `admin` is NEVER stored -- an admin implicitly holds every page.
+    Only permissions.CONFIGURABLE_STAFF_ROLES ever get a row here;
+    patient / emergency_responder are not page-gated at all.
+
+    BRAND-NEW table -- `create_all` picks it up on both a fresh and an
+    HospitalSetting / QueueTicket / SelfRegistrationAttempt).
+    """
+    __tablename__ = "role_page_permissions"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    role = Column(String(64), nullable=False)
+    allowed_pages = Column(JSON, nullable=False, default=list)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("facility_name", "role", name="uq_role_page_permission_facility_role"),
+    )
+
+
+class WaitingRoomDisplay(Base):
+    """A public, unauthenticated waiting-room TV/monitor feed for a facility,
+    optionally scoped to one FacilitySection. Mirrors ReceptionStation's
+    long-lived, admin-managed, soft-revocable token model: `token` is an
+    unguessable secrets.token_urlsafe(16) the display device puts in the URL
+    (GET /display/{token}, no auth, NOT under require_page_access), looked up
+    server-side to resolve which facility/section to show -- a client never
+    supplies a facility name.
+
+    Unlike ReceptionStation, MULTIPLE non-revoked rows per facility are
+    allowed on purpose (a hospital may run one screen per waiting area, each
+    scoped to a different section). `show_full_names` opts a given screen
+    into showing patients' full names instead of the default masked label
+    ("Ahmad bin Ismail" -> "Ahmad I.") -- a per-screen privacy choice the
+    admin makes when they know that screen faces staff-only space.
+
+    BRAND-NEW table -- `create_all` picks it up on both a fresh and an
+    RolePagePermission / HospitalSetting / FacilitySection).
+    """
+    __tablename__ = "waiting_room_displays"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    token = Column(String(64), unique=True, nullable=False)
+    section = Column(String(64), nullable=True)
+    show_full_names = Column(Boolean, nullable=False, default=False)
+    revoked = Column(Boolean, nullable=False, default=False)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ClinicalRecordAnnotation(Base):
+    """Append-only clinical-record sign-off / correction note. NEVER updated
+    or deleted -- no endpoint exposes either operation; a change of mind is
+    recorded as another annotation. Snapshots the signer's name / role /
+    facility and a COPY of their digital signature PNG
+    (clarion-signatures bucket, key annotations/{id}.png) at signing time, so
+    the annotation stays verifiable even if the signer's account or profile signature
+    changes later -- same snapshot-not-live-join reasoning as
+    Encounter.signed_by_name and AuditLog.actor_facility.
+
+    `target_type` / `target_id` point at a Condition / MedicationStatement /
+    AllergyIntolerance / Encounter row. The read path
+    (routers/patients.py::_serialize_patient) groups these by target_id and
+    folds kind=='resolved' / kind=='discontinued' into a COMPUTED
+    effective_status / effective_active on the serialized record WITHOUT ever
+    mutating the underlying row -- the immutability-safe way to mark a
+    cross-facility record resolved/discontinued (the row's own author facility
+    still owns the actual column via PATCH).
+
+    BRAND-NEW table -- `create_all` picks it up on both a fresh and an
+    """
+    __tablename__ = "clinical_record_annotations"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    target_type = Column(String(64), nullable=False)  # condition | medication | allergy | encounter
+    target_id = Column(String(36), nullable=False, index=True)
+    kind = Column(String(64), nullable=False)  # resolved | discontinued | correction | note
+    note = Column(Text, nullable=True)
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_by_role = Column(String(64), nullable=True)
+    facility_name = Column(String(255), nullable=True)
+    # A COPY of the signer's profile signature PNG taken at signing time,
+    # `clarion-signatures` bucket, key `annotations/{id}.png` (see
+    # app/storage.py), so the annotation stays verifiable even if the signer
+    # later changes/clears their profile signature. (P1.6)
+    signature_object_key = Column(String(512), nullable=True)
+    signature_sha256 = Column(String(64), nullable=True)
+    signature_bytes = Column(Integer, nullable=True)
+    signature_mime = Column(String(128), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+

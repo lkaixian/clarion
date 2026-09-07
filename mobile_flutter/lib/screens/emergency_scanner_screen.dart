@@ -19,7 +19,7 @@ enum _ScanMode { qr, nfc, manual }
 /// three ways to look a card up, switchable via a segmented control:
 ///
 /// - **Scan QR**: live camera preview (`mobile_scanner`), decodes the
-///   `MEDIBRIDGE-EMERGENCY:<ref>` payload encoded in the QR.
+///   `CLARION-EMERGENCY:<ref>` payload encoded in the QR.
 /// - **Tap NFC**: reads a physical NFC card's UID (`nfc_manager`), for
 ///   patients using a physical card instead of the QR flow.
 /// - **Type Manually**: text entry fallback for either a QR card
@@ -117,8 +117,8 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       if (raw == null) continue;
       // QR payload format encoded by the backend: see
       // backend/app/routers/emergency.py::issue_emergency_card ->
-      // `f"MEDIBRIDGE-EMERGENCY:{card_reference}"`.
-      const prefix = 'MEDIBRIDGE-EMERGENCY:';
+      // `f"CLARION-EMERGENCY:{card_reference}"`.
+      const prefix = 'CLARION-EMERGENCY:';
       final ref = raw.startsWith(prefix) ? raw.substring(prefix.length) : raw;
       if (ref.isEmpty) continue;
       _qrHandledOnce = true;
@@ -176,7 +176,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
           children: [
             Text(
               l10n.responderScanDesc,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.4),
+              style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
             ),
             const SizedBox(height: 16),
             SegmentedButton<_ScanMode>(
@@ -205,12 +205,12 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(_error!, style: const TextStyle(color: AppColors.emergency)),
+                child: Text(_error!, style: TextStyle(color: context.palette.emergency)),
               ),
             if (_loading)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Center(child: CircularProgressIndicator(color: context.palette.primary)),
               ),
             if (_result != null) ...[
               const SizedBox(height: 20),
@@ -240,7 +240,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             l10n.scanResultFoundTitle,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.5),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.palette.textMuted, letterSpacing: 0.5),
           ),
         ),
         _ScanResultHeader(result: result, l10n: l10n),
@@ -251,9 +251,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         _CategorySection(
           title: l10n.allergiesTitle,
           icon: Icons.warning_amber_rounded,
-          iconColor: AppColors.emergency,
-          backgroundColor: AppColors.emergencyBg,
-          borderColor: AppColors.emergency,
+          iconColor: context.palette.emergency,
+          backgroundColor: context.palette.emergencyBg,
+          borderColor: context.palette.emergency,
           omittedNotice: (omitted['allergies'] ?? 0) > 0 ? l10n.scanResultOmittedAllergies(omitted['allergies']!) : null,
           child: result.allergies.isEmpty
               ? _EmptyText(l10n.noAllergies)
@@ -271,9 +271,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         _CategorySection(
           title: l10n.currentMedicationsTitle,
           icon: Icons.medication_outlined,
-          iconColor: AppColors.primary,
-          backgroundColor: AppColors.chipBg,
-          borderColor: AppColors.primaryLight,
+          iconColor: context.palette.primary,
+          backgroundColor: context.palette.chipBg,
+          borderColor: context.palette.primaryLight,
           omittedNotice:
               (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
           child: result.medications.isEmpty
@@ -294,9 +294,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         _CategorySection(
           title: l10n.activeConditionsTitle,
           icon: Icons.medical_information_outlined,
-          iconColor: AppColors.primary,
-          backgroundColor: AppColors.surface,
-          borderColor: AppColors.border,
+          iconColor: context.palette.primary,
+          backgroundColor: context.palette.surface,
+          borderColor: context.palette.border,
           omittedNotice: (omitted['conditions'] ?? 0) > 0 ? l10n.scanResultOmittedConditions(omitted['conditions']!) : null,
           child: result.conditions.isEmpty
               ? _EmptyText(l10n.noConditions)
@@ -305,8 +305,8 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
                   runSpacing: 8,
                   children: result.conditions
                       .map((c) => Chip(
-                            label: Text(c, style: const TextStyle(fontSize: 12, color: AppColors.textBody)),
-                            backgroundColor: AppColors.chipBg,
+                            label: Text(c, style: TextStyle(fontSize: 12, color: context.palette.textBody)),
+                            backgroundColor: context.palette.chipBg,
                             side: BorderSide.none,
                           ))
                       .toList(),
@@ -367,18 +367,18 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
 
   Widget _buildNfcMode(AppLocalizations l10n) {
     if (!NfcService.isSupportedPlatform) {
-      return Text(l10n.nfcUnsupportedPlatform, style: const TextStyle(color: AppColors.textMuted));
+      return Text(l10n.nfcUnsupportedPlatform, style: TextStyle(color: context.palette.textMuted));
     }
     switch (_nfcAvailability) {
       case null:
-        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        return Center(child: CircularProgressIndicator(color: context.palette.primary));
       case NfcAvailability.unsupported:
-        return Text(l10n.nfcUnsupportedDevice, style: const TextStyle(color: AppColors.textMuted));
+        return Text(l10n.nfcUnsupportedDevice, style: TextStyle(color: context.palette.textMuted));
       case NfcAvailability.disabled:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.nfcDisabled, style: const TextStyle(color: AppColors.textMuted)),
+            Text(l10n.nfcDisabled, style: TextStyle(color: context.palette.textMuted)),
             const SizedBox(height: 8),
             OutlinedButton(onPressed: openAppSettings, child: Text(l10n.openAppSettings)),
           ],
@@ -387,14 +387,14 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: AppColors.chipBg, borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(color: context.palette.chipBg, borderRadius: BorderRadius.circular(16)),
           child: Column(
             children: [
-              Icon(Icons.nfc, size: 48, color: _nfcSessionActive ? AppColors.primary : AppColors.textFaint),
+              Icon(Icons.nfc, size: 48, color: _nfcSessionActive ? context.palette.primary : context.palette.textFaint),
               const SizedBox(height: 12),
               Text(
                 _nfcSessionActive ? l10n.nfcReadyToTap : l10n.nfcStarting,
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -468,7 +468,7 @@ class _ScanResultHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: context.palette.primary,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -507,6 +507,9 @@ class _BloodTypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasType = bloodType != null && bloodType!.trim().isNotEmpty;
+    // Deliberately NOT theme-aware: a fixed white chip on the primary-coloured
+    // header for maximum at-a-glance prominence in both themes, so its text
+    // stays on the light [AppColors] palette (dark-on-white) regardless.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -592,7 +595,7 @@ class _CategorySection extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               notice,
-              style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontStyle: FontStyle.italic, height: 1.3),
+              style: TextStyle(fontSize: 11, color: context.palette.textMuted, fontStyle: FontStyle.italic, height: 1.3),
             ),
           ],
         ],
@@ -609,7 +612,7 @@ class _ScanBulletLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text('•  $text', style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.4)),
+      child: Text('•  $text', style: TextStyle(fontSize: 14, color: context.palette.textBody, height: 1.4)),
     );
   }
 }
@@ -620,6 +623,6 @@ class _EmptyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textFaint));
+    return Text(text, style: TextStyle(fontSize: 13, color: context.palette.textFaint));
   }
 }

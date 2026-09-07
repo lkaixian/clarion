@@ -1,0 +1,372 @@
+# CLARION -- demo-capable on-prem topology (roadmap task P1.11).
+#
+# This is the "single-VM fallback for the pilot" Compose file described in
+# healthcare/On-Prem Architecture.md. It is NOT the final hardened production
+# stack -- see docs/deployment.md for what is wired now vs. TODO.
+#
+#   Bring up:        docker compose --env-file .env.docker up -d --build
+#   Validate config: docker compose --env-file .env.docker config
+#
+# Only the `proxy` (Caddy) publishes host ports (80/443) -- roadmap task
+# P1.9. It terminates TLS, adds HSTS/CSP/security headers, and routes
+# /api/* -> backend, everything else -> web. Two network segments (P1.9):
+# `edge` (proxy <-> web/backend) and `internal` (backend <-> data/PACS) --
+# so a popped web/edge can't reach the data tier and the data tier can't
+# reach the API. Every service has a healthcheck and a named volume.
+#
+# For local debugging without going through TLS, start a service with its
+# port published ad hoc:  docker compose run --service-ports backend
+
+name: clarion
+
+# ---------------------------------------------------------------------------
+# Reusable snippets
+# ---------------------------------------------------------------------------
+x-restart: &restart
+  restart: unless-stopped
+
+x-env-file: &env-file
+  env_file:
+    - path: ./.env.docker
+      required: false
+
+# ===========================================================================
+# Services
+# ===========================================================================
+services:
+
+  # -------------------------------------------------------------------------
+  # Edge -- the only service that publishes to the host (P1.9)
+  # -------------------------------------------------------------------------
+  proxy:
+    <<: [*restart, *env-file]
+    image: caddy:2.8-alpine
+    environment:
+      # FQDN clients use. "localhost" for the demo; set to
+      # e.g. clarion.example.edu.my in .env.docker for a real deployment.
+      CLARION_SITE_ADDRESS: ${CLARION_SITE_ADDRESS:-localhost}
+      # Demo: "tls internal" (Caddy local CA). Production: override with
+      #   tls /etc/caddy/certs/clarion.crt /etc/caddy/certs/clarion.key
+      CLARION_TLS_DIRECTIVE: ${CLARION_TLS_DIRECTIVE:-tls internal}
+      # Extra CSP connect-src entries (space-separated), e.g. the
+      # on-workstation NFC bridge: http://localhost:8770 http://127.0.0.1:8770
+      CLARION_CSP_CONNECT_EXTRA: ${CLARION_CSP_CONNECT_EXTRA:-}
+      # HSTS value. Short by default; ramp for prod. No "preload" without
+      # The University domain-owner sign-off (see .env.docker.example).
+      CLARION_HSTS: ${CLARION_HSTS:-max-age=300}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./proxy/certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        # Fixed address so the backend can trust X-Forwarded-* from exactly
+        # this hop (FORWARDED_ALLOW_IPS below) and nothing else.
+        ipv4_address: 172.28.0.2
+    depends_on:
+      web:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    healthcheck:
+      # Plain-HTTP loopback route in the Caddyfile -- no TLS / cert / DNS
+      # dependency, so it works identically for the demo and the FQDN config.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # Application tier
+  # -------------------------------------------------------------------------
+  backend:
+    <<: [*restart, *env-file]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: clarion/backend:local
+    environment:
+      APP_ENV: ${APP_ENV:-demo}
+      # database.py supports MariaDB. Default points at the mounted SQLite volume
+      # so the app works out-of-the-box in demo mode.
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clarion.db}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # gunicorn trusts X-Forwarded-* only from the edge proxy's fixed
+      # address (see the proxy service). The rate limiter keys on the
+      # resulting client IP, so this must never widen to "*".
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.28.0.2}
+      # Wiring hints for the ObjectStore / cache work (P1.6). Harmless today.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_ALLOW_CLOUD_AI come from
+      # ./.env.docker via env_file -- never inline real secrets here.
+    volumes:
+      - clarion_db:/app/data
+      - clarion_uploads:/app/uploads
+    expose:
+      - "8000"
+    networks:
+      # edge: reachable by the proxy (and web's fallback /api proxy).
+      # internal: reaches mariadb / minio / redis. NOT the other way round.
+      - edge
+      - internal
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      # See Dockerfile note: probes "/" until /healthz exists (P5.1).
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+  # One-shot schema migration for the MariaDB path (code-review follow-up 2026-09-07).
+  # NOT started by default -- the SQLite demo migrates itself via the app's
+  # _ensure_schema() at boot. For a MariaDB deployment, run this to completion
+  # BEFORE starting `backend` (whose runtime account has no DDL rights and
+  # will refuse to serve against an un-migrated DB):
+  #
+  #   docker compose --profile migrate run --rm migrate
+  #
+  # It runs as the DDL-privileged `clarion_migrate` account. The P1.6
+  # legacy-column drop (b7f1c0d94a2e) now aborts if blobs have not first been
+  # moved with db/migrate_uploads_to_objectstore.py -- see docs/deployment.md
+  # "MariaDB cutover" for the full ordered runbook.
+  migrate:
+    <<: [*restart, *env-file]
+    profiles: ["migrate"]
+    restart: "no"
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: clarion/backend:local
+    environment:
+      DATABASE_URL: ${MIGRATE_DATABASE_URL:-mysql+pymysql://clarion_migrate:${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}@mariadb:3306/clarion?charset=utf8mb4}
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    networks:
+      - internal
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  web:
+    <<: *restart
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: clarion/web:local
+    environment:
+      # /api => same-origin proxy (the edge proxy routes it to the backend;
+      # web/nginx.conf also proxies it if web is hit directly). A full URL
+      # here switches the SPA to direct cross-origin calls.
+      API_BASE: ${API_BASE:-/api}
+    expose:
+      - "8080"
+    networks:
+      - edge
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # Data tier
+  # -------------------------------------------------------------------------
+
+  # MariaDB -- the app can run on this now (P1.3): set DATABASE_URL to
+  # mysql+pymysql://clarion_app:...@mariadb:3306/clarion?charset=utf8mb4 and run
+  # `alembic upgrade head` as clarion_migrate first. The demo still defaults to
+  # SQLite. Copying the existing demo data across is P1.4.
+  mariadb:
+    <<: [*restart, *env-file]
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-change-me-root}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-clarion}
+      MARIADB_APP_PASSWORD: ${MARIADB_APP_PASSWORD:-change-me-app}
+      MARIADB_MIGRATE_PASSWORD: ${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}
+      MARIADB_REPORT_PASSWORD: ${MARIADB_REPORT_PASSWORD:-change-me-report}
+      MARIADB_AUTO_UPGRADE: "1"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=512M
+      - --max-connections=200
+      # The three least-privilege accounts (clarion_app / clarion_migrate /
+      # clarion_report) are created on first init by
+      # ./backend/db/mariadb/10-accounts.sh (mounted below).
+      # TODO (P2.7): --log-bin=ROW for point-in-time recovery + encrypted
+      # tablespaces + REQUIRE SSL on the accounts once TLS is configured.
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./backend/db/mariadb:/docker-entrypoint-initdb.d:ro
+    expose:
+      - "3306"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # MinIO -- S3-compatible object store for documents / signatures / medicine
+  # photos / derived thumbnails / DICOM. ObjectStore abstraction is P1.6.
+  minio:
+    <<: [*restart, *env-file]
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-clarion}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+      # MINIO_BROWSER: "off"   # enable to disable the web console in prod
+    volumes:
+      - minio_data:/data
+    expose:
+      - "9000"   # S3 API
+      - "9001"   # web console
+    # To reach the console from the host during a demo, uncomment:
+    # ports:
+    #   - "9000:9000"
+    #   - "9001:9001"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # Redis -- cache + (later) rate-limit / session / worker broker.
+  redis:
+    <<: *restart
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+
+  # -------------------------------------------------------------------------
+  # PACS tier (roadmap task P4.7) -- minimal, demo-only config for now.
+  # -------------------------------------------------------------------------
+
+  # PostgreSQL index for Orthanc.
+  orthanc-postgres:
+    <<: [*restart, *env-file]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${ORTHANC_PG_USER:-orthanc}
+      POSTGRES_PASSWORD: ${ORTHANC_PG_PASSWORD:-change-me-orthanc}
+      POSTGRES_DB: ${ORTHANC_PG_DB:-orthanc}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - orthanc_pg_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ORTHANC_PG_USER:-orthanc} -d ${ORTHANC_PG_DB:-orthanc}"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  orthanc:
+    <<: [*restart, *env-file]
+    image: orthancteam/orthanc:24.10.1
+    environment:
+      # Demo-only: open access on the internal network. Lock this down (auth +
+      # per-user creds) before anything real -- part of P4.7.
+      ORTHANC__NAME: "CLARION PACS"
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__REMOTE_ACCESS_ALLOWED: "true"
+      # DICOMweb plugin (WADO-RS / QIDO-RS / STOW-RS) for the OHIF viewer.
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      # TODO (P4.7): enable the PostgreSQL index + MinIO S3 storage plugins:
+      #   ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      #   ORTHANC__POSTGRESQL__HOST: "orthanc-postgres"
+      #   ORTHANC__POSTGRESQL__DATABASE: "${ORTHANC_PG_DB:-orthanc}"
+      #   ORTHANC__POSTGRESQL__USERNAME: "${ORTHANC_PG_USER:-orthanc}"
+      #   ORTHANC__POSTGRESQL__PASSWORD: "${ORTHANC_PG_PASSWORD}"
+      #   ORTHANC__AWS_S3_STORAGE__* -> bucket clarion-dicom on the minio service
+      # Until then Orthanc uses its built-in SQLite index on the named volume.
+    volumes:
+      - orthanc_data:/var/lib/orthanc/db
+    expose:
+      - "8042"   # HTTP / DICOMweb
+      - "4242"   # DICOM protocol (DIMSE)
+    networks:
+      - internal
+    depends_on:
+      orthanc-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8042/system || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+# ===========================================================================
+# Networks -- two segments, nothing on the default network.
+#   edge     : proxy <-> web, proxy <-> backend. Fixed subnet so the proxy
+#              holds a stable address (172.28.0.2) that the backend trusts
+#              for X-Forwarded-* (FORWARDED_ALLOW_IPS). web has no route to
+#              the data tier; the data/PACS tier has no route to the API.
+#   internal : backend <-> mariadb / minio / redis / orthanc(+pg).
+# ===========================================================================
+networks:
+  edge:
+    driver: bridge
+    ipam:
+      config:
+        # Dynamic IPs from .10.0/24 upward; .0.2-.0.9 reserved for static
+        # assignment (the proxy holds .0.2).
+        - subnet: 172.28.0.0/16
+          ip_range: 172.28.10.0/24
+          gateway: 172.28.0.1
+  internal:
+    driver: bridge
+
+# ===========================================================================
+# Volumes -- named, so `docker compose down` keeps the data.
+# ===========================================================================
+volumes:
+  clarion_db:
+  clarion_uploads:
+  mariadb_data:
+  minio_data:
+  redis_data:
+  orthanc_data:
+  orthanc_pg_data:
+  caddy_data:
+  caddy_config:

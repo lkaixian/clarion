@@ -1,0 +1,31 @@
+# CLARION Android release signing (P1.13).
+#
+# Copy this file to `android/key.properties` (git-ignored — see repo root
+# .gitignore) and fill in real values. NEVER commit the filled-in file or the
+# .jks/.keystore it points at.
+#
+# 1. Generate a real release keystore (do this ONCE, then guard the .jks like
+#    any other long-lived credential — a password manager or CI secret store,
+#    not this repo):
+#
+#      keytool -genkeypair -v -storetype JKS \
+#        -keystore clarion-release.jks \
+#        -keyalg RSA -keysize 2048 -validity 10000 \
+#        -alias clarion
+#
+#    `-validity 10000` (days, ~27 years) matches Google Play's requirement
+#    that a release key outlive the app itself -- losing this key means you
+#    can never again publish an update under the same applicationId.
+#
+# 2. Point storeFile below at wherever you keep that .jks (absolute path, or
+#    relative to this android/ directory). Do not place it inside the repo.
+#
+# 3. Without this file present, `build.gradle.kts` falls back to Android's
+#    default debug signing (a well-known, insecure, publicly-published key)
+#    so local `flutter build apk --release` still works for internal/demo
+#    builds -- but that output must never be distributed as the real release.
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=clarion
+storeFile=/absolute/path/to/clarion-release.jks

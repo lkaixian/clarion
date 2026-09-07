@@ -5,7 +5,9 @@ import 'config/app_config.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/patient_provider.dart';
+import 'providers/queue_provider.dart';
 import 'providers/reminders_provider.dart';
+import 'providers/theme_provider.dart';
 import 'services/api_client.dart';
 import 'services/token_storage.dart';
 
@@ -28,15 +30,19 @@ void main() {
   // meaningfully fail or that any caller is waiting on.
   apiClient.onUnauthorized = () => authProvider.forceLogout();
   final patientProvider = PatientProvider(api: apiClient);
+  final queueProvider = QueueProvider(api: apiClient);
   final localeProvider = LocaleProvider();
   final remindersProvider = RemindersProvider();
+  final themeProvider = ThemeProvider();
 
-  runApp(MediBridgeApp(
+  runApp(ClarionApp(
     appConfig: appConfig,
     apiClient: apiClient,
     authProvider: authProvider,
     patientProvider: patientProvider,
+    queueProvider: queueProvider,
     localeProvider: localeProvider,
     remindersProvider: remindersProvider,
+    themeProvider: themeProvider,
   ));
 }

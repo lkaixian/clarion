@@ -1,4 +1,4 @@
-# MediBridge release build shrink/obfuscation rules.
+# CLARION release build shrink/obfuscation rules.
 #
 # Flutter's own engine + plugin registrant classes are already kept by the
 # Flutter Gradle plugin's default rules. The extra keeps below are for the

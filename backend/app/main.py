@@ -1,6 +1,7 @@
+import contextlib
+import logging
 import os
-import shutil
-from datetime import datetime
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +12,40 @@ from dotenv import load_dotenv
 # missing .env is fine -- load_dotenv() just no-ops.
 load_dotenv()
 
+# No app-wide logging config existed before this -- every `logger.info`/
+# `logger.warning`/`logger.exception` call under app/ (nric_ocr.py's OCR
+# fallback warnings, self_registration.py's verify-photos outcome log,
+# etc.) was silently dropped: Python's root logger defaults to WARNING
+# with no handler attached, and uvicorn only configures ITS OWN
+# uvicorn.*/uvicorn.access loggers, not the app's. This makes every
+# "clarion.*"-named (and any other) logger's INFO+ output actually reach
+# the console uvicorn is already running in. Deliberately basicConfig, not
+# a dictConfig/handler-per-module setup -- this is a single-process local
+# dev/demo backend, not a service with log aggregation to wire up.
+#
+# Level is read from LOG_LEVEL (env var or backend/.env, defaulting to
+# INFO) rather than hardcoded, so switching to DEBUG for a one-off
+# debugging session (e.g. nric_ocr.py's raw Tesseract OCR text, which logs
+# at DEBUG specifically because it's sensitive card-text output -- see
+# that module) is a console-only change, no source edit needed: e.g.
+# `$env:LOG_LEVEL="DEBUG"` (PowerShell) before starting uvicorn, then unset
+# / close that shell afterward to go back to INFO.
+#
+# Unlike SECRET_KEY/OTP_HMAC_KEY elsewhere in this file (deliberately
+# fail-closed with no fallback -- those are security-critical), an invalid
+# LOG_LEVEL is just a typo in a cosmetic dev-convenience setting -- crashing
+# the whole app over e.g. "DEBGU" would be a bad trade. logging.basicConfig
+# raises ValueError for anything not a known level name, so validate first
+# and fall back to INFO with a warning printed straight to stderr (the
+# logging config itself isn't up yet at this point, so a real logger call
+# here would be silently lost).
+_VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+if _LOG_LEVEL not in _VALID_LOG_LEVELS:
+    print(f"[main] Ignoring invalid LOG_LEVEL={_LOG_LEVEL!r} -- falling back to INFO.")
+    _LOG_LEVEL = "INFO"
+logging.basicConfig(level=_LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,267 +53,161 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
-from . import models
-from .database import engine
+from fastapi import Depends
+
+from . import auth
+from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile
 
-models.Base.metadata.create_all(bind=engine)
+# Schema management (P1.5): Alembic is the single source of schema truth. The
+# old startup path -- create_all() plus a ~400-line hand-rolled
+# _migrate_lightweight() that ran ALTER TABLE on every boot -- is gone
+# (Security Audit M9: uncontrolled DDL as the app user on a shared server).
+_IS_SQLITE = DB_BACKEND == "sqlite"
 
 
-def _backup_sqlite_file_before_migration():
-    """Best-effort copy of the live SQLite file to backend/backups/ before
-    any ALTER TABLE runs. Only called when _migrate_lightweight() has
-    detected at least one pending column/index addition, so a normal
-    restart (no pending schema change) never touches disk beyond the usual
-    DB file. Silently no-ops for non-SQLite backends or if the file can't
-    be found — this is a cheap safety net for the demo DB, not a real
-    backup strategy (no retention/rotation policy; old backups just
-    accumulate under backend/backups/)."""
+@contextlib.contextmanager
+def _schema_lock():
+    """Serialise :func:`_ensure_schema` across processes. gunicorn imports this
+    module in every worker; without this, 4 workers race ``alembic upgrade`` on
+    one SQLite file and corrupt it (tables land, ``alembic_version`` doesn't).
+    POSIX + SQLite only -- MariaDB only verifies, and local dev is single-process."""
+    if not _IS_SQLITE:
+        yield
+        return
     try:
-        db_url = engine.url
-        if db_url.get_backend_name() != "sqlite" or not db_url.database:
-            return
-        db_path = Path(db_url.database)
-        if not db_path.is_file():
-            return
-        backups_dir = db_path.parent / "backups"
-        backups_dir.mkdir(exist_ok=True)
-        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-        backup_path = backups_dir / f"{db_path.stem}_pre_migration_{timestamp}{db_path.suffix}"
-        shutil.copy2(db_path, backup_path)
-    except OSError:
-        # Never let a backup failure block startup/migration of the live DB.
-        pass
+        import fcntl
+    except ImportError:  # Windows dev
+        yield
+        return
+    db_path = engine.url.database or "clarion.db"
+    lock_path = Path(db_path).resolve().parent / ".clarion_schema.lock"
+    with open(lock_path, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
-def _migrate_lightweight():
-    """This project has no Alembic (SQLite + `create_all`, hackathon-scale
-    on purpose) — `create_all` only creates *missing tables*, not missing
-    *columns* (or indexes on pre-existing columns) on tables that already
-    existed on disk. So when a column is added to an existing model (like
-    `EmergencyToken.nfc_uid`), an already-seeded `medibridge.db` from
-    before that change needs a manual `ALTER TABLE`. This runs once at
-    startup, is a no-op if the column/index already exists, and only ever
-    adds columns/indexes — never destructive. A backup of the DB file is
-    taken first, but only if something is actually about to change."""
-    inspector = inspect(engine)
+def _ensure_schema() -> None:
+    """Make sure the connected database is at the current Alembic head.
 
-    existing_columns = set()
-    if "emergency_tokens" in inspector.get_table_names():
-        existing_columns = {col["name"] for col in inspector.get_columns("emergency_tokens")}
+    - Non-SQLite (production MariaDB): the deploy runs `alembic upgrade head`
+      with the `clarion_migrate` account *before* this process starts. Here we
+      only VERIFY, and refuse to serve otherwise -- the runtime account is
+      DML-only and must never issue DDL.
+    - SQLite (demo): bring a fresh or already-Alembic-managed file up to head
+      automatically. A *pre-Alembic* `clarion.db` (tables present, no
+      `alembic_version`) is refused rather than blind-stamped -- those files
+      were built by the retired `create_all` and carry real constraint drift
+      (missing FK `ondelete`, missing UNIQUEs). Rebuild it: `rm clarion.db`
+      then `python seed.py`.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
 
-    existing_user_columns = set()
-    existing_user_indexes = set()
-    if "users" in inspector.get_table_names():
-        existing_user_columns = {col["name"] for col in inspector.get_columns("users")}
-        existing_user_indexes = {idx["name"] for idx in inspector.get_indexes("users")}
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    head = ScriptDirectory.from_config(cfg).get_current_head()
 
-    existing_patient_columns = set()
-    if "patients" in inspector.get_table_names():
-        existing_patient_columns = {col["name"] for col in inspector.get_columns("patients")}
-
-    existing_document_columns = set()
-    if "clinical_documents" in inspector.get_table_names():
-        existing_document_columns = {col["name"] for col in inspector.get_columns("clinical_documents")}
-
-    existing_audit_log_columns = set()
-    if "audit_logs" in inspector.get_table_names():
-        existing_audit_log_columns = {col["name"] for col in inspector.get_columns("audit_logs")}
-
-    pending = (
-        ("emergency_tokens" in inspector.get_table_names() and (
-            "nfc_uid" not in existing_columns or "registered_by" not in existing_columns
-        ))
-        or ("users" in inspector.get_table_names() and (
-            "must_change_password" not in existing_user_columns
-            or "reset_attempt_count" not in existing_user_columns
-            or "reset_locked_until" not in existing_user_columns
-            or "login_failed_count" not in existing_user_columns
-            or "login_locked_until" not in existing_user_columns
-            or "ix_users_patient_id" not in existing_user_indexes
-            or "otp_code_hash" not in existing_user_columns
-            or "otp_expires_at" not in existing_user_columns
-            or "otp_attempt_count" not in existing_user_columns
-            or "otp_request_count" not in existing_user_columns
-            or "otp_request_window_start" not in existing_user_columns
-            or "password_changed_at" not in existing_user_columns
-        ))
-        or ("patients" in inspector.get_table_names() and (
-            "email" not in existing_patient_columns
-            or "emergency_contact_name" not in existing_patient_columns
-            or "emergency_contact_phone" not in existing_patient_columns
-            or "emergency_contact_relationship" not in existing_patient_columns
-        ))
-        or ("clinical_documents" in inspector.get_table_names() and (
-            "file_path" not in existing_document_columns
-        ))
-        or ("audit_logs" in inspector.get_table_names() and (
-            "actor_facility" not in existing_audit_log_columns
-        ))
-    )
-    if pending:
-        _backup_sqlite_file_before_migration()
-
-    if "emergency_tokens" in inspector.get_table_names():
-        with engine.begin() as conn:
-            if "nfc_uid" not in existing_columns:
-                conn.execute(text("ALTER TABLE emergency_tokens ADD COLUMN nfc_uid VARCHAR"))
-                conn.execute(text(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_emergency_tokens_nfc_uid "
-                    "ON emergency_tokens (nfc_uid)"
-                ))
-            if "registered_by" not in existing_columns:
-                conn.execute(text("ALTER TABLE emergency_tokens ADD COLUMN registered_by VARCHAR"))
-
-    # Added for staff-issued patient accounts / self-service password reset
-    # (POST /auth/patients/{id}/issue-account, /auth/forgot-password,
-    # /auth/change-password). All nullable/defaulted so this is a safe
-    # additive ALTER TABLE against an already-seeded medibridge.db.
-    if "users" in inspector.get_table_names():
-        with engine.begin() as conn:
-            if "must_change_password" not in existing_user_columns:
-                conn.execute(text(
-                    "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
-                ))
-            if "reset_attempt_count" not in existing_user_columns:
-                conn.execute(text(
-                    "ALTER TABLE users ADD COLUMN reset_attempt_count INTEGER NOT NULL DEFAULT 0"
-                ))
-            if "reset_locked_until" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN reset_locked_until DATETIME"))
-            # Added for POST /auth/login lockout (brute-force protection on
-            # the login endpoint itself, distinct from the reset_* columns
-            # above which only cover /auth/forgot-password).
-            if "login_failed_count" not in existing_user_columns:
-                conn.execute(text(
-                    "ALTER TABLE users ADD COLUMN login_failed_count INTEGER NOT NULL DEFAULT 0"
-                ))
-            if "login_locked_until" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN login_locked_until DATETIME"))
-            # patient_id is a hot-path lookup key (login NRIC resolution,
-            # issue-account, forgot-password) — index it on already-seeded
-            # DBs too, matching models.py's `index=True` (which only takes
-            # effect for brand-new tables via create_all).
-            if "ix_users_patient_id" not in existing_user_indexes:
-                conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_users_patient_id ON users (patient_id)"
-                ))
-            # Added for the email-OTP password reset flow (POST
-            # /auth/request-password-reset-otp, POST
-            # /auth/reset-password-with-otp), replacing the old NRIC+DOB
-            # single-step /auth/forgot-password. Only ever the HASH of the
-            # OTP is stored (otp_code_hash), never the plaintext code.
-            if "otp_code_hash" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN otp_code_hash VARCHAR"))
-            if "otp_expires_at" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN otp_expires_at DATETIME"))
-            if "otp_attempt_count" not in existing_user_columns:
-                conn.execute(text(
-                    "ALTER TABLE users ADD COLUMN otp_attempt_count INTEGER NOT NULL DEFAULT 0"
-                ))
-            if "otp_request_count" not in existing_user_columns:
-                conn.execute(text(
-                    "ALTER TABLE users ADD COLUMN otp_request_count INTEGER NOT NULL DEFAULT 0"
-                ))
-            if "otp_request_window_start" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN otp_request_window_start DATETIME"))
-            # Added for JWT revocation-on-password-change (POST /auth/login,
-            # auth._resolve_current_user). Nullable/additive -- existing rows
-            # get password_changed_at=NULL, which auth._resolve_current_user
-            # treats as "no watermark, don't reject" so this migration itself
-            # doesn't force-logout every already-issued token; only an
-            # actual subsequent password change (via _apply_new_password)
-            # starts revoking tokens issued before it.
-            if "password_changed_at" not in existing_user_columns:
-                conn.execute(text("ALTER TABLE users ADD COLUMN password_changed_at DATETIME"))
-
-    # Added for patient self-service profile editing (PATCH
-    # /patients/{id}/profile). All nullable — additive/safe ALTER TABLE
-    # against an already-seeded medibridge.db. `email` here is the
-    # patient's own contact address (where the password-reset OTP is
-    # sent), distinct from users.email which stays the internal
-    # login-identifier field.
-    if "patients" in inspector.get_table_names():
-        with engine.begin() as conn:
-            if "email" not in existing_patient_columns:
-                conn.execute(text("ALTER TABLE patients ADD COLUMN email VARCHAR"))
-            if "emergency_contact_name" not in existing_patient_columns:
-                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_name VARCHAR"))
-            if "emergency_contact_phone" not in existing_patient_columns:
-                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_phone VARCHAR"))
-            if "emergency_contact_relationship" not in existing_patient_columns:
-                conn.execute(text("ALTER TABLE patients ADD COLUMN emergency_contact_relationship VARCHAR"))
-
-    # Added for original-file retrieval of uploaded clinical documents (GET
-    # /patients/{id}/documents/{id}/file) -- see ClinicalDocument.file_path.
-    # Nullable/additive; existing rows just get file_path=NULL (their
-    # original file was never persisted -- only OCR'd text is available for
-    # those, same as before this change).
-    if "clinical_documents" in inspector.get_table_names():
-        with engine.begin() as conn:
-            if "file_path" not in existing_document_columns:
-                conn.execute(text("ALTER TABLE clinical_documents ADD COLUMN file_path VARCHAR"))
-
-    # Added so GET /patients/{id}/audit-log can show WHERE a staff actor
-    # accessed from, snapshotted at access time (see AuditLog's class
-    # docstring for why this is a snapshot and not a live join, unlike the
-    # actor's display name). Nullable/additive; existing rows just get
-    # actor_facility=NULL (no snapshot exists for accesses logged before
-    # this column existed).
-    if "audit_logs" in inspector.get_table_names():
-        with engine.begin() as conn:
-            if "actor_facility" not in existing_audit_log_columns:
-                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_facility VARCHAR"))
+    with _schema_lock():
+        _ensure_schema_locked(cfg, head)
 
 
-_migrate_lightweight()
+def _ensure_schema_locked(cfg, head) -> None:
+    from alembic import command
+    from alembic.runtime.migration import MigrationContext
+
+    with engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+        has_tables = bool(inspect(conn).get_table_names())
+
+    if current == head:
+        return
+
+    if not _IS_SQLITE:
+        raise RuntimeError(
+            f"Database schema is at revision {current!r}, expected head {head!r}. "
+            "Run `alembic upgrade head` with the clarion_migrate account before "
+            "starting the app. See docs/deployment.md (MariaDB cutover)."
+        )
+
+    if current is None and has_tables:
+        raise RuntimeError(
+            "backend/clarion.db predates Alembic (has tables but no alembic_version) "
+            "and cannot be trusted to match the current schema. For a clean demo DB: "
+            "`rm backend/clarion.db && python backend/seed.py`."
+        )
+
+    logging.getLogger("clarion.schema").info(
+        "Bringing SQLite schema up to Alembic head %s.", head)
+    command.upgrade(cfg, "head")
+
+
+_ensure_schema()
 
 app = FastAPI(
-    title="MediBridge API",
+    title="CLARION API",
     description="Emergency-first, interoperable health record continuity system.",
     version="0.1.0",
 )
 
-# CORS_ALLOWED_ORIGINS: comma-separated list of real origins (e.g.
-# "https://app.example.com,https://staff.example.com") to lock this down
-# before any real deployment. Left unset (or APP_ENV=demo), this defaults
-# to allow_origins=["*"] -- the "just works for judging" convenience this
-# project has always had, appropriate for a not-yet-deployed hackathon/demo
-# app but NOT for anything handling real patient data on the open internet.
-# Once you deploy for real: set CORS_ALLOWED_ORIGINS to your actual web/
-# mobile origins AND set APP_ENV to anything other than "demo" (or leave it
-# unset -- see the condition below), so a forgotten/blank env var doesn't
-# silently fall back to wide-open CORS in production.
+# Browser CORS. Precedence:
+#   1. CORS_ALLOWED_ORIGINS set  -> exactly that comma-separated allowlist
+#      (e.g. "https://clarion.example.edu.my"). This is the real-deployment path.
+#   2. else APP_ENV=demo / DEMO_MODE in {demo,1,true}  -> allow_origins=["*"]
+#      (local dev + judging). This is now an EXPLICIT opt-in.
+#   3. else (nothing configured, or a non-demo APP_ENV with no allowlist)
+#      -> allow_origins=[] : fail CLOSED. A cross-origin SPA is blocked until
+#      one of the above is set. (Security Audit M3 -- an unconfigured deploy
+#      must not silently get wide-open CORS.)
+# Same-origin setups (the web/ container's nginx /api proxy) need none of
+# this -- the browser call is same-origin so CORS never engages.
 _app_env = os.environ.get("APP_ENV", "").strip().lower()
 _demo_mode = os.environ.get("DEMO_MODE", "").strip().lower()
 _cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+_is_demo = _app_env == "demo" or _demo_mode in ("demo", "1", "true")
+_cors_log = logging.getLogger("clarion.cors")
 
 if _cors_origins_env:
     allow_origins = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
-elif _app_env == "demo" or _demo_mode == "demo" or (not _app_env and not _demo_mode):
-    # Preserves today's default behavior: unset APP_ENV/DEMO_MODE (this
-    # project's status quo -- not yet deployed) or an explicit "demo" value
-    # both mean "wide open, judging-friendly".
+elif _is_demo:
     allow_origins = ["*"]
+    _cors_log.warning(
+        "CORS is wide open (allow_origins=['*']) because APP_ENV/DEMO_MODE=demo. "
+        "Set CORS_ALLOWED_ORIGINS and APP_ENV=production before any real deployment."
+    )
 else:
-    # APP_ENV/DEMO_MODE explicitly set to something other than "demo" but no
-    # CORS_ALLOWED_ORIGINS provided -- fail safe to "no origins allowed"
-    # rather than silently falling back to "*" in what's been flagged as a
-    # non-demo environment.
     allow_origins = []
+    _cors_log.warning(
+        "CORS disabled (allow_origins=[]): no CORS_ALLOWED_ORIGINS set and "
+        "APP_ENV/DEMO_MODE is not 'demo'. Cross-origin browser calls will be "
+        "blocked -- set CORS_ALLOWED_ORIGINS for a real deployment, or "
+        "APP_ENV=demo for local cross-origin dev. (Same-origin /api proxy needs neither.)"
+    )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
-    # No cookies are used anywhere in this app (JWT is sent via the
-    # Authorization header, never a cookie) -- allow_credentials=True bought
-    # nothing here and is exactly what forces Starlette's CORS middleware
-    # into permissive origin-reflection behavior even when allow_origins is
-    # locked down to a real list. False is correct and strictly tighter.
-    allow_credentials=False,
+    # P2.5 (Security Audit M4) introduced ONE cookie: the HttpOnly refresh
+    # token POST /auth/login sets (see auth_router.py's
+    # _set_refresh_cookie). Every other authenticated call is still a
+    # Bearer header, unaffected by this setting either way. Credentialed
+    # CORS is spec-forbidden with a wildcard origin (`allow_origins=["*"]`)
+    # -- browsers reject the combination outright -- so this is True ONLY
+    # when an explicit, real allowlist is configured (the actual-deployment
+    # path); the demo wildcard and fail-closed-empty paths both get False,
+    # which means the refresh cookie simply isn't sent/received on a
+    # cross-origin call in either of those modes (e.g. the rotating
+    # trycloudflare-tunnel demo) -- the browser silently drops it, so that
+    # mode degrades to "re-login when the 15-minute access token expires"
+    # rather than misbehaving. Same-origin setups (the web/ container's
+    # nginx /api proxy) need none of this either way -- no CORS preflight,
+    # no credentials mode, the cookie just works.
+    allow_credentials=bool(_cors_origins_env),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -348,15 +277,106 @@ async def validation_exception_handler(request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": message})
 
 
+_unhandled_log = logging.getLogger("clarion.unhandled")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc: Exception):
+    """Code-review follow-up 2026-09-07: previously there was no app-wide handler for an
+    unhandled exception -- Starlette's default logged a bare traceback to
+    stdout and returned a 500, so a failing endpoint (pharmacy stock
+    conflict blowing up, self-registration, an emergency path) was
+    effectively invisible unless someone was tailing the container logs and
+    happened to catch it.
+
+    This logs every unhandled exception at ERROR with the full traceback,
+    the request method + path, and a short correlation id, then returns that
+    id to the caller in a clean `{"detail": ..., "request_id": ...}` 500 --
+    the exception text itself is never sent to the client. An operator can
+    grep the logs for the id a user reports.
+
+    HTTPException / RequestValidationError / RateLimitExceeded are handled by
+    their own registered handlers and never reach here."""
+    request_id = uuid.uuid4().hex[:12]
+    _unhandled_log.error(
+        "unhandled exception [%s] on %s %s",
+        request_id, request.method, request.url.path,
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "request_id": request_id},
+    )
+
+
+# Per-facility, admin-configurable page-access control (see
+# app/permissions.py + models.RolePagePermission). auth.require_page_access
+# is applied at ROUTER level here -- NOT per endpoint -- so it's an
+# additional gate layered on top of each route's own require_roles(...)
+# without touching every route. It's a no-op for admin (all pages) and for
+# non-configurable roles (patient / emergency_responder), so the
+# patient-facing / self-service routes that live on the patients + reception
+# routers stay reachable by a patient token. Deliberately NOT applied to
+# auth_router (login/me), emergency (unauthenticated), staff (clock-in/out
+# -- any staff), or admin (already admin-only).
 app.include_router(auth_router.router)
-app.include_router(patients.router)
+app.include_router(
+    patients.router,
+    dependencies=[Depends(auth.require_page_access("patients"))],
+)
 app.include_router(emergency.router)
-app.include_router(ai_router.router)
-app.include_router(appointments.router)
+app.include_router(
+    ai_router.router,
+    # AI tools are clinical -- same gate as the patient record itself.
+    dependencies=[Depends(auth.require_page_access("patients"))],
+)
+app.include_router(
+    appointments.router,
+    # Appointments hang off a patient record and carry clinical context
+    # (reason, precaution_notes, fasting instructions) -- same gate as the
+    # record itself and as ai_router. A patient token is unaffected (patient
+    # is outside CONFIGURABLE_STAFF_ROLES, so require_page_access is a no-op
+    # for it) so own-record self-service (request-reschedule) keeps working;
+    # a pharmacist / receptionist without the `patients` page no longer
+    # reaches any appointment endpoint. Code-review follow-up 2026-09-07.
+    dependencies=[Depends(auth.require_page_access("patients"))],
+)
 app.include_router(admin.router)
 app.include_router(staff.router)
+# Self-service patient registration (NRIC-OCR identity verification, see
+# routers/self_registration.py's module docstring).
+app.include_router(self_registration.router)
+# Reception desk check-in + queue number system.
+app.include_router(
+    reception.router,
+    dependencies=[Depends(auth.require_page_access("reception"))],
+)
+# Pharmacy stock endpoints (routers/pharmacy.py).
+app.include_router(
+    pharmacy.router,
+    dependencies=[Depends(auth.require_page_access("pharmacy"))],
+)
+# Clinician "Start session" (clock-in + claim-a-room in one step) + the
+# per-room consultation worklist and sign-off. Gated on the `patients` page
+# -- a clinician's default page set is now ["patients"] only (see
+# app/permissions.py::DEFAULT_ROLE_PAGES); admin / records_officer also hold
+# it. reception.py does NOT import consultation.py, so consultation.py
+# reusing reception's helpers is cycle-free.
+app.include_router(
+    consultation.router,
+    dependencies=[Depends(auth.require_page_access("patients"))],
+)
+# Saved digital signature (POST/GET/DELETE /me/signature, GET
+# /staff/{id}/signature). Registered plainly like staff.py -- "for yourself"
+# plus one facility-scoped colleague read; NOT page-gated.
+app.include_router(profile.router)
+# Public, unauthenticated waiting-room display feed (GET /display/{token}).
+# Deliberately NO auth dependency and NOT under require_page_access -- a
+# login-less screen device renders it; the token is the only credential and
+# what it exposes is low-sensitivity (queue numbers + masked names).
+app.include_router(display.router)
 
 
 @app.get("/")
 def root():
-    return {"status": "MediBridge API running", "docs": "/docs"}
+    return {"status": "CLARION API running", "docs": "/docs"}

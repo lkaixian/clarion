@@ -105,7 +105,7 @@ abstract class AppLocalizations {
   /// App name, shown on the login screen and app title.
   ///
   /// In en, this message translates to:
-  /// **'MediBridge'**
+  /// **'CLARION'**
   String get appTitle;
 
   /// No description provided for @apiSettingsTooltip.
@@ -159,7 +159,7 @@ abstract class AppLocalizations {
   /// No description provided for @demoLoginHint.
   ///
   /// In en, this message translates to:
-  /// **'Demo login: patient@medibridge.demo / patient123 (or NRIC 520314-01-1234 / patient123)'**
+  /// **'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)'**
   String get demoLoginHint;
 
   /// No description provided for @loginFailedGeneric.
@@ -221,6 +221,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Forgot password?'**
   String get forgotPasswordButton;
+
+  /// Precedes the Register link on the Login screen, for patients who don't yet have an account.
+  ///
+  /// In en, this message translates to:
+  /// **'First time here?'**
+  String get selfRegisterLinkPrompt;
+
+  /// No description provided for @selfRegisterLinkAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Register'**
+  String get selfRegisterLinkAction;
 
   /// No description provided for @forgotPasswordTitle.
   ///
@@ -342,6 +354,156 @@ abstract class AppLocalizations {
   /// **'Could not reset your password. Check your details or the API base URL in Settings.'**
   String get forgotPasswordFailedGeneric;
 
+  /// No description provided for @selfRegisterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Your Account'**
+  String get selfRegisterTitle;
+
+  /// No description provided for @selfRegisterDetailsStepDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC — we\'ll verify them against your hospital record.'**
+  String get selfRegisterDetailsStepDesc;
+
+  /// No description provided for @selfRegisterContinueButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get selfRegisterContinueButton;
+
+  /// No description provided for @selfRegisterStartFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify your details. Check what you entered or the API base URL in Settings.'**
+  String get selfRegisterStartFailedGeneric;
+
+  /// No description provided for @selfRegisterOtpStepDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit verification code we emailed you.'**
+  String get selfRegisterOtpStepDesc;
+
+  /// No description provided for @selfRegisterVerifyOtpButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify Code'**
+  String get selfRegisterVerifyOtpButton;
+
+  /// No description provided for @selfRegisterVerifyOtpFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify that code. Check the code or the API base URL in Settings.'**
+  String get selfRegisterVerifyOtpFailedGeneric;
+
+  /// No description provided for @selfRegisterPhotosStepTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify Your Identity'**
+  String get selfRegisterPhotosStepTitle;
+
+  /// No description provided for @selfRegisterPhotosStepDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Now take clear photos of the front and back of your physical NRIC card. These are used only to confirm your identity against your hospital record — a member of our staff, not this app, checks the match.'**
+  String get selfRegisterPhotosStepDesc;
+
+  /// No description provided for @selfRegisterFrontPhotoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Front of NRIC'**
+  String get selfRegisterFrontPhotoLabel;
+
+  /// No description provided for @selfRegisterBackPhotoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Back of NRIC'**
+  String get selfRegisterBackPhotoLabel;
+
+  /// No description provided for @selfRegisterTakePhotoButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Take Photo'**
+  String get selfRegisterTakePhotoButton;
+
+  /// No description provided for @selfRegisterRetakePhotoButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Retake'**
+  String get selfRegisterRetakePhotoButton;
+
+  /// Shown once the backend has reported a photo-verification attempt count, so the user knows how many tries remain before the terminal manual-registration state.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of 5 attempts remaining'**
+  String selfRegisterAttemptsRemaining(int count);
+
+  /// No description provided for @selfRegisterSubmitPhotosButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit Photos'**
+  String get selfRegisterSubmitPhotosButton;
+
+  /// No description provided for @selfRegisterPhotosRequiredNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Please take both photos before submitting.'**
+  String get selfRegisterPhotosRequiredNote;
+
+  /// No description provided for @selfRegisterPhotosFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify your photos. Check the API base URL in Settings and try again.'**
+  String get selfRegisterPhotosFailedGeneric;
+
+  /// No description provided for @selfRegisterCameraFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the camera. Check camera permission in system settings and try again.'**
+  String get selfRegisterCameraFailed;
+
+  /// No description provided for @selfRegisterPasswordStepDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Almost done. Choose a password for your new account (at least 8 characters).'**
+  String get selfRegisterPasswordStepDesc;
+
+  /// No description provided for @selfRegisterCompleteButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get selfRegisterCompleteButton;
+
+  /// No description provided for @selfRegisterCompleteFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create your account. Check the API base URL in Settings and try again.'**
+  String get selfRegisterCompleteFailedGeneric;
+
+  /// No description provided for @selfRegisterSuccessSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Account created — welcome to CLARION!'**
+  String get selfRegisterSuccessSnack;
+
+  /// No description provided for @selfRegisterManualRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Visit a Registration Counter'**
+  String get selfRegisterManualRequiredTitle;
+
+  /// No description provided for @selfRegisterManualRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t verify your NRIC photos after several attempts. For your security, please visit a registration counter in person, bringing your physical NRIC — our staff will help set up your account there.'**
+  String get selfRegisterManualRequiredBody;
+
+  /// No description provided for @selfRegisterManualRequiredBackButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Sign In'**
+  String get selfRegisterManualRequiredBackButton;
+
   /// No description provided for @changePasswordTitle.
   ///
   /// In en, this message translates to:
@@ -377,6 +539,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'My Health Record'**
   String get homeTitle;
+
+  /// No description provided for @quickActionsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick Actions'**
+  String get quickActionsSectionTitle;
+
+  /// No description provided for @healthRecordSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Medical Record'**
+  String get healthRecordSectionTitle;
 
   /// No description provided for @scanSomeoneElsesCardTooltip.
   ///
@@ -557,6 +731,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get retry;
+
+  /// Expands a truncated list section (conditions, medications, allergies, encounters, documents, appointments) to show every remaining item.
+  ///
+  /// In en, this message translates to:
+  /// **'Show {count} more'**
+  String showMoreAction(int count);
+
+  /// Collapses a list section back to its default top-N view after showMoreAction was tapped.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get showLessAction;
 
   /// No description provided for @emergencyCardTitle.
   ///
@@ -972,6 +1158,30 @@ abstract class AppLocalizations {
   /// **'Language'**
   String get languageLabel;
 
+  /// No description provided for @themeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get themeLabel;
+
+  /// No description provided for @themeModeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeModeLight;
+
+  /// No description provided for @themeModeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeModeDark;
+
+  /// No description provided for @themeModeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get themeModeSystem;
+
   /// No description provided for @auditLogTitle.
   ///
   /// In en, this message translates to:
@@ -1001,6 +1211,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'emergency responder — self-reported, unverified'**
   String get auditActorEmergencyResponderUnverified;
+
+  /// No description provided for @auditLogLegendIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Color and icon show how sensitive each access looks:'**
+  String get auditLogLegendIntro;
+
+  /// No description provided for @auditSeverityRoutine.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine'**
+  String get auditSeverityRoutine;
+
+  /// No description provided for @auditSeverityAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency access'**
+  String get auditSeverityAttention;
+
+  /// No description provided for @auditSeverityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed attempt'**
+  String get auditSeverityCritical;
 
   /// No description provided for @responderScanTitle.
   ///
@@ -1373,6 +1607,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong. Please try again.'**
   String get unexpectedErrorGeneric;
+
+  /// No description provided for @queueStatusButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue Status'**
+  String get queueStatusButton;
+
+  /// No description provided for @queueStatusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Queue Status'**
+  String get queueStatusTitle;
+
+  /// No description provided for @yourNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your number: {number}'**
+  String yourNumberLabel(String number);
+
+  /// No description provided for @nowServingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Now serving: {number}'**
+  String nowServingLabel(String number);
+
+  /// No description provided for @nowServingNoneYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No number called yet'**
+  String get nowServingNoneYet;
+
+  /// No description provided for @peopleAheadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} people ahead of you'**
+  String peopleAheadLabel(String count);
+
+  /// No description provided for @queueTicketDetailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket Details'**
+  String get queueTicketDetailsTitle;
+
+  /// No description provided for @queueStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get queueStatusLabel;
+
+  /// No description provided for @queueFacilityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Facility'**
+  String get queueFacilityLabel;
+
+  /// No description provided for @queueDepartmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Department'**
+  String get queueDepartmentLabel;
+
+  /// No description provided for @queueReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get queueReasonLabel;
+
+  /// No description provided for @queueStatusWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get queueStatusWaiting;
+
+  /// No description provided for @queueStatusCalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Called'**
+  String get queueStatusCalled;
+
+  /// No description provided for @queueStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get queueStatusDone;
+
+  /// No description provided for @queueStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get queueStatusCancelled;
+
+  /// No description provided for @noActiveQueueTicketTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No active queue ticket'**
+  String get noActiveQueueTicketTitle;
+
+  /// No description provided for @noActiveQueueTicketDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Check in at reception to get a queue number.'**
+  String get noActiveQueueTicketDesc;
+
+  /// No description provided for @scanCheckinButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to Check In'**
+  String get scanCheckinButton;
+
+  /// No description provided for @scanCheckinTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to Check In'**
+  String get scanCheckinTitle;
+
+  /// No description provided for @scanCheckinDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code at the reception self-check-in station, or type in its code below. No staff assistance needed — you\'ll get a queue number right away.'**
+  String get scanCheckinDesc;
+
+  /// No description provided for @checkinReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason for visit (optional)'**
+  String get checkinReasonLabel;
+
+  /// No description provided for @checkinReasonHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. follow-up, blood test'**
+  String get checkinReasonHint;
+
+  /// No description provided for @stationCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Station code'**
+  String get stationCodeLabel;
+
+  /// No description provided for @stationCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. from the reception counter\'s printed code'**
+  String get stationCodeHint;
+
+  /// No description provided for @checkinSubmitButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Check In'**
+  String get checkinSubmitButton;
+
+  /// No description provided for @checkinSubmitting.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking in…'**
+  String get checkinSubmitting;
+
+  /// No description provided for @requestRescheduleButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Request Reschedule'**
+  String get requestRescheduleButton;
+
+  /// No description provided for @rescheduleDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a Reschedule'**
+  String get rescheduleDialogTitle;
+
+  /// No description provided for @rescheduleDialogDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Let your clinic know you can\'t make this appointment. They\'ll review your request and follow up with you.'**
+  String get rescheduleDialogDesc;
+
+  /// No description provided for @rescheduleReasonScheduleConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule conflict'**
+  String get rescheduleReasonScheduleConflict;
+
+  /// No description provided for @rescheduleReasonUnwell.
+  ///
+  /// In en, this message translates to:
+  /// **'Unwell / can\'t travel'**
+  String get rescheduleReasonUnwell;
+
+  /// No description provided for @rescheduleReasonTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport issue'**
+  String get rescheduleReasonTransport;
+
+  /// No description provided for @rescheduleReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get rescheduleReasonOther;
+
+  /// No description provided for @rescheduleOtherReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Please describe your reason'**
+  String get rescheduleOtherReasonLabel;
+
+  /// No description provided for @rescheduleOtherReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please describe your reason.'**
+  String get rescheduleOtherReasonRequired;
+
+  /// No description provided for @rescheduleSubmitButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit Request'**
+  String get rescheduleSubmitButton;
+
+  /// No description provided for @rescheduleSubmitting.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitting…'**
+  String get rescheduleSubmitting;
+
+  /// No description provided for @reschedulePendingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Reschedule requested — waiting for the clinic to respond'**
+  String get reschedulePendingNote;
+
+  /// No description provided for @rescheduleAcceptedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your reschedule request was accepted.'**
+  String get rescheduleAcceptedNote;
+
+  /// No description provided for @rescheduleRejectedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your reschedule request was declined.'**
+  String get rescheduleRejectedNote;
+
+  /// No description provided for @rescheduleClinicianNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Clinic note: {note}'**
+  String rescheduleClinicianNoteLabel(String note);
+
+  /// No description provided for @previouslyScheduledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Previously: {date}'**
+  String previouslyScheduledLabel(String date);
+
+  /// No description provided for @seniorMenuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get seniorMenuTooltip;
+
+  /// No description provided for @seniorMenuTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get seniorMenuTitle;
+
+  /// No description provided for @seniorThemeToggleTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch colour theme'**
+  String get seniorThemeToggleTooltip;
+
+  /// No description provided for @confirmSwitchToStandardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Standard View?'**
+  String get confirmSwitchToStandardTitle;
+
+  /// No description provided for @confirmSwitchToStandardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll leave Senior Mode and see the regular app. You can turn Senior Mode back on anytime from Settings.'**
+  String get confirmSwitchToStandardBody;
+
+  /// No description provided for @confirmSwitchToStandardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, Switch'**
+  String get confirmSwitchToStandardAction;
+
+  /// No description provided for @confirmSignOutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out?'**
+  String get confirmSignOutTitle;
+
+  /// No description provided for @confirmSignOutBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You will need to sign in again to see your health record.'**
+  String get confirmSignOutBody;
+
+  /// No description provided for @confirmSignOutAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, Sign Out'**
+  String get confirmSignOutAction;
 }
 
 class _AppLocalizationsDelegate

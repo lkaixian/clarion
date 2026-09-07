@@ -119,7 +119,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.palette.background,
       appBar: AppBar(title: Text(l10n.forgotPasswordTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -136,7 +136,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       children: [
         Text(
           l10n.forgotPasswordStep1Desc,
-          style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.4),
+          style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
         ),
         const SizedBox(height: 24),
         TextField(
@@ -170,7 +170,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       children: [
         Text(
           l10n.forgotPasswordStep2Desc,
-          style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.4),
+          style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
         ),
         const SizedBox(height: 24),
         TextField(
@@ -233,7 +233,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: TextButton(
             onPressed: _loading ? null : () => setState(() => _step = _Step.requestOtp),
             child: Text(l10n.useDifferentNricButton,
-                style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                style: TextStyle(fontSize: 13, color: context.palette.textMuted)),
           ),
         ),
       ],

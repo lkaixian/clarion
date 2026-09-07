@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getCurrentUser, logout, getClockStatus, clockIn, clockOut } from "../api/client";
+import { landingPathFor } from "../lib/access";
 
 // Small nav pill only ever needs the time-of-day, not a full date — same
 // "no date library, plain built-in formatting" approach as
@@ -55,7 +56,11 @@ function ClockControl({ user }) {
     }
   }
 
-  if (!user || user.role === "patient") return null;
+  // Clinicians clock in/out implicitly via Start/End consultation session
+  // (PatientList.jsx's <MyConsultationRoom />), so they get no nav pill —
+  // two competing clock controls would be confusing. Everyone else
+  // (admin, records_officer, receptionist, pharmacist) keeps it.
+  if (!user || user.role === "patient" || user.role === "clinician") return null;
 
   if (status === null) {
     return <span className="text-xs text-blue-300">Loading status…</span>;
@@ -86,22 +91,48 @@ function ClockControl({ user }) {
 export default function Layout({ children }) {
   const user = getCurrentUser();
   const navigate = useNavigate();
-  // A patient account has no access to GET /patients (the staff list) —
-  // send them "home" to their own record instead, same fix as Login.jsx.
-  const homeHref = user?.role === "patient" && user?.patient_id ? `/patients/${user.patient_id}` : "/patients";
+  // "Home" = the first page this user's role is allowed to open at this
+  // facility (a patient → their own record). Same helper Login.jsx and
+  // App.jsx's RequirePage guard use, so the logo link can never point at a
+  // page the guard would immediately bounce them off.
+  const homeHref = landingPathFor(user);
+  // Nav links are driven by the backend's per-facility allowed_pages matrix;
+  // an admin implicitly sees everything.
+  const pages = user?.allowed_pages || [];
+  const canSee = (page) => user?.role === "admin" || pages.includes(page);
 
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-blue-900 text-white px-6 py-3 flex items-center justify-between">
-        <Link to={homeHref} className="font-bold text-lg">MediBridge Console</Link>
+        {/* Logo mark is dark-navy on a transparent background (see
+            public/Logo/Clarion.png) -- unreadable directly against this
+            nav's own dark-navy background, so it sits on a small white
+            pill rather than bare on the nav. */}
+        <Link to={homeHref} className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5">
+          <img src="/Logo/Clarion.png" alt="CLARION" className="h-6 w-auto" />
+          <span className="font-bold text-lg sr-only">CLARION Console</span>
+        </Link>
         <div className="flex items-center gap-4 text-sm">
-          {/* /admin is role==="admin"-only on the backend (routers/admin.py) —
-              hidden for every other role rather than shown as a dead-end link;
-              App.jsx's AdminOnly guard is the actual enforcement, this is just
-              keeping the nav from advertising a page that would redirect away. */}
-          {user?.role === "admin" && <Link to="/admin" className="text-blue-200 hover:text-white">Admin Console</Link>}
+          {/* Every link below mirrors App.jsx's RequirePage guard — shown only
+              when the user's role is allowed that page at this facility, so
+              the nav never advertises a page that would redirect straight
+              back. A receptionist therefore sees only "Reception". */}
+          {canSee("patients") && <Link to="/patients" className="text-blue-200 hover:text-white">Patients</Link>}
+          {canSee("reception") && <Link to="/reception" className="text-blue-200 hover:text-white">Reception</Link>}
+          {canSee("pharmacy") && <Link to="/pharmacy" className="text-blue-200 hover:text-white">Pharmacy</Link>}
+          {canSee("admin") && <Link to="/admin" className="text-blue-200 hover:text-white">Admin Console</Link>}
           <ClockControl user={user} />
-          {user && <span className="text-blue-200">{user.full_name} · {user.role}</span>}
+          {/* Name/role doubles as the link to the profile page (signature
+              management) — for every non-patient role. A patient account has
+              no signature and no profile page, so it stays a plain label. */}
+          {user && user.role !== "patient" && (
+            <Link to="/profile" className="text-blue-200 hover:text-white">
+              {user.full_name} · {user.role}
+            </Link>
+          )}
+          {user && user.role === "patient" && (
+            <span className="text-blue-200">{user.full_name} · {user.role}</span>
+          )}
           <button
             onClick={() => { logout(); navigate("/"); }}
             className="bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg"

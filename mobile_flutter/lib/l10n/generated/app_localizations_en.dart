@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'MediBridge';
+  String get appTitle => 'CLARION';
 
   @override
   String get apiSettingsTooltip => 'API Settings';
@@ -37,7 +37,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get demoLoginHint =>
-      'Demo login: patient@medibridge.demo / patient123 (or NRIC 520314-01-1234 / patient123)';
+      'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -71,6 +71,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get forgotPasswordButton => 'Forgot password?';
+
+  @override
+  String get selfRegisterLinkPrompt => 'First time here?';
+
+  @override
+  String get selfRegisterLinkAction => 'Register';
 
   @override
   String get forgotPasswordTitle => 'Reset Password';
@@ -141,6 +147,95 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not reset your password. Check your details or the API base URL in Settings.';
 
   @override
+  String get selfRegisterTitle => 'Create Your Account';
+
+  @override
+  String get selfRegisterDetailsStepDesc =>
+      'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC — we\'ll verify them against your hospital record.';
+
+  @override
+  String get selfRegisterContinueButton => 'Continue';
+
+  @override
+  String get selfRegisterStartFailedGeneric =>
+      'Could not verify your details. Check what you entered or the API base URL in Settings.';
+
+  @override
+  String get selfRegisterOtpStepDesc =>
+      'Enter the 6-digit verification code we emailed you.';
+
+  @override
+  String get selfRegisterVerifyOtpButton => 'Verify Code';
+
+  @override
+  String get selfRegisterVerifyOtpFailedGeneric =>
+      'Could not verify that code. Check the code or the API base URL in Settings.';
+
+  @override
+  String get selfRegisterPhotosStepTitle => 'Verify Your Identity';
+
+  @override
+  String get selfRegisterPhotosStepDesc =>
+      'Now take clear photos of the front and back of your physical NRIC card. These are used only to confirm your identity against your hospital record — a member of our staff, not this app, checks the match.';
+
+  @override
+  String get selfRegisterFrontPhotoLabel => 'Front of NRIC';
+
+  @override
+  String get selfRegisterBackPhotoLabel => 'Back of NRIC';
+
+  @override
+  String get selfRegisterTakePhotoButton => 'Take Photo';
+
+  @override
+  String get selfRegisterRetakePhotoButton => 'Retake';
+
+  @override
+  String selfRegisterAttemptsRemaining(int count) {
+    return '$count of 5 attempts remaining';
+  }
+
+  @override
+  String get selfRegisterSubmitPhotosButton => 'Submit Photos';
+
+  @override
+  String get selfRegisterPhotosRequiredNote =>
+      'Please take both photos before submitting.';
+
+  @override
+  String get selfRegisterPhotosFailedGeneric =>
+      'Could not verify your photos. Check the API base URL in Settings and try again.';
+
+  @override
+  String get selfRegisterCameraFailed =>
+      'Could not open the camera. Check camera permission in system settings and try again.';
+
+  @override
+  String get selfRegisterPasswordStepDesc =>
+      'Almost done. Choose a password for your new account (at least 8 characters).';
+
+  @override
+  String get selfRegisterCompleteButton => 'Create Account';
+
+  @override
+  String get selfRegisterCompleteFailedGeneric =>
+      'Could not create your account. Check the API base URL in Settings and try again.';
+
+  @override
+  String get selfRegisterSuccessSnack =>
+      'Account created — welcome to CLARION!';
+
+  @override
+  String get selfRegisterManualRequiredTitle => 'Visit a Registration Counter';
+
+  @override
+  String get selfRegisterManualRequiredBody =>
+      'We couldn\'t verify your NRIC photos after several attempts. For your security, please visit a registration counter in person, bringing your physical NRIC — our staff will help set up your account there.';
+
+  @override
+  String get selfRegisterManualRequiredBackButton => 'Back to Sign In';
+
+  @override
   String get changePasswordTitle => 'Change Password';
 
   @override
@@ -158,6 +253,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeTitle => 'My Health Record';
+
+  @override
+  String get quickActionsSectionTitle => 'Quick Actions';
+
+  @override
+  String get healthRecordSectionTitle => 'Your Medical Record';
 
   @override
   String get scanSomeoneElsesCardTooltip =>
@@ -260,6 +361,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get retry => 'Retry';
+
+  @override
+  String showMoreAction(int count) {
+    return 'Show $count more';
+  }
+
+  @override
+  String get showLessAction => 'Show less';
 
   @override
   String get emergencyCardTitle => 'Emergency Card';
@@ -505,6 +614,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageLabel => 'Language';
 
   @override
+  String get themeLabel => 'Theme';
+
+  @override
+  String get themeModeLight => 'Light';
+
+  @override
+  String get themeModeDark => 'Dark';
+
+  @override
+  String get themeModeSystem => 'System default';
+
+  @override
   String get auditLogTitle => 'Who\'s Viewed My Record';
 
   @override
@@ -521,6 +642,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get auditActorEmergencyResponderUnverified =>
       'emergency responder — self-reported, unverified';
+
+  @override
+  String get auditLogLegendIntro =>
+      'Color and icon show how sensitive each access looks:';
+
+  @override
+  String get auditSeverityRoutine => 'Routine';
+
+  @override
+  String get auditSeverityAttention => 'Emergency access';
+
+  @override
+  String get auditSeverityCritical => 'Failed attempt';
 
   @override
   String get responderScanTitle => 'Scan Emergency Card';
@@ -736,4 +870,174 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get unexpectedErrorGeneric =>
       'Something went wrong. Please try again.';
+
+  @override
+  String get queueStatusButton => 'Queue Status';
+
+  @override
+  String get queueStatusTitle => 'Your Queue Status';
+
+  @override
+  String yourNumberLabel(String number) {
+    return 'Your number: $number';
+  }
+
+  @override
+  String nowServingLabel(String number) {
+    return 'Now serving: $number';
+  }
+
+  @override
+  String get nowServingNoneYet => 'No number called yet';
+
+  @override
+  String peopleAheadLabel(String count) {
+    return '$count people ahead of you';
+  }
+
+  @override
+  String get queueTicketDetailsTitle => 'Ticket Details';
+
+  @override
+  String get queueStatusLabel => 'Status';
+
+  @override
+  String get queueFacilityLabel => 'Facility';
+
+  @override
+  String get queueDepartmentLabel => 'Department';
+
+  @override
+  String get queueReasonLabel => 'Reason';
+
+  @override
+  String get queueStatusWaiting => 'Waiting';
+
+  @override
+  String get queueStatusCalled => 'Called';
+
+  @override
+  String get queueStatusDone => 'Done';
+
+  @override
+  String get queueStatusCancelled => 'Cancelled';
+
+  @override
+  String get noActiveQueueTicketTitle => 'No active queue ticket';
+
+  @override
+  String get noActiveQueueTicketDesc =>
+      'Check in at reception to get a queue number.';
+
+  @override
+  String get scanCheckinButton => 'Scan to Check In';
+
+  @override
+  String get scanCheckinTitle => 'Scan to Check In';
+
+  @override
+  String get scanCheckinDesc =>
+      'Scan the QR code at the reception self-check-in station, or type in its code below. No staff assistance needed — you\'ll get a queue number right away.';
+
+  @override
+  String get checkinReasonLabel => 'Reason for visit (optional)';
+
+  @override
+  String get checkinReasonHint => 'e.g. follow-up, blood test';
+
+  @override
+  String get stationCodeLabel => 'Station code';
+
+  @override
+  String get stationCodeHint =>
+      'e.g. from the reception counter\'s printed code';
+
+  @override
+  String get checkinSubmitButton => 'Check In';
+
+  @override
+  String get checkinSubmitting => 'Checking in…';
+
+  @override
+  String get requestRescheduleButton => 'Request Reschedule';
+
+  @override
+  String get rescheduleDialogTitle => 'Request a Reschedule';
+
+  @override
+  String get rescheduleDialogDesc =>
+      'Let your clinic know you can\'t make this appointment. They\'ll review your request and follow up with you.';
+
+  @override
+  String get rescheduleReasonScheduleConflict => 'Schedule conflict';
+
+  @override
+  String get rescheduleReasonUnwell => 'Unwell / can\'t travel';
+
+  @override
+  String get rescheduleReasonTransport => 'Transport issue';
+
+  @override
+  String get rescheduleReasonOther => 'Other';
+
+  @override
+  String get rescheduleOtherReasonLabel => 'Please describe your reason';
+
+  @override
+  String get rescheduleOtherReasonRequired => 'Please describe your reason.';
+
+  @override
+  String get rescheduleSubmitButton => 'Submit Request';
+
+  @override
+  String get rescheduleSubmitting => 'Submitting…';
+
+  @override
+  String get reschedulePendingNote =>
+      'Reschedule requested — waiting for the clinic to respond';
+
+  @override
+  String get rescheduleAcceptedNote => 'Your reschedule request was accepted.';
+
+  @override
+  String get rescheduleRejectedNote => 'Your reschedule request was declined.';
+
+  @override
+  String rescheduleClinicianNoteLabel(String note) {
+    return 'Clinic note: $note';
+  }
+
+  @override
+  String previouslyScheduledLabel(String date) {
+    return 'Previously: $date';
+  }
+
+  @override
+  String get seniorMenuTooltip => 'Menu';
+
+  @override
+  String get seniorMenuTitle => 'Menu';
+
+  @override
+  String get seniorThemeToggleTooltip => 'Switch colour theme';
+
+  @override
+  String get confirmSwitchToStandardTitle => 'Switch to Standard View?';
+
+  @override
+  String get confirmSwitchToStandardBody =>
+      'You\'ll leave Senior Mode and see the regular app. You can turn Senior Mode back on anytime from Settings.';
+
+  @override
+  String get confirmSwitchToStandardAction => 'Yes, Switch';
+
+  @override
+  String get confirmSignOutTitle => 'Sign Out?';
+
+  @override
+  String get confirmSignOutBody =>
+      'You will need to sign in again to see your health record.';
+
+  @override
+  String get confirmSignOutAction => 'Yes, Sign Out';
 }

@@ -1,0 +1,100 @@
+# CLARION FastAPI backend -- multi-stage production image.
+# Build context is ./backend (see docker-compose.yml `build: ./backend`).
+#
+# Stage 1 (builder): resolve + install Python deps into a self-contained venv.
+# Stage 2 (runtime) : slim image, no build toolchain, non-root, venv copied in.
+#
+# No network access is required at *runtime* -- every dependency (including
+# gunicorn, which is not in requirements.txt yet) is baked in at build time.
+
+# ---------------------------------------------------------------------------
+# Stage 1 -- builder
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# build-essential/libffi/libssl headers cover the (rare) case where a pinned
+# dependency has no manylinux wheel for cp312. Stays out of the runtime image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /build
+COPY requirements.txt ./
+
+# requirements.txt now pins gunicorn + uvicorn-worker (uvicorn 0.52 dropped the
+# built-in `uvicorn.workers` module, so the CMD uses `uvicorn_worker.UvicornWorker`).
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ---------------------------------------------------------------------------
+# Stage 2 -- runtime
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app
+
+# tesseract-ocr is the native engine behind pytesseract (NRIC OCR path).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root runtime user.
+RUN groupadd --system app \
+    && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY . /app
+
+# Writable data dirs:
+#   /app/data    -> CWD at runtime; SQLite lands here (database.py uses the
+#                   relative path "sqlite:///./clarion.db"). Mount a named
+#                   volume here. Replaced by MariaDB in roadmap task P1.3.
+#   /app/uploads -> UPLOAD_ROOT (Path(__file__).../uploads). Mount a volume.
+RUN mkdir -p /app/data /app/uploads \
+    && chown -R app:app /app
+
+USER app
+
+# Run from /app/data so "./clarion.db" resolves to /app/data/clarion.db.
+# The `app` package stays importable via PYTHONPATH=/app.
+WORKDIR /app/data
+
+EXPOSE 8000
+
+# NOTE: /healthz does not exist yet (added in roadmap task P5.1 -- observability).
+# Until then we probe "/" which returns {"status": "CLARION API running"}.
+# Switch the path to /healthz once the liveness endpoint lands.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=4).status == 200 else 1)"
+
+# 4 uvicorn workers matches the On-Prem Architecture pooling math
+# (pool_size=10 + max_overflow=10 per worker => <= 80 DB connections).
+# uvicorn 0.52 removed the built-in `uvicorn.workers` module, so we use the
+# standalone `uvicorn-worker` package installed in the builder stage.
+#
+# forwarded-allow-ips is NOT hardcoded here. gunicorn reads the
+# FORWARDED_ALLOW_IPS env var (default 127.0.0.1). The old "*" trusted
+# X-Forwarded-* / -Proto from any peer, which let a client spoof its IP and
+# defeat every per-IP rate limit (slowapi keys on it) -- worse while the
+# backend port is published to the host. Set FORWARDED_ALLOW_IPS to the edge
+# proxy's address/subnet in deployment (roadmap P1.9); leave it at the safe
+# default otherwise. See docs/deployment.md.
+CMD ["gunicorn", "app.main:app", \
+     "-k", "uvicorn_worker.UvicornWorker", \
+     "-w", "4", \
+     "-b", "0.0.0.0:8000", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

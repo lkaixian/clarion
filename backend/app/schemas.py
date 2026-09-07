@@ -1,23 +1,73 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from . import permissions
 
 # Minimum acceptable length for any newly-set password (staff-issued temp
 # passwords are exempt -- they're generated server-side via
 # auth.generate_temp_password(), which always produces 14 chars). Applied
 # everywhere a human can choose/submit their own password: initial
 # registration, the self-service email-OTP password reset, and
-# authenticated change-password. Deliberately just a length floor, not a complexity
-# policy (mandatory mixed-case/digits/symbols) -- this is a health-record
-# demo app, not a bank, and complexity rules mostly just push people toward
-# predictable substitutions without meaningfully raising entropy.
-MIN_PASSWORD_LENGTH = 8
+# authenticated change-password. Deliberately just a length floor, not a
+# complexity policy (mandatory mixed-case/digits/symbols) -- this follows
+# NIST SP 800-63B's guidance, which explicitly recommends AGAINST forced
+# composition rules (they mostly push people toward predictable
+# substitutions like "P@ssw0rd1" without meaningfully raising entropy) and
+# FOR a longer minimum length plus a check against known-weak/breached
+# passwords instead. Security Audit finding H3 flagged this policy as "no
+# complexity" against 8 chars; the fix here is the length bump below plus
+# _WEAK_PASSWORD_DENYLIST, not composition rules -- a stronger, better-
+# evidenced mechanism aimed at the same underlying concern (guessable
+# passwords), not a literal complexity checkbox.
+MIN_PASSWORD_LENGTH = 12
+
+# A small, deliberately non-exhaustive denylist of passwords that are weak
+# regardless of length/composition (top-of-list common passwords, and this
+# app's OWN seeded demo credentials -- see seed.py -- so a real user can
+# never coincidentally reuse "admin123" etc. as their actual password).
+# This is NOT a substitute for a real breached-password API (e.g.
+# Have I Been Pwned's k-anonymity range API) -- that would be a network
+# call to a third party, which this codebase deliberately avoids
+# everywhere else (see app/ai/_cloud_guard.py) -- it's a cheap, offline
+# floor that catches the most obviously bad choices.
+_WEAK_PASSWORD_DENYLIST = frozenset({
+    "password", "password1", "password123", "12345678", "123456789",
+    "1234567890", "qwerty123", "qwertyuiop", "letmein123", "welcome123",
+    "changeme123", "iloveyou1", "admin1234", "administrator",
+    "trustno1", "monkey123", "sunshine1", "princess1", "football1",
+    # This app's own seeded demo credentials (see seed.py) -- never valid
+    # as a REAL user's chosen password, demo convenience or not.
+    "admin123", "clinician123", "pharmacist123", "receptionist123", "patient123",
+})
 
 
 def _validate_password_length(value: str) -> str:
     if len(value) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long.")
+    if value.lower() in _WEAK_PASSWORD_DENYLIST:
+        raise ValueError("This password is too common/predictable. Choose a different one.")
     return value
+
+
+# Every role string the app recognises. Enforced on UserCreate.role (staff
+# account creation via POST /auth/register) -- previously `role` was a bare
+# `str` with no validation at all, so a typo ("clinicain") or an unknown
+# value would create an account that silently failed every require_roles
+# check. "pharmacist" (Phase G) is scoped to medicine inventory + own
+# clock-in/out only.
+VALID_ROLES = {
+    "admin",
+    "clinician",
+    "records_officer",
+    # Front-desk / reception staff. By default (see app/permissions.py's
+    # DEFAULT_ROLE_PAGES) this role can only reach the Reception page --
+    # an admin can widen that per facility via PUT /admin/role-permissions.
+    "receptionist",
+    "patient",
+    "emergency_responder",
+    "pharmacist",
+}
 
 
 # ---------- Auth ----------
@@ -25,7 +75,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    role: str  # admin | clinician | records_officer | patient | emergency_responder
+    role: str  # admin | clinician | records_officer | receptionist | patient | emergency_responder | pharmacist
     facility: Optional[str] = None
     patient_id: Optional[str] = None
 
@@ -33,6 +83,15 @@ class UserCreate(BaseModel):
     @classmethod
     def _password_min_length(cls, v: str) -> str:
         return _validate_password_length(v)
+
+    @field_validator("role")
+    @classmethod
+    def _check_role(cls, v: str) -> str:
+        if v not in VALID_ROLES:
+            raise ValueError(
+                f"role must be one of: {', '.join(sorted(VALID_ROLES))}"
+            )
+        return v
 
 
 class UserOut(BaseModel):
@@ -43,6 +102,12 @@ class UserOut(BaseModel):
     facility: Optional[str] = None
     patient_id: Optional[str] = None
     must_change_password: bool = False
+    # Per-counter reception scoping (models.User.section) -- the
+    # FacilitySection name this receptionist/clinician is hard-pinned to, or
+    # None if unscoped. Plain ORM column, so UserOut.from_attributes picks it
+    # up automatically on both POST /auth/login and GET /auth/me. Lets the
+    # web console label the reception board with the active section.
+    section: Optional[str] = None
     # Data-completeness signal for patient-role users only (always [] for
     # staff/emergency-responder roles) -- which of
     # models.PATIENT_PROFILE_FIELDS_TO_PROMPT are still null/empty on the
@@ -53,6 +118,26 @@ class UserOut(BaseModel):
     # goes through UserOut's from_attributes path via an explicit
     # model_validate(..., ) call rather than FastAPI's implicit ORM read.
     missing_profile_fields: List[str] = []
+    # True when this user has a saved digital signature
+    # (models.User.signature_object_key is set). Computed (bool of the key
+    # column), attached by auth_router alongside allowed_pages on
+    # POST /auth/login and GET /auth/me -- lets a client show/hide the
+    # "save your signature" nudge and know a consultation sign-off won't 409.
+    has_signature: bool = False
+    # The console pages this user is allowed to reach -- drives the web
+    # console's nav, routing, and post-login landing page. Computed (not a
+    # DB column) and stashed as an unmapped attribute by auth_router
+    # (_attach_allowed_pages) on both POST /auth/login and GET /auth/me,
+    # same technique as missing_profile_fields above:
+    #   - admin                         -> ["patients","reception","pharmacy","admin"]
+    #   - clinician / records_officer /
+    #     receptionist / pharmacist      -> that (facility, role)'s allowed_pages
+    #                                       (see models.RolePagePermission /
+    #                                        app/permissions.py; lazy default)
+    #   - patient / emergency_responder -> []  (not page-gated)
+    # Enforced server-side by auth.require_page_access (router-level in
+    # main.py) -- this field is the client's copy of that same decision.
+    allowed_pages: List[str] = []
 
     class Config:
         from_attributes = True
@@ -62,6 +147,21 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+    # P2.5 (Security Audit M4): present ONLY for a native client (Flutter),
+    # which has no browser cookie jar and stores this itself via secure
+    # OS-keychain storage (see mobile_flutter's TokenStorage) -- the web
+    # console gets the equivalent refresh token exclusively as an HttpOnly
+    # cookie (never in this JSON body) and MUST NOT read or persist this
+    # field even if it happens to be present. See
+    # docs/deployment.md's "Session / refresh tokens" section.
+    refresh_token: Optional[str] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """POST /auth/refresh's optional JSON body -- native-client path only.
+    The web client relies entirely on the HttpOnly cookie instead and
+    sends no body at all."""
+    refresh_token: Optional[str] = None
 
 
 # ---------- Patient account issuance / password reset ----------
@@ -98,6 +198,49 @@ class PasswordResetWithOtpRequest(BaseModel):
         return _validate_password_length(v)
 
 
+# ---------- Self-service patient registration (NRIC-OCR identity verification) ----------
+# Alternative to staff-issued accounts (IssueAccountResponse above) -- see
+# routers/self_registration.py's module docstring for the full multi-factor
+# design (NRIC + DOB + name + emailed OTP + OCR-verified NRIC photos, all
+# checked against an EXISTING Patient row; never creates a new Patient).
+class SelfRegisterStartRequest(BaseModel):
+    """Public, unauthenticated. Step 1 of self-service registration.
+    No date_of_birth field here (deliberately removed, not deprecated-kept)
+    -- a standard Malaysian NRIC's first 6 digits already encode the
+    holder's birthdate, so the router derives the expected date_of_birth
+    from national_id itself (see routers/self_registration.py::
+    start_self_registration, via ai/nric_ocr.py::dob_from_ic_number) and
+    checks it against Patient.date_of_birth as a self-consistency check,
+    rather than asking the caller to separately supply it as an
+    independently-known factor."""
+
+    national_id: str
+    full_name: str
+    email: EmailStr
+
+
+class SelfRegisterVerifyOtpRequest(BaseModel):
+    """Public, unauthenticated. Step 2 of self-service registration."""
+
+    national_id: str
+    otp_code: str
+
+
+class SelfRegisterCompleteRequest(BaseModel):
+    """Public, unauthenticated. Final step of self-service registration --
+    only reachable once the attempt's status is photo_verified (router
+    enforces this). Same password-length floor as every other
+    human-chosen-password endpoint in this API."""
+
+    national_id: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_min_length(cls, v: str) -> str:
+        return _validate_password_length(v)
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -111,7 +254,16 @@ class ChangePasswordRequest(BaseModel):
 # ---------- Patient ----------
 class PatientCreate(BaseModel):
     full_name: str
-    date_of_birth: str
+    # Optional on the wire: when national_id is a standard, parseable
+    # Malaysian NRIC, the router derives date_of_birth server-side from the
+    # NRIC itself (see routers/patients.py::create_patient, which uses
+    # ai/nric_ocr.py's dob_from_ic_number) and that derived value OVERRIDES
+    # whatever's sent here -- staff should never have to (and can't
+    # override, if the NRIC is standard) hand-type a DOB that the NRIC
+    # already encodes. Only actually required, and only actually taken from
+    # the client, when national_id is absent or doesn't resolve to a
+    # plausible date (see create_patient for the exact fallback logic).
+    date_of_birth: Optional[str] = None
     gender: Optional[str] = None
     national_id: Optional[str] = None
     blood_type: Optional[str] = None
@@ -204,6 +356,9 @@ class MedicationUpdate(BaseModel):
     drug_name: Optional[str] = None
     dosage: Optional[str] = None
     frequency: Optional[str] = None
+    # The prescriber (may be external) -- informational, editable. NOT the
+    # immutability key; that's recorded_by_facility, which has no field here
+    # (mirrors ConditionUpdate/AllergyUpdate never exposing authored_by_facility).
     prescribed_by_facility: Optional[str] = None
     start_date: Optional[str] = None
     active: Optional[bool] = None
@@ -267,7 +422,11 @@ class EncounterCreate(BaseModel):
 
 
 class EncounterUpdate(BaseModel):
-    facility_name: Optional[str] = None
+    # facility_name is deliberately NOT editable here -- an encounter always
+    # happens AT one facility, and that facility is the authoring facility for
+    # the cross-hospital immutability guard (patients.py::_row_author_facility).
+    # Letting an editor rewrite it would let them hand the row's edit rights to
+    # another facility or hide it by pointing it at an opted-out one.
     encounter_type: Optional[str] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
@@ -380,14 +539,137 @@ class AppointmentOut(BaseModel):
     status: str
     created_by: str
     created_at: datetime
+    # Reschedule tracking -- see models.Appointment's docstring. All null on
+    # an appointment that's never been rescheduled.
+    previous_scheduled_at: Optional[datetime] = None
+    reschedule_reason_code: Optional[str] = None
+    reschedule_reason_other: Optional[str] = None
     # Computed (not a DB column) via appointments.compute_reminder_offsets --
     # see that function's docstring for why the exact reminder rule lives
     # only there. Populated explicitly by the router (not via from_attributes
     # ORM auto-read), since it isn't a plain attribute on models.Appointment.
     reminders: List[dict] = []
+    # The most recent AppointmentRescheduleRequest filed against this
+    # appointment, regardless of outcome (pending/accepted/rejected) -- None
+    # if the patient has never requested a reschedule. Deliberately not
+    # narrowed to "only pending" so a patient/staff member can still see how
+    # their last request was resolved (e.g. a rejection note), not just
+    # whether one is currently open. Populated explicitly by the router
+    # (same pattern as `reminders` above), since it's a live query, not a
+    # plain attribute on models.Appointment.
+    latest_reschedule_request: Optional["RescheduleRequestOut"] = None
 
     class Config:
         from_attributes = True
+
+
+# ---------- Appointment rescheduling ----------
+# Staff reschedule (clinician/admin/records_officer picks a new time
+# unprompted, or after agreeing one with the patient by phone following an
+# accepted reschedule request) vs. patient reschedule REQUEST (the patient
+# only ever asks; staff must accept/reject it, and accepting does not by
+# itself move the appointment -- see AppointmentRescheduleRequest's
+# docstring in models.py for why). Two separate, deliberately non-overlapping
+# reason vocabularies: a patient never sees "Doctor unavailable" as a reason
+# for THEIR OWN request, and staff never see "Transport issue" as a reason
+# they'd give for rescheduling someone.
+STAFF_RESCHEDULE_REASON_CODES = {
+    "doctor_unavailable",
+    "facility_or_equipment_issue",
+    "emergency_prioritization",
+    "patient_requested",  # staff rescheduling because the patient asked (by phone, in person, or after accepting an in-app request)
+    "other",
+}
+
+PATIENT_RESCHEDULE_REASON_CODES = {
+    "schedule_conflict",
+    "unwell_or_cannot_travel",
+    "transport_issue",
+    "other",
+}
+
+
+def _check_reason_other_required(reason_code: str, reason_other: Optional[str]) -> None:
+    """Shared guard for both reschedule reason vocabularies: 'other' is only
+    useful paired with actual free text -- an 'other' reason with nothing
+    typed in gives staff/patient strictly less information than one of the
+    named options would have."""
+    if reason_code == "other" and not (reason_other and reason_other.strip()):
+        raise ValueError("reason_other is required when reason_code is 'other'.")
+
+
+class RescheduleAppointmentRequest(BaseModel):
+    """Body for POST /patients/{id}/appointments/{id}/reschedule -- the
+    staff-only action that actually moves scheduled_at. Reuses
+    AppointmentCreate._check_not_past's exact reasoning: a reschedule to a
+    time already in the past is almost certainly a typo, not intentional."""
+
+    new_scheduled_at: datetime
+    reason_code: str
+    reason_other: Optional[str] = None
+
+    @field_validator("new_scheduled_at")
+    @classmethod
+    def _check_not_past(cls, v: datetime) -> datetime:
+        if v < datetime.utcnow():
+            raise ValueError("new_scheduled_at cannot be in the past.")
+        return v
+
+    @field_validator("reason_code")
+    @classmethod
+    def _check_reason_code(cls, v: str) -> str:
+        if v not in STAFF_RESCHEDULE_REASON_CODES:
+            raise ValueError(f"reason_code must be one of: {', '.join(sorted(STAFF_RESCHEDULE_REASON_CODES))}")
+        return v
+
+    @model_validator(mode="after")
+    def _check_other_text(self):
+        _check_reason_other_required(self.reason_code, self.reason_other)
+        return self
+
+
+class RescheduleRequestCreate(BaseModel):
+    """Body for POST /patients/{id}/appointments/{id}/reschedule-requests --
+    the patient-only action that files a request for staff to review."""
+
+    reason_code: str
+    reason_other: Optional[str] = None
+
+    @field_validator("reason_code")
+    @classmethod
+    def _check_reason_code(cls, v: str) -> str:
+        if v not in PATIENT_RESCHEDULE_REASON_CODES:
+            raise ValueError(f"reason_code must be one of: {', '.join(sorted(PATIENT_RESCHEDULE_REASON_CODES))}")
+        return v
+
+    @model_validator(mode="after")
+    def _check_other_text(self):
+        _check_reason_other_required(self.reason_code, self.reason_other)
+        return self
+
+
+class RescheduleRequestRejectBody(BaseModel):
+    clinician_note: Optional[str] = None
+
+
+class RescheduleRequestOut(BaseModel):
+    id: str
+    appointment_id: str
+    patient_id: str
+    requested_by: str
+    reason_code: str
+    reason_other: Optional[str] = None
+    status: str  # pending | accepted | rejected
+    clinician_note: Optional[str] = None
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+AppointmentOut.model_rebuild()
 
 
 class PatientFullRecord(PatientOut):
@@ -421,6 +703,14 @@ class MedicineInventoryCreate(BaseModel):
     unit: str = "units"
     reorder_threshold: Optional[int] = None
     notes: Optional[str] = None
+    # Optional scanned/keyed barcode (see MedicineInventoryItem.barcode).
+    # Admin-set at create time; searchable via GET .../inventory?q=.
+    barcode: Optional[str] = None
+    # Per single `unit` procurement cost (RM). Drives the budget /
+    # procurement-spend rollup (see routers/admin.py::get_budget and the
+    # pharmacy restock flow). Nullable = "cost not tracked yet" (treated as
+    # 0 in the rollup).
+    unit_cost: Optional[float] = None
 
     @field_validator("quantity_on_hand")
     @classmethod
@@ -436,6 +726,13 @@ class MedicineInventoryCreate(BaseModel):
             raise ValueError("reorder_threshold cannot be negative.")
         return v
 
+    @field_validator("unit_cost")
+    @classmethod
+    def _check_unit_cost_non_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError("unit_cost cannot be negative.")
+        return v
+
 
 class MedicineInventoryUpdate(BaseModel):
     """Partial update for PATCH /admin/inventory/{item_id}. Every field
@@ -449,6 +746,14 @@ class MedicineInventoryUpdate(BaseModel):
     unit: Optional[str] = None
     reorder_threshold: Optional[int] = None
     notes: Optional[str] = None
+    unit_cost: Optional[float] = None
+    barcode: Optional[str] = None
+    # Admin-only toggle for the purchase-approval workflow: when True a
+    # pharmacist restock applies immediately, when False it files a
+    # MedicinePurchaseProposal for admin review. Only reachable through the
+    # admin router (PATCH /admin/inventory/{id}); the pharmacy router never
+    # accepts this schema, so a pharmacist token cannot flip it.
+    auto_approved: Optional[bool] = None
 
     @field_validator("quantity_on_hand")
     @classmethod
@@ -464,6 +769,13 @@ class MedicineInventoryUpdate(BaseModel):
             raise ValueError("reorder_threshold cannot be negative.")
         return v
 
+    @field_validator("unit_cost")
+    @classmethod
+    def _check_unit_cost_non_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError("unit_cost cannot be negative.")
+        return v
+
     class Config:
         extra = "forbid"
 
@@ -477,6 +789,11 @@ class MedicineInventoryOut(BaseModel):
     reorder_threshold: Optional[int] = None
     notes: Optional[str] = None
     last_restocked_at: Optional[datetime] = None
+    unit_cost: Optional[float] = None
+    barcode: Optional[str] = None
+    # True while an admin has opted this item into immediate pharmacist
+    # restocks (see MedicineInventoryItem.auto_approved).
+    auto_approved: bool = False
     updated_by: Optional[str] = None
     updated_at: Optional[datetime] = None
     created_at: datetime
@@ -484,9 +801,308 @@ class MedicineInventoryOut(BaseModel):
     # rather than stored, so a change to reorder_threshold or
     # quantity_on_hand can never leave a stale is_low_stock flag behind.
     is_low_stock: bool = False
+    # Computed in the serializer -- True while an unresolved (pending)
+    # InventoryDeleteRequest exists for this item, so the UI can show
+    # "deletion requested" instead of offering the request button again.
+    pending_delete_request: bool = False
+    # Whether a medicine photo has been uploaded (image_object_key set on
+    # the row). `image_url` is the authenticated GET endpoint the frontend
+    # hits to render it -- null when has_image is False. Both computed in
+    # the serializer; the raw object key is never exposed.
+    has_image: bool = False
+    image_url: Optional[str] = None
+    # P1.7: authenticated GET endpoint for a 300px preview JPEG (regenerated
+    # on demand from the original). Null when has_image is False.
+    thumbnail_url: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+# ---------- Pharmacy: stock adjustments, budget, delete-approval ----------
+class StockAdjustRequest(BaseModel):
+    """Body for POST /pharmacy/inventory/{item_id}/adjust. `delta` > 0 is a
+    restock (accrues procurement spend at `unit_cost` or the item's stored
+    unit_cost); `delta` < 0 is a dispense/consume (no budget effect)."""
+
+    delta: int
+    unit_cost: Optional[float] = None
+
+    @field_validator("delta")
+    @classmethod
+    def _check_delta(cls, v: int) -> int:
+        # A single stock movement is bounded -- a real restock/dispense is
+        # never millions of units, and an unbounded delta lets a pharmacist
+        # (or a stolen pharmacist token) drive the medicine budget wildly
+        # negative in one call. Anything larger is a data-entry error.
+        if v == 0:
+            raise ValueError("delta must be a non-zero integer.")
+        if abs(v) > 1_000_000:
+            raise ValueError("delta magnitude must be <= 1,000,000.")
+        return v
+
+    @field_validator("unit_cost")
+    @classmethod
+    def _check_unit_cost(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and (v < 0 or v > 1_000_000):
+            raise ValueError("unit_cost must be between 0 and 1,000,000.")
+        return v
+
+
+class InventoryDeleteRequestCreate(BaseModel):
+    reason: Optional[str] = None
+
+
+class InventoryDeleteRequestOut(BaseModel):
+    id: str
+    item_id: str
+    item_name: str
+    requested_by: str
+    # Live join to users.full_name (None if that account is since gone) --
+    # same convention as AdminAppointmentOut.created_by_name.
+    requested_by_name: Optional[str] = None
+    reason: Optional[str] = None
+    status: str  # pending | approved | rejected
+    created_at: datetime
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    admin_note: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DeleteRequestResolve(BaseModel):
+    admin_note: Optional[str] = None
+
+
+class BudgetOut(BaseModel):
+    allocated_amount: float
+    procurement_spend: float
+    current_stock_value: float
+    remaining: float
+    # Number of this facility's inventory items currently at/below their
+    # reorder_threshold -- surfaced here (not just on GET
+    # /pharmacy/inventory/low-stock) so the pharmacy/admin budget console
+    # can badge "N items low" without a second round-trip. Defaulted so the
+    # PUT /admin/budget response (which doesn't recompute it) stays valid.
+    low_stock_count: int = 0
+
+
+class PharmacySummaryOut(BaseModel):
+    """GET /pharmacy/summary -- the two counters the pharmacy console badges
+    on load. `pending_proposal_count` is this facility's purchase proposals
+    still awaiting admin review; `low_stock_count` matches BudgetOut's."""
+    low_stock_count: int = 0
+    pending_proposal_count: int = 0
+
+
+class PurchaseProposalCreate(BaseModel):
+    """Body for POST /pharmacy/purchase-proposals -- a pharmacist proposing a
+    BRAND-NEW catalogue item (item_id is NULL on the resulting proposal).
+    Restocking an EXISTING item does not use this schema: that goes through
+    POST /pharmacy/inventory/{id}/adjust with delta > 0, which builds the
+    proposal server-side from the item."""
+
+    proposed_drug_name: str
+    proposed_unit: str = "units"
+    proposed_barcode: Optional[str] = None
+    quantity: int
+    unit_cost: Optional[float] = None
+    reason: Optional[str] = None
+
+    @field_validator("proposed_drug_name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("proposed_drug_name is required.")
+        return v.strip()
+
+    @field_validator("quantity")
+    @classmethod
+    def _check_quantity(cls, v: int) -> int:
+        # Same bound/rationale as StockAdjustRequest.delta -- a real purchase
+        # is never millions of units, and an unbounded quantity lets a
+        # stolen token drive the budget wildly negative on approval.
+        if v <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        if v > 1_000_000:
+            raise ValueError("quantity must be <= 1,000,000.")
+        return v
+
+    @field_validator("unit_cost")
+    @classmethod
+    def _check_unit_cost(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and (v < 0 or v > 1_000_000):
+            raise ValueError("unit_cost must be between 0 and 1,000,000.")
+        return v
+
+    class Config:
+        extra = "forbid"
+
+
+class PurchaseProposalReject(BaseModel):
+    reason: Optional[str] = None
+
+
+class PurchaseProposalOut(BaseModel):
+    id: str
+    facility_name: str
+    # NULL => this proposal creates a brand-new catalogue item on approval;
+    # is_new_item mirrors that as a convenience flag for the UI.
+    item_id: Optional[str] = None
+    is_new_item: bool = False
+    proposed_drug_name: str
+    proposed_unit: str
+    proposed_barcode: Optional[str] = None
+    quantity: int
+    unit_cost: Optional[float] = None
+    reason: Optional[str] = None
+    requested_by: str
+    # Live join to users.full_name (None if that account is since gone) --
+    # same convention as InventoryDeleteRequestOut.requested_by_name.
+    requested_by_name: Optional[str] = None
+    status: str  # pending | approved | rejected
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    admin_note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BudgetUpdate(BaseModel):
+    allocated_amount: float
+
+    @field_validator("allocated_amount")
+    @classmethod
+    def _check_non_negative(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("allocated_amount cannot be negative.")
+        return v
+
+    class Config:
+        extra = "forbid"
+
+
+# ---------- Hospital settings (per-facility admin config) ----------
+class HospitalSettingOut(BaseModel):
+    """The caller's own facility's HospitalSetting row (lazily created with
+    defaults on first GET, same as MedicineBudget)."""
+    facility_name: str
+    display_name: Optional[str] = None
+    address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    timezone: str = "Asia/Kuala_Lumpur"
+    # When False, this facility's authored clinical sub-records are hidden
+    # from staff at OTHER facilities (read filter in
+    # routers/patients.py::_serialize_patient). The emergency-token scan path
+    # ALWAYS ignores this flag (life-safety override), and the patient's own
+    # view is never filtered.
+    records_shared_publicly: bool = True
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class HospitalSettingUpdate(BaseModel):
+    """PUT /admin/hospital-settings -- every field optional; only the fields
+    actually present in the body are applied (exclude_unset in the router).
+    facility_name is NOT editable here: it's the identity of the row and is
+    always the acting admin's own facility."""
+    display_name: Optional[str] = None
+    address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    timezone: Optional[str] = None
+    records_shared_publicly: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+# ---------- Role -> page access (per-facility, admin-configurable) ----------
+# See app/permissions.py + models.RolePagePermission. GET /admin/role-permissions
+# returns one row per configurable staff role (plus a read-only `admin`
+# row so the UI can render it greyed); PUT accepts a single {role,
+# allowed_pages} object OR a list of them (bulk matrix save).
+class RolePagePermissionOut(BaseModel):
+    role: str
+    allowed_pages: List[str] = []
+    # The fixed full column set the matrix UI should render
+    # (["patients","reception","pharmacy"]) -- same on every row so the
+    # console knows which checkboxes exist regardless of what's ticked.
+    configurable_pages: List[str] = []
+    # False for the `admin` row only (all pages, not editable) so the UI can
+    # show it greyed; True for every real configurable staff role.
+    editable: bool = True
+
+
+class RolePagePermissionUpdate(BaseModel):
+    role: str
+    allowed_pages: List[str]
+
+    class Config:
+        extra = "forbid"
+
+
+# ---------- LDAP/AD role mapping (P1.10) ----------
+# Unlike most of app/routers/admin.py, this config is NOT facility-scoped --
+# it governs which AD groups can authenticate as which CLARION role at all
+# (a platform-level identity-provider setting), so every admin sees and
+# edits the same global table. See app/ldap_auth.py, models.LdapRoleMapping.
+#
+# Deliberately NOT the general VALID_ROLES set (voltagent security review
+# finding M1): "patient" must never be LDAP-assignable -- a directory
+# account JIT-provisioned as role="patient" would have patient_id=None (no
+# linked Patient row), violating this codebase's stated invariant that
+# patients never authenticate via LDAP. "emergency_responder" is likewise
+# excluded -- that's a purpose-issued credential, not a general staff
+# directory identity. Admin IS included: an AD "IT/Helpdesk" group mapping
+# to admin is a normal, intended use of this feature.
+LDAP_ASSIGNABLE_ROLES = set(permissions.CONFIGURABLE_STAFF_ROLES) | {"admin"}
+
+
+class LdapRoleMappingOut(BaseModel):
+    id: str
+    group_dn: str
+    role: str
+    facility: Optional[str] = None
+    priority: int
+
+    class Config:
+        from_attributes = True
+
+
+class LdapRoleMappingCreate(BaseModel):
+    group_dn: str
+    role: str
+    facility: Optional[str] = None
+    priority: int = 0
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("group_dn")
+    @classmethod
+    def _group_dn_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("group_dn must not be blank")
+        return v
+
+    @field_validator("role")
+    @classmethod
+    def _check_role(cls, v: str) -> str:
+        if v not in LDAP_ASSIGNABLE_ROLES:
+            raise ValueError(f"role must be one of: {', '.join(sorted(LDAP_ASSIGNABLE_ROLES))}")
+        return v
+
+
+class LdapRoleMappingUpdate(LdapRoleMappingCreate):
+    """Same validated shape as create -- PUT replaces every field."""
 
 
 VALID_WARD_TYPES = {"general", "icu", "pediatric", "maternity", "emergency", "other"}
@@ -585,6 +1201,189 @@ class WardOut(BaseModel):
         from_attributes = True
 
 
+# ---------- Floors (auto-generated wards) + per-bed admissions ----------
+VALID_GENDER_RESTRICTIONS = {"male", "female"}
+
+
+def _validate_gender_restriction(v: Optional[str]) -> Optional[str]:
+    if v is not None and v not in VALID_GENDER_RESTRICTIONS:
+        raise ValueError('gender_restriction must be "male", "female", or null (mixed).')
+    return v
+
+
+class FloorCreate(BaseModel):
+    """facility_name is FORCED server-side from the acting admin's own row --
+    this schema has no such field, same forced-facility boundary as
+    WardCreate (see routers/admin.py docstring). Creating a floor also
+    creates `ward_count` child Ward rows in the same request."""
+
+    floor_label: str
+    gender_restriction: Optional[str] = None
+    ward_count: int
+    beds_per_ward: int
+
+    @field_validator("gender_restriction")
+    @classmethod
+    def _check_gender(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_gender_restriction(v)
+
+    @field_validator("ward_count")
+    @classmethod
+    def _check_ward_count(cls, v: int) -> int:
+        if not (1 <= v <= 200):
+            raise ValueError("ward_count must be between 1 and 200.")
+        return v
+
+    @field_validator("beds_per_ward")
+    @classmethod
+    def _check_beds_per_ward(cls, v: int) -> int:
+        if not (1 <= v <= 500):
+            raise ValueError("beds_per_ward must be between 1 and 500.")
+        return v
+
+
+class FloorUpdate(BaseModel):
+    """Partial update for PATCH /admin/floors/{floor_id}. Every field
+    optional; only fields present in the request body are applied (see
+    exclude_unset in the router). Cross-field consequences (adding/removing
+    child wards, resizing every child ward, refusing a shrink that would
+    strand an admitted patient) are all handled in the router against the
+    merged row -- same technique as WardUpdate."""
+
+    floor_label: Optional[str] = None
+    gender_restriction: Optional[str] = None
+    ward_count: Optional[int] = None
+    beds_per_ward: Optional[int] = None
+
+    @field_validator("gender_restriction")
+    @classmethod
+    def _check_gender(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_gender_restriction(v)
+
+    @field_validator("ward_count")
+    @classmethod
+    def _check_ward_count(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (1 <= v <= 200):
+            raise ValueError("ward_count must be between 1 and 200.")
+        return v
+
+    @field_validator("beds_per_ward")
+    @classmethod
+    def _check_beds_per_ward(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (1 <= v <= 500):
+            raise ValueError("beds_per_ward must be between 1 and 500.")
+        return v
+
+    class Config:
+        extra = "forbid"
+
+
+class FloorOut(BaseModel):
+    id: str
+    facility_name: str
+    floor_label: str
+    gender_restriction: Optional[str] = None
+    ward_count: int
+    beds_per_ward: int
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    # All computed in routers/admin.py::_serialize_floor from the live child
+    # Ward rows + active Admission rows -- never stored, so they can't drift.
+    ward_ids: List[str] = []
+    total_beds: int = 0
+    occupied_beds: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class AdmissionCreate(BaseModel):
+    """Exactly one of patient_id / national_id must be given -- same
+    "fail loud if a client bug sends two" idiom as ReceptionCheckinRequest.
+    If ward_id + bed_number are both given the patient goes to that exact
+    bed (validated free + gender-compatible); otherwise the backend
+    auto-assigns (optionally restricted to `floor_id`)."""
+
+    patient_id: Optional[str] = None
+    national_id: Optional[str] = None
+    floor_id: Optional[str] = None
+    ward_id: Optional[str] = None
+    bed_number: Optional[int] = None
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check_exactly_one_identifier(self):
+        provided = [self.patient_id, self.national_id]
+        if sum(1 for p in provided if p) != 1:
+            raise ValueError("Provide exactly one of patient_id or national_id.")
+        return self
+
+
+class AdmissionUpdate(BaseModel):
+    ward_id: Optional[str] = None
+    bed_number: Optional[int] = None
+    notes: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class AdmissionOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_name: str
+    national_id: Optional[str] = None
+    ward_id: str
+    ward_name: str
+    floor_id: Optional[str] = None
+    floor_label: Optional[str] = None
+    bed_number: int
+    admitted_at: datetime
+    admitted_by: Optional[str] = None
+    discharged_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class WardMapBedAdmission(BaseModel):
+    # `id` (the Admission id) is included beyond the approved plan's field
+    # list so the Ward Map's per-bed Discharge / Move actions have something
+    # to address without a second round-trip to GET /reception/admissions.
+    id: str
+    patient_id: str
+    patient_name: str
+    national_id: Optional[str] = None
+    admitted_at: datetime
+    notes: Optional[str] = None
+
+
+class WardMapBed(BaseModel):
+    bed_number: int
+    occupied: bool
+    admission: Optional[WardMapBedAdmission] = None
+
+
+class WardMapWard(BaseModel):
+    id: str
+    ward_name: str
+    beds: List[WardMapBed] = []
+
+
+class WardMapFloor(BaseModel):
+    id: str
+    floor_label: str
+    gender_restriction: Optional[str] = None
+    wards: List[WardMapWard] = []
+
+
+class WardMapOut(BaseModel):
+    floors: List[WardMapFloor] = []
+
+
 # ---------- Staff clock-in/out ----------
 class ClockStatusOut(BaseModel):
     """Response for POST /staff/clock-in, POST /staff/clock-out, and
@@ -629,6 +1428,10 @@ class StaffRosterEntryOut(BaseModel):
     role: str
     facility: Optional[str] = None
     must_change_password: bool = False
+    # Per-counter reception scoping (models.User.section). None for staff
+    # not pinned to a FacilitySection, and always None for records_officer
+    # (only receptionist/clinician are ever assignable -- see routers/admin.py).
+    section: Optional[str] = None
     clocked_in: bool
     since: Optional[datetime] = None
     last_clock_out_at: Optional[datetime] = None
@@ -708,6 +1511,375 @@ class NfcScanRequest(BaseModel):
     nfc_uid: str
     responder_name: Optional[str] = None
     responder_org: Optional[str] = None
+
+
+# ---------- Reception desk check-in / queue ----------
+VALID_QUEUE_TICKET_STATUSES = {"waiting", "called", "done", "cancelled"}
+
+
+class ReceptionCheckinRequest(BaseModel):
+    """Exactly one of national_id / patient_id / card_reference / nfc_uid must
+    be given -- whichever identifier the receptionist actually has to hand.
+    Validated explicitly (not "silently pick the first non-null one") so a
+    client bug that accidentally sends two identifiers fails loudly instead
+    of checking in the wrong patient.
+
+    `national_id` is the patient's IC/NRIC (dash-tolerant, resolved against
+    Patient.national_id -- see routers/reception.py::_resolve_patient); it's
+    the default front-desk path now that `patient_id` (an opaque internal
+    UUID) is only a fallback."""
+
+    national_id: Optional[str] = None
+    patient_id: Optional[str] = None
+    card_reference: Optional[str] = None
+    nfc_uid: Optional[str] = None
+    reason: Optional[str] = None
+    department: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check_exactly_one_identifier(self):
+        # A model_validator (not a field_validator on one of the four
+        # fields) is used deliberately: field_validators don't run against
+        # an untouched default value in pydantic v2 unless validate_default
+        # is set, so a request that omits ALL FOUR identifiers would
+        # otherwise slip through with nothing to check against. This always
+        # runs, regardless of which (if any) fields were actually supplied.
+        provided = [self.national_id, self.patient_id, self.card_reference, self.nfc_uid]
+        count = sum(1 for p in provided if p)
+        if count != 1:
+            raise ValueError(
+                "Provide exactly one of national_id, patient_id, card_reference, or nfc_uid."
+            )
+        return self
+
+
+class QueueTicketOut(BaseModel):
+    id: str
+    patient_id: str
+    facility_name: str
+    queue_number: int
+    department: Optional[str] = None
+    room_id: Optional[str] = None
+    room_name: Optional[str] = None
+    reason: Optional[str] = None
+    source: str
+    status: str
+    checked_in_at: datetime
+    called_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    checked_in_by: str
+
+    class Config:
+        from_attributes = True
+
+
+class ReceptionCheckinResponse(BaseModel):
+    """Response for POST /reception/checkin -- the ticket plus enough of the
+    patient's identity for the receptionist to visually confirm they
+    checked in the right person (this endpoint is often reached via a
+    fumble-prone manual card_reference/nfc_uid entry, so a wrong-lookup
+    should be obvious immediately, not discovered later)."""
+
+    ticket: QueueTicketOut
+    patient_full_name: str
+    patient_date_of_birth: str
+
+
+class QueueBoardOut(BaseModel):
+    """Response for GET /reception/queue -- today's tickets for the calling
+    staff member's own facility, plus two small computed conveniences so
+    the queue-board UI doesn't have to re-derive them client-side."""
+
+    tickets: List[QueueTicketOut]
+    now_serving: Optional[int] = None  # queue_number of the one ticket currently status == "called", if any
+    waiting_count: int = 0
+    # Per-counter reception scoping: the FacilitySection name the calling
+    # staff member is pinned to (models.User.section), or None if unscoped.
+    # When set, `tickets`/`now_serving`/`waiting_count` above are already
+    # filtered to just that section -- this field lets the board UI label
+    # which counter it's showing.
+    section: Optional[str] = None
+
+
+class QueueStatusOut(BaseModel):
+    """Response for GET /reception/queue/status/{patient_id}. Mirrors
+    GET /emergency/current/{patient_id}'s `{"active": false}` convention
+    exactly for "nothing to show" -- see routers/reception.py."""
+
+    active: bool
+    ticket: Optional[QueueTicketOut] = None
+    now_serving: Optional[int] = None
+    people_ahead: Optional[int] = None
+
+
+# ---------- Reception station (self-check-in QR) ----------
+class ReceptionStationCreate(BaseModel):
+    department: Optional[str] = None
+
+
+class ReceptionStationOut(BaseModel):
+    """Response for GET/POST /reception/station. `qr_base64` is rendered
+    fresh on every response (same "fully deterministic, never persisted"
+    approach as emergency.py::_render_qr_base64) -- it's just a rendering of
+    `token`, nothing else to cache."""
+
+    id: str
+    facility_name: str
+    department: Optional[str] = None
+    revoked: bool
+    created_at: datetime
+    # Exposed alongside qr_base64, same convention as
+    # EmergencyCardOut.card_reference alongside its own QR image -- this
+    # isn't a secret protected by obscurity, the JWT auth on this endpoint
+    # is; surfacing it lets staff read it out / type it as a fallback if a
+    # camera scan ever fails.
+    token: str
+    qr_base64: str
+
+    class Config:
+        from_attributes = True
+
+
+class ReceptionStationStatusOut(BaseModel):
+    """Response for GET /reception/station when a facility has no active
+    station yet -- mirrors QueueStatusOut's `{"active": false}` convention."""
+
+    active: bool
+    station: Optional[ReceptionStationOut] = None
+
+
+class SelfCheckinRequest(BaseModel):
+    """Body for POST /reception/self-checkin -- the patient-authenticated
+    counterpart to staff-run ReceptionCheckinRequest. No patient_id/
+    card_reference/nfc_uid field: the patient is identified from their own
+    JWT (current_user.patient_id), never from anything client-supplied."""
+
+    station_token: str
+    reason: Optional[str] = None
+
+
+# ---------- Consultation rooms ("Bilik") + clinician room claims ----------
+class ConsultationRoomCreate(BaseModel):
+    """facility_name is FORCED server-side from the acting admin's own row --
+    this schema has no such field, same forced-facility boundary as
+    WardCreate / MedicineInventoryCreate (see routers/admin.py docstring)."""
+
+    room_name: str
+    department: Optional[str] = None
+    active: bool = True
+
+
+class ConsultationRoomUpdate(BaseModel):
+    room_name: Optional[str] = None
+    department: Optional[str] = None
+    active: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ConsultationRoomOut(BaseModel):
+    id: str
+    facility_name: str
+    room_name: str
+    department: Optional[str] = None
+    active: bool
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    created_at: datetime
+    # Computed in routers/admin.py::_serialize_room -- today's (Malaysia-local
+    # date) non-cancelled ticket count routed to this room, so the admin can
+    # see load at a glance. Not a DB column.
+    waiting_today: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- Facility sections (per-counter reception scoping) ----------
+class FacilitySectionCreate(BaseModel):
+    """facility_name is FORCED server-side from the acting admin's own row --
+    this schema has no such field, same forced-facility boundary as
+    ConsultationRoomCreate / WardCreate (see routers/admin.py docstring)."""
+
+    name: str
+
+
+class FacilitySectionUpdate(BaseModel):
+    name: Optional[str] = None
+    active: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class FacilitySectionOut(BaseModel):
+    id: str
+    facility_name: str
+    name: str
+    active: bool
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    created_at: datetime
+    # Computed in routers/admin.py::_serialize_section -- how many
+    # receptionist/clinician accounts at this facility are currently pinned
+    # to this section (models.User.section == name). Not a DB column.
+    assigned_staff_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class StaffSectionAssign(BaseModel):
+    """Body for PATCH /admin/staff/{user_id}. `section` is required in the
+    payload (send explicit null to un-assign) -- a section string must be
+    the name of an ACTIVE FacilitySection at the admin's own facility, else
+    400 (see routers/admin.py::assign_staff_section)."""
+
+    section: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class RoomClaimOut(BaseModel):
+    """One clinician's live claim on a room. `claimed_by_name` is a
+    read-time join to users.full_name (nullable if the claiming account was
+    since deleted) -- same live-name-resolution convention as AuditLog's
+    actor name."""
+
+    room_id: str
+    room_name: str
+    user_id: str
+    claimed_by_name: Optional[str] = None
+    claimed_at: datetime
+
+
+class ReceptionRoomOut(ConsultationRoomOut):
+    """A room as shown on the clinician's "claim a Bilik" list -- the room
+    plus who (if anyone) currently holds it."""
+
+    claim: Optional[RoomClaimOut] = None
+
+
+class MyRoomOut(BaseModel):
+    """Response for GET /reception/my-room. `room`/`tickets` are empty unless
+    the caller is BOTH currently clocked in AND holds an active RoomClaim --
+    the "withdrawn on clock-out" rule (see routers/staff.py::clock_out)."""
+
+    clocked_in: bool
+    room: Optional[ConsultationRoomOut] = None
+    tickets: List[QueueTicketOut] = []
+
+
+class AssignRoomRequest(BaseModel):
+    room_id: str
+
+
+# ---------- Clinician "Start session" (consultation router) ----------
+class ConsultationRoomStateOut(ReceptionRoomOut):
+    """A consultation room as shown on the clinician Consultation page --
+    identical to ReceptionRoomOut (the room fields + who currently holds it),
+    aliased so the consultation router has its own named response type."""
+
+
+class ConsultationSessionStartRequest(BaseModel):
+    room_id: str
+
+
+class ConsultationCompleteRequest(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=4000)
+    # Base64 PNG of a signature to save on the caller's profile first, for a
+    # clinician who hasn't saved one yet (POST /me/signature is the other
+    # way). Ignored if the caller already has a saved signature.
+    signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)  # ~1MB PNG as base64
+
+
+class ConsultationTicketOut(QueueTicketOut):
+    """A queued consultation ticket routed to the caller's claimed room, with
+    the patient's name + DOB joined in so the worklist is readable without a
+    second call (mirrors ReceptionCheckinResponse's identity-confirmation
+    fields)."""
+
+    patient_full_name: Optional[str] = None
+    patient_date_of_birth: Optional[str] = None
+
+
+class ConsultationMyRoomOut(BaseModel):
+    """Response for GET /consultation/my-room, POST /consultation/session/start
+    and POST /consultation/session/end. `room` / `tickets` are empty unless
+    the caller is BOTH clocked in AND holds an active RoomClaim -- same
+    "withdrawn on clock-out" rule as reception's MyRoomOut."""
+
+    clocked_in: bool
+    room: Optional[ConsultationRoomStateOut] = None
+    tickets: List[ConsultationTicketOut] = []
+
+
+# ---------- Waiting-room display (public, unauthenticated feed) ----------
+class WaitingRoomDisplayCreate(BaseModel):
+    """Body for POST /admin/waiting-room-displays. `section` (optional) pins
+    the screen to one FacilitySection's queue; omitted / null = whole
+    facility. `show_full_names` opts this one screen out of the default
+    masked patient labels."""
+
+    section: Optional[str] = None
+    show_full_names: bool = False
+
+    class Config:
+        extra = "forbid"
+
+
+class WaitingRoomDisplayOut(BaseModel):
+    id: str
+    facility_name: str
+    section: Optional[str] = None
+    show_full_names: bool
+    revoked: bool
+    created_at: datetime
+    # The unguessable token that goes in the display URL (GET /display/{token}).
+    # Not a secret protected by obscurity -- the feed it unlocks is
+    # deliberately public/low-sensitivity (queue numbers + masked names) --
+    # surfaced so an admin can copy the URL onto the screen device.
+    token: str
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- Clinical-record annotations (append-only sign-off) ----------
+ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter"}
+ANNOTATION_KINDS = {"resolved", "discontinued", "correction", "note"}
+
+
+class RecordAnnotationCreate(BaseModel):
+    """Body for POST /patients/{patient_id}/annotations. `kind` cross-rules
+    (`discontinued` only for a medication, `resolved` only for a condition)
+    are enforced in the router, not here, so the error names the target
+    type. `signature_b64` saves a signature on the caller's profile first if
+    they have none yet."""
+
+    target_type: str
+    target_id: str
+    kind: str
+    note: Optional[str] = Field(default=None, max_length=4000)
+    signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)
+
+    @field_validator("target_type")
+    @classmethod
+    def _check_target_type(cls, v: str) -> str:
+        if v not in ANNOTATION_TARGET_TYPES:
+            raise ValueError(
+                f"target_type must be one of: {', '.join(sorted(ANNOTATION_TARGET_TYPES))}"
+            )
+        return v
+
+    @field_validator("kind")
+    @classmethod
+    def _check_kind(cls, v: str) -> str:
+        if v not in ANNOTATION_KINDS:
+            raise ValueError(f"kind must be one of: {', '.join(sorted(ANNOTATION_KINDS))}")
+        return v
 
 
 # ---------- AI ----------

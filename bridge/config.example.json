@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy to config.json and edit. Every key is optional. Priority: CLI flags > NFC_BRIDGE_* env vars > config.json > defaults.",
+
+  "_how_to_find_values": "Run: python bridge/nfc_bridge.py --list-ports",
+
+  "port": "COM3",
+  "_port_note": "Explicit serial port. If set, vid/pid/description_contains are ignored. Comment out (delete) to auto-detect.",
+
+  "vid": "0x072F",
+  "pid": "0x2200",
+  "_vid_pid_note": "USB vendor/product id filter. Accepts hex ('0x072F') or decimal. Used only when 'port' is not set.",
+
+  "description_contains": "PICC",
+  "_description_note": "Case-insensitive substring match against the port description/manufacturer/product.",
+
+  "baudrate": 9600,
+  "reconnect_seconds": 3,
+  "http_port": 8770,
+
+  "allowed_origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+  "_allowed_origins_note": "CORS allowlist for the web console. Exact origins only (scheme+host+port), no wildcards. Defaults cover the Vite dev/preview ports. Add your console's real origin here if you serve it elsewhere. The bridge listens on 127.0.0.1 only, so the console must run on the SAME PC.",
+
+  "debug_token": "",
+  "_debug_token_note": "Leave empty to DISABLE POST /debug/scan entirely (recommended in normal use). Set to a random string to enable it for testing; callers must then send that string as an 'X-Debug-Token' header or '?token=' query param, in addition to being on the local machine."
+}

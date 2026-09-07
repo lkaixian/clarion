@@ -5,6 +5,7 @@ import '../config/app_config.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import 'edit_profile_screen.dart';
 
@@ -81,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     final config = context.watch<AppConfig>();
     final localeProvider = context.watch<LocaleProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
@@ -100,8 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: const Icon(Icons.person_outline),
                     label: Text(l10n.editProfileTitle),
                     style: OutlinedButton.styleFrom(
-                      backgroundColor: AppColors.chipBg,
-                      foregroundColor: AppColors.primary,
+                      backgroundColor: context.palette.chipBg,
+                      foregroundColor: context.palette.primary,
                       padding: const EdgeInsets.all(16),
                       side: BorderSide.none,
                     ),
@@ -112,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.chipBg,
+                  color: context.palette.chipBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -122,10 +124,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(l10n.seniorModeToggleLabel,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.primary)),
                           const SizedBox(height: 4),
                           Text(l10n.seniorModeToggleDesc,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.3)),
+                              style: TextStyle(fontSize: 12, color: context.palette.textMuted, height: 1.3)),
                         ],
                       ),
                     ),
@@ -140,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 28),
             ],
             Text(l10n.languageLabel,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -151,18 +153,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   label: Text(kLocaleDisplayNames[locale.languageCode] ?? locale.languageCode),
                   selected: selected,
                   onSelected: (_) => localeProvider.setLocale(locale),
-                  selectedColor: AppColors.primary,
-                  labelStyle: TextStyle(color: selected ? Colors.white : AppColors.textBody),
+                  selectedColor: context.palette.primary,
+                  labelStyle: TextStyle(color: selected ? Colors.white : context.palette.textBody),
                 );
               }).toList(),
             ),
             const SizedBox(height: 28),
+            // Unlike the Senior Mode toggle above (gated on auth.isAuthenticated
+            // — it only makes sense once there's a signed-in session to apply
+            // it to), Theme is an app-wide display preference like Language,
+            // so it must be reachable straight from the pre-login LoginScreen's
+            // settings gear too — hence it lives down here, ungated.
+            Text(l10n.themeLabel,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
+            const SizedBox(height: 8),
+            SegmentedButton<ThemeMode>(
+              segments: [
+                ButtonSegment(value: ThemeMode.light, label: Text(l10n.themeModeLight)),
+                ButtonSegment(value: ThemeMode.dark, label: Text(l10n.themeModeDark)),
+                ButtonSegment(value: ThemeMode.system, label: Text(l10n.themeModeSystem)),
+              ],
+              selected: {themeProvider.themeMode},
+              onSelectionChanged: (selection) =>
+                  context.read<ThemeProvider>().setThemeMode(selection.first),
+            ),
+            const SizedBox(height: 28),
             Text(l10n.backendUrlLabel,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.palette.textPrimary)),
             const SizedBox(height: 8),
             Text(
               l10n.backendUrlDesc,
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+              style: TextStyle(fontSize: 12, color: context.palette.textMuted, height: 1.4),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -189,18 +210,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AppColors.chipBg, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: context.palette.chipBg, borderRadius: BorderRadius.circular(10)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(l10n.currentlyActive(config.baseUrl),
-                      style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontSize: 12, color: context.palette.primary, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   Text(l10n.compileTimeDefault(config.compileTimeDefault),
-                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      style: TextStyle(fontSize: 12, color: context.palette.textMuted)),
                   Text(
                     config.isOverridden ? l10n.usingOverride : l10n.usingDefault,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                   ),
                 ],
               ),
@@ -208,7 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             Text(
               l10n.emulatorNote,
-              style: const TextStyle(fontSize: 11, color: AppColors.textFaint, height: 1.4),
+              style: TextStyle(fontSize: 11, color: context.palette.textFaint, height: 1.4),
             ),
           ],
         ),

@@ -1,0 +1,135 @@
+# CLARION edge reverse proxy (roadmap task P1.9).
+#
+# The single TLS-terminating entry point. Everything else in the stack
+# (web, backend, mariadb, minio, ...) is reachable only on the internal
+# networks -- only this proxy publishes 80/443 to the host.
+#
+# Responsibilities:
+#   - TLS termination (the University internal CA cert in production; Caddy's own
+#     local CA for the demo -- see CLARION_TLS_DIRECTIVE below)
+#   - HTTP -> HTTPS redirect (automatic in Caddy for a named site)
+#   - HSTS + CSP + the rest of the security-header set. The FastAPI app and
+#     web/nginx.conf deliberately DO NOT set these -- the edge owns them so
+#     there is exactly one place to reason about them.
+#   - Routing: /api/* -> backend (FastAPI), everything else -> web (SPA)
+#   - Request timeouts + header/body caps (a 4-worker backend is cheap to
+#     tie up; shed slow-body / slowloris at the door).
+#
+# The app processes see this proxy as their only client, so the backend
+# trusts X-Forwarded-* only from this proxy's fixed address
+# (FORWARDED_ALLOW_IPS in docker-compose.yml).
+{
+	admin off
+	persist_config off
+	# On-prem: no ACME / Let's Encrypt reachout. An explicit `tls internal`
+	# (demo) or `tls <cert> <key>` (prod) on the site already stops Caddy
+	# from trying to issue a public cert, so automatic HTTPS here just means
+	# "manage that cert + add the HTTP->HTTPS redirect", which is what we want.
+	servers {
+		# HTTP/1.1 + HTTP/2 only. HTTP/3 needs UDP/443 published (it isn't);
+		# advertising Alt-Svc for a port that never answers just adds latency.
+		protocols h1 h2
+		# Caddy is hop 1 from the internet -- never trust an inbound
+		# X-Forwarded-* header. (This is already the default; stated for audit.)
+		trusted_proxies static
+		# Reject Host/SNI mismatch games.
+		strict_sni_host on
+		# Shed slow clients before they reach a backend worker.
+		timeouts {
+			read_body 30s
+			read_header 5s
+			write 120s
+			idle 2m
+		}
+		max_header_size 16KB
+	}
+}
+
+# --- Compose healthcheck target ------------------------------------------
+# Plain HTTP on loopback so the container healthcheck needs no TLS, no cert
+# matching the site FQDN, and no DNS. Everything else on :80 still 301s to
+# HTTPS (this block replaces Caddy's auto-redirect vhost, so re-add it).
+:80 {
+	@healthz path /healthz
+	handle @healthz {
+		respond "ok" 200
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+{$CLARION_SITE_ADDRESS:localhost} {
+	# --- TLS ---------------------------------------------------------------
+	# Demo default: `tls internal` -- Caddy mints a cert from its own local
+	# CA. Run `docker compose exec proxy caddy trust` (or import the root
+	# from the caddy_data volume) on the demo machine to silence the warning.
+	#
+	# Production: set CLARION_TLS_DIRECTIVE in .env.docker to
+	#   tls /etc/caddy/certs/clarion.crt /etc/caddy/certs/clarion.key
+	# and mount the CAMPUS-CA-issued PEM pair at proxy/certs/ (see proxy/README.md).
+	# The `{ }` block below attaches to whichever `tls` invocation the env
+	# produced, so the protocol floor applies either way.
+	{$CLARION_TLS_DIRECTIVE:tls internal} {
+		protocols tls1.2 tls1.3
+	}
+
+	# --- Security headers (single source of truth for the whole stack) ----
+	header {
+		# max-age is env-driven so the demo can ship a short pin and prod
+		# ramps it deliberately. NO `preload` -- that is a near-irreversible
+		# domain-owner (the University) decision, not an app default.
+		Strict-Transport-Security "{$CLARION_HSTS:max-age=300}"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		# camera=(self): the reception barcode scanner (@zxing/browser, pure
+		# JS -- no wasm) needs getUserMedia. Everything else off.
+		Permissions-Policy "accelerometer=(), autoplay=(), camera=(self), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()"
+		# CSP (agy sweep 2026-08-30, Claude-verified against the built SPA):
+		#  - script-src 'self': the Vite build emits only hashed /assets/*.js
+		#    + the tiny same-origin /config.js. No inline script, no eval, no wasm.
+		#  - style-src-elem 'self' blocks injected <style>/<link>; style-src-attr
+		#    'unsafe-inline' keeps React's style={{}} props working. style-src is
+		#    the fallback for browsers without the granular directives.
+		#  - connect-src: same-origin API (via the /api route) + whatever
+		#    CLARION_CSP_CONNECT_EXTRA adds (the NFC bridge http://localhost:8770
+		#    on reception kiosks; a cross-origin VITE_API_BASE host if used).
+		#  - NO upgrade-insecure-requests: it would rewrite the plain-HTTP NFC
+		#    bridge call to https and break it.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self' {$CLARION_CSP_CONNECT_EXTRA:}; worker-src 'self' blob:; manifest-src 'self'"
+		# Don't leak the reverse-proxy / app-server identity.
+		-Server
+	}
+
+	# --- Access log (edge). PHI never appears in CLARION URLs (UUID path
+	# params, no identifiers in query strings), so path logging is safe. ----
+	log {
+		output stdout
+		format json
+	}
+
+	# --- Routing --------------------------------------------------------
+	# API: strip the /api prefix (FastAPI routes are mounted at root), same
+	# contract as web/nginx.conf's option-1 proxy. Body cap slightly above
+	# the backend's 15 MB MAX_UPLOAD_BYTES so an oversized upload gets a
+	# clean 413 from the app, not a truncated stream -- but not 20 MB+.
+	handle_path /api/* {
+		request_body {
+			max_size 16MB
+		}
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# Everything else: the static SPA container. Compress only here -- keep
+	# compression off the /api responses (BREACH-class caution; low risk
+	# given bearer-header auth, but free to avoid).
+	handle {
+		encode zstd gzip
+		reverse_proxy web:8080
+	}
+}

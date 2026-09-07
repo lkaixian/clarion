@@ -14,6 +14,8 @@ Two modes:
 import os
 from typing import Optional
 
+from ._cloud_guard import cloud_ai_enabled
+
 
 def _fallback_summary(patient: dict) -> str:
     lines = [f"Patient: {patient['full_name']} (DOB: {patient['date_of_birth']})"]
@@ -50,10 +52,12 @@ def _fallback_summary(patient: dict) -> str:
 
 
 def generate_handover_brief(patient: dict) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    # Cloud AI is disabled by default -- posting the full patient record to a
+    # third-party API breaks the tender and PDPA. See _cloud_guard.
+    if not cloud_ai_enabled():
         return _fallback_summary(patient)
 
+    api_key = os.environ["ANTHROPIC_API_KEY"]
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)

@@ -1,0 +1,54 @@
+# Keep the backend build context small and free of secrets / local state.
+
+# Virtualenvs
+venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local databases (image starts from an empty volume)
+*.db
+*.sqlite
+*.sqlite3
+clarion.db
+comiin.db
+
+# Runtime / user data
+uploads/
+backups/
+_debug_photos/
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+
+# Tests / dev-only helpers
+tests/
+test/
+*_test.py
+test_*.py
+
+# VCS / editor / OS
+.git/
+.gitignore
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+
+# Don't ship the Docker build files themselves
+Dockerfile
+.dockerignore
