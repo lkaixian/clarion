@@ -370,21 +370,34 @@ def _set_refresh_cookie(response: Response, plaintext_refresh_token: str) -> Non
     )
 
 
-def _issue_login_response(db: Session, response: Response, user: models.User) -> schemas.Token:
+def _issue_login_response(
+    db: Session, response: Response, user: models.User,
+    refresh_plaintext: Optional[str] = None,
+) -> schemas.Token:
     """Shared by every successful-auth branch in login() (local, LDAP JIT,
     LDAP resync) and by POST /auth/refresh: mints the short-lived access
-    JWT, issues+cookies a fresh refresh token, and assembles the response.
-    """
+    JWT, cookies a refresh token, and assembles the response.
+
+    `refresh_plaintext` lets POST /auth/refresh pass the token
+    `auth.rotate_refresh_token` ALREADY minted, instead of issuing yet
+    another one -- previously that path rotated (row A) AND then issued a
+    second fresh row (B), handing the client B and leaving A as an
+    un-revoked orphan the client never saw. That both leaked a live token
+    per refresh and broke the `replaced_by_id` rotation chain (A pointed at
+    nothing the client held), which the concurrent-refresh-race check
+    (auth._is_concurrent_refresh_race) relies on. The login paths pass
+    nothing and still get a freshly issued token."""
     token = auth.create_access_token(
         {"sub": user.id, "role": user.role},
         password_changed_at=user.password_changed_at,
     )
-    plaintext_refresh, _row = auth.issue_refresh_token(db, user)
-    _set_refresh_cookie(response, plaintext_refresh)
+    if refresh_plaintext is None:
+        refresh_plaintext, _row = auth.issue_refresh_token(db, user)
+    _set_refresh_cookie(response, refresh_plaintext)
     _with_missing_profile_fields(user)
     _attach_allowed_pages(db, user)
     _attach_has_signature(user)
-    return schemas.Token(access_token=token, user=user, refresh_token=plaintext_refresh)
+    return schemas.Token(access_token=token, user=user, refresh_token=refresh_plaintext)
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -527,8 +540,8 @@ def refresh_access_token(
         response.delete_cookie(_REFRESH_COOKIE_NAME, path=_REFRESH_COOKIE_PATH)
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
-    user, _new_plaintext = result
-    return _issue_login_response(db, response, user)
+    user, new_plaintext = result
+    return _issue_login_response(db, response, user, refresh_plaintext=new_plaintext)
 
 
 @router.post("/logout")

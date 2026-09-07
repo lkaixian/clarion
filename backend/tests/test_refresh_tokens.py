@@ -125,6 +125,31 @@ def test_immediate_concurrent_reuse_is_graced_not_a_compromise(test_client, make
     assert legit_followup.status_code == 200
 
 
+def test_reuse_after_chain_moved_on_still_revokes_even_within_window(test_client, make_user, db_session):
+    """Code-review follow-up 2026-09-07 (grace-window tightening): once ANY
+    client has rotated past the replacement token, reusing the original is a
+    stale replay, not a live race -- the full-revoke compromise response
+    fires even inside REFRESH_REUSE_GRACE_SECONDS."""
+    user = make_user(role="clinician", facility="Facility A")
+    login_resp = test_client.post(
+        "/auth/login", data={"username": user.email, "password": user.plaintext_password}
+    )
+    t1 = login_resp.json()["refresh_token"]
+    test_client.cookies.clear()
+
+    t2 = test_client.post("/auth/refresh", json={"refresh_token": t1}).json()["refresh_token"]
+    test_client.cookies.clear()
+    t3 = test_client.post("/auth/refresh", json={"refresh_token": t2}).json()["refresh_token"]
+    test_client.cookies.clear()
+
+    # Chain is now t1 -> t2 -> t3. Reuse t1 -- t2 is no longer the head.
+    replay = test_client.post("/auth/refresh", json={"refresh_token": t1})
+    assert replay.status_code == 401
+
+    test_client.cookies.clear()
+    assert test_client.post("/auth/refresh", json={"refresh_token": t3}).status_code == 401
+
+
 def test_delayed_reuse_of_rotated_token_revokes_the_whole_chain(test_client, make_user, db_session):
     """Security-critical: reuse of an already-rotated token OUTSIDE the
     concurrent-tab grace window is still a compromise signal -- every

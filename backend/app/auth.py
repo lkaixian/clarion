@@ -66,8 +66,19 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30
 # this many seconds, treat it as the race it almost certainly is: fail the
 # request (401, the client retries with the now-updated cookie) WITHOUT
 # revoking the chain. Genuine reuse outside this window still trips the
-# full-revoke compromise response.
-REFRESH_REUSE_GRACE_SECONDS = int(os.environ.get("REFRESH_REUSE_GRACE_SECONDS", "15"))
+# full-revoke compromise response. Kept SHORT deliberately -- a real
+# cross-tab race resolves in milliseconds; the window only needs to cover
+# clock skew + the refresh round-trip. Parsed fail-soft (bad value ->
+# default, like LOG_LEVEL in main.py) and clamped to [0, 120].
+def _grace_seconds_from_env() -> int:
+    try:
+        return max(0, min(120, int(os.environ.get("REFRESH_REUSE_GRACE_SECONDS", "8"))))
+    except ValueError:
+        print("[auth] Ignoring invalid REFRESH_REUSE_GRACE_SECONDS -- using 8.")
+        return 8
+
+
+REFRESH_REUSE_GRACE_SECONDS = _grace_seconds_from_env()
 
 # POST /auth/login lockout policy (same "reasonable human typo tolerance vs.
 # brute-force resistance" tradeoff as the email-OTP reset limits below)
@@ -225,12 +236,22 @@ def revoke_all_refresh_tokens_for_user(db: Session, user: "models.User") -> None
 def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken") -> bool:
     """True when an already-revoked token being presented again looks like a
     concurrent-tab refresh race rather than token reuse/theft, per
-    REFRESH_REUSE_GRACE_SECONDS. All three must hold:
+    REFRESH_REUSE_GRACE_SECONDS. ALL must hold:
       - the row was ROTATED, not logged-out / chain-revoked
         (`replaced_by_id` is set),
-      - it was revoked within the grace window,
-      - its replacement row still exists and is itself un-revoked (a thief
-        who used the rotated-to token would have caused THAT to rotate away).
+      - it was revoked within the (short) grace window,
+      - its replacement row still exists, is itself un-revoked, AND is still
+        the head of the chain (`replaced_by_id is None`) -- i.e. NOBODY has
+        rotated past it yet. Once any client has moved on to a further token,
+        a reuse of this one is a stale replay, not a live race.
+
+    Residual risk this deliberately accepts (see the code-review follow-up
+    2026-09-07 note in Security Audit.md): if an attacker who ALREADY holds a
+    currently-valid refresh token wins a sub-second rotation race against the
+    legitimate client, the legit client's subsequent reuse of the old token
+    is graced instead of tripping the revoke-everything alarm, leaving the
+    attacker's freshly-issued token unflagged. Mitigated by keeping the
+    window small; a full fix needs device/fingerprint binding of the token.
     """
     if revoked_row.replaced_by_id is None or revoked_row.revoked_at is None:
         return False
@@ -241,7 +262,11 @@ def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken")
         .filter(models.RefreshToken.id == revoked_row.replaced_by_id)
         .first()
     )
-    return replacement is not None and replacement.revoked_at is None
+    return (
+        replacement is not None
+        and replacement.revoked_at is None
+        and replacement.replaced_by_id is None
+    )
 
 
 def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.User", str]]:
@@ -273,7 +298,8 @@ def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.
             # chain. See REFRESH_REUSE_GRACE_SECONDS.
             return None
         # Reuse of a token that was already rotated away -- see docstring.
-        revoke_all_refresh_tokens_for_user(db, row.user)
+        if row.user is not None:
+            revoke_all_refresh_tokens_for_user(db, row.user)
         return None
     if row.expires_at < datetime.utcnow():
         return None

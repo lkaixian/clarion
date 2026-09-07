@@ -409,13 +409,32 @@ Two tabs sharing one refresh cookie both hit 401 near access-token expiry,
 both POST `/auth/refresh`; the second presents the just-rotated token and
 `rotate_refresh_token` treated it as theft → `revoke_all_refresh_tokens` →
 "logged out everywhere". **Fix:** `_is_concurrent_refresh_race` +
-`REFRESH_REUSE_GRACE_SECONDS` (default 15) -- an already-revoked token that
-was *rotated* (not logged-out/compromised), whose replacement is still the
-live chain head, revoked within the window, fails only that one request
-(the client retries with the updated cookie); the chain is not revoked.
-Reuse outside the window still trips the full-revoke compromise response.
-`test_refresh_tokens.py` split into a graced-race test + an
-outside-window-still-revokes test.
+`REFRESH_REUSE_GRACE_SECONDS` (default **8**, fail-soft parse, clamped
+[0,120]) -- an already-revoked token that was *rotated* (not
+logged-out/compromised), whose replacement is still the live chain head AND
+still un-rotated (`replaced_by_id is None`), revoked within the window,
+fails only that one request; the chain is not revoked. Reuse after the
+chain has moved on, or outside the window, still trips the full-revoke
+compromise response.
+
+**Residual (accepted):** if an attacker who already holds a currently-valid
+refresh token wins a sub-second rotation race against the legit client, the
+legit client's reuse of the old token is graced rather than alarming, and
+the attacker's freshly-minted token is left unflagged. Mitigated by the
+short window; a full fix needs device/fingerprint binding of the token.
+Documented in `_is_concurrent_refresh_race`.
+
+**Also fixed a pre-existing bug this exposed:** `POST /auth/refresh` called
+`rotate_refresh_token` (mints row A, the rotation) *and then*
+`_issue_login_response` minted a SECOND fresh row B, handed the client B,
+and left A as a live, un-revoked orphan the client never saw -- one leaked
+30-day token per refresh, forever, and a `replaced_by_id` chain that didn't
+match the client's actual token sequence. `_issue_login_response` now takes
+an optional `refresh_plaintext` so the refresh path reuses the token
+rotation already minted; the login paths are unchanged.
+
+`test_refresh_tokens.py`: graced-race test, chain-moved-on-still-revokes
+test, outside-window-still-revokes test.
 
 ### CR11 — duplication extraction **(low, done — mechanical)**
 Antigravity delegation was **blocked on a missing `write_file` permission**
@@ -446,6 +465,21 @@ was done directly using agy's recon digest.
 now carries a one-line comment explaining the deliberate no-`response_model`
 (public flat screen feed). `models.py` unused `text` import + `main.py:59`
 unused `models` import were removed in the first pass.
+
+### Post-review verification pass (independent second-model review of `f457d78..1c41cab`)
+An independent security review of the CR9–CR12 diff confirmed the global 500
+handler and the `list_appointments` gate are sound (no leak / no bypass) and
+raised follow-ups, now applied:
+- grace window default 15→8s, fail-soft env parse + clamp, `_is_concurrent_
+  refresh_race` tightened with the "replacement is still un-rotated" clause;
+- `row.user is None` guard in the reuse-of-revoked branch (orphaned token →
+  was a possible 500);
+- stale "never read at auth time" comment on `RefreshToken.replaced_by_id`
+  corrected;
+- the double-issue orphaned-token bug above.
+`REFRESH_COOKIE_PATH` default `/` kept (reviewer confirmed it is not a CSRF
+regression given HttpOnly + SameSite=Strict + Secure; `/api/auth` is not a
+valid universal default because the direct-origin topology needs `/auth`).
 
 ### Still open — needs a decision, not just code
 - **LDAP facility-admin → admin-role mapping.** A facility-scoped admin can
