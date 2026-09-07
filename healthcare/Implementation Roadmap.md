@@ -16,6 +16,20 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Code-review follow-up, fourth pass (delegated
+  refactors + device binding).** Refresh-token device binding built
+  (`client_fingerprint` column, migration `e7c1a9b3f2d4`): a reuse from a
+  different User-Agent is not graced → full-revoke. **@voltagent**
+  react-specialist split `AdminConsole.jsx` 2447→42 lines into
+  `web/src/pages/admin/*`; **@voltagent** python-pro extracted the 13
+  medicine-inventory helpers from `admin.py` (2257→1937) into
+  `app/inventory.py` so `pharmacy.py` stops importing service logic from
+  another router (**@antigravity** did the read-only recon for that).
+  `consultation.py` no longer calls `reception.py` route handlers as
+  functions (`_*_impl` helpers). All verified by hand: **160/160**, `npm
+  build` + `oxlint` clean, byte-identical moved bodies. GitHub repo renamed
+  `medibridge` → `clarion` (`github.com/lkaixian/clarion`). Still open:
+  `reception.py` sub-module split (lower priority — no service coupling left).
 - **2026-09-07** — **Code-review follow-up, third pass (closing the "still
   open" list).** LDAP facility-admin→admin-role mapping: made the secure
   call -- only a platform admin (no facility) may create an admin-granting

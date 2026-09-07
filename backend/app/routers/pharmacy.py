@@ -37,8 +37,8 @@ from ..audit import log_access
 from ..storage import BUCKET_MEDICINE, ObjectNotFound, ObjectStoreError, get_object_store
 from ..derived import get_or_make_thumbnail
 from ..directory import resolve_user_names
-from .admin import (
-    _require_facility,
+from .admin import _require_facility
+from ..inventory import (
     _get_inventory_item_or_404,
     _serialize_inventory_item,
     _pending_delete_item_ids,

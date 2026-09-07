@@ -540,19 +540,31 @@ imports the `_impl`s, never the routes. The `_impl` logic stays covered by
 the existing reception route tests. No consultation-specific test infra
 exists yet -- adding it is its own small task.
 
-### Still genuinely open — a dedicated refactor, not this pass
-1. **`app/inventory.py`** -- `admin.py` (2.2k) exports ~12 `_private`
-   medicine-inventory helpers that `pharmacy.py` imports (router→router +
-   load-order coupling). NOT cleanly separable as-is: some (`_require_facility`)
-   are generic admin utilities used by ~9 non-inventory endpoints, so this
-   needs a careful pass that also sorts generic-vs-inventory.
-2. **File-size splits** -- `reception.py` (1.4k) into queue / rooms / wards
-   sub-modules (already comment-delimited); `AdminConsole.jsx` (2.4k) into
-   `pages/admin/*Tab.jsx`. Pure organisation, high churn, no behaviour
-   change -- best as its own reviewed PR with the suite green at each step.
+### `app/inventory.py` — **extracted** (delegated to a voltagent python-pro, verified here)
+The 13 medicine-inventory helpers (`save_medicine_image` + its image
+consts/sniffer, `_serialize_inventory_item`, `_apply_restock`,
+`_serialize_purchase_proposal`, the delete-request + count helpers, ...) moved
+verbatim from `admin.py` to `app/inventory.py`; `admin.py` (2257→1937 lines)
+and `pharmacy.py` both import from it now. `_require_facility` stays in
+`admin.py` (generic — 30 call sites, mostly wards/rooms/staff/etc.).
+`pharmacy.py` no longer imports service logic from another router. Verified:
+`import app.main` OK, 4 spot-checked bodies (incl. `save_medicine_image`)
+byte-identical, `pyflakes` clean, **160/160**.
 
-Deferred with eyes open: the demo works, and a rushed split risks the
-queue/room-claim flow that judging depends on.
+### `AdminConsole.jsx` split — **done** (delegated to a voltagent react-specialist, verified here)
+2447 → 42 lines; 11 files under `web/src/pages/admin/` (one per tab +
+`_shared.jsx` for Section/TabBar + `occupancy.js` for the two colour helpers
+genuinely shared by InventoryTab and WardsTab). `npm run build` + `oxlint`
+clean, scope clean, ~39 component defs all accounted for.
+
+### Still open — a dedicated pass
+- **`reception.py`** (1.4k) into queue / stations / rooms / wards
+  sub-modules — the four domains are already comment-delimited, but it holds
+  the single combined `router`, the shared `_*_impl` helpers, and is imported
+  by `admin.py` / `display.py` / `patients.py` / `consultation.py`, so the
+  package `__init__` has to re-export carefully. Lower priority than the two
+  above (it's half the size and has no cross-router *service* coupling left
+  after the `_impl` extraction).
 
 ---
 
