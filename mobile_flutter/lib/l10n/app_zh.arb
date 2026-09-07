@@ -226,7 +226,7 @@
   "nfcStarting": "正在启动 NFC…",
 
   "scanResultFoundTitle": "已找到病患",
-  "scanResultDobValue": "出生日期：{date}",
+  "scanResultAgeValue": "年龄：{age}",
   "scanResultBloodTypeUnknown": "记录中无此信息",
   "scanResultOmittedMedications": "另有 {count} 项药物记录未在此显示——未被标记为紧急重要信息。",
   "scanResultOmittedConditions": "另有 {count} 项病症记录未在此显示——未被标记为紧急重要信息。",

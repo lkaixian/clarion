@@ -685,8 +685,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scanResultFoundTitle => '已找到病患';
 
   @override
-  String scanResultDobValue(String date) {
-    return '出生日期：$date';
+  String scanResultAgeValue(String age) {
+    return '年龄：$age';
   }
 
   @override

@@ -49,7 +49,13 @@ class ScanMedication {
 /// structure for a first responder skimming under pressure.
 class EmergencyScanResult {
   final String fullName;
-  final String dateOfBirth;
+
+  /// Whole years, computed server-side from the patient's date of birth.
+  /// The scan endpoint deliberately returns age, not the exact DOB
+  /// (Security Audit M7b) — enough for dose/weight banding without handing
+  /// an unauthenticated caller a birthdate. `null` for an older record
+  /// with no parseable DOB on file.
+  final int? age;
   final String? bloodType;
   final List<ScanAllergy> allergies;
   final List<ScanMedication> medications;
@@ -67,7 +73,7 @@ class EmergencyScanResult {
 
   const EmergencyScanResult({
     required this.fullName,
-    required this.dateOfBirth,
+    this.age,
     this.bloodType,
     required this.allergies,
     required this.medications,
@@ -77,7 +83,7 @@ class EmergencyScanResult {
 
   factory EmergencyScanResult.fromJson(Map<String, dynamic> json) => EmergencyScanResult(
         fullName: json['full_name'] as String? ?? '',
-        dateOfBirth: json['date_of_birth'] as String? ?? '',
+        age: (json['age'] as num?)?.toInt(),
         bloodType: json['blood_type'] as String?,
         allergies: (json['allergies'] as List<dynamic>? ?? [])
             .map((e) => ScanAllergy.fromJson(e as Map<String, dynamic>))

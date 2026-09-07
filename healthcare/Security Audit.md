@@ -291,8 +291,9 @@ Resolved by the MariaDB move — [[On-Prem Architecture]].
   `emergency.py:396-452`; `schemas.py:1382-1402` default `valid_minutes=525600`.
   Raw MIFARE UID used verbatim as the lookup key. QR `card_reference` is stronger.
   `_scoped_fields` (`emergency.py:96`) always returns name + DOB regardless of scope.
-  🟡 **PARTLY RESOLVED 2026-09-07 (P2.6)** — user picked HMAC-at-rest +
-  minimise-payload + per-card anomaly logging; kept the 1-yr default expiry.
+  ✅ **RESOLVED 2026-09-07 (P2.6)** — user picked HMAC-at-rest +
+  minimise-payload + per-card anomaly logging; kept the 1-yr default expiry
+  (an explicit choice, not an oversight).
   - **M7a — HMAC at rest.** `EmergencyToken.nfc_uid` now stores
     `auth.hash_nfc_uid(raw)` = keyed HMAC-SHA256 (`_OTP_HMAC_KEY`, domain
     separator `nfc-uid:`), never the raw UID. `auth.canonical_nfc_uid`
@@ -318,11 +319,19 @@ Resolved by the MariaDB move — [[On-Prem Architecture]].
     `audit_logs.timestamp` index — no row materialisation on the life-safety
     path. `patient_id=None` on the row when it's triggered off failed scans
     (don't correlate a probe to a patient).
-  - **NOT done:** M7b (minimise `_scoped_fields` payload / drop DOB→age) is
-    a separate part; the default `valid_minutes` was deliberately left at
-    1yr per the user's selection; `register_nfc_card` / `revoke_nfc_card`
-    still lack the `_require_patient_present_for_staff` facility scoping the
-    other emergency endpoints have — **pre-existing**, not an M7 regression,
+  - **M7b — minimise the scan payload.** `_scoped_fields` now returns
+    `age` (whole years, `_age_from_dob`, `None` for a missing/unparseable/
+    future DOB) instead of the full `date_of_birth`. `full_name` is kept
+    (on-scene identity confirmation). Both the QR scan and the NFC scan go
+    through `_scoped_fields`, so both shapes changed. Flutter:
+    `EmergencyScanResult.dateOfBirth` → `age: int?`, `emergency_scanner_screen`
+    renders `scanResultAgeValue` (new l10n key, all 4 locales + regen). New
+    `backend/tests/test_emergency_scan_payload.py` (3). Web has no
+    emergency-scan renderer — unaffected.
+  - **NOT done:** the default `valid_minutes` was deliberately left at 1yr
+    per the user's selection; `register_nfc_card` / `revoke_nfc_card` still
+    lack the `_require_patient_present_for_staff` facility scoping the other
+    emergency endpoints have — **pre-existing**, not an M7 regression,
     flagged by the review for a follow-up (it has senior-citizen-registration
     workflow implications).
   New `backend/tests/test_emergency_nfc_hardening.py` (8). **Verified

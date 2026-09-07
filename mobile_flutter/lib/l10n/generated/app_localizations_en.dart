@@ -722,8 +722,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanResultFoundTitle => 'Patient Found';
 
   @override
-  String scanResultDobValue(String date) {
-    return 'Date of birth: $date';
+  String scanResultAgeValue(String age) {
+    return 'Age: $age';
   }
 
   @override

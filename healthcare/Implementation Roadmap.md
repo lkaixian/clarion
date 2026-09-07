@@ -16,6 +16,19 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Security Audit M7b (minimise the emergency-scan
+  payload) — P2.6 now fully closed.** `_scoped_fields` returns `age`
+  (`_age_from_dob`: whole years, `None` for missing/unparseable/future DOB)
+  instead of the full `date_of_birth`; `full_name` kept for on-scene
+  identity. Both QR and NFC scans go through `_scoped_fields`. Flutter
+  `EmergencyScanResult.dateOfBirth` → `age: int?`, scanner screen +
+  `scanResultAgeValue` l10n key (4 locales + regen); web has no scan
+  renderer. Single-agent `/code-review`, `_age_from_dob` hardened against a
+  future/garbage DOB. New `test_emergency_scan_payload.py` (3). **Verified
+  188/188, `flutter analyze` clean on touched files.** **P2.6 (M5/M6/M7/M8)
+  is now fully resolved** — the last piece, and with it all of the
+  [[Security Audit]] Critical/High/Medium findings except M7's inherent
+  physical-clone residual (documented, accepted).
 - **2026-09-07** — **Security Audit M7a + M7c (NFC emergency-card
   hardening).** `EmergencyToken.nfc_uid` now stores `auth.hash_nfc_uid` (keyed
   HMAC-SHA256; `auth.canonical_nfc_uid` normalises case + separators first so
@@ -1040,7 +1053,7 @@ has a forward dependency on a later one. Backbone:
 | P2.3 | Fix H3 — random seed passwords + `must_change_password`; real staff password policy | S | | ✅ 2026-09-07 |
 | P2.4 | Fix M1/M2 — per-IP login + OTP throttle; indexed normalized-NRIC column | S | | ✅ 2026-09-07 |
 | P2.5 | Fix M4 — short access-token TTL + refresh in `HttpOnly` cookie + `jti` deny-list; strict CSP | M | | ✅ 2026-09-07 (CSP residual — see log) |
-| P2.6 | Fix M5/M6/M7/M8 — upload magic-byte + AV hook; verified responder credential; HMAC card key + PIN; stop logging clinical values into `audit_logs.detail` | M | | 🟡 M5 ✅ 2026-09-07 · M8 ✅ 2026-09-07 (add_* endpoints log row id not clinical value) · **M6/M7 open** (need a design call) |
+| P2.6 | Fix M5/M6/M7/M8 — upload magic-byte + AV hook; verified responder credential; HMAC card key + PIN; stop logging clinical values into `audit_logs.detail` | M | | ✅ 2026-09-07 — M5 (image validation) · M6 (scan audit binds real staff identity, unverified path unchanged) · M7 (HMAC NFC UID at rest + `nfc_uid_last4` + revoke-by-id + scan-anomaly logging + age-not-DOB payload; 1yr expiry kept by choice; physical-clone residual accepted) · M8 (log row id not clinical value) |
 | P2.7 | Encryption at rest — MariaDB encrypted tablespaces + on-prem key management | M | | — |
 | P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | — |
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | — |

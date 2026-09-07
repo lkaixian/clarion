@@ -1356,11 +1356,11 @@ abstract class AppLocalizations {
   /// **'Patient Found'**
   String get scanResultFoundTitle;
 
-  /// No description provided for @scanResultDobValue.
+  /// No description provided for @scanResultAgeValue.
   ///
   /// In en, this message translates to:
-  /// **'Date of birth: {date}'**
-  String scanResultDobValue(String date);
+  /// **'Age: {age}'**
+  String scanResultAgeValue(String age);
 
   /// No description provided for @scanResultBloodTypeUnknown.
   ///

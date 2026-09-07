@@ -729,8 +729,8 @@ class AppLocalizationsTa extends AppLocalizations {
   String get scanResultFoundTitle => 'நோயாளி கண்டறியப்பட்டார்';
 
   @override
-  String scanResultDobValue(String date) {
-    return 'பிறந்த தேதி: $date';
+  String scanResultAgeValue(String age) {
+    return 'வயது: $age';
   }
 
   @override

@@ -244,8 +244,8 @@
   "nfcStarting": "Starting NFC…",
 
   "scanResultFoundTitle": "Patient Found",
-  "scanResultDobValue": "Date of birth: {date}",
-  "@scanResultDobValue": {"placeholders": {"date": {"type": "String"}}},
+  "scanResultAgeValue": "Age: {age}",
+  "@scanResultAgeValue": {"placeholders": {"age": {"type": "String"}}},
   "scanResultBloodTypeUnknown": "Not on file",
   "scanResultOmittedMedications": "+{count} more medications on file, not shown here — not flagged as emergency-critical.",
   "@scanResultOmittedMedications": {"placeholders": {"count": {"type": "int"}}},

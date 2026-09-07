@@ -1,7 +1,7 @@
 import base64
 import io
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 import qrcode
@@ -35,6 +35,25 @@ def _require_patient_present_for_staff(db: Session, current_user: models.User, p
             status_code=403,
             detail="This patient is not currently checked in at your facility.",
         )
+
+
+def _age_from_dob(dob: "str | None", *, today: "date | None" = None) -> "int | None":
+    """Whole years from an ISO `YYYY-MM-DD` date-of-birth string (the format
+    this app stores). Security Audit M7b: the unauthenticated emergency scan
+    returns age, not the full DOB -- age covers the clinical need
+    (weight/dose banding, "is this a child") without handing an anonymous
+    caller an exact birthdate. Returns None for a missing/unparseable/future
+    value (older/incomplete record) -- the scan screen shows that gracefully.
+    `today` is injectable for deterministic tests."""
+    if not dob:
+        return None
+    ref = today or datetime.utcnow().date()
+    try:
+        year, month, day = (int(p) for p in str(dob)[:10].split("-"))
+        age = ref.year - year - ((ref.month, ref.day) < (month, day))
+    except (ValueError, TypeError):
+        return None
+    return age if 0 <= age <= 150 else None  # reject a future / garbage DOB
 
 
 def _render_qr_base64(card_reference: str) -> str:
@@ -208,7 +227,8 @@ def _scoped_fields(
     to tell "this patient truly has nothing else on file" apart from "there
     IS more, it's just not flagged critical for this view", which is a real
     safety gap for an emergency-facing screen."""
-    result = {"full_name": patient.full_name, "date_of_birth": patient.date_of_birth}
+    # M7b: age, not the full date_of_birth -- see _age_from_dob.
+    result = {"full_name": patient.full_name, "age": _age_from_dob(patient.date_of_birth)}
     omitted_non_critical = {}
 
     # A `resolved` condition annotation / `discontinued` medication
