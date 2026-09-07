@@ -16,6 +16,32 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **`reception.py` sub-module split (the last "still open"
+  refactor).** `backend/app/routers/reception.py` (1456 lines, one
+  `APIRouter`, ~21 endpoints) → package `backend/app/routers/reception/`:
+  `checkin.py` / `queue.py` / `stations.py` / `rooms.py` / `admissions.py`
+  sub-routers combined in `__init__.py` (`router = APIRouter(prefix="/reception")`
+  + 5 `include_router`s + re-export of the 10 helpers `consultation.py` and
+  the `_malaysia_today` importers pull via `from .reception import ...`),
+  shared helpers in `_common.py`. **Delegated to a voltagent python-pro**;
+  verified here independently: all 48 top-level fn bodies + 21 route
+  decorators byte-identical to HEAD (my first AST-diff flagged 7 "changed"
+  — a Windows cp1252-stdout display artifact mangling `—`; the bytes are
+  identical), `import app.main` clean / no cycles, 19 `/reception/*` OpenAPI
+  paths = 21 operations unchanged, all `require_roles` + the parent-mount
+  `require_page_access("reception")` still apply. **Parallel-agent
+  `/code-review`** (code / security / quality): all clean — "genuinely
+  mechanical", no auth regression. Actioned the quality follow-ups worth
+  doing: removed an orphan `# ----` divider in `_common.py`, trimmed
+  `__init__.py`'s `__all__` + re-export list to exactly what's imported
+  externally. Left as noted judgment calls: `_require_not_section_scoped`
+  could move back to `stations.py`; `_create_ticket_with_retry` is reached
+  by `stations.py` importing from `checkin.py` (intra-package, defensible).
+  **New `backend/tests/test_reception_smoke.py` (5)** — first HTTP coverage
+  of any `/reception/*` endpoint (the suite had none; the split's safety
+  had rested on body-identity alone): checkin→queue-board, admission
+  create+list, station/rooms mount + role gate, patient-reachable
+  `/queue/status`, pharmacist blocked by the page gate. **Verified 170/170.**
 - **2026-09-07** — **Code-review fifth pass (verify the delegated splits) +
   Security Audit M8.** Ran the full parallel-agent `/code-review` over
   `HEAD~2..HEAD` — the two voltagent-delegated god-file splits (`AdminConsole.jsx`
