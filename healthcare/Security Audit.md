@@ -525,27 +525,26 @@ tender-grade follow-up.
   (default 500, max 2000) -- generous enough that the current "fetch all"
   web client is unaffected, but the unbounded growth is capped.
 
-### Still genuinely open — a dedicated refactor, not this pass
-**God-file splits + cross-router coupling.** `admin.py` (2.2k) exports ~12
-`_private` inventory helpers that `pharmacy.py` imports; `consultation.py`
-imports 11 names from `reception.py` and calls three of its **route
-handlers** (`claim_room`, `call_ticket`, `cancel_ticket`) directly as
-functions. `AdminConsole.jsx` (2.4k) / `reception.py` (1.4k) each hold
-several independent domains in one file. The code works and the tests cover
-it, but this is real structural debt.
+### Cross-router route-handler calls — **the fragile part fixed**
+`consultation.py` was calling `reception.py`'s `claim_room` / `call_ticket` /
+`cancel_ticket` **route handlers** directly as functions -- which silently
+breaks the day one of those endpoints gains a new `Depends(...)`. Extracted
+each body into a `_*_impl(id, db, current_user)` in `reception.py` (marked
+with a note); the routes are now one-line wrappers and `consultation.py`
+imports the `_impl`s, never the routes. The `_impl` logic stays covered by
+the existing reception route tests. No consultation-specific test infra
+exists yet -- adding it is its own small task.
 
-Recommended plan (own reviewed PR, build + suite green at each step):
-1. `app/inventory.py` -- move the medicine-inventory service helpers out of
-   `admin.py`; `admin.py` and `pharmacy.py` both import from it (kills the
-   router→router import + the load-order coupling).
-2. Extract `claim_room` / `call_ticket` / `cancel_ticket` bodies into plain
-   `*_logic(db, current_user, ...)` helpers in a `reception_service` module;
-   the routes and `consultation.py` both call the helper (removes the
-   route-handler-as-function fragility -- it silently breaks the day one of
-   those endpoints gains a `Depends`).
-3. Split `reception.py` into queue / rooms / wards sub-modules (they are
-   already comment-delimited) and `AdminConsole.jsx` into
-   `pages/admin/*Tab.jsx`.
+### Still genuinely open — a dedicated refactor, not this pass
+1. **`app/inventory.py`** -- `admin.py` (2.2k) exports ~12 `_private`
+   medicine-inventory helpers that `pharmacy.py` imports (router→router +
+   load-order coupling). NOT cleanly separable as-is: some (`_require_facility`)
+   are generic admin utilities used by ~9 non-inventory endpoints, so this
+   needs a careful pass that also sorts generic-vs-inventory.
+2. **File-size splits** -- `reception.py` (1.4k) into queue / rooms / wards
+   sub-modules (already comment-delimited); `AdminConsole.jsx` (2.4k) into
+   `pages/admin/*Tab.jsx`. Pure organisation, high churn, no behaviour
+   change -- best as its own reviewed PR with the suite green at each step.
 
 Deferred with eyes open: the demo works, and a rushed split risks the
 queue/room-claim flow that judging depends on.

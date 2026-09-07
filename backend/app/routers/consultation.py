@@ -37,9 +37,12 @@ from .reception import (
     _room_out,
     _claim_out,
     _get_ticket_for_staff,
-    call_ticket as _reception_call_ticket,
-    cancel_ticket as _reception_cancel_ticket,
-    claim_room as _reception_claim_room,
+    # The shared queue/room LOGIC -- not the route handlers (see the note by
+    # these `_impl` defs in reception.py). Calling the routes directly would
+    # silently break the day one gained a new Depends(...).
+    _call_ticket_impl,
+    _cancel_ticket_impl,
+    _claim_room_impl,
 )
 from .profile import (
     save_signature_from_b64,
@@ -209,7 +212,7 @@ def start_session(
         db.flush()  # visible to claim_room's clocked-in check, not yet committed
 
     try:
-        _reception_claim_room(payload.room_id, db=db, current_user=current_user)
+        _claim_room_impl(payload.room_id, db, current_user)
     except HTTPException:
         if clock_event is not None:
             db.rollback()  # undo the just-added clock-in
@@ -273,7 +276,7 @@ def call_consultation_ticket(
     reception.py::call_ticket for the per-department "auto-close the
     previously-called ticket" sweep."""
     _ticket_in_my_room_or_404(ticket_id, current_user, db)
-    return _reception_call_ticket(ticket_id, db=db, current_user=current_user)
+    return schemas.QueueTicketOut.model_validate(_call_ticket_impl(ticket_id, db, current_user))
 
 
 @router.post("/tickets/{ticket_id}/cancel", response_model=schemas.QueueTicketOut)
@@ -287,7 +290,7 @@ def cancel_consultation_ticket(
     confinement as call/complete, then delegates to reception.py::cancel_ticket.
     No signature (nothing clinical happened)."""
     _ticket_in_my_room_or_404(ticket_id, current_user, db)
-    return _reception_cancel_ticket(ticket_id, db=db, current_user=current_user)
+    return schemas.QueueTicketOut.model_validate(_cancel_ticket_impl(ticket_id, db, current_user))
 
 
 @router.post("/tickets/{ticket_id}/complete")
