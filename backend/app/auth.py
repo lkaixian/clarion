@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import string
@@ -296,6 +297,16 @@ def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.
             # first tab just rotated -- not theft. Fail this request only
             # (the client retries with the updated cookie); do NOT revoke the
             # chain. See REFRESH_REUSE_GRACE_SECONDS.
+            #
+            # Logged at WARNING (not silent): the residual risk this grace
+            # accepts (an attacker who holds a valid token winning a
+            # rotation race, see _is_concurrent_refresh_race) is at least
+            # detectable after the fact -- a burst of these for one user id
+            # is the signal.
+            logging.getLogger("clarion.auth").warning(
+                "refresh-token reuse graced as a concurrent-tab race "
+                "(user=%s, token row=%s)", row.user_id, row.id,
+            )
             return None
         # Reuse of a token that was already rotated away -- see docstring.
         if row.user is not None:

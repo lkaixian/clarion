@@ -41,6 +41,7 @@ from .admin import (
     _require_facility,
     _get_inventory_item_or_404,
     _serialize_inventory_item,
+    _pending_delete_item_ids,
     _serialize_delete_request,
     _apply_inventory_search,
     _apply_restock,
@@ -75,7 +76,8 @@ def list_pharmacy_inventory(
         db, None, current_user.id, current_user.role, "view_pharmacy_inventory",
         actor_facility=current_user.facility,
     )
-    return [_serialize_inventory_item(db, i) for i in items]
+    pending = _pending_delete_item_ids(db, [i.id for i in items])
+    return [_serialize_inventory_item(db, i, pending) for i in items]
 
 
 @router.get("/inventory/low-stock", response_model=List[schemas.MedicineInventoryOut])
@@ -99,7 +101,8 @@ def list_low_stock(
         .order_by(models.MedicineInventoryItem.drug_name.asc())
         .all()
     )
-    return [_serialize_inventory_item(db, i) for i in items]
+    pending = _pending_delete_item_ids(db, [i.id for i in items])
+    return [_serialize_inventory_item(db, i, pending) for i in items]
 
 
 @router.get("/summary", response_model=schemas.PharmacySummaryOut)

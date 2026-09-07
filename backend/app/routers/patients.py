@@ -935,6 +935,8 @@ def update_own_profile(
 @router.get("/{patient_id}/audit-log")
 def get_audit_log(
     patient_id: str, db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
     current_user: models.User = Depends(auth.get_current_user),
 ):
     """Patients (and staff) can review exactly who accessed the record and
@@ -959,6 +961,11 @@ def get_audit_log(
     if current_user.role == "patient" and current_user.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Cannot view another patient's audit log")
 
+    # Paginated (code-review follow-up 2026-09-07): a long-lived record's
+    # audit trail grows without bound and was returned in full on every
+    # PatientDetail open. `limit` defaults to 500 -- well above any
+    # demo/clinic patient's real history, so the existing "fetch all" web
+    # client is unaffected -- and caps the pathological case.
     logs = (
         db.query(models.AuditLog)
         .filter(models.AuditLog.patient_id == patient_id)
@@ -966,6 +973,8 @@ def get_audit_log(
         # timestamp (P1.2b -- matters most on MariaDB, and as a floor even with
         # DATETIME(6) precision).
         .order_by(models.AuditLog.timestamp.desc(), models.AuditLog.id.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
 
@@ -1251,9 +1260,13 @@ def add_record_annotation(
 def list_record_annotations(
     patient_id: str,
     db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
-    """Every annotation on this patient's records, newest first."""
+    """Every annotation on this patient's records, newest first. Paginated
+    (code-review follow-up 2026-09-07) with a generous default so the
+    existing "fetch all" client is unaffected."""
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -1262,6 +1275,8 @@ def list_record_annotations(
         db.query(models.ClinicalRecordAnnotation)
         .filter(models.ClinicalRecordAnnotation.patient_id == patient_id)
         .order_by(models.ClinicalRecordAnnotation.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     return [_serialize_annotation(a) for a in rows]
