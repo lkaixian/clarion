@@ -55,6 +55,19 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 15
 # password change / a detected-reuse compromise signal, not capped at this
 # value -- see models.RefreshToken's docstring.
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+# Grace window for a concurrent-tab refresh race (code-review follow-up
+# 2026-09-07). Two browser tabs share one refresh cookie; when both fire an
+# API call around the 15-min access-token expiry, both hit 401 and both POST
+# /auth/refresh. The second presents the token the first just rotated away.
+# Without a grace window that looks identical to token theft and nukes every
+# session on every device -- users see random "logged out everywhere". If
+# the already-revoked token was ROTATED (not logged-out/compromised), its
+# replacement is still the live head of the chain, and it was revoked within
+# this many seconds, treat it as the race it almost certainly is: fail the
+# request (401, the client retries with the now-updated cookie) WITHOUT
+# revoking the chain. Genuine reuse outside this window still trips the
+# full-revoke compromise response.
+REFRESH_REUSE_GRACE_SECONDS = int(os.environ.get("REFRESH_REUSE_GRACE_SECONDS", "15"))
 
 # POST /auth/login lockout policy (same "reasonable human typo tolerance vs.
 # brute-force resistance" tradeoff as the email-OTP reset limits below)
@@ -209,6 +222,28 @@ def revoke_all_refresh_tokens_for_user(db: Session, user: "models.User") -> None
     db.commit()
 
 
+def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken") -> bool:
+    """True when an already-revoked token being presented again looks like a
+    concurrent-tab refresh race rather than token reuse/theft, per
+    REFRESH_REUSE_GRACE_SECONDS. All three must hold:
+      - the row was ROTATED, not logged-out / chain-revoked
+        (`replaced_by_id` is set),
+      - it was revoked within the grace window,
+      - its replacement row still exists and is itself un-revoked (a thief
+        who used the rotated-to token would have caused THAT to rotate away).
+    """
+    if revoked_row.replaced_by_id is None or revoked_row.revoked_at is None:
+        return False
+    if datetime.utcnow() - revoked_row.revoked_at > timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS):
+        return False
+    replacement = (
+        db.query(models.RefreshToken)
+        .filter(models.RefreshToken.id == revoked_row.replaced_by_id)
+        .first()
+    )
+    return replacement is not None and replacement.revoked_at is None
+
+
 def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.User", str]]:
     """The core of POST /auth/refresh: validates `raw_token`, and on
     success ROTATES it (revokes this row, issues a brand new one) rather
@@ -218,16 +253,25 @@ def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.
     client has already moved past. That specific case (a row that exists
     and matches, but is ALREADY revoked) is treated as a compromise
     signal: every refresh token for that user is revoked, forcing a fresh
-    login on every device rather than trusting the chain further.
+    login on every device rather than trusting the chain further -- UNLESS
+    it looks like a concurrent-tab race (see _is_concurrent_refresh_race /
+    REFRESH_REUSE_GRACE_SECONDS), where only this one request fails.
 
     Returns (user, new_plaintext_refresh_token), or None if `raw_token`
-    doesn't match any row, is expired, or was itself the reuse-of-revoked
-    case just described (already logged/handled internally)."""
+    doesn't match any row, is expired, was a graced concurrent-refresh
+    race, or was the reuse-of-revoked compromise case (already
+    logged/handled internally)."""
     token_hash = _hash_refresh_token(raw_token)
     row = db.query(models.RefreshToken).filter(models.RefreshToken.token_hash == token_hash).first()
     if row is None:
         return None
     if row.revoked_at is not None:
+        if _is_concurrent_refresh_race(db, row):
+            # Almost certainly a second browser tab presenting the token the
+            # first tab just rotated -- not theft. Fail this request only
+            # (the client retries with the updated cookie); do NOT revoke the
+            # chain. See REFRESH_REUSE_GRACE_SECONDS.
+            return None
         # Reuse of a token that was already rotated away -- see docstring.
         revoke_all_refresh_tokens_for_user(db, row.user)
         return None

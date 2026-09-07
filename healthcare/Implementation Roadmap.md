@@ -16,6 +16,25 @@ has a forward dependency on a later one. Backbone:
 > you write it — retrofitting portability later doubles the CI4 estimate.
 
 ## Progress log
+- **2026-09-07** — **Code-review follow-up, second pass (the deferred
+  items).** CR9: refresh cookie `Path` was `/auth`, never sent on the
+  documented `/api/auth/refresh` proxy path -> silent refresh dead ->
+  re-login every 15 min; now `REFRESH_COOKIE_PATH` env, default `/`. CR10:
+  concurrent browser tabs racing `/auth/refresh` no longer nuke every
+  session -- `_is_concurrent_refresh_race` + `REFRESH_REUSE_GRACE_SECONDS`
+  grace the just-rotated token, reuse outside the window still full-revokes.
+  CR11: duplication extracted -- `backend/app/directory.py`,
+  `web/src/lib/{format,upload,image}.js` (agy delegation was blocked on a
+  missing write permission, so done directly from agy's recon). CR12: new
+  `test_password_change_lifecycle.py` (2) + `test_otp_reset_step2.py` (4)
+  close the access-token-watermark / `must_change_password` /
+  OTP-reset-step-2 coverage gaps. Lint: `Login.jsx` catch binding,
+  `display.get_display_feed` documented. **Verified: 158/158, npm build +
+  oxlint clean.** Still open (need a decision, not code): the LDAP
+  facility-admin→admin-role mapping policy; the `AdminConsole.jsx` /
+  `admin.py` / `reception.py` god-file splits + cross-router private
+  imports; lower-sev list-serializer N+1 + pagination. See
+  [[Security Audit#Second pass (2026-09-07) — the deferred items]].
 - **2026-09-07** — **Code-review follow-up (post P2.1–P2.6).** A full
   parallel-agent `/code-review` over the uncommitted `backend/` + `web/`
   tree surfaced one missed instance of the H1/H2 authz pattern plus perf /

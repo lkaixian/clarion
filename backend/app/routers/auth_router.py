@@ -318,6 +318,18 @@ def _attach_has_signature(user: models.User) -> models.User:
 # ---------- Session / refresh tokens (P2.5, Security Audit M4) ----------
 _REFRESH_COOKIE_NAME = "clarion_refresh_token"
 
+# Cookie Path. Default "/" -- the browser matches this against the
+# REQUEST-URL path, not the path the backend ultimately sees. In the
+# documented same-origin topology the SPA calls `/api/auth/refresh` (nginx /
+# the Caddy edge strip `/api` before the backend), so a `Path=/auth` cookie
+# would NEVER be sent on that request and silent refresh would be dead --
+# the session would drop to a full re-login every 15 minutes. "/" is safe
+# here: the cookie is HttpOnly + SameSite=Strict (its whole CSRF defense,
+# see _set_refresh_cookie) and only /auth/refresh + /auth/logout ever read
+# it. A deployment that is certain it runs the browser directly against the
+# backend origin (no /api prefix) can narrow this to "/auth".
+_REFRESH_COOKIE_PATH = os.environ.get("REFRESH_COOKIE_PATH", "/").strip() or "/"
+
 
 def _is_demo_env() -> bool:
     """Same demo-detection as main.py's CORS wildcard opt-in and seed.py's
@@ -343,7 +355,10 @@ def _set_refresh_cookie(response: Response, plaintext_refresh_token: str) -> Non
     app ever has a browser attach automatically; every other authenticated
     call is a Bearer header, which a cross-site request can't attach
     without this app's own JS running first (and that's an XSS problem,
-    not a CSRF one)."""
+    not a CSRF one).
+
+    Path is `_REFRESH_COOKIE_PATH` (default "/"); see that constant for why
+    the old `/auth` value silently broke refresh behind the `/api` proxy."""
     response.set_cookie(
         key=_REFRESH_COOKIE_NAME,
         value=plaintext_refresh_token,
@@ -351,7 +366,7 @@ def _set_refresh_cookie(response: Response, plaintext_refresh_token: str) -> Non
         secure=not _is_demo_env(),
         samesite="strict",
         max_age=auth.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/auth",
+        path=_REFRESH_COOKIE_PATH,
     )
 
 
@@ -509,7 +524,7 @@ def refresh_access_token(
         # or auth.rotate_refresh_token just nuked the whole chain on a
         # detected-reuse signal) -- clear it so the client doesn't keep
         # silently retrying it on every subsequent request.
-        response.delete_cookie(_REFRESH_COOKIE_NAME, path="/auth")
+        response.delete_cookie(_REFRESH_COOKIE_NAME, path=_REFRESH_COOKIE_PATH)
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     user, _new_plaintext = result
@@ -535,7 +550,7 @@ def logout(
     raw_token = request.cookies.get(_REFRESH_COOKIE_NAME) or (body.refresh_token if body else None)
     if raw_token:
         auth.revoke_refresh_token(db, raw_token)
-    response.delete_cookie(_REFRESH_COOKIE_NAME, path="/auth")
+    response.delete_cookie(_REFRESH_COOKIE_NAME, path=_REFRESH_COOKIE_PATH)
     return {"status": "logged_out"}
 
 

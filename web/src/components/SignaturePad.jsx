@@ -1,17 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-
-// Turn a PNG data-URL (canvas.toDataURL("image/png") output) into a Blob so
-// callers can POST it as multipart form-data. Also tolerates a bare base64
-// string (no "data:...," prefix). Returns null for empty input.
-export function dataUrlToPngBlob(dataUrl) {
-  if (!dataUrl) return null;
-  const comma = dataUrl.indexOf(",");
-  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: "image/png" });
-}
+import { dataUrlToPngBlob } from "../lib/image";
 
 // CSS layout size of the pad. The backing <canvas> store is scaled up by
 // devicePixelRatio (below) so strokes stay crisp on HiDPI screens.

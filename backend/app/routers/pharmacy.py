@@ -36,6 +36,7 @@ from ..database import get_db
 from ..audit import log_access
 from ..storage import BUCKET_MEDICINE, ObjectNotFound, ObjectStoreError, get_object_store
 from ..derived import get_or_make_thumbnail
+from ..directory import resolve_user_names
 from .admin import (
     _require_facility,
     _get_inventory_item_or_404,
@@ -394,15 +395,7 @@ def list_purchase_proposals(
         query = query.filter(models.MedicinePurchaseProposal.status == status)
     proposals = query.order_by(models.MedicinePurchaseProposal.created_at.desc()).all()
 
-    requester_ids = {p.requested_by for p in proposals}
-    names = {}
-    if requester_ids:
-        for uid, full_name in (
-            db.query(models.User.id, models.User.full_name)
-            .filter(models.User.id.in_(requester_ids))
-            .all()
-        ):
-            names[uid] = full_name
+    names = resolve_user_names(db, {p.requested_by for p in proposals})
     return [_serialize_purchase_proposal(p, names.get(p.requested_by)) for p in proposals]
 
 

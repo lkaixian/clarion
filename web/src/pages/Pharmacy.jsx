@@ -11,25 +11,8 @@ import {
   uploadMedicineImage,
   getMedicineImageBlob,
 } from "../api/client";
-
-// No date library in this codebase (see AdminConsole.jsx's identical note) —
-// a plain toLocaleString() matches every other timestamp rendered in the
-// console.
-function formatDateTime(iso) {
-  return iso ? new Date(iso).toLocaleString() : "—";
-}
-
-// Client-side gate before we even attempt an upload — the backend also
-// re-checks content-type + extension + magic bytes and 422s on mismatch,
-// but rejecting the obvious cases here saves a round-trip and gives an
-// instant inline message. Returns an error string, or "" when acceptable.
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-function validateImageFile(file) {
-  if (!file) return "";
-  if (!file.type.startsWith("image/")) return "That file isn't an image.";
-  if (file.size > MAX_IMAGE_BYTES) return "Image must be 2MB or smaller.";
-  return "";
-}
+import { formatDateTime } from "../lib/format";
+import { validateImageFile } from "../lib/upload";
 
 // pending=amber, approved=green, rejected=slate — reuses the same
 // "amber = needs attention / green = good / slate = closed" vocabulary the

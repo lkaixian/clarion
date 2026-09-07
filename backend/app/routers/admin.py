@@ -44,6 +44,7 @@ from ..derived import prime_thumbnail
 from ._uploads import enforce_upload_size
 from .staff import _get_clock_status
 from .reception import _malaysia_today
+from ..directory import resolve_user_names
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -381,15 +382,7 @@ def list_admin_appointments(
         ):
             patient_names[pid] = full_name
 
-    creator_ids = {a.created_by for a in appointments}
-    creator_names = {}
-    if creator_ids:
-        for uid, full_name in (
-            db.query(models.User.id, models.User.full_name)
-            .filter(models.User.id.in_(creator_ids))
-            .all()
-        ):
-            creator_names[uid] = full_name
+    creator_names = resolve_user_names(db, {a.created_by for a in appointments})
 
     log_access(
         db, None, current_user.id, current_user.role, "view_admin_appointments",
@@ -612,15 +605,7 @@ def list_inventory_delete_requests(
         query = query.filter(models.InventoryDeleteRequest.status == status)
     requests = query.order_by(models.InventoryDeleteRequest.created_at.desc()).all()
 
-    requester_ids = {r.requested_by for r in requests}
-    requester_names = {}
-    if requester_ids:
-        for uid, full_name in (
-            db.query(models.User.id, models.User.full_name)
-            .filter(models.User.id.in_(requester_ids))
-            .all()
-        ):
-            requester_names[uid] = full_name
+    requester_names = resolve_user_names(db, {r.requested_by for r in requests})
 
     return [_serialize_delete_request(r, requester_names.get(r.requested_by)) for r in requests]
 
@@ -747,15 +732,7 @@ def _purchase_proposals_with_names(
 ) -> list:
     """Batch-resolve requester display names in one query, same
     "batch, don't N+1" discipline as list_inventory_delete_requests."""
-    requester_ids = {p.requested_by for p in proposals}
-    names = {}
-    if requester_ids:
-        for uid, full_name in (
-            db.query(models.User.id, models.User.full_name)
-            .filter(models.User.id.in_(requester_ids))
-            .all()
-        ):
-            names[uid] = full_name
+    names = resolve_user_names(db, {p.requested_by for p in proposals})
     return [_serialize_purchase_proposal(p, names.get(p.requested_by)) for p in proposals]
 
 

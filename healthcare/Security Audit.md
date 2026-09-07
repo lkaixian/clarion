@@ -388,14 +388,85 @@ Dropped `argon2-cffi` + `argon2-cffi-bindings` (never imported — `auth.py`
 hashes with bcrypt). Moved `pytest` out of `requirements.txt` into a new
 `requirements-dev.txt` so it is not baked into the runtime image.
 
-### Deferred (tracked, not done this pass)
-Web-side items from the review were all "suggestions", not blockers: the
-multi-tab refresh-token logout race, the `Path=/auth` refresh cookie vs the
-`/api/...` proxy path, the LDAP facility-admin → global-admin mapping path,
-and the god-file / duplication cleanups (`AdminConsole.jsx`, `admin.py`,
-`reception.py`). Lower-severity backend N+1 in the admin/reception list
-serializers + pagination on the remaining unbounded list endpoints also
-deferred. See the review summary for the full list.
+---
+
+## Second pass (2026-09-07) — the deferred items
+
+Full backend suite **158/158**, `npm run build` + `oxlint` clean.
+
+### CR9 — refresh cookie `Path` broke silent refresh behind `/api` **(Medium, fixed)**
+`_set_refresh_cookie` set `Path=/auth`. The browser matches `Path` against
+the REQUEST URL, and the documented same-origin topology calls
+`/api/auth/refresh` (nginx / the Caddy edge strip `/api` before the
+backend), so the cookie was **never sent** on that path -- silent refresh
+was dead and the session dropped to a full re-login every 15 minutes.
+**Fix:** new `REFRESH_COOKIE_PATH` env var, **default `/`** (works in every
+topology; HttpOnly + SameSite=Strict remain the CSRF defense). Narrow to
+`/auth` only for a no-`/api` direct-origin deployment.
+
+### CR10 — concurrent-tab refresh nuked every session **(Medium, fixed)**
+Two tabs sharing one refresh cookie both hit 401 near access-token expiry,
+both POST `/auth/refresh`; the second presents the just-rotated token and
+`rotate_refresh_token` treated it as theft → `revoke_all_refresh_tokens` →
+"logged out everywhere". **Fix:** `_is_concurrent_refresh_race` +
+`REFRESH_REUSE_GRACE_SECONDS` (default 15) -- an already-revoked token that
+was *rotated* (not logged-out/compromised), whose replacement is still the
+live chain head, revoked within the window, fails only that one request
+(the client retries with the updated cookie); the chain is not revoked.
+Reuse outside the window still trips the full-revoke compromise response.
+`test_refresh_tokens.py` split into a graced-race test + an
+outside-window-still-revokes test.
+
+### CR11 — duplication extraction **(low, done — mechanical)**
+Antigravity delegation was **blocked on a missing `write_file` permission**
+(no `--yolo` was passed -- correct for a cross-cutting refactor), so this
+was done directly using agy's recon digest.
+- Backend: `app/directory.py::resolve_user_names(db, ids)` replaces four
+  byte-identical "resolve user ids → names" loops in `admin.py` (×3) +
+  `pharmacy.py`.
+- Web: `src/lib/format.js` (`formatDateTime` / `formatTime`, was in 5
+  files), `src/lib/upload.js` (`validateImageFile` + `MAX_IMAGE_BYTES`, was
+  in 2), `src/lib/image.js` (`dataUrlToPngBlob`, moved out of
+  `SignaturePad.jsx` so that file exports only a component -- clears the
+  oxlint `only-export-components` warning).
+
+### CR12 — auth test coverage gaps **(done)**
+- `test_password_change_lifecycle.py` (2): an access token issued before a
+  password change is 401 afterwards (the `pwd_changed_at` watermark);
+  `must_change_password` actually 403s protected endpoints while
+  `/auth/me` + `/auth/change-password` stay reachable.
+- `test_otp_reset_step2.py` (4): `POST /auth/reset-password-with-otp`
+  (bug history: commit 873595c) -- successful reset changes the password +
+  burns the OTP, 5 wrong guesses invalidate the live OTP, an expired OTP
+  is rejected + cleared, unknown-NRIC vs wrong-code responses are
+  byte-identical.
+
+### Lint cleanups
+`Login.jsx` unused catch binding → bare `catch {`; `display.get_display_feed`
+now carries a one-line comment explaining the deliberate no-`response_model`
+(public flat screen feed). `models.py` unused `text` import + `main.py:59`
+unused `models` import were removed in the first pass.
+
+### Still open — needs a decision, not just code
+- **LDAP facility-admin → admin-role mapping.** A facility-scoped admin can
+  create an `role="admin"` (and, via a facility-omitted mapping, a
+  `facility=None` GLOBAL admin) LDAP role mapping. This is currently
+  *deliberate and tested* (`test_admin_role_is_assignable`, "an IT/Helpdesk
+  AD group mapping to admin is a normal use"). Tightening it (only a
+  platform admin may point a mapping at `admin`) is a product/security
+  policy call for the University -- a one-liner in `_check_mapping_facility` once
+  decided. Only reachable with `LDAP_ENABLED` + control of AD group
+  membership.
+- **God-file splits** (`AdminConsole.jsx` 2.4k, `admin.py` 2.2k,
+  `reception.py` 1.4k) and the cross-router private-name imports
+  (`pharmacy.py`←`admin.py`, `consultation.py`←`reception.py` calling route
+  handlers directly). Genuinely large, interconnected refactors -- best
+  done as a dedicated pass with the build watched at each step, not a
+  fire-and-forget delegation. `PatientDetail.jsx:1447` `exhaustive-deps`
+  warning left alone for the same reason (a wrong fix loops the effect).
+- Lower-severity N+1 in the admin/reception list serializers +
+  `skip`/`limit` on the remaining unbounded list endpoints (audit log,
+  inventory, annotations, purchase proposals).
 
 ---
 

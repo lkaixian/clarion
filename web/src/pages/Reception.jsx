@@ -8,6 +8,7 @@ import {
   getCurrentUser,
 } from "../api/client";
 import WardMap from "../components/WardMap";
+import { formatTime } from "../lib/format";
 
 // How often to re-poll today's queue board — same "short enough to feel
 // responsive in a demo, long enough not to hammer the backend" reasoning,
@@ -45,10 +46,6 @@ const STATUS_BADGE_CLASSES = {
   done: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-600",
 };
-
-function formatTime(iso) {
-  return iso ? new Date(iso).toLocaleTimeString() : "—";
-}
 
 function Section({ title, children }) {
   return (

@@ -23,7 +23,11 @@ def test_login_sets_httponly_refresh_cookie_and_returns_short_lived_access_token
     set_cookie_header = resp.headers.get("set-cookie", "")
     assert "HttpOnly" in set_cookie_header
     assert "SameSite=strict" in set_cookie_header or "samesite=strict" in set_cookie_header.lower()
-    assert "Path=/auth" in set_cookie_header
+    # Path defaults to "/" (REFRESH_COOKIE_PATH). It used to be "/auth", which
+    # a browser never sends on the documented `/api/auth/refresh` proxy path
+    # -- silent refresh was dead in that topology (code-review follow-up
+    # 2026-09-07). HttpOnly + SameSite=Strict remain the CSRF defense.
+    assert "Path=/;" in set_cookie_header or set_cookie_header.rstrip().endswith("Path=/")
 
 
 def test_refresh_token_row_created_and_matches_neither_plaintext_stored(
@@ -96,10 +100,11 @@ def test_refresh_token_is_single_use_rotation(test_client, make_user):
     assert second.status_code == 401
 
 
-def test_reusing_a_rotated_away_token_revokes_the_whole_chain(test_client, make_user, db_session):
-    """Security-critical: presenting an ALREADY-rotated (revoked) refresh
-    token is treated as a compromise signal -- every refresh token for
-    that user gets revoked, not just the one being reused."""
+def test_immediate_concurrent_reuse_is_graced_not_a_compromise(test_client, make_user, db_session):
+    """Code-review follow-up 2026-09-07: presenting a just-rotated token
+    again WITHIN REFRESH_REUSE_GRACE_SECONDS (the second browser tab racing
+    the first around access-token expiry) fails only that request -- it must
+    NOT revoke the whole chain. The legitimate new token stays live."""
     user = make_user(role="clinician", facility="Facility A")
     login_resp = test_client.post(
         "/auth/login", data={"username": user.email, "password": user.plaintext_password}
@@ -111,13 +116,43 @@ def test_reusing_a_rotated_away_token_revokes_the_whole_chain(test_client, make_
     new_refresh = first.json()["refresh_token"]
     test_client.cookies.clear()
 
-    # Reuse the OLD (already-rotated) token -- simulates a stolen copy
-    # still being used after the legitimate client moved past it.
+    replay = test_client.post("/auth/refresh", json={"refresh_token": original_refresh})
+    assert replay.status_code == 401  # this request fails...
+
+    # ...but the chain is intact -- the token the legit client holds still works.
+    test_client.cookies.clear()
+    legit_followup = test_client.post("/auth/refresh", json={"refresh_token": new_refresh})
+    assert legit_followup.status_code == 200
+
+
+def test_delayed_reuse_of_rotated_token_revokes_the_whole_chain(test_client, make_user, db_session):
+    """Security-critical: reuse of an already-rotated token OUTSIDE the
+    concurrent-tab grace window is still a compromise signal -- every
+    refresh token for that user is revoked, not just the one reused."""
+    from datetime import datetime, timedelta
+
+    from app import auth
+
+    user = make_user(role="clinician", facility="Facility A")
+    login_resp = test_client.post(
+        "/auth/login", data={"username": user.email, "password": user.plaintext_password}
+    )
+    original_refresh = login_resp.json()["refresh_token"]
+    test_client.cookies.clear()
+
+    first = test_client.post("/auth/refresh", json={"refresh_token": original_refresh})
+    new_refresh = first.json()["refresh_token"]
+    test_client.cookies.clear()
+
+    # Age the revoked row past the grace window.
+    old_hash = auth._hash_refresh_token(original_refresh)
+    stale = datetime.utcnow() - timedelta(seconds=auth.REFRESH_REUSE_GRACE_SECONDS + 60)
+    db_session.query(models.RefreshToken).filter_by(token_hash=old_hash).update({"revoked_at": stale})
+    db_session.commit()
+
     replay = test_client.post("/auth/refresh", json={"refresh_token": original_refresh})
     assert replay.status_code == 401
 
-    # The chain's new token (that the legitimate client actually holds)
-    # must ALSO now be dead.
     test_client.cookies.clear()
     legit_followup = test_client.post("/auth/refresh", json={"refresh_token": new_refresh})
     assert legit_followup.status_code == 401

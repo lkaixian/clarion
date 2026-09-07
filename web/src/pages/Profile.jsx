@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
-import SignaturePad, { dataUrlToPngBlob } from "../components/SignaturePad";
+import SignaturePad from "../components/SignaturePad";
+import { dataUrlToPngBlob } from "../lib/image";
 import {
   getCurrentUser,
   refreshCurrentUser,
