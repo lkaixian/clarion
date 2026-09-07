@@ -204,16 +204,32 @@ def _generate_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-def issue_refresh_token(db: Session, user: "models.User") -> tuple[str, "models.RefreshToken"]:
+def client_fingerprint(user_agent: "str | None") -> "str | None":
+    """A COARSE device fingerprint for a refresh token: sha256 of the
+    User-Agent header, or None when there is no UA (native clients, curl).
+    Deliberately not IP-based -- a phone's IP changes constantly. Only ever
+    used to tighten the concurrent-refresh-race grace, never as a hard auth
+    factor (a browser update legitimately changes the UA)."""
+    ua = (user_agent or "").strip()
+    if not ua:
+        return None
+    return hashlib.sha256(ua.encode("utf-8")).hexdigest()
+
+
+def issue_refresh_token(
+    db: Session, user: "models.User", *, fingerprint: "str | None" = None,
+) -> tuple[str, "models.RefreshToken"]:
     """Mints a new refresh token for `user`. Returns (plaintext, row) --
     the plaintext is the caller's ONE chance to see it (set it as the
     HttpOnly cookie / return it to a native client); it is never stored or
-    logged anywhere after this call returns."""
+    logged anywhere after this call returns. `fingerprint` (see
+    client_fingerprint) is stored for the race-grace check only."""
     plaintext = _generate_refresh_token()
     row = models.RefreshToken(
         user_id=user.id,
         token_hash=_hash_refresh_token(plaintext),
         expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        client_fingerprint=fingerprint,
     )
     db.add(row)
     db.commit()
@@ -234,7 +250,10 @@ def revoke_all_refresh_tokens_for_user(db: Session, user: "models.User") -> None
     db.commit()
 
 
-def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken") -> bool:
+def _is_concurrent_refresh_race(
+    db: Session, revoked_row: "models.RefreshToken",
+    presented_fingerprint: "str | None" = None,
+) -> bool:
     """True when an already-revoked token being presented again looks like a
     concurrent-tab refresh race rather than token reuse/theft, per
     REFRESH_REUSE_GRACE_SECONDS. ALL must hold:
@@ -244,19 +263,26 @@ def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken")
       - its replacement row still exists, is itself un-revoked, AND is still
         the head of the chain (`replaced_by_id is None`) -- i.e. NOBODY has
         rotated past it yet. Once any client has moved on to a further token,
-        a reuse of this one is a stale replay, not a live race.
+        a reuse of this one is a stale replay, not a live race,
+      - if BOTH the row and this request carry a device fingerprint (see
+        client_fingerprint) they MATCH. A reuse from a different device than
+        the token was issued to is not a tab race -- it is the theft case
+        the grace must NOT cover. Skipped when either side is NULL (native
+        client, pre-migration token) rather than failing closed on it.
 
-    Residual risk this deliberately accepts (see the code-review follow-up
-    2026-09-07 note in Security Audit.md): if an attacker who ALREADY holds a
-    currently-valid refresh token wins a sub-second rotation race against the
-    legitimate client, the legit client's subsequent reuse of the old token
-    is graced instead of tripping the revoke-everything alarm, leaving the
-    attacker's freshly-issued token unflagged. Mitigated by keeping the
-    window small; a full fix needs device/fingerprint binding of the token.
+    Residual risk this still accepts (see Security Audit.md): a same-device
+    attacker -- one who exfiltrated the token AND runs the same User-Agent
+    string -- winning a sub-second rotation race. Narrow.
     """
     if revoked_row.replaced_by_id is None or revoked_row.revoked_at is None:
         return False
     if datetime.utcnow() - revoked_row.revoked_at > timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS):
+        return False
+    if (
+        revoked_row.client_fingerprint
+        and presented_fingerprint
+        and revoked_row.client_fingerprint != presented_fingerprint
+    ):
         return False
     replacement = (
         db.query(models.RefreshToken)
@@ -270,7 +296,9 @@ def _is_concurrent_refresh_race(db: Session, revoked_row: "models.RefreshToken")
     )
 
 
-def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.User", str]]:
+def rotate_refresh_token(
+    db: Session, raw_token: str, *, presented_fingerprint: "str | None" = None,
+) -> Optional[tuple["models.User", str]]:
     """The core of POST /auth/refresh: validates `raw_token`, and on
     success ROTATES it (revokes this row, issues a brand new one) rather
     than just re-validating it repeatedly -- a caller that goes on to
@@ -292,7 +320,7 @@ def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.
     if row is None:
         return None
     if row.revoked_at is not None:
-        if _is_concurrent_refresh_race(db, row):
+        if _is_concurrent_refresh_race(db, row, presented_fingerprint):
             # Almost certainly a second browser tab presenting the token the
             # first tab just rotated -- not theft. Fail this request only
             # (the client retries with the updated cookie); do NOT revoke the
@@ -319,7 +347,7 @@ def rotate_refresh_token(db: Session, raw_token: str) -> Optional[tuple["models.
     if user is None:
         return None
 
-    new_plaintext, new_row = issue_refresh_token(db, user)
+    new_plaintext, new_row = issue_refresh_token(db, user, fingerprint=presented_fingerprint)
     row.revoked_at = datetime.utcnow()
     row.replaced_by_id = new_row.id
     db.add(row)

@@ -247,6 +247,13 @@ class RefreshToken(Base):
     # Nullable self-FK; no ondelete action needed since a row is never
     # hard-deleted.
     replaced_by_id = Column(String(36), ForeignKey("refresh_tokens.id"), nullable=True)
+    # Coarse device fingerprint (sha256 of the User-Agent) captured when this
+    # token was issued. Used ONLY to tighten the concurrent-refresh-race
+    # grace (auth._is_concurrent_refresh_race): a reuse whose request comes
+    # from a different fingerprint than the token was issued to is NOT
+    # graced. NULL for a native client with no UA, or a pre-migration token
+    # -- the check is skipped in that case, never fails closed on it.
+    client_fingerprint = Column(String(64), nullable=True)
 
     user = relationship("User")
 

@@ -150,6 +150,39 @@ def test_reuse_after_chain_moved_on_still_revokes_even_within_window(test_client
     assert test_client.post("/auth/refresh", json={"refresh_token": t3}).status_code == 401
 
 
+def test_reuse_from_a_different_device_is_not_graced(test_client, make_user, db_session):
+    """Code-review follow-up 2026-09-07 (device binding): the grace covers a
+    same-device tab race, not a token used from somewhere else. A reuse
+    whose User-Agent hash differs from the one the token was issued to trips
+    the full-revoke compromise response even inside the grace window."""
+    user = make_user(role="clinician", facility="Facility A")
+    login = test_client.post(
+        "/auth/login",
+        data={"username": user.email, "password": user.plaintext_password},
+        headers={"User-Agent": "legit-browser/1.0"},
+    )
+    t1 = login.json()["refresh_token"]
+    test_client.cookies.clear()
+
+    t2 = test_client.post(
+        "/auth/refresh", json={"refresh_token": t1}, headers={"User-Agent": "legit-browser/1.0"}
+    ).json()["refresh_token"]
+    test_client.cookies.clear()
+
+    # Reuse t1 from a DIFFERENT device -- not a tab race.
+    replay = test_client.post(
+        "/auth/refresh", json={"refresh_token": t1}, headers={"User-Agent": "attacker-tool/9.9"}
+    )
+    assert replay.status_code == 401
+
+    # Chain nuked: the legit client's t2 is dead too.
+    test_client.cookies.clear()
+    followup = test_client.post(
+        "/auth/refresh", json={"refresh_token": t2}, headers={"User-Agent": "legit-browser/1.0"}
+    )
+    assert followup.status_code == 401
+
+
 def test_delayed_reuse_of_rotated_token_revokes_the_whole_chain(test_client, make_user, db_session):
     """Security-critical: reuse of an already-rotated token OUTSIDE the
     concurrent-tab grace window is still a compromise signal -- every

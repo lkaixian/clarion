@@ -505,13 +505,18 @@ effects now list honest deps and the `eslint-disable` is gone. No render
 loop -- every dep is stable (module-import getters, `useState` setters, a
 `useRef`). oxlint is fully clean.
 
-### Grace-window residual — **partly addressed**
-Full device/fingerprint binding not built (needs a schema column + threading
-the request through `issue_refresh_token`; marginal against an attacker who
-also has the token). Instead every graced race now logs a WARNING
-(`clarion.auth`, user id + token row) -- the residual is at least detectable
-post-hoc (a burst for one user id is the signal). Full binding stays a
-tender-grade follow-up.
+### Grace-window residual — **device binding now built**
+`refresh_tokens.client_fingerprint` (migration `e7c1a9b3f2d4`, nullable) --
+a sha256 of the User-Agent, captured at issue on login + every rotation.
+`_is_concurrent_refresh_race` now also requires: if BOTH the token's stored
+fingerprint and the reusing request's fingerprint are present, they must
+match. A reuse from a different device is NOT graced → full-revoke
+compromise response. Skipped (not failed-closed) when either side is NULL
+(native client with no UA, pre-migration token). Every graced race still
+logs a WARNING (`clarion.auth`). New
+`test_reuse_from_a_different_device_is_not_graced`. Residual now: a
+same-device attacker (exfiltrated the token AND runs the identical UA
+string) winning a sub-second rotation race -- narrow.
 
 ### Lower-severity N+1 + pagination — **fixed**
 - `_serialize_inventory_item` gained an optional `pending_delete_ids` set;
