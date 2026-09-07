@@ -2,6 +2,7 @@ import base64
 import io
 import secrets
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -51,7 +52,56 @@ def _render_qr_base64(card_reference: str) -> str:
     return f"data:image/png;base64,{qr_base64}"
 
 
-def _audit_sharing_bypass_if_any(db: Session, patient: models.Patient, payload) -> None:
+class _ResponderAudit(NamedTuple):
+    actor: str
+    actor_role: str
+    actor_facility: "str | None"
+    detail_suffix: str
+
+
+def _responder_audit(current_user: "models.User | None", payload) -> _ResponderAudit:
+    """Security Audit M6: the emergency scan is unauthenticated by design, so
+    `responder_name` / `responder_org` in the request body are self-asserted
+    and unverifiable.
+
+    - **No/invalid token (the common field case):** audited EXACTLY as
+      before -- `actor="emergency_responder:<name>"`,
+      `actor_role="emergency_responder"`. That role value already *means*
+      "self-asserted, unverified" and every existing audit-trail consumer
+      (web `PatientDetail.jsx`, `mobile_flutter/.../audit_log_screen.dart`)
+      keys on it; a reviewer filtering `actor_role == "emergency_responder"`
+      gets precisely the unverified accesses.
+    - **Valid staff bearer token:** bind the REAL identity -- `actor` is the
+      user id, `actor_role` their real role, `actor_facility` recorded, and
+      `detail` is prefixed `verified` with the typed-in name kept as
+      `self_asserted=<name>`. The audit-trail UIs already resolve a real
+      user id to a name, so these rows render as an attributed staff access,
+      not an anonymous responder.
+
+    Audit *action* strings are untouched (`emergency_access` / `_nfc` /
+    `_failed` / `_sharing_bypass`) -- audit_log_screen.dart switches on the
+    exact action for severity/icons. Unauthenticated flow otherwise
+    unchanged: no new field, no 401, identical data returned."""
+    org = getattr(payload, "responder_org", None)
+    said = getattr(payload, "responder_name", None) or None
+    if current_user is not None:
+        return _ResponderAudit(
+            actor=current_user.id,
+            actor_role=current_user.role,
+            actor_facility=current_user.facility,
+            detail_suffix=f"verified org={org}" + (f" self_asserted={said}" if said else ""),
+        )
+    return _ResponderAudit(
+        actor=f"emergency_responder:{said or 'unidentified'}",
+        actor_role="emergency_responder",
+        actor_facility=None,
+        detail_suffix=f"org={org}",
+    )
+
+
+def _audit_sharing_bypass_if_any(
+    db: Session, patient: models.Patient, ident: _ResponderAudit
+) -> None:
     """The unauthenticated emergency-token scan is a life-safety override: it
     ALWAYS ignores HospitalSetting.records_shared_publicly (unlike the
     authenticated patient-record path in routers/patients.py, which filters
@@ -81,10 +131,11 @@ def _audit_sharing_bypass_if_any(db: Session, patient: models.Patient, payload) 
         return
     log_access(
         db, patient.id,
-        actor=f"emergency_responder:{getattr(payload, 'responder_name', None) or 'unidentified'}",
-        actor_role="emergency_responder",
+        actor=ident.actor,
+        actor_role=ident.actor_role,
         action="emergency_access_sharing_bypass",
         detail=f"life-safety override: showed records from opted-out facilities {bypassed}",
+        actor_facility=ident.actor_facility,
     )
 
 
@@ -287,13 +338,22 @@ def issue_emergency_card(
 # card_reference brute-force loop. Generous enough for a real responder
 # mistyping/rescanning a few times, tight enough to make guessing
 # infeasible (see also the failed-scan audit-log entries below).
-def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest, db: Session = Depends(get_db)):
+def scan_emergency_card(
+    request: Request,
+    payload: schemas.EmergencyScanRequest,
+    db: Session = Depends(get_db),
+    current_user: "models.User | None" = Depends(auth.get_optional_current_user),
+):
     """
     Called by an emergency responder's device after scanning the QR or
     keying in the physical card's printed reference. No login required —
     this is the whole point — but every scan is logged, and only the
-    pre-approved scope is ever returned.
+    pre-approved scope is ever returned. If the caller happens to be a
+    logged-in staff member, their real identity is bound to the audit
+    entry (M6); otherwise the typed-in responder name is recorded but
+    flagged unverified.
     """
+    ident = _responder_audit(current_user, payload)
     grant = (
         db.query(models.EmergencyToken)
         .filter(models.EmergencyToken.card_reference == payload.card_reference)
@@ -308,10 +368,10 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
         # previously invisible in the audit log.
         log_access(
             db, None,
-            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-            actor_role="emergency_responder",
+            actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"card_reference={payload.card_reference} org={payload.responder_org}",
+            detail=f"card_reference={payload.card_reference} {ident.detail_suffix}",
+            actor_facility=ident.actor_facility,
         )
         raise HTTPException(status_code=404, detail="Invalid or expired emergency card")
 
@@ -319,10 +379,10 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
     if not patient:
         log_access(
             db, None,
-            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-            actor_role="emergency_responder",
+            actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"card_reference={payload.card_reference} org={payload.responder_org} (grant found, patient missing)",
+            detail=f"card_reference={payload.card_reference} {ident.detail_suffix} (grant found, patient missing)",
+            actor_facility=ident.actor_facility,
         )
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -332,13 +392,13 @@ def scan_emergency_card(request: Request, payload: schemas.EmergencyScanRequest,
 
     log_access(
         db, patient.id,
-        actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-        actor_role="emergency_responder",
+        actor=ident.actor, actor_role=ident.actor_role,
         action="emergency_access",
         fields=list(scope),
-        detail=f"org={payload.responder_org}",
+        detail=ident.detail_suffix,
+        actor_facility=ident.actor_facility,
     )
-    _audit_sharing_bypass_if_any(db, patient, payload)
+    _audit_sharing_bypass_if_any(db, patient, ident)
 
     return result
 
@@ -478,9 +538,16 @@ def register_nfc_card(
 
 @router.post("/nfc/scan")
 @limiter.limit("10/minute")  # per-IP -- same rationale as POST /emergency/scan above.
-def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session = Depends(get_db)):
+def scan_nfc_card(
+    request: Request,
+    payload: schemas.NfcScanRequest,
+    db: Session = Depends(get_db),
+    current_user: "models.User | None" = Depends(auth.get_optional_current_user),
+):
     """No login required — same design as /emergency/scan, but keyed by the
-    physical card's NFC UID instead of a QR-encoded card_reference."""
+    physical card's NFC UID instead of a QR-encoded card_reference. A
+    logged-in staff caller is bound to the audit entry (M6)."""
+    ident = _responder_audit(current_user, payload)
     grant = (
         db.query(models.EmergencyToken)
         .filter(models.EmergencyToken.nfc_uid == payload.nfc_uid)
@@ -491,10 +558,10 @@ def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session
         # logged with patient_id=None.
         log_access(
             db, None,
-            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-            actor_role="emergency_responder",
+            actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"nfc_uid={payload.nfc_uid} org={payload.responder_org}",
+            detail=f"nfc_uid={payload.nfc_uid} {ident.detail_suffix}",
+            actor_facility=ident.actor_facility,
         )
         raise HTTPException(status_code=404, detail="This NFC card is not registered, revoked, or expired")
 
@@ -502,10 +569,10 @@ def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session
     if not patient:
         log_access(
             db, None,
-            actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-            actor_role="emergency_responder",
+            actor=ident.actor, actor_role=ident.actor_role,
             action="emergency_access_failed",
-            detail=f"nfc_uid={payload.nfc_uid} org={payload.responder_org} (grant found, patient missing)",
+            detail=f"nfc_uid={payload.nfc_uid} {ident.detail_suffix} (grant found, patient missing)",
+            actor_facility=ident.actor_facility,
         )
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -515,13 +582,13 @@ def scan_nfc_card(request: Request, payload: schemas.NfcScanRequest, db: Session
 
     log_access(
         db, patient.id,
-        actor=f"emergency_responder:{payload.responder_name or 'unidentified'}",
-        actor_role="emergency_responder",
+        actor=ident.actor, actor_role=ident.actor_role,
         action="emergency_access_nfc",
         fields=list(scope),
-        detail=f"org={payload.responder_org}",
+        detail=ident.detail_suffix,
+        actor_facility=ident.actor_facility,
     )
-    _audit_sharing_bypass_if_any(db, patient, payload)
+    _audit_sharing_bypass_if_any(db, patient, ident)
 
     return result
 

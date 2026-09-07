@@ -255,6 +255,38 @@ Resolved by the MariaDB move — [[On-Prem Architecture]].
 - **M6 — emergency-scan audit trail is unauthenticated + self-asserted.**
   `emergency.py:262-321`. The audit "actor" is free text from the request body
   (`responder_name` / `responder_org`), never verified.
+  ✅ **RESOLVED 2026-09-07 (P2.6).** New `auth.get_optional_current_user`
+  (`OAuth2PasswordBearer(auto_error=False)` → `User | None`; a missing OR
+  broken/expired token both yield `None`, never a 401 — a bad token must not
+  turn a life-safety scan into an error; delegates to the same
+  `_resolve_current_user` — signature + revoke-on-password-change — that
+  `get_current_user` uses, so it's not an auth-bypass path; identity is used
+  for audit attribution ONLY, scope is still `grant.scope`).
+  `emergency._responder_audit()`:
+  - **valid staff token** → audited under the **real user id + real role**,
+    `actor_facility` recorded, `detail` prefixed `verified` with the typed
+    name kept as `self_asserted=<name>`. The audit UIs already resolve a
+    real user id → name, so these render as an attributed staff access.
+  - **no/invalid token** → audited EXACTLY as before: `actor=
+    "emergency_responder:<name>"`, `actor_role="emergency_responder"`. That
+    role value already *means* "self-asserted, unverified"; a reviewer
+    filtering `actor_role == "emergency_responder"` gets precisely the
+    unverified accesses, and every existing consumer
+    (`PatientDetail.jsx:1069`, `audit_log_screen.dart:55`,
+    `patients.py:989`'s skip-optimisation) keeps working unchanged. (An
+    earlier draft that changed the actor/role strings was reverted after
+    the parallel-agent review flagged the 3-consumer format drift.)
+  **Audit *action* strings deliberately unchanged** (`emergency_access` /
+  `_nfc` / `_failed` / `_sharing_bypass`) —
+  `mobile_flutter/.../audit_log_screen.dart` switches on the exact action
+  for severity/labelling. `_audit_sharing_bypass_if_any` re-signatured
+  `(db, patient, payload)` → `(db, patient, ident)` so the bypass row gets
+  the same attribution as the access row. Unauthenticated flow otherwise
+  unchanged: no new field, no 401, identical data returned. New
+  `backend/tests/test_emergency_scan_audit_identity.py` (6 — unverified
+  shape byte-identical to pre-M6, verified binds real id/role/facility,
+  failed-scan unverified, NFC verified, broken-token→no-401, sharing-bypass
+  attribution). **Verified 176/176.**
 - **M7 — emergency NFC cards: cloneable low-entropy key, 1-year default.**
   `emergency.py:396-452`; `schemas.py:1382-1402` default `valid_minutes=525600`.
   Raw MIFARE UID used verbatim as the lookup key. QR `card_reference` is stronger.
