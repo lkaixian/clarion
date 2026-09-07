@@ -373,6 +373,7 @@ def _set_refresh_cookie(response: Response, plaintext_refresh_token: str) -> Non
 def _issue_login_response(
     db: Session, response: Response, user: models.User,
     refresh_plaintext: Optional[str] = None,
+    fingerprint: Optional[str] = None,
 ) -> schemas.Token:
     """Shared by every successful-auth branch in login() (local, LDAP JIT,
     LDAP resync) and by POST /auth/refresh: mints the short-lived access
@@ -392,7 +393,7 @@ def _issue_login_response(
         password_changed_at=user.password_changed_at,
     )
     if refresh_plaintext is None:
-        refresh_plaintext, _row = auth.issue_refresh_token(db, user)
+        refresh_plaintext, _row = auth.issue_refresh_token(db, user, fingerprint=fingerprint)
     _set_refresh_cookie(response, refresh_plaintext)
     _with_missing_profile_fields(user)
     _attach_allowed_pages(db, user)
@@ -448,12 +449,13 @@ def login(
     With LDAP_ENABLED unset (the default), ldap_auth.ldap_enabled() is
     always False and this function's behavior is unchanged from before P1.10.
     """
+    fp = auth.client_fingerprint(request.headers.get("user-agent"))
     user, ldap_eligible = _resolve_login_user(db, form_data.username)
 
     if user is None and ldap_eligible and ldap_auth.ldap_enabled():
         user = _jit_provision_ldap_user(db, form_data.username, form_data.password)
         if user is not None:
-            return _issue_login_response(db, response, user)
+            return _issue_login_response(db, response, user, fingerprint=fp)
         # Unknown to the directory, or authenticated but unmapped to any
         # role -- fall through to the same generic 401 as an unknown local
         # identifier (ldap_auth/_jit_provision_ldap_user already logged why).
@@ -491,7 +493,7 @@ def login(
                 user.login_locked_until = None
                 db.add(user)
                 db.commit()
-            return _issue_login_response(db, response, user)
+            return _issue_login_response(db, response, user, fingerprint=fp)
 
         # Same per-account lockout bookkeeping for an LDAP-backed account's
         # failed bind as for a local account's wrong password -- LDAP-backed
@@ -531,7 +533,8 @@ def refresh_access_token(
     if not raw_token:
         raise HTTPException(status_code=401, detail="No refresh token provided")
 
-    result = auth.rotate_refresh_token(db, raw_token)
+    fp = auth.client_fingerprint(request.headers.get("user-agent"))
+    result = auth.rotate_refresh_token(db, raw_token, presented_fingerprint=fp)
     if result is None:
         # A stale cookie is now definitely dead (either genuinely expired,
         # or auth.rotate_refresh_token just nuked the whole chain on a
@@ -541,7 +544,7 @@ def refresh_access_token(
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     user, new_plaintext = result
-    return _issue_login_response(db, response, user, refresh_plaintext=new_plaintext)
+    return _issue_login_response(db, response, user, refresh_plaintext=new_plaintext, fingerprint=fp)
 
 
 @router.post("/logout")
