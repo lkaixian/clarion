@@ -1594,9 +1594,9 @@ export default function PatientDetail() {
     }
   }
 
-  async function revokeNfc(nfcUid) {
-    if (!confirm(`Revoke NFC card ${nfcUid}? This cannot be undone from here — you'd need to re-register it.`)) return;
-    await revokeNfcCard(nfcUid);
+  async function revokeNfc(card) {
+    if (!confirm(`Revoke NFC card ••${card.nfc_uid_last4 || "?"}? This cannot be undone from here — you'd need to re-register it.`)) return;
+    await revokeNfcCard(card.id);
     refresh();
   }
 
@@ -1971,16 +1971,18 @@ export default function PatientDetail() {
             ) : (
               <div className="space-y-2">
                 {nfcCards.map((n) => (
-                  <div key={n.nfc_uid} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <div key={n.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                     <div className="text-sm">
-                      <code className="bg-slate-100 px-1 rounded">{n.nfc_uid}</code>
+                      {/* The raw UID is stored hashed server-side (M7) and never sent back;
+                          the last 4 chars are enough to tell two cards apart. */}
+                      <code className="bg-slate-100 px-1 rounded">card ••{n.nfc_uid_last4 || "????"}</code>
                       <span className={`ml-2 text-xs ${n.revoked ? "text-red-600" : "text-green-700"}`}>
                         {n.revoked ? "REVOKED" : "active"}
                       </span>
                       <p className="text-xs text-slate-400 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
                     </div>
                     {!n.revoked && isStaff && (
-                      <button onClick={() => revokeNfc(n.nfc_uid)} className="text-xs text-red-700">Revoke</button>
+                      <button onClick={() => revokeNfc(n)} className="text-xs text-red-700">Revoke</button>
                     )}
                   </div>
                 ))}

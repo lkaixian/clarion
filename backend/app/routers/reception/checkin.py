@@ -71,9 +71,10 @@ def _resolve_patient(payload: schemas.ReceptionCheckinRequest, db: Session):
 
     # payload.nfc_uid -- schemas.ReceptionCheckinRequest guarantees exactly
     # one of the four identifiers is set, so this is the only remaining case.
+    # M7: EmergencyToken.nfc_uid stores the HMAC, so hash the presented UID.
     grant = (
         db.query(models.EmergencyToken)
-        .filter(models.EmergencyToken.nfc_uid == payload.nfc_uid)
+        .filter(models.EmergencyToken.nfc_uid == auth.hash_nfc_uid(payload.nfc_uid))
         .first()
     )
     if not grant:

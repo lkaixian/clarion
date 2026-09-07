@@ -161,6 +161,41 @@ def verify_otp_code(code: str, code_hash: str) -> bool:
     return hmac.compare_digest(hash_otp_code(code), code_hash)
 
 
+def canonical_nfc_uid(raw_uid: str) -> str:
+    """A MIFARE/NFC UID is a hex byte string; readers/manual entry vary only
+    in case and separators (`04:A1:B2`, `04-a1-b2`, `04 A1 B2`, `04a1b2`).
+    Canonicalise to uppercase hex, no separators, so register / scan /
+    reception-checkin all hash to the same value regardless of which reader
+    or field produced the string. Raises ValueError on an empty/too-short
+    result so a blank UID can't be registered as a catch-all grant."""
+    canon = "".join(raw_uid.split()).replace(":", "").replace("-", "").upper()
+    if len(canon) < 4:
+        raise ValueError("NFC UID is empty or too short")
+    return canon
+
+
+def nfc_uid_last4(raw_uid: str) -> str:
+    """Cleartext 4-char tail of the canonical UID -- display only, so staff
+    can tell two registered cards apart in the console (Security Audit M7)."""
+    return canonical_nfc_uid(raw_uid)[-4:]
+
+
+def hash_nfc_uid(raw_uid: str) -> str:
+    """Security Audit M7: a physical NFC card's UID is stored only as this
+    keyed HMAC-SHA256 hex digest (EmergencyToken.nfc_uid), never in the
+    clear -- a leak of the emergency_tokens table then yields no usable card
+    keys. The `nfc-uid:` domain separator keeps this namespace distinct from
+    hash_otp_code even though both use _OTP_HMAC_KEY. (This does NOT defend
+    against a physically cloned card -- MIFARE UIDs are readable; it shrinks
+    the DB-disclosure blast radius. Short-lived grants + minimal scan
+    payload + per-card anomaly logging carry the rest.)"""
+    return hmac.new(
+        _OTP_HMAC_KEY,
+        b"nfc-uid:" + canonical_nfc_uid(raw_uid).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 

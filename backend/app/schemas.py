@@ -1484,6 +1484,18 @@ class EmergencyScanRequest(BaseModel):
 
 
 # ---------- Emergency: NFC physical cards ----------
+def _validated_nfc_uid(v: str) -> str:
+    """Security Audit M7: a NFC/MIFARE UID is a hex byte string. Reject a
+    blank / separators-only / non-hex value at the schema boundary so it
+    can't be registered as a catch-all grant once auth.canonical_nfc_uid
+    collapses it. Accepts common reader/manual formats (04:A1:B2, 04-a1-b2,
+    04 A1 B2, 04a1b2); the raw string is stored only as its HMAC."""
+    canon = "".join(str(v).split()).replace(":", "").replace("-", "").upper()
+    if len(canon) < 4 or len(canon) % 2 or any(c not in "0123456789ABCDEF" for c in canon):
+        raise ValueError("nfc_uid must be a hex card UID of at least 2 bytes")
+    return v
+
+
 class NfcRegisterRequest(BaseModel):
     """Staff-only: register (or re-register / update) a physical NFC card
     against a patient — for senior citizens / anyone without a smartphone.
@@ -1506,11 +1518,15 @@ class NfcRegisterRequest(BaseModel):
             )
         return v
 
+    _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)
+
 
 class NfcScanRequest(BaseModel):
     nfc_uid: str
     responder_name: Optional[str] = None
     responder_org: Optional[str] = None
+
+    _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)
 
 
 # ---------- Reception desk check-in / queue ----------
@@ -1535,6 +1551,11 @@ class ReceptionCheckinRequest(BaseModel):
     nfc_uid: Optional[str] = None
     reason: Optional[str] = None
     department: Optional[str] = None
+
+    @field_validator("nfc_uid")
+    @classmethod
+    def _check_nfc_uid(cls, v):
+        return _validated_nfc_uid(v) if v else v
 
     @model_validator(mode="after")
     def _check_exactly_one_identifier(self):

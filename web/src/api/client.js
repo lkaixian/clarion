@@ -274,7 +274,9 @@ export const getCurrentCardStatus = (patientId) =>
 export const listNfcCards = (patientId) => client.get(`/emergency/nfc/${patientId}`).then((r) => r.data);
 export const registerNfcCard = (patientId, nfcUid, scope) =>
   client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope }).then((r) => r.data);
-export const revokeNfcCard = (nfcUid) => client.post(`/emergency/nfc/revoke/${nfcUid}`).then((r) => r.data);
+// Revoke by the grant id (from listNfcCards) -- the raw UID is stored
+// hashed server-side and never returned to the client (Security Audit M7).
+export const revokeNfcCard = (tokenId) => client.post(`/emergency/nfc/revoke/${tokenId}`).then((r) => r.data);
 
 // Staff-only. Creates a login for a patient who doesn't have one yet, or
 // regenerates the password of an existing one (doubles as staff-mediated

@@ -291,6 +291,42 @@ Resolved by the MariaDB move — [[On-Prem Architecture]].
   `emergency.py:396-452`; `schemas.py:1382-1402` default `valid_minutes=525600`.
   Raw MIFARE UID used verbatim as the lookup key. QR `card_reference` is stronger.
   `_scoped_fields` (`emergency.py:96`) always returns name + DOB regardless of scope.
+  🟡 **PARTLY RESOLVED 2026-09-07 (P2.6)** — user picked HMAC-at-rest +
+  minimise-payload + per-card anomaly logging; kept the 1-yr default expiry.
+  - **M7a — HMAC at rest.** `EmergencyToken.nfc_uid` now stores
+    `auth.hash_nfc_uid(raw)` = keyed HMAC-SHA256 (`_OTP_HMAC_KEY`, domain
+    separator `nfc-uid:`), never the raw UID. `auth.canonical_nfc_uid`
+    normalises case + separators first, so register / scan / reception
+    check-in all agree regardless of reader format. New cleartext
+    `nfc_uid_last4` column (display only); `GET /emergency/nfc/{id}` and the
+    register response return `{id, nfc_uid_last4}`, never the UID;
+    `POST /emergency/nfc/revoke/{token_id}` revokes by grant id. Scan
+    `detail` logs `nfc_hash=<hmac16>`, never the raw UID (also closes an
+    M8-adjacent leak). Alembic `f3a9d21c5e88` rewrites existing rows +
+    backfills last4 + indexes `audit_logs.timestamp`; **hard-fails if
+    `OTP_HMAC_KEY` is unset with rows to migrate** (a standalone
+    `alembic upgrade` doesn't load `app.auth`'s fail-fast). Residual
+    (documented in `auth.py` + the model + migration): a *physically
+    cloned* card still works — MIFARE UIDs are readable; and the scheme's
+    strength is conditional on `_OTP_HMAC_KEY` secrecy (a key+table leak
+    leaves a 2³² UID space brute-forceable offline). HMAC-at-rest shrinks
+    the DB-disclosure blast radius, nothing more.
+  - **M7c — per-card scan-anomaly logging.** `_flag_nfc_scan_anomaly_if_needed`
+    on every NFC scan (success + fail): ≥ 8 scans of one card within an
+    hour → one `emergency_card_scan_anomaly` audit row (`actor="system"`),
+    debounced to once/card/hour. Two `.count()` queries windowed on the new
+    `audit_logs.timestamp` index — no row materialisation on the life-safety
+    path. `patient_id=None` on the row when it's triggered off failed scans
+    (don't correlate a probe to a patient).
+  - **NOT done:** M7b (minimise `_scoped_fields` payload / drop DOB→age) is
+    a separate part; the default `valid_minutes` was deliberately left at
+    1yr per the user's selection; `register_nfc_card` / `revoke_nfc_card`
+    still lack the `_require_patient_present_for_staff` facility scoping the
+    other emergency endpoints have — **pre-existing**, not an M7 regression,
+    flagged by the review for a follow-up (it has senior-citizen-registration
+    workflow implications).
+  New `backend/tests/test_emergency_nfc_hardening.py` (8). **Verified
+  185/185, `check_schema` PASS, web build + oxlint + `flutter analyze` clean.**
 - **M8 — clinical data written into `audit_logs.detail`.** `patients.py:524` (diagnosis
   name), `:589` (drug name), `:642` (allergen). The audit store becomes a second,
   less-controlled copy of clinical data.
