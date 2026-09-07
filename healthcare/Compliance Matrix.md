@@ -12,7 +12,12 @@ PHP rewrite must redo) · **N/A** (contractual / process). *Demo?* = worth showi
 stage. Judged on functional behaviour in the codebase, not polish.
 
 Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.**
-None of the four platform pillars (on-prem AI, PACS, FHIR, MariaDB) exist yet.
+
+> [!warning] Scored 2026-08-30, **not re-scored after P1/P2**. Since then: MariaDB path,
+> ObjectStore/MinIO, edge proxy + TLS, LDAP/AD, containerisation, and the whole P2
+> security wave landed — several rows have moved Gap/Partial → Have. Treat
+> [[Implementation Roadmap]] as the current-status source; re-score this matrix as its
+> own task before any formal compliance submission.
 
 ## Modules
 
