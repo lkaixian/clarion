@@ -239,9 +239,13 @@ class RefreshToken(Base):
     issued_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(TZDateTime, nullable=False, index=True)
     revoked_at = Column(TZDateTime, nullable=True)
-    # Rotation chain pointer -- forensic/audit trail only ("what did this
-    # token get rotated into"), never read by any auth-time logic. Nullable
-    # self-FK; no ondelete action needed since a row is never hard-deleted.
+    # Rotation chain pointer -- "what did this token get rotated into".
+    # Primarily a forensic/audit trail, but auth.rotate_refresh_token DOES
+    # read it at auth time (code-review follow-up 2026-09-07): its presence
+    # distinguishes a rotated token from a logged-out / bulk-revoked one, and
+    # _is_concurrent_refresh_race follows it one hop to check the chain head.
+    # Nullable self-FK; no ondelete action needed since a row is never
+    # hard-deleted.
     replaced_by_id = Column(String(36), ForeignKey("refresh_tokens.id"), nullable=True)
 
     user = relationship("User")
