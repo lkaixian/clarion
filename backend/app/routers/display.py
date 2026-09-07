@@ -52,6 +52,12 @@ def _mask_name(full_name: str) -> str:
 # proxy collapsing every client to one address) would trip an IP-keyed limit
 # and blank real displays. The 128-bit token makes an enumeration sweep
 # pointless anyway, so a generous per-token ceiling is the right shape.
+# No response_model (unlike the rest of the API): this is a public,
+# unauthenticated screen feed with a deliberately flat, display-only shape
+# (queue numbers + masked names + room + timestamps, assembled inline
+# below). A Pydantic model here would be pure ceremony -- nothing consumes
+# it as a typed contract and there is no sensitive field to guard with
+# response filtering. Code-review follow-up 2026-09-07.
 @router.get("/{token}")
 @limiter.limit("120/minute", key_func=lambda request: request.path_params.get("token", "") or "unknown")
 def get_display_feed(token: str, request: Request, db: Session = Depends(get_db)):

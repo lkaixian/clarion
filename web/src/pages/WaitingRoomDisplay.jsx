@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicDisplay } from "../api/client";
+import { formatTime } from "../lib/format";
 
 // Public lobby big-screen. Own dark full-screen styling — deliberately NOT
 // wrapped in <Layout> (no nav, no auth, no max-width container). Polls the
 // unauthenticated /display/{token} endpoint.
 const DISPLAY_POLL_MS = 5000;
-
-// No date library in this codebase — plain built-in formatting, same as
-// every other timestamp in the app.
-function formatTime(iso) {
-  return iso ? new Date(iso).toLocaleTimeString() : "—";
-}
 
 export default function WaitingRoomDisplay() {
   const { token } = useParams();

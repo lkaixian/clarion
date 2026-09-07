@@ -24,7 +24,7 @@ export default function Login() {
       // /patients, and a patient on their own record (/patients/{id}, which
       // the backend scopes for them — they can't call the staff list).
       navigate(landingPathFor(data.user));
-    } catch (err) {
+    } catch {
       setError("Login failed. Check credentials or that the API server is running.");
     } finally {
       setLoading(false);

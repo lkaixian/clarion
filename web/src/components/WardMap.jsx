@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getWardMap, admitPatient, dischargeAdmission, updateAdmission } from "../api/client";
+import { formatDateTime } from "../lib/format";
 
 // Match Reception.jsx's QUEUE_BOARD_POLL_MS — the ward map is a live board,
 // same "responsive in a demo, not hammering the backend" tradeoff.
@@ -25,10 +26,6 @@ function heatText(pct) {
   if (pct >= 75) return "text-amber-700";
   if (pct > 0) return "text-green-700";
   return "text-slate-400";
-}
-
-function formatDateTime(iso) {
-  return iso ? new Date(iso).toLocaleString() : "—";
 }
 
 // Green = free, red = occupied — reuses AdminConsole.jsx occupancyColor's

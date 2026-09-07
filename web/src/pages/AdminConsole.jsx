@@ -17,13 +17,8 @@ import {
   getWaitingRoomDisplays, createWaitingRoomDisplay, revokeWaitingRoomDisplay,
 } from "../api/client";
 import WardMap from "../components/WardMap";
-
-// No date library in this codebase (see PatientDetail.jsx's identical
-// comment on formatAppointmentTime) — a plain toLocaleString() matches
-// every other timestamp rendered here.
-function formatDateTime(iso) {
-  return iso ? new Date(iso).toLocaleString() : "—";
-}
+import { formatDateTime } from "../lib/format";
+import { validateImageFile } from "../lib/upload";
 
 // duration_minutes is server-computed (ClockEventOut) — never re-derive it
 // client-side, this just formats what's already on the object. null means
@@ -179,18 +174,6 @@ const INVENTORY_FIELDS = [
   { key: "barcode", label: "Barcode", type: "text", placeholder: "Scanned/keyed code — searchable from the pharmacy console" },
   { key: "notes", label: "Notes", type: "textarea" },
 ];
-
-// Client-side gate before an image upload — the backend re-checks
-// content-type + extension + magic bytes and 422s on mismatch, but catching
-// the obvious cases here saves a round-trip. Returns an error string, or ""
-// when acceptable.
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-function validateImageFile(file) {
-  if (!file) return "";
-  if (!file.type.startsWith("image/")) return "That file isn't an image.";
-  if (file.size > MAX_IMAGE_BYTES) return "Image must be 2MB or smaller.";
-  return "";
-}
 
 // 40px inventory-row thumbnail. Loads the photo as an auth blob (object URL,
 // revoked on unmount / image change) or shows a pill placeholder. Admins
