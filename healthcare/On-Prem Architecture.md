@@ -19,6 +19,12 @@ Full text: `scratchpad/architecture.md`.
 
 ## Database — MariaDB 11.4 LTS + Alembic
 - InnoDB, `utf8mb4`, TLS-only, binlog ROW (for point-in-time recovery).
+- **Encryption at rest (P2.7):** InnoDB + Aria TDE (`innodb_encrypt_tables=FORCE`),
+  `innodb_encrypt_log`, `encrypt_binlog`, `encrypt_tmp_files` — keys via the
+  Community `file_key_management` plugin (0400 keyfile on the LUKS volume;
+  `backend/db/mariadb/encryption.cnf` + `generate-encryption-key.sh`). Enterprise
+  Server buys Vault / KMIP key management with no schema change. LUKS FDE of the
+  data LUN sits underneath (physical-theft layer). ~3–10% overhead.
 - **Three least-privilege accounts:** `clarion_app` (DML only; `UPDATE`/`DELETE`
   revoked on `audit_logs`), `clarion_migrate` (DDL, deploy-time only), `clarion_report`
   (read-only for reporting + integrations).
