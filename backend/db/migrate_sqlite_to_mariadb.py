@@ -6,9 +6,8 @@ import hashlib
 from datetime import datetime
 from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.schema import UniqueConstraint
-import app.models  # to ensure Base has all models
+import app.models  # noqa: F401 - side-effect import: registers every model on Base.metadata
 from app.database import Base
-from sqlalchemy import Computed
 
 def parse_args():
     parser = argparse.ArgumentParser()

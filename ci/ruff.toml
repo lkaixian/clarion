@@ -1,0 +1,23 @@
+# CLARION lint gate (roadmap P2.11). Conservative on purpose -- this must
+# stay green so a red CI always means a real regression.
+#
+#   HARD  (ci/run.sh fails on these): F (pyflakes-equivalent), E9 (syntax),
+#         B006 (mutable default argument -- a real bug class).
+#   SOFT  (ci/run.sh prints but does not fail): everything else, via a
+#         second `ruff check --statistics` pass with a wider select.
+#
+# `ruff` replaces the ad-hoc `python -m pyflakes` the earlier waves used --
+# it honours `# noqa: F401` on the two deliberate side-effect imports
+# (alembic/env.py, db/migrate_sqlite_to_mariadb.py) that pyflakes could not.
+line-length = 100
+target-version = "py311"
+# alembic revision files are (mostly) generated; the SQLite->MariaDB migrator
+# builds INSERTs from a trusted hardcoded table list (S608 there is noise).
+extend-exclude = ["alembic/versions", "**/__pycache__"]
+
+[lint]
+select = ["F", "E9", "B006"]
+
+[lint.per-file-ignores]
+"tests/*" = ["F811"]        # pytest fixtures legitimately shadow names
+"db/migrate_sqlite_to_mariadb.py" = ["S608"]

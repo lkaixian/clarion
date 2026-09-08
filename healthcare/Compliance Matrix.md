@@ -100,10 +100,10 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 
 | Clause | Requirement | Status | Note |
 |---|---|---|---|
-| | OWASP | Partial | [[Security Audit]] drives this |
+| | OWASP | Partial | [[Security Audit]] drives this; CI enforces (ruff/bandit/semgrep, P2.11) |
 | –6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Partial | 30 tables; no stored procs/views (fine); schema docs = Gap |
 | –8 | The University hosts DB; vendor supplies no DB server | N/A | App connects to University MariaDB |
-| | AI-assisted code quality / OWASP review in pipeline | Gap | CI + SAST (Semgrep/Bandit) + LLM review step |
+| | AI-assisted code quality / OWASP review in pipeline | Partial | `ci/run.sh` = ruff + bandit + semgrep(local rules) + osv-scanner + check_schema + pytest (P2.11, 2026-09-08); LLM-review step still to add |
 | | **FHIR-compatible schema**, MySejahtera/PADU interop | Gap | [[FHIR Schema Readiness]] — do early |
 | | Automated data-quality monitoring | Have | `app/data_quality.py` (13 batch rules: missing / duplicate / coding / anomaly) → `data_quality_alerts` (UPSERT + auto-resolve); `db/data_quality_scan.py` cron; admin list/summary/acknowledge/resolve; `DATA_QUALITY_DISABLED_RULES` config (P2.12, 2026-09-08) |
 
@@ -126,7 +126,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Credentials + **LDAP** | Gap | [[Integration Engine and LDAP]] |
 | | Intelligent anomaly detection | Gap | Login/access analytics + framing |
 | | AI-driven audit-trail intelligence | Gap | LLM over `audit_logs` hash-chain |
-| | Continuous automated vuln assessment of own code + APIs | Gap | CI SAST/DAST + dependency scanning |
+| | Continuous automated vuln assessment of own code + APIs | Partial | SAST (bandit/semgrep) + SCA (osv-scanner) + trivy in `ci/run.sh` (P2.11); DAST still a gap |
 
 ##
 

@@ -6,3 +6,10 @@
 -r requirements.txt
 
 pytest==9.1.1
+
+# CI gate (roadmap P2.11, the tender) -- see
+# ci/run.sh and ci/README.md. ruff replaces the ad-hoc `python -m pyflakes`.
+# osv-scanner and trivy are Go binaries, installed separately (not pip).
+ruff==0.16.6
+bandit==1.9.4
+semgrep==1.176.1

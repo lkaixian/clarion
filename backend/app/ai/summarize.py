@@ -12,7 +12,6 @@ Two modes:
    symposium venue is unreliable.
 """
 import os
-from typing import Optional
 
 from ._cloud_guard import cloud_ai_enabled
 

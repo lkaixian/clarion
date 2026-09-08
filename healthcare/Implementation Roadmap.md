@@ -23,6 +23,31 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-08 — P2.11 offline CI
+
+- **P2.11** — one portable CI gate (decision confirmed with the user):
+  `ci/run.sh` runs ruff (F/E9/B006 hard; style advisory) → bandit `-ll` →
+  semgrep with `ci/semgrep/clarion.yml` (local rules: SQL-string-interp,
+  `jwt.decode` alg pin, `shell=True`, `yaml.load`, hardcoded-secret,
+  requests-no-timeout) → osv-scanner → trivy (advisory) →
+  `python -m db.check_schema` (the alembic up/down + drift gate, finally
+  wired into CI) → pytest. `--fast` / `--no-sca` flags. All hard gates green
+  on the current tree.
+- `.woodpecker.yml` (recommended engine for an air-gapped forge — no
+  marketplace-action dependency) + repo-root `Makefile` (`make ci` etc.),
+  both just call `ci/run.sh`. Forge-agnostic; Gitea/Forgejo Actions notes in
+  `ci/README.md`.
+- **osv-scanner, not pip-audit** — pip-audit has no offline mode (live
+  OSV/PyPI); osv-scanner runs air-gapped from a pre-downloaded OSV DB.
+  `ci/README.md` covers feeding osv-scanner / trivy / semgrep their data
+  offline.
+- `ruff` replaces the ad-hoc `python -m pyflakes` (honours `# noqa: F401`
+  on the two side-effect model imports pyflakes couldn't). Fixed 7
+  pre-existing lint issues (unused imports/var) to get F/E9 green.
+  `backend/requirements-dev.txt` pins ruff/bandit/semgrep.
+- `docs/deployment.md` "CI gate" section; Compliance Matrix
+ updated.
+
 ### 2026-09-08 — P2.7 encryption at rest
 
 - **P2.7** — MariaDB data-at-rest encryption wired into the compose stack
@@ -257,7 +282,7 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 | P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | — |
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | ✅ 2026-09-08 (SQLite-verified; MariaDB migration written, pending a run with creds) |
 | P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | — |
-| P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | — |
+| P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | ✅ 2026-09-08 (portable `ci/run.sh` + Woodpecker YAML + Makefile; osv-scanner not pip-audit; forge-agnostic) |
 | P2.12 | `data_quality_alerts` — batch validators (missing values, dup patients, bad coding) | S | | ✅ 2026-09-08 (backend + admin API; no web UI yet) |
 
 ## P3 — Tender modules

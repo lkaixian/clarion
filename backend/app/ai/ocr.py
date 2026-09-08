@@ -10,7 +10,6 @@ on a laptop without the binary yet).
 INSTALL NOTE (Week 2 task): `sudo apt-get install tesseract-ocr` then
 `pip install pytesseract pillow`.
 """
-from typing import Optional
 
 
 def extract_text_from_image(image_path: str) -> str:

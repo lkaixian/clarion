@@ -303,6 +303,38 @@ flag** — the P2.8 backup pipeline pipes its `--stream` output through
 
 ---
 
+## CI gate (P2.11, the tender)
+
+One portable script — `ci/run.sh` — runs the whole gate and is what the
+`Makefile` and `.woodpecker.yml` call. **No network required.**
+
+| Gate | Tool | Hard |
+|---|---|---|
+| Lint (pyflakes-equivalent + mutable-default) | `ruff` (`ci/ruff.toml`) | ✓ |
+| Python SAST | `bandit -ll` | ✓ |
+| CLARION security patterns (SQL-i, `jwt.decode` alg, `shell=True`, …) | `semgrep` + `ci/semgrep/*.yml` | ✓ |
+| Python dependency CVEs | `osv-scanner` (pre-downloaded OSV DB) | ✓ |
+| FS / container CVEs + secrets | `trivy fs` (pre-fetched DB) | advisory |
+| `alembic up→down→up` + no model drift | `python -m db.check_schema` | ✓ |
+| Tests | `pytest` | ✓ |
+
+```
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+make ci            # or:  bash ci/run.sh   /   ci/run.sh --fast
+```
+
+**Air-gapped:** `ci/README.md` has the per-tool setup — semgrep rules are
+local; `osv-scanner` / `trivy` take a DB copied from a connected host.
+`pip-audit` is deliberately **not** used (no offline mode); `osv-scanner`
+covers the same ground offline.
+
+**Forge:** Woodpecker CI is the recommendation for an air-gapped forge
+(`.woodpecker.yml`, no marketplace-action dependency). Gitea/Forgejo Actions
+also work if the runner images are pre-loaded and `DEFAULT_ACTIONS_URL`
+points at the internal forge.
+
+---
+
 ## Data-quality monitoring (P2.12, the tender)
 
 `app/data_quality.py` is a registry of independent batch validators —

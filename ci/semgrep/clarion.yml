@@ -1,0 +1,102 @@
+# CLARION-local Semgrep rules (roadmap P2.11, the tender "AI-assisted
+# code-quality & compliance review in the dev pipeline -- auto-detect logic
+# errors, security vulns, OWASP deviations pre-deployment").
+#
+# LOCAL rules only -- `semgrep --config ci/semgrep/` needs no network. To add
+# the community Python/security packs in an air-gapped setup, `git clone` or
+# vendor https://github.com/semgrep/semgrep-rules into ci/semgrep/vendor/ and
+# point `--config` at it too. Run with `--metrics=off --disable-version-check`.
+rules:
+  - id: sql-string-interpolation-in-execute
+    languages: [python]
+    severity: ERROR
+    message: >
+      SQL built with an f-string / % / .format() then passed to execute() or
+      text(). Use bound parameters. (OWASP A03)
+    patterns:
+      - pattern-either:
+          - pattern: $CUR.execute(f"...", ...)
+          - pattern: $CUR.execute("..." % ..., ...)
+          - pattern: $CUR.execute("...".format(...), ...)
+          - pattern: sqlalchemy.text(f"...")
+          - pattern: text(f"...")
+    paths:
+      # The SQLite->MariaDB migrator and Alembic revisions interpolate table
+      # / column names that come from Base.metadata (a trusted, hardcoded
+      # schema), never from a request. Application code is still checked.
+      exclude:
+        - "db/migrate_sqlite_to_mariadb.py"
+        - "**/alembic/versions/**"
+
+  - id: requests-without-timeout
+    languages: [python]
+    severity: WARNING
+    message: >
+      HTTP call with no timeout= -- a hung upstream will pin a worker.
+      CLARION's the tender keeps inference local, but every external
+      call (RxNav, LDAP, MinIO) still needs a timeout.
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M(...)
+          - pattern: httpx.$M(...)
+      - pattern-not: requests.$M(..., timeout=$T, ...)
+      - pattern-not: httpx.$M(..., timeout=$T, ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(get|post|put|patch|delete|request|head)$
+
+  - id: jwt-decode-without-algorithms
+    languages: [python]
+    severity: ERROR
+    message: "jwt.decode() without algorithms=[...] accepts 'alg':'none' -- pin it."
+    patterns:
+      - pattern: jwt.decode(...)
+      - pattern-not: jwt.decode(..., algorithms=[...], ...)
+
+  - id: subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: "subprocess with shell=True -- command injection surface. Pass a list."
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$F(..., shell=True, ...)
+          - pattern: os.system(...)
+          - pattern: os.popen(...)
+
+  - id: yaml-load-without-safe-loader
+    languages: [python]
+    severity: ERROR
+    message: "yaml.load() without SafeLoader can construct arbitrary objects."
+    patterns:
+      - pattern: yaml.load($X)
+
+  - id: hardcoded-secret-assignment
+    languages: [python]
+    severity: WARNING
+    message: >
+      Looks like a hardcoded credential. CLARION reads SECRET_KEY /
+      OTP_HMAC_KEY / DB passwords from the environment -- never a literal.
+    patterns:
+      - pattern: $NAME = "$VALUE"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(secret_?key|passwd|password|api_?key|access_?key|private_?key|client_?secret).*
+      - metavariable-regex:
+          # a real key/password is long and not an obvious enum/word
+          metavariable: $VALUE
+          regex: ^(?!(bearer|basic|none|changeme|password|test|example)$).{16,}$
+    paths:
+      exclude: ["tests/", "seed.py", "**/conftest.py"]
+
+  - id: broad-except-pass
+    languages: [python]
+    severity: INFO
+    message: "except ...: pass swallows every error, including bugs. Log it or narrow it."
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except ...:
+            pass
+    paths:
+      exclude: ["tests/"]
