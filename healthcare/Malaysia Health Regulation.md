@@ -1,7 +1,7 @@
 ---
 title: Malaysia Health Regulation
 type: research
-updated: 2026-08-30
+updated: 2026-09-08
 tags: [research, pdpa, moh, mda, compliance, malaysia]
 ---
 
@@ -10,25 +10,94 @@ tags: [research, pdpa, moh, mda, compliance, malaysia]
 Covers PDPA 2024, MOH reporting, and medical-device regulation as they bear on
  the tender, and the AI features.
 
-## PDPA (Amendment) Act 2024
-Phased in through 2025–2026. Changes that touch a clinical system:
-- "Data User" → **"Data Controller"**.
-- Mandatory **Data Protection Officer**, registered with the Commissioner.
-- Mandatory **breach notification** to the Commissioner, and to affected individuals
-  where significant harm is likely. A **72-hour** window is the working benchmark
-  (official guidance was still settling — *re-check before any formal submission*).
-- Penalties raised to **RM 1,000,000 and/or 3 years**.
-- **Biometric data is now sensitive personal data** — bears on the NRIC-photo flow and
-  any fingerprint check-in.
-- **Data processors** now carry direct statutory Security-Principle obligations (not
-  only the controller).
-- Cross-border: the whitelist is **removed** — transfer allowed where destination law is
-  "substantially similar" or gives "adequate protection", with a Transfer Impact
-  Assessment expected. **No hard localisation mandate** — but the tender's on-prem
-  hosting settles it anyway.
+## PDPA (Amendment) Act 2024 — deep dive (2026-09-08, for [[Implementation Roadmap]] P2.10)
 
-Source: [pdp.gov.my](https://www.pdp.gov.my) + law-firm briefings (Skrine, Mayer Brown,
-Deloitte). *Exact clause commencement dates are soft — verify.*
+Multi-source verified (Skrine ×2, Mayer Brown, DLA Piper, Christopher Lee Ong,
+Tay Partners, Rödl, DataGuidance — all 2024–2025 briefings).
+
+**Act A1727**, gazetted 17 Oct 2024, phased: **1 Jan 2025** (admin provisions),
+**1 Apr 2025** (Data Controller term, direct processor obligations, biometric =
+sensitive, s.129 cross-border, penalties), **1 Jun 2025** (mandatory DPO,
+breach notification, data portability).
+
+### Data-subject rights — THERE IS NO RIGHT TO ERASURE
+Proposed in PCP 01/2020, **dropped from the final Act**. The 6 rights:
+| Right | Section | New? |
+|---|---|---|
+| Access (+ copy, 21 days +14 extension) | s.30 | no |
+| Correction | s.34 (–37) | no |
+| Withdraw consent (prospective only) | s.38 | no |
+| Prevent processing causing damage/distress | s.42 | no |
+| Prevent direct marketing | s.43 | no |
+| **Data portability** (machine-readable, controller→controller) | **s.43A** | **YES — the only new right** |
+
+So a "delete my record" flow is **not required**. Withdraw-consent (s.38) is
+*prospective* — it stops optional secondary use, not lawfully-held data.
+
+### Clinical records don't even run on consent
+Medical/treatment data is **sensitive personal data** (s.4). Processed under the
+**s.40 "medical purposes" exception** — s.40(1)(b)(iv): no consent needed when a
+healthcare professional processes for medical purposes (s.40(4): diagnosis,
+preventive medicine, care/treatment, *management of healthcare services*). Also
+s.40 vital-interests + legal-defence grounds.
+
+### Records cannot be deleted on request — retention overrides
+- **s.10 Retention Principle:** erase when no longer needed *unless required by
+  other law*.
+- **PHFSA 1998 (Act 586)** + 2006 Regs + **Limitation Act 1953** (6-yr civil
+  claim) mandate retention. **MMC Guideline 002/2006:** records are the
+  *facility's property*; patient has access, **not** erasure.
+- Retention periods (KKM *Jadual Pelupusan Rekod Perubatan 2016* + Act 586 +
+  MMC — figures directionally corroborated, some agy-synthesised, treat as
+  design defaults not legal advice):
+  | Category | Keep |
+  |---|---|
+  | Adult out/inpatient | **7 years** from last contact |
+  | Paediatric / minor | until age 18 + 7 ≈ **age 25** |
+  | Obstetric / maternity | **21 years** from delivery |
+  | Deceased | **7 years** post-death |
+  | Medico-legal / forensic / litigation | **indefinite** / until exhausted + 7 yr |
+  - It's "eligible for **disposal review**", not auto-purge. → P2.10 retention
+    config = flag-only batch job (user decision 2026-09-08).
+
+### DPO — MANDATORY for the University
+Effective **1 Jun 2025**. Triggered by ANY of: ≥20,000 data subjects; ≥10,000
+*sensitive*-data subjects; regular systematic monitoring. **University PKU (~23k
+users, all health data) hits both count thresholds.** DPO must be
+Malaysia-resident (≥180 days/yr), BM+English, direct access to management,
+**registered with JPDP** (business contact details). JPDP *DPO Appointment
+Guidelines* 25 Feb 2025 + *Circular 2/2025* 1 Aug 2025.
+
+### Breach notification
+≤ **72 hours** to the Commissioner ("as soon as practicable"; justify if
+exceeded; forms / `dbnpdp@pdp.gov.my`). Notify **affected individuals within 7
+days** of notifying the Commissioner **if "significant harm"** = sensitive data,
+risk of financial loss / ID theft / physical harm, **or > 1,000 data subjects**.
+*Guidelines on Data Breach Notification*, operational 1 Jun 2025.
+Penalty for notification failure: RM250k / 2 yr. General non-compliance:
+**RM1,000,000 / 3 yr** (enforceable since 1 Apr 2025).
+
+### Cross-border (s.129) — N/A for CLARION
+Whitelist abolished 1 Apr 2025. Now: destination law "substantially similar" OR
+"adequate protection", OR statutory exception (consent/contract/vital
+interests); **Transfer Impact Assessment** required (CBPDT Guidelines 29 Apr
+2025, refresh every 3 yr) + SCCs/BCRs. **CLARION is on-prem with local AI —
+nothing leaves Malaysia, so no TIA needed** (this is the same constraint as
+[[Security Audit]] C1 / the tender).
+
+### Jurisdiction note
+s.3(1) PDPA exempts *federal/state government* bodies. Whether a public
+university's health centre counts is a genuine open question (the exemption is
+narrow) — **moot**: the tender demands PDPA compliance and CLARION builds to it
+regardless. A private/fee-charging PKU falls squarely under the PDPA.
+
+### Earlier summary (still valid)
+- "Data User" → **"Data Controller"**; biometric now sensitive (bears on the
+  NRIC-photo flow + any fingerprint check-in); processors carry direct
+  Security-Principle obligations.
+
+Source: JPDP [pdp.gov.my](https://www.pdp.gov.my) + the law-firm briefings above.
+Raw research digest: session scratchpad (2026-09-08 agy research pass).
 
 ## MOH / KKM reporting
 - **Notifiable infectious diseases** (Prevention & Control of Infectious Diseases Act
