@@ -15,9 +15,12 @@
 # NOTE (P2.9): audit_logs is meant to be append-only for clarion_app
 # (INSERT/SELECT, no UPDATE/DELETE). MariaDB has no partial_revokes, so a
 # subtractive `REVOKE UPDATE, DELETE ON clarion.audit_logs` errors (ERROR
-# 1147) -- the table doesn't exist yet at init time either. That guarantee is
-# delivered in P2.9 as a BEFORE UPDATE / BEFORE DELETE trigger on audit_logs
-# (alongside the hash-chain), which is enforced regardless of grants.
+# 1147) -- the table doesn't exist yet at init time either. DELIVERED in
+# migration b2d7e4a9c1f6 as BEFORE UPDATE / BEFORE DELETE triggers on
+# audit_logs (alongside the hash chain) -- enforced regardless of grants,
+# for every account including root. Retention is therefore a DDL job
+# (clarion_migrate drops sealed partitions), never a DELETE. See
+# docs/deployment.md "Audit hash chain".
 set -euo pipefail
 
 for v in MARIADB_ROOT_PASSWORD MARIADB_APP_PASSWORD MARIADB_MIGRATE_PASSWORD MARIADB_REPORT_PASSWORD; do

@@ -181,6 +181,73 @@ default with a warning in the container log.
 
 ---
 
+## Audit hash chain (P2.9, the tender)
+
+`audit_logs` is tamper-evident and physically append-only.
+
+- **Append-only, enforced at the DB.** The `b2d7e4a9c1f6` migration installs
+  `BEFORE UPDATE` / `BEFORE DELETE` triggers on `audit_logs` (`SIGNAL
+  SQLSTATE '45000'` on MariaDB, `RAISE(ABORT)` on SQLite). `clarion_app`
+  keeps schema-wide `UPDATE`/`DELETE` for the other tables; the trigger is
+  what makes `audit_logs` the exception, and because `clarion_app` has **no**
+  `DROP`/`ALTER`/`TRIGGER` grant it can neither `TRUNCATE` the table nor drop
+  the trigger. A DDL-capable account (`clarion_migrate`, used only at deploy
+  time; or root) *can* still bypass — the hash chain + the off-box daily seal
+  (below) are what make that detectable. Keep `clarion_migrate` credentials
+  out of the running app's environment.
+- **Hash chain.** Every row carries `seq` (gap-free, 1-based), `prev_hash`,
+  and `row_hash` = `HMAC-SHA256(SECRET_KEY, "audit-chain-v1:" || seq || prev_hash
+  || canonical_json(row))`. `app/audit.py::log_access` — the single
+  audit-write path — advances a singleton `audit_chain_state` tip row inside
+  the same transaction (`SELECT ... FOR UPDATE` on MariaDB, a process lock on
+  SQLite) so concurrent workers cannot fork the chain. `SECRET_KEY` must be
+  set to run the `b2d7e4a9c1f6` migration (it back-fills the chain over
+  existing rows).
+- **Verify** any time — read-only, safe against production:
+  ```
+  python -m db.verify_audit_chain --worm     # nightly: also re-reads the WORM seals
+  python -m db.verify_audit_chain --json
+  ```
+  or `GET /admin/audit/chain-status` (admin token). Wire the CLI into the
+  nightly cron **with `--worm`** (without it a DDL-capable wipe that also
+  rewrote `audit_chain_state` + the `audit_seals` rows verifies clean — the
+  WORM copy is the only thing that then still disagrees) and into CI (P2.11).
+- **Daily WORM seal.** Run `db/seal_audit_day.py` from cron just after
+  midnight UTC — it writes one `audit_seals` row per day (the day's
+  `[from_seq, to_seq]` range + the range-end `row_hash`) and, best-effort,
+  mirrors that digest to the `clarion-reports-archive` WORM bucket, so a
+  wholesale replacement of `audit_logs` (e.g. a restore from a doctored
+  backup) is caught even if the in-DB chain was also rewritten.
+  ```
+  5 0 * * *  cd /app/backend && python -m db.seal_audit_day >> /var/log/clarion/audit-seal.log 2>&1
+  ```
+  `python -m db.seal_audit_day --backfill` seals every past unsealed day.
+- **Retention / partitioning.** Because the triggers block `DELETE`,
+  audit-log retention is a **DDL** operation done by `clarion_migrate`, not a
+  `DELETE` job. On MariaDB, range-partition `audit_logs` by month
+  (`ALTER TABLE audit_logs PARTITION BY RANGE (TO_DAYS(timestamp)) (...)`)
+  and drop whole past partitions once their days are sealed **and** the seals
+  are shipped off-box. Set the policy (e.g. 7 years online per the tender)
+  before go-live; the seals remain the permanent record after a partition
+  drop. Do not shorten retention below the tender's clinical-record floor.
+- **Known residuals** (security review 2026-09-08, accepted for now):
+  - The triggers cover `UPDATE`/`DELETE` but not `INSERT`. An account with
+    `INSERT` on `audit_logs` (i.e. `clarion_app`, or an app-level SQL-i —
+    none currently known) can insert one row at the next `seq` without
+    advancing `audit_chain_state`, which then collides the next real
+    `log_access` on `uq_audit_logs_seq` and 500s that request until a
+    DDL-capable operator removes the forged row. `verify_chain` flags the
+    forged row. A `BEFORE INSERT` trigger validating `NEW.seq` / `NEW.prev_hash`
+    against `audit_chain_state` would close this — deferred (needs a MariaDB
+    test pass).
+  - `log_access` calls `db.commit()` on the caller's session — the contract
+    is **"log last, after your own commit"**. A future caller that logs
+    mid-transaction would have its partial work committed. It also opens a
+    theoretical deadlock window (state-row X-lock vs an uncommitted
+    `UPDATE patients`) that the commit-before-log pattern currently closes.
+
+---
+
 ## LDAP / Active Directory (P1.10, the tender)
 
 A SECOND, opt-in auth provider next to local password accounts

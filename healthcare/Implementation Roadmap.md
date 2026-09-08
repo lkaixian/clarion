@@ -1,7 +1,7 @@
 ---
 title: Implementation Roadmap
 type: plan
-updated: 2026-09-07
+updated: 2026-09-08
 tags: [plan, roadmap, clarion, campus]
 ---
 
@@ -22,6 +22,51 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 > notes). Full implementation detail is in git — search the commit log for the task id.
 
 ## Changelog
+
+### 2026-09-08 — P2.9 audit hash chain
+
+- **P2.9** — `audit_logs` is now tamper-evident and physically append-only.
+  - Migration `b2d7e4a9c1f6` adds `seq` / `prev_hash` / `row_hash`, back-fills
+    the chain over every existing row (ordered `(timestamp, id)`), creates the
+    `audit_chain_state` tip singleton + `audit_seals` table, and installs
+    `BEFORE UPDATE` / `BEFORE DELETE` triggers (`SIGNAL` on MariaDB,
+    `RAISE(ABORT)` on SQLite) — the append-only guarantee `10-accounts.sh`
+    noted it couldn't express as a `REVOKE`.
+  - `app/audit.py::log_access` (the single audit-write chokepoint) advances
+    the chain tip in-transaction under a lock (`SELECT ... FOR UPDATE` /
+    process lock). `row_hash` = HMAC-SHA256(SECRET_KEY, domain-separated).
+  - `verify_chain()` + `db/verify_audit_chain.py` (CLI, exit 1 on a break) +
+    `GET /admin/audit/chain-status` (admin). `seal_day()` +
+    `db/seal_audit_day.py` (cron) write the daily WORM anchor, best-effort
+    mirrored to the `clarion-reports-archive` bucket.
+  - `docs/deployment.md` gets an "Audit hash chain" section (verify cadence,
+    seal cron, and why retention is a partition-drop DDL job now, not a DELETE).
+  - `test_audit_hash_chain.py` (18): intact/gap-free/linked chain, trigger
+    blocks UPDATE+DELETE, verify detects altered row / deleted-middle gap /
+    deleted tail / mid-chain forge, seal idempotency + tamper-raise, WORM
+    readback, concurrent-append tolerance, **migration back-fill over real
+    pre-P2.9 rows + restartability**, both CLIs (exit codes).
+  - **voltagent security review + 5-agent `/code-review` actioned:**
+    WORM seal is now re-read on verify (`verify_chain(check_worm=True)`,
+    `--worm` cron flag) — it was written but never checked (tail-truncation
+    hole); `verify_chain` reads the chain tip *first* to stop false alarms
+    from concurrent writers; `log_access` gets a cross-process `flock` on the
+    SQLite path (the demo runs 4 gunicorn workers on one file, where the
+    `FOR UPDATE` is a no-op); the migration is now restartable (inspector
+    guards + trigger-drop-during-backfill + skip-if-already-filled) and
+    streamed/batched for a large table; hash construction extracted to
+    stdlib-only `app/audit_hash.py` shared by app + migration (kills the
+    copy-paste drift hazard); `ChainReport` → dataclass; failed WORM mirror
+    retried on the next seal; CLI flag conflicts rejected; `audit.py` fails
+    closed on an empty `SECRET_KEY`. Residuals documented in
+    `docs/deployment.md` (INSERT-wedge DoS by a privileged account; the
+    `log_access` "log last" contract; `SECRET_KEY` rotation = chain re-baseline).
+  - Verified: 206/206 pytest, `db.check_schema` PASS (SQLite), real-data
+    back-fill on `clarion.db` (14 rows → chain intact + `--worm` OK), runtime
+    append + trigger enforcement + seal + both CLIs. **MariaDB run still
+    owed** (no local creds this session).
+  - Still open in P2: P2.7 encryption-at-rest, P2.8 backup/DR, P2.10 PDPA,
+    P2.11 offline CI, P2.12 data-quality alerts.
 
 ### 2026-09-07 — P2 security wave + refactors
 - **P0.2** — `git rm -r mobile/` (legacy RN app), deleted stray `comiin.db` + stale
@@ -148,7 +193,7 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 | P2.6 | Fix M5/M6/M7/M8 — upload validation; verified scan audit identity; HMAC card key + minimise payload; stop logging clinical values | M | | ✅ 2026-09-07 (residuals: M7 physical-clone, 1yr expiry by choice — see Security Audit) |
 | P2.7 | Encryption at rest — MariaDB encrypted tablespaces + on-prem key management | M | | — |
 | P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | — |
-| P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | — |
+| P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | ✅ 2026-09-08 (SQLite-verified; MariaDB migration written, pending a run with creds) |
 | P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | — |
 | P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | — |
 | P2.12 | `data_quality_alerts` — batch validators (missing values, dup patients, bad coding) | S | | — |

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer, Index,
-    UniqueConstraint, Float, Computed
+    UniqueConstraint, Float, Computed, BigInteger
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship, validates
@@ -1128,6 +1128,80 @@ class AuditLog(Base):
     # both window on recent rows (WHERE timestamp >= now() - interval).
     timestamp = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), index=True)
     detail = Column(Text, nullable=True)
+
+    # --- P2.9: tamper-evident hash chain ---------------------------------
+    # Every row is cryptographically linked to its predecessor, so any
+    # after-the-fact edit, delete, or insert-in-the-middle of audit_logs
+    # breaks the chain and is caught by db/verify_audit_chain.py and
+    # GET /admin/audit/chain-status. Enforced from two directions:
+    #   - DB-level BEFORE UPDATE / BEFORE DELETE triggers (same migration)
+    #     block edits + row deletes for the DML-scoped runtime account, which
+    #     has no DROP/ALTER/TRIGGER rights and so also cannot TRUNCATE or
+    #     drop the triggers. A DDL-capable account (deploy-time migrate, or
+    #     root) can still bypass -- that residual is covered by the next line;
+    #   - the hash chain + the off-box daily WORM seal make an out-of-band
+    #     tamper (a DDL-capable wipe, raw datadir access, a restore from a
+    #     doctored backup) detectable via verify_chain(check_worm=True).
+    # `seq` is the gap-free 1-based chain position -- NOT `timestamp`, which
+    # can tie at the same microsecond or step backwards on an NTP correction.
+    # `row_hash` = HMAC-SHA256(SECRET_KEY, "audit-chain-v1:" || seq || "\n"
+    # || prev_hash || "\n" || canonical_json(row)); see app/audit.py.
+    # Written only by audit.log_access() -- the single audit-write chokepoint
+    # -- which serialises the read-tip -> compute -> append critical section
+    # (SELECT ... FOR UPDATE on AuditChainState for MariaDB; a process lock
+    # for SQLite, which already serialises writers).
+    seq = Column(BigInteger, nullable=False, unique=True)
+    prev_hash = Column(String(64), nullable=False)
+    row_hash = Column(String(64), nullable=False)
+
+
+class AuditChainState(Base):
+    """Singleton (``id = 1``) holding the current tip of the audit_logs hash
+    chain: the last sequence number issued and its row_hash.
+
+    audit.log_access() reads this row (``SELECT ... FOR UPDATE`` on MariaDB,
+    under a process lock on SQLite), computes the next row from it, inserts
+    the audit row, and advances this row -- all in one transaction. Keeping
+    the tip here rather than recomputing ``MAX(audit_logs.seq)`` on every
+    write keeps the hot path to one PK read + one PK update and gives the
+    FOR UPDATE something stable to serialise on.
+    """
+    __tablename__ = "audit_chain_state"
+
+    id = Column(Integer, primary_key=True, default=1)
+    last_seq = Column(BigInteger, nullable=False, default=0)
+    last_hash = Column(String(64), nullable=False)
+    updated_at = Column(
+        TZDateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class AuditSeal(Base):
+    """One row per sealed UTC day -- the daily WORM anchor for the audit
+    hash chain (roadmap P2.9, the tender).
+
+    ``db/seal_audit_day.py`` (a cron job) calls audit.seal_day() once the
+    day is over: it records that day's ``[from_seq, to_seq]`` range, the row
+    count, and ``to_seq``'s row_hash -- a short digest that pins the entire
+    day's audit history. That digest can be published / shipped off-box /
+    mirrored to the object-store WORM bucket (``object_key``), so a later
+    wholesale replacement of audit_logs (e.g. restore from a doctored
+    backup) is caught even if the attacker also rewrote the in-DB chain.
+    Idempotent per ``seal_date``; re-sealing a day whose digest has changed
+    raises -- that is the tamper signal.
+    """
+    __tablename__ = "audit_seals"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    seal_date = Column(String(10), nullable=False, unique=True)  # 'YYYY-MM-DD' (UTC)
+    from_seq = Column(BigInteger, nullable=False)
+    to_seq = Column(BigInteger, nullable=False)
+    row_count = Column(BigInteger, nullable=False)
+    chain_hash = Column(String(64), nullable=False)  # row_hash of the row at seq = to_seq
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    object_key = Column(String(512), nullable=True)  # object-store key if the seal was mirrored to WORM storage
 
 
 class HospitalSetting(Base):

@@ -148,17 +148,21 @@ text + Compliance Matrix, not built as app code).
 
 ## Next up
 
-**P2.6, continued** — M6 (emergency-scan audit trail's `responder_name`/
-`responder_org` are free-text from the unauthenticated request body, never
-verified -- `emergency.py:262-321`), M7 (emergency NFC card: raw MIFARE
-UID used verbatim as the lookup key, cloneable/low-entropy, 1-year default
-validity -- `emergency.py:396-452`, `schemas.py:1382-1402`), M8 (clinical
-values -- diagnosis/drug/allergen names -- written into
-`audit_logs.detail`, `patients.py:524,589,642`, making the audit store a
-second less-controlled copy of clinical data). See
-`healthcare/Security Audit.md#M6` through `#M8` and
-`healthcare/Implementation Roadmap.md`'s P2 table for the rest (P2.7
-backup/DR, P2.9 audit hash-chain, P2.10 PDPA, P2.11 offline CI).
+The whole **P2 High/Medium security wave is done** (P2.1–P2.6), and **P2.9**
+(audit-log hash chain + append-only triggers + daily WORM seal) landed
+2026-09-08. The live plan + full narrative is in
+`healthcare/Implementation Roadmap.md` — that changelog is the source of
+truth, this file is not kept blow-by-blow.
+
+Remaining P2 items (all need an infra/product decision, not just code —
+surface them, don't start autonomously): **P2.7** encryption at rest,
+**P2.8** backup/DR, **P2.10** PDPA consent + DSR, **P2.11** offline CI,
+**P2.12** data-quality alerts. After that: the P3 tender modules.
+
+**P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
+SQLite this session — a real `alembic upgrade head` on MariaDB is still
+owed (no local DB creds). It uses the same dialect-branched patterns as the
+other MariaDB-verified migrations.
 
 **Ongoing housekeeping:** existing test files predating `tests/conftest.py`
 (`test_storage.py`/`test_imaging.py`/`test_derived.py`/`test_ldap_auth.py`)
