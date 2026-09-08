@@ -133,11 +133,14 @@ services:
 
   # One-shot schema migration for the MariaDB path (code-review follow-up 2026-09-07).
   # NOT started by default -- the SQLite demo migrates itself via the app's
-  # _ensure_schema() at boot. For a MariaDB deployment, run this to completion
-  # BEFORE starting `backend` (whose runtime account has no DDL rights and
-  # will refuse to serve against an un-migrated DB):
+  # _ensure_schema() at boot. For a MariaDB deployment, with the DB already up:
   #
-  #   docker compose --profile migrate run --rm migrate
+  #   bash backend/db/mariadb/generate-encryption-key.sh     # P2.7, once
+  #   docker compose --profile mariadb up -d mariadb
+  #   docker compose --profile migrate run --rm migrate      # BEFORE `backend`
+  #
+  # `backend`'s runtime account has no DDL rights and refuses to serve against
+  # an un-migrated DB.
   #
   # It runs as the DDL-privileged `clarion_migrate` account. The P1.6
   # legacy-column drop (b7f1c0d94a2e) now aborts if blobs have not first been
@@ -194,6 +197,10 @@ services:
   # `alembic upgrade head` as clarion_migrate first. The demo still defaults to
   # SQLite. Copying the existing demo data across is P1.4.
   mariadb:
+    # Behind a profile: the SQLite demo doesn't use it, and P2.7 TDE means
+    # it won't start until `bash backend/db/mariadb/generate-encryption-key.sh`
+    # has run. Bring it up with:  docker compose --profile mariadb up -d
+    profiles: ["mariadb"]
     <<: [*restart, *env-file]
     image: mariadb:11.4
     environment:
@@ -368,8 +375,11 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
-      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?set RESTIC_REPOSITORY}
-      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?set RESTIC_PASSWORD}
+      # required for the backup service -- lib.sh fails loudly at run time if
+      # unset (kept as :- here so a plain `docker compose config` of the
+      # non-backup stack doesn't error on them).
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
       AGE_RECIPIENTS: ${BACKUP_AGE_RECIPIENTS:-}
       RETENTION_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
     volumes:
