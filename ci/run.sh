@@ -40,6 +40,12 @@ run_hard "ruff (F / E9 / B006)" \
 run_soft "ruff style (line length, imports, pyupgrade)" \
   ruff check --isolated --select E,W,I,UP,B --statistics "$BACKEND/app"
 
+if have shellcheck; then
+  # lint every tracked *.sh (ci/, backend/backup/, backend/db/mariadb/, entrypoints)
+  mapfile -t SH < <(git -C "$ROOT" ls-files '*.sh')
+  run_hard "shellcheck" bash -c "cd '$ROOT' && shellcheck -x -S warning ${SH[*]}"
+fi
+
 # --- SAST ---------------------------------------------------------------
 if have bandit; then
   run_hard "bandit (medium+ severity)" \
