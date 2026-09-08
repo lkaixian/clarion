@@ -67,7 +67,7 @@ def main() -> None:
         print("  [1/3] upgrade head OK")
 
         # 2. autogenerate must be empty
-        out = tempfile.mkdtemp()
+        tempfile.mkdtemp()
         cfg.set_main_option("version_locations", str(BACKEND / "alembic" / "versions"))
         script = command.revision(cfg, message="_ci_autogen_probe", autogenerate=True)
         probe = Path(script.path)

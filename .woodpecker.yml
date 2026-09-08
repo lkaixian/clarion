@@ -1,0 +1,25 @@
+# CLARION CI pipeline (roadmap P2.11). Woodpecker CI is the recommended
+# engine for an air-gapped forge -- container-native, no marketplace-action
+# dependency. The whole gate is `ci/run.sh`; this file just wires it up.
+#
+# The `clarion-ci` image is python:3.13-slim + ruff/bandit/semgrep/pytest
+# (backend/requirements*.txt) + the osv-scanner / trivy binaries + a
+# pre-fetched OSV / trivy DB. Build it once and push to the internal
+# registry (see ci/README.md). Until it exists, `image: python:3.13-slim`
+# + the pip install step below works (osv-scanner / trivy then just skip).
+
+when:
+  - event: [push, pull_request, manual]
+
+steps:
+  - name: ci-gate
+    image: python:3.13-slim
+    environment:
+      APP_ENV: demo
+      SECRET_KEY: ci-only-secret-key-not-for-any-deployment
+      OTP_HMAC_KEY: ci-only-otp-hmac-key
+      OSV_OFFLINE: "1"
+    commands:
+      - apt-get update -qq && apt-get install -y -qq --no-install-recommends bash git >/dev/null
+      - pip install --quiet -r backend/requirements.txt -r backend/requirements-dev.txt
+      - bash ci/run.sh

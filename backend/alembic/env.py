@@ -13,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.database import Base, SQLALCHEMY_DATABASE_URL
-import app.models  # Ensure all models are registered on Base.metadata
+import app.models  # noqa: F401 - side-effect import: registers every model on Base.metadata for autogenerate
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
