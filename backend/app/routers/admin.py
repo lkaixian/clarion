@@ -24,13 +24,13 @@ routers/patients.py, which keeps its existing (broader) admin/clinician/
 records_officer access as-is.
 """
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Union
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from .. import models, schemas, auth, permissions
@@ -1964,3 +1964,212 @@ def get_audit_chain_status(
         actor_facility=current_user.facility,
     )
     return report.as_dict()
+
+
+# --------------------------------------------------------------------------
+# Data-quality alerts (P2.12, the tender)
+# --------------------------------------------------------------------------
+# Facility-scoped like the rest of this router: an admin sees alerts for
+# patients their facility has a relationship to (the P2.2
+# `_facility_known_patient_ids_select` scope), plus the inherently
+# cross-facility `patient_probable_duplicate` alerts (those exist precisely
+# to be reviewed for a merge), plus non-patient alerts. A platform admin
+# (`facility is None`) or an explicit `break_glass_reason` sees everything,
+# audit-logged -- same escape hatch, and same wording, as `list_patients`.
+# Every read is `log_access`-ed. `detail` never carries a clinical value.
+
+_DQ_STATUS = {"open", "acknowledged", "resolved", "all"}
+_DQ_CROSS_FACILITY_RULES = ("patient_probable_duplicate",)
+
+
+def _dq_facility_filter(current_user: models.User):
+    """The WHERE clause that scopes DataQualityAlert to `current_user`'s
+    facility, or None if the caller may see everything (platform admin)."""
+    from .patients import _facility_known_patient_ids_select
+
+    if not current_user.facility:
+        return None
+    known = _facility_known_patient_ids_select(current_user.facility)
+    return or_(
+        models.DataQualityAlert.patient_id.is_(None),
+        models.DataQualityAlert.patient_id.in_(select(known.c.patient_id)),
+        models.DataQualityAlert.rule.in_(_DQ_CROSS_FACILITY_RULES),
+    )
+
+
+@router.get("/data-quality", response_model=List[schemas.DataQualityAlertOut])
+def list_data_quality_alerts(
+    db: Session = Depends(get_db),
+    status: str = Query("open", description="open | acknowledged | resolved | all"),
+    category: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    patient_id: Optional[str] = Query(None),
+    break_glass_reason: Optional[str] = Query(
+        None, description="see EVERY facility's alerts, not just your own -- "
+                          "audited (action=list_data_quality_break_glass)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    if status not in _DQ_STATUS:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(_DQ_STATUS)}")
+
+    q = db.query(models.DataQualityAlert)
+    if status == "open":
+        q = q.filter(models.DataQualityAlert.resolved.is_(False),
+                     models.DataQualityAlert.acknowledged.is_(False))
+    elif status == "acknowledged":
+        q = q.filter(models.DataQualityAlert.acknowledged.is_(True),
+                     models.DataQualityAlert.resolved.is_(False))
+    elif status == "resolved":
+        q = q.filter(models.DataQualityAlert.resolved.is_(True))
+    if category:
+        q = q.filter(models.DataQualityAlert.category == category)
+    if severity:
+        q = q.filter(models.DataQualityAlert.severity == severity)
+    if patient_id:
+        q = q.filter(models.DataQualityAlert.patient_id == patient_id)
+
+    broke_glass = bool(break_glass_reason and break_glass_reason.strip())
+    scope = _dq_facility_filter(current_user)
+    if broke_glass or scope is None:
+        log_access(db, None, current_user.id, current_user.role,
+                   "list_data_quality_break_glass" if broke_glass else "list_data_quality",
+                   detail=(break_glass_reason or "").strip()[:200] or None,
+                   actor_facility=current_user.facility)
+    else:
+        q = q.filter(scope)
+        log_access(db, None, current_user.id, current_user.role, "list_data_quality",
+                   actor_facility=current_user.facility)
+
+    # Resolved rows sort by when they were resolved (a manually-resolved
+    # alert whose finding keeps recurring still gets its last_seen_at bumped
+    # by every scan -- ordering that view by last_seen_at would float dead
+    # rows to the top forever). Everything else sorts by recency of the issue.
+    order_col = (models.DataQualityAlert.resolved_at if status == "resolved"
+                 else models.DataQualityAlert.last_seen_at)
+    return (
+        q.order_by(order_col.desc(), models.DataQualityAlert.id.desc())
+        .offset(skip).limit(limit).all()
+    )
+
+
+@router.get("/data-quality/summary")
+def data_quality_summary(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    open_unack = and_(
+        models.DataQualityAlert.resolved.is_(False),
+        models.DataQualityAlert.acknowledged.is_(False),
+    )
+    scope = _dq_facility_filter(current_user)
+    base = db.query(models.DataQualityAlert)
+    if scope is not None:
+        base = base.filter(scope)
+
+    rows = (
+        base.with_entities(
+            models.DataQualityAlert.category,
+            models.DataQualityAlert.severity,
+            func.count(models.DataQualityAlert.id),
+        )
+        .filter(open_unack)
+        .group_by(models.DataQualityAlert.category, models.DataQualityAlert.severity)
+        .all()
+    )
+    by_category: dict = {}
+    by_severity: dict = {}
+    open_total = 0
+    for category, severity, n in rows:
+        by_category[category] = by_category.get(category, 0) + n
+        by_severity[severity] = by_severity.get(severity, 0) + n
+        open_total += n
+    acknowledged = (
+        base.with_entities(func.count(models.DataQualityAlert.id))
+        .filter(models.DataQualityAlert.resolved.is_(False),
+                models.DataQualityAlert.acknowledged.is_(True))
+        .scalar()
+    )
+    log_access(db, None, current_user.id, current_user.role, "data_quality_summary",
+               actor_facility=current_user.facility)
+    return {
+        "open_total": open_total,
+        "acknowledged": acknowledged or 0,
+        "by_category": by_category,
+        "by_severity": by_severity,
+    }
+
+
+@router.post("/data-quality/scan")
+def run_data_quality_scan(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Trigger a scan on demand (the cron job `db/data_quality_scan.py` is the
+    routine path). The scan is platform-wide regardless of the acting admin's
+    facility -- it re-derives every alert. `run_scan` catches the
+    concurrent-run IntegrityError, so this racing the cron is safe."""
+    from ..data_quality import run_scan
+
+    result = run_scan(db)
+    log_access(
+        db, None, current_user.id, current_user.role, "run_data_quality_scan",
+        detail=f"findings={result.findings} new={result.new_alerts} "
+               f"resolved={result.auto_resolved} open={result.still_open} "
+               f"failed={len(result.rules_failed)}",
+        actor_facility=current_user.facility,
+    )
+    return result.as_dict()
+
+
+def _get_dq_alert_or_404(db: Session, alert_id: str) -> models.DataQualityAlert:
+    row = db.query(models.DataQualityAlert).filter(models.DataQualityAlert.id == alert_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Data-quality alert not found")
+    return row
+
+
+@router.post("/data-quality/{alert_id}/acknowledge", response_model=schemas.DataQualityAlertOut)
+def acknowledge_data_quality_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Mark a known/accepted issue as acknowledged -- it stays listed but
+    drops out of the 'open' count. A future scan that still sees the finding
+    leaves the acknowledgement in place."""
+    row = _get_dq_alert_or_404(db, alert_id)
+    row.acknowledged = True
+    row.acknowledged_by = current_user.id
+    row.acknowledged_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, row.patient_id, current_user.id, current_user.role,
+               "acknowledge_data_quality_alert", detail=f"id={alert_id} rule={row.rule}",
+               actor_facility=current_user.facility)
+    return row
+
+
+@router.post("/data-quality/{alert_id}/resolve", response_model=schemas.DataQualityAlertOut)
+def resolve_data_quality_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Manually resolve an alert (the underlying data was fixed, or it's a
+    false positive). A manual resolve is NOT reopened by a later scan the way
+    a system auto-resolve is -- `resolved_by` is the acting admin, not
+    'system'."""
+    row = _get_dq_alert_or_404(db, alert_id)
+    row.resolved = True
+    row.resolved_by = current_user.id
+    row.resolved_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, row.patient_id, current_user.id, current_user.role,
+               "resolve_data_quality_alert", detail=f"id={alert_id} rule={row.rule}",
+               actor_facility=current_user.facility)
+    return row

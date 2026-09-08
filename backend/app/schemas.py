@@ -1903,6 +1903,27 @@ class RecordAnnotationCreate(BaseModel):
         return v
 
 
+# ---------- Data quality (P2.12) ----------
+class DataQualityAlertOut(BaseModel):
+    id: str
+    rule: str
+    category: str
+    severity: str
+    entity_type: str
+    entity_id: str
+    patient_id: Optional[str] = None
+    detail: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    times_seen: int
+    acknowledged: bool
+    resolved: bool
+    resolved_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ---------- AI ----------
 class SummaryRequest(BaseModel):
     patient_id: str

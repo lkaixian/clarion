@@ -105,7 +105,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | –8 | The University hosts DB; vendor supplies no DB server | N/A | App connects to University MariaDB |
 | | AI-assisted code quality / OWASP review in pipeline | Gap | CI + SAST (Semgrep/Bandit) + LLM review step |
 | | **FHIR-compatible schema**, MySejahtera/PADU interop | Gap | [[FHIR Schema Readiness]] — do early |
-| | Automated data-quality monitoring | Gap | Batch validators + admin alerts (`data_quality_alerts` table) |
+| | Automated data-quality monitoring | Have | `app/data_quality.py` (13 batch rules: missing / duplicate / coding / anomaly) → `data_quality_alerts` (UPSERT + auto-resolve); `db/data_quality_scan.py` cron; admin list/summary/acknowledge/resolve; `DATA_QUALITY_DISABLED_RULES` config (P2.12, 2026-09-08) |
 
 ## Integration, Migration, Auth
 

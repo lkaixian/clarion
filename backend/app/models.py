@@ -1204,6 +1204,55 @@ class AuditSeal(Base):
     object_key = Column(String(512), nullable=True)  # object-store key if the seal was mirrored to WORM storage
 
 
+class DataQualityAlert(Base):
+    """One row per (rule, entity) that a batch data-quality scan has flagged
+    -- roadmap P2.12, the tender ("automated data-quality monitoring in
+    the DB layer -- missing values, duplicate patients, inconsistent coding,
+    anomalous entries; configurable admin alerts").
+
+    ``app/data_quality.py::run_scan`` (invoked by ``db/data_quality_scan.py``
+    on a cron, or ad hoc by an admin) UPSERTs on ``(rule, entity_type,
+    entity_id)``: a repeat sighting just bumps ``last_seen_at`` / ``times_seen``;
+    a finding that stops firing is auto-resolved (``resolved_by='system'``).
+    An admin can ``acknowledge`` a known/accepted issue (stays listed, drops
+    out of the "open" count) or ``resolve`` it by hand.
+
+    ``detail`` is a short human summary -- it names the field and the bad
+    value's *shape* (e.g. "blood_type='O positiv' not a recognised ABO/Rh
+    group"), never a diagnosis / drug / allergen string, keeping the same
+    "no clinical values in a second store" discipline as audit_logs (M8).
+    """
+    __tablename__ = "data_quality_alerts"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    rule = Column(String(64), nullable=False, index=True)
+    category = Column(String(32), nullable=False)   # missing | duplicate | coding | anomaly
+    severity = Column(String(16), nullable=False)   # info | warning | error
+    entity_type = Column(String(32), nullable=False)  # patient | condition | medication | allergy | encounter
+    entity_id = Column(String(36), nullable=False)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=True, index=True)
+    detail = Column(Text, nullable=False)
+
+    first_seen_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    times_seen = Column(Integer, nullable=False, default=1)
+
+    acknowledged = Column(Boolean, nullable=False, default=False)
+    acknowledged_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    acknowledged_at = Column(TZDateTime, nullable=True)
+
+    resolved = Column(Boolean, nullable=False, default=False, index=True)
+    # A users.id, or the literal 'system' for an auto-resolve -- deliberately a
+    # plain string, not an FK, so the sentinel is legal and a deleted admin's
+    # id stays as a historical record of who resolved it.
+    resolved_by = Column(String(36), nullable=True)
+    resolved_at = Column(TZDateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("rule", "entity_type", "entity_id", name="uq_data_quality_alerts_rule_entity"),
+    )
+
+
 class HospitalSetting(Base):
     """One row per facility (`facility_name` unique) holding that hospital's
     own admin-editable configuration. Lazily created on first read of

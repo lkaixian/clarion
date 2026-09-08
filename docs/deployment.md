@@ -248,6 +248,42 @@ default with a warning in the container log.
 
 ---
 
+## Data-quality monitoring (P2.12, the tender)
+
+`app/data_quality.py` is a registry of independent batch validators —
+missing values, probable-duplicate patients, out-of-range coding, anomalous
+dates. `run_scan()` UPSERTs findings into `data_quality_alerts` keyed on
+`(rule, entity_type, entity_id)`: a repeat sighting bumps `last_seen_at` /
+`times_seen`, a finding that stops firing is **auto-resolved**
+(`resolved_by='system'`), and a manual admin resolve is never reopened by a
+later scan.
+
+- **Run it from cron** (hourly or nightly — it's read-heavy, write-light):
+  ```
+  0 * * * *  cd /app/backend && python -m db.data_quality_scan >> /var/log/clarion/data-quality.log 2>&1
+  ```
+  or on demand: `POST /admin/data-quality/scan` (admin).
+- **Review**: `GET /admin/data-quality` (filter `status` open|acknowledged|
+  resolved|all, `category`, `severity`, `patient_id`), `GET
+  /admin/data-quality/summary` (counts). An admin `acknowledge`s a known /
+  accepted issue (stays listed, off the open count) or `resolve`s it by hand.
+  No web UI yet — API only.
+- **Scoped like the rest of the admin console**: an admin sees alerts for
+  patients their facility has a relationship to, plus the cross-facility
+  `patient_probable_duplicate` alerts, plus non-patient alerts. A platform
+  admin (`facility` unset), or an explicit `break_glass_reason`, sees every
+  facility's — audit-logged (`list_data_quality_break_glass`), same as
+  `list_patients`. Every read is `log_access`-ed.
+- **Configurable** (the clause's word): `DATA_QUALITY_DISABLED_RULES` = a
+  comma-separated list of rule keys to skip (`python -m db.data_quality_scan
+  --list-rules` prints them). A disabled rule's existing alerts are left
+  untouched, not auto-resolved.
+- `detail` strings name the field + the bad value's *shape*, never a
+  diagnosis / drug / allergen — same "no clinical values in a second store"
+  rule as `audit_logs` (M8).
+
+---
+
 ## LDAP / Active Directory (P1.10, the tender)
 
 A SECOND, opt-in auth provider next to local password accounts

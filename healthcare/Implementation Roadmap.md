@@ -23,6 +23,40 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-08 — P2.12 data-quality monitoring
+
+- **P2.12** — `app/data_quality.py`: a registry of 13 independent batch rules
+  (missing patient/condition/medication/encounter fields; out-of-range coding
+  for gender / blood_type / condition status / allergy severity / encounter
+  type; unparseable ISO-date strings; probable-duplicate patients — same
+  name+DOB where one has no NRIC; duplicate active conditions; future/pre-birth
+  date anomalies). `run_scan()` UPSERTs into the NEW `data_quality_alerts`
+  table (migration `c3e8f1a4d5b7`) keyed `(rule, entity_type, entity_id)` —
+  repeat sighting bumps `last_seen_at`/`times_seen`, a finding that stops
+  firing auto-resolves (`resolved_by='system'`, reopens if it recurs), a
+  manual admin resolve does not reopen. `detail` names the field + bad-value
+  shape, never a clinical string (M8 discipline).
+- `db/data_quality_scan.py` (cron CLI, `--json` / `--list-rules`).
+  `DATA_QUALITY_DISABLED_RULES` env = the clause's "configurable".
+- Admin API: `GET /admin/data-quality` (status/category/severity/patient
+  filters, paginated), `GET .../summary`, `POST .../scan`,
+  `POST .../{id}/acknowledge`, `POST .../{id}/resolve` — admin-role,
+  **facility-scoped** (P2.2 `_facility_known_patient_ids_select` + a
+  `break_glass_reason` escape hatch + `patient_probable_duplicate` always
+  cross-facility), every read `log_access`-ed. No web UI yet.
+- Test suite drafted by agy (caught a real config-key vs finding-rule
+  namespace bug → fixed via `Rule.emits`), Claude-verified + expanded.
+- **voltagent code-review + 3-agent `/code-review` actioned:** `detail`
+  strings no longer embed raw dates (DOB / event dates are PDPA/M8 — now
+  describe the shape); the platform-global endpoints are now facility-scoped
+  + audited (the "GET /patients/{id} is open" premise was stale post-P2.2);
+  per-rule `try/except` so one bad rule can't lose the whole scan
+  (`ScanResult.rules_failed`); `run_scan` preloads existing alerts (kills an
+  N+1) + catches the concurrent-scan `IntegrityError` (cron vs the button);
+  dropped dead `Rule.category`/`severity`/`RULE_KEYS`; whitespace-only blank
+  check made consistent; `acknowledged_by` FK → `ON DELETE SET NULL`.
+- `docs/deployment.md` + Compliance Matrix (Gap→Have) updated.
+
 ### 2026-09-08 — P2.9 audit hash chain
 
 - **P2.9** — `audit_logs` is now tamper-evident and physically append-only.
@@ -196,7 +230,7 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | ✅ 2026-09-08 (SQLite-verified; MariaDB migration written, pending a run with creds) |
 | P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | — |
 | P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | — |
-| P2.12 | `data_quality_alerts` — batch validators (missing values, dup patients, bad coding) | S | | — |
+| P2.12 | `data_quality_alerts` — batch validators (missing values, dup patients, bad coding) | S | | ✅ 2026-09-08 (backend + admin API; no web UI yet) |
 
 ## P3 — Tender modules
 | # | Task | Size | Clause |
