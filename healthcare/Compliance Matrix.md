@@ -54,7 +54,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Admin billing + SMP/SMS/e-klinik | Gap | Billing + integrations | — |
 | | Patient medical-info reports, data export | Partial | Some export; comprehensive reporting = Gap | — |
 | | System Configuration: notifications, content/text/appearance | Partial | `hospital_settings` + admin config; content/appearance CMS = Gap | — |
-| | Security Management: data recovery/backup, security protocol | Gap | Real backup/DR | — |
+| | Security Management: data recovery/backup, security protocol | Have | `backend/backup/` + DR runbook (P2.8); security protocol via [[Security Audit]] | — |
 | | **Billing Module** | Gap | New module: `bills`, `bill_items`, `payments`, `claims`, charge master | Yes |
 | | **Procedure Module** | Gap | Reference implementation of the shared ancillary pattern | Partial |
 | | **Laboratory Module** (+ direct reg, result-interpretation AI, trend analysis) | Gap | New module + analyser integration + AI + longitudinal trends | Yes |
@@ -134,7 +134,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 |---|---|---|---|
 | | System Admin controls access via Module facility | Have | Access Control tab |
 | | Dedicated DB server, on-prem, enterprise RDBMS | Gap | SQLite → MariaDB → [[On-Prem Architecture]] |
-| | Automated encrypted backups, 30-day, image snapshot, quarterly restore, RPO/RTO | Gap | [[On-Prem Architecture]] backup section |
+| | Automated encrypted backups, 30-day, image snapshot, quarterly restore, RPO/RTO | Have | `backend/backup/` (backup.sh + restore-test.sh + pre-update-snapshot.sh) + compose `backup` service + DR runbook (P2.8, 2026-09-08); offsite target = deploy config |
 | | Integrate with the University hosting, collaborate with infra team | N/A | Contractual |
 | | ≥2 onsite support staff, 2 years | N/A | Contractual / bid |
 | | Lab machine API integration (bidirectional, standards, test env) | Gap | HL7 v2 / ASTM → [[Integration Engine and LDAP]] |

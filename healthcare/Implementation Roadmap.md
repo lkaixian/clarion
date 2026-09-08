@@ -23,6 +23,33 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-08 — P2.8 backup / DR
+
+- **P2.8** — `backend/backup/` script bundle + a compose `backup` service
+  (profile `backup`), decision confirmed with the user (research validated
+  the vault design: `mariadb-backup` (renamed from `mariabackup`) + `mydumper`
+  + `restic` to an append-only/Object-Lock repo is current best practice).
+  - `backup.sh {full|incremental|logical|binlog|objectstore|prune|daily|weekly}`
+    — mariadb-backup full/incr + mydumper logical + 15-min binlog ship + MinIO
+    `mc mirror`, every stream `age`-encrypted into a `restic` repo, retention
+    `--keep-daily 30 --keep-weekly 12 --keep-monthly 84 --keep-yearly 7` +
+    `restic check`. One JSON status line per run.
+  - `restore-test.sh` — restores latest into a throwaway `mariadbd`,
+    reconciles the Alembic head + every table's row count against prod,
+    emits a signed report (quarterly test).
+  - `pre-update-snapshot.sh` — the hard deploy gate: fresh
+    full+logical backup, records the Alembic downgrade target + running image
+    digests + prompts for the hypervisor snapshot id.
+  - `backend/backup/Dockerfile` (mariadb:11.4 + restic/age/rsync/mydumper/mc);
+    `backend/backup/README.md` = the DR runbook (RPO ≤1h / RTO ≤4h, restore
+    steps, 3-2-1, contacts placeholder). compose `mariadb` already emits
+    `--log-bin` ROW (added in P2.7).
+  - shellcheck added to `ci/run.sh` (all `*.sh` now lint-gated);
+    `shellcheck-py` pinned in requirements-dev.
+  - `.env.docker.example` (RESTIC_* / AGE), `docs/deployment.md` "Backup / DR",
+    Compliance Matrix updated. **Not container-run this session** (no Docker) —
+    scripts are `bash -n` + shellcheck clean, compose YAML validates.
+
 ### 2026-09-08 — P2.11 offline CI
 
 - **P2.11** — one portable CI gate (decision confirmed with the user):
@@ -279,7 +306,7 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 | P2.5 | Fix M4 — short access-token TTL + refresh token (HttpOnly cookie / secure storage) + real logout | M | | ✅ 2026-09-07 (app-level CSP residual) |
 | P2.6 | Fix M5/M6/M7/M8 — upload validation; verified scan audit identity; HMAC card key + minimise payload; stop logging clinical values | M | | ✅ 2026-09-07 (residuals: M7 physical-clone, 1yr expiry by choice — see Security Audit) |
 | P2.7 | Encryption at rest — MariaDB encrypted tablespaces + on-prem key management | M | | ✅ 2026-09-08 (Community file_key_management path wired into compose; LUKS + Enterprise/Vault documented; not container-tested) |
-| P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | — |
+| P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | ✅ 2026-09-08 (`backend/backup/` scripts + compose `backup` service + DR runbook; offsite target = config; not container-run) |
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | ✅ 2026-09-08 (SQLite-verified; MariaDB migration written, pending a run with creds) |
 | P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | — |
 | P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | ✅ 2026-09-08 (portable `ci/run.sh` + Woodpecker YAML + Makefile; osv-scanner not pip-audit; forge-agnostic) |

@@ -350,6 +350,46 @@ services:
       start_period: 20s
       retries: 3
 
+  # Backup runner (roadmap P2.8, the tender). Not started by default --
+  #   docker compose --profile backup up -d backup     (installs the cron)
+  #   docker compose --profile backup run --rm backup "./backup.sh weekly"
+  #   docker compose --profile backup run --rm backup "./pre-update-snapshot.sh 'reason'"
+  # mariadb-backup / mydumper / mc / restic / age are baked into the image.
+  # See backend/backup/README.md for the schedule + DR runbook.
+  backup:
+    build: ./backend/backup
+    profiles: ["backup"]
+    environment:
+      BACKUP_ROOT: /backup
+      MARIADB_HOST: mariadb
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-clarion}
+      MARIADB_BACKUP_USER: clarion_migrate
+      MARIADB_BACKUP_PASSWORD: ${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?set RESTIC_REPOSITORY}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?set RESTIC_PASSWORD}
+      AGE_RECIPIENTS: ${BACKUP_AGE_RECIPIENTS:-}
+      RETENTION_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
+    volumes:
+      - clarion_backup:/backup
+      - mariadb_data:/backup/binlog-src:ro   # binlogs live in the datadir
+    networks:
+      - internal
+    # Install the cron from README.md and run it in the foreground.
+    command:
+      - |
+        cat > /etc/cron.d/clarion-backup <<'CRON'
+        */15 * * * * root cd /opt/clarion-backup && ./backup.sh binlog >> /backup/cron.log 2>&1
+        15 1 * * 1-6 root cd /opt/clarion-backup && ./backup.sh daily  >> /backup/cron.log 2>&1
+        15 1 * * 0   root cd /opt/clarion-backup && ./backup.sh weekly >> /backup/cron.log 2>&1
+        CRON
+        chmod 0644 /etc/cron.d/clarion-backup
+        printenv | grep -E '^(BACKUP_|MARIADB_|MINIO_|RESTIC_|AGE_|RETENTION_)' > /etc/environment
+        touch /backup/cron.log
+        cron && tail -F /backup/cron.log
+
 # ===========================================================================
 # Networks -- two segments, nothing on the default network.
 #   edge     : proxy <-> web, proxy <-> backend. Fixed subnet so the proxy
@@ -377,6 +417,7 @@ networks:
 volumes:
   clarion_db:
   clarion_uploads:
+  clarion_backup:
   mariadb_data:
   minio_data:
   redis_data:

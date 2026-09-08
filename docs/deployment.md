@@ -303,6 +303,39 @@ flag** — the P2.8 backup pipeline pipes its `--stream` output through
 
 ---
 
+## Backup / DR (P2.8, the tender)
+
+`backend/backup/` — `backup.sh` (scheduled), `restore-test.sh` (quarterly),
+`pre-update-snapshot.sh` (deploy gate), `lib.sh`. Runs in the `backup`
+compose service (profile `backup`) or standalone. The full runbook —
+schedule, RPO/RTO, restore steps, contacts — is `backend/backup/README.md`.
+
+- **Start it:** `docker compose --profile backup up -d backup` — builds the
+  runner image (`mariadb-backup` + `mydumper` + `mc` + `restic` + `age`) and
+  installs the cron: binlog every 15 min, `daily` (incr + logical +
+  objectstore) Mon–Sat 01:15, `weekly` (full + prune + `restic check`)
+  Sunday, `restore-test.sh` quarterly. Needs `RESTIC_REPOSITORY` /
+  `RESTIC_PASSWORD` (and ideally `BACKUP_AGE_RECIPIENTS`) in `.env.docker`.
+- **RPO** ≤ 1 h clinical (≈15 min real), ≤ 24 h object store. **RTO** ≤ 4 h
+  full / ≤ 1 h app-tier. Retention: restic `--keep-daily 30 --keep-weekly 12
+  --keep-monthly 84 --keep-yearly 7`; 7-yr WORM for records/audit/imaging via
+  MinIO object-lock (P1.6).
+- **Encrypted backup files:** `mariadb-backup` has no
+  `--encrypt` — the DB dumps are streamed through `age` into the restic repo
+  (itself encrypted). Store `RESTIC_PASSWORD` + the `age` key in the org
+  secret manager, not on VM-BACKUP.
+- **Pre-update gate:**
+  `docker compose --profile backup run --rm backup "./pre-update-snapshot.sh '<change>'"`
+  **must exit 0 before any `alembic upgrade` / image bump.** It records the
+  fresh backup, the current Alembic head (the `downgrade` target), and the
+  running image digests.
+- **Success/failure reporting:** one JSON line per run to
+  `/backup/status.jsonl` — feed it into P5.1 alerting.
+- **3-2-1:** the restic repo on VM-BACKUP + a monthly `restic copy` to a
+  rotated offline disk in another building.
+
+---
+
 ## CI gate (P2.11, the tender)
 
 One portable script — `ci/run.sh` — runs the whole gate and is what the
