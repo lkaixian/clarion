@@ -592,4 +592,39 @@ except Exception as _e:  # never let a top-up failure abort the script
     db.rollback()
     print(f"(consultation-wave top-up skipped: {_e})")
 
+# PDPA wave (P2.10): seed the retention schedule from the Malaysian defaults,
+# a placeholder DPO-register row for the demo facility, and a `pdpa_notice`
+# acknowledgement for the demo patient so the consent screen isn't empty.
+try:
+    from app.retention import DEFAULT_RETENTION_POLICIES
+    _have = {p.category for p in db.query(models.RetentionPolicy).all()}
+    for _cat, _yrs, _basis in DEFAULT_RETENTION_POLICIES:
+        if _cat not in _have:
+            db.add(models.RetentionPolicy(category=_cat, retain_years=_yrs, basis=_basis))
+    db.commit()
+
+    if db.query(models.DpoRegister).filter(models.DpoRegister.facility_name == _TOPUP_FACILITY).first() is None:
+        db.add(models.DpoRegister(
+            facility_name=_TOPUP_FACILITY,
+            dpo_name="(unassigned -- set via PUT /admin/dpo-register)",
+            jpdp_registration_ref="(pending JPDP registration)",
+        ))
+        db.commit()
+        print(f"Seeded DPO-register placeholder for {_TOPUP_FACILITY}")
+
+    _demo_p = db.query(models.Patient).filter(models.Patient.national_id.isnot(None)).first()
+    if _demo_p is not None and db.query(models.ConsentRecord).filter(
+        models.ConsentRecord.patient_id == _demo_p.id,
+        models.ConsentRecord.purpose == "pdpa_notice",
+    ).first() is None:
+        db.add(models.ConsentRecord(
+            patient_id=_demo_p.id, purpose="pdpa_notice", granted=True,
+            source="registration", note="Shown the PDPA privacy notice at registration.",
+        ))
+        db.commit()
+        print("Seeded pdpa_notice acknowledgement for the demo patient")
+except Exception as _e:  # never let a top-up failure abort the script
+    db.rollback()
+    print(f"(PDPA top-up skipped: {_e})")
+
 db.close()

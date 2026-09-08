@@ -121,7 +121,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 
 | Clause | Requirement | Status | Note |
 |---|---|---|---|
-| | PDPA: encryption at rest+transit, RBAC, audit, retention | Partial | RBAC + append-only `audit_logs` Have; **encryption at rest** = MariaDB TDE (`file_key_management`) + `encrypt_binlog`/`_log`/`_tmp` wired into compose + LUKS documented (P2.7, 2026-09-08); in transit = Caddy TLS (P1.9), MariaDB `REQUIRE SSL` still owed; retention config = P2.10 |
+| | PDPA: encryption at rest+transit, RBAC, audit, retention | Partial | RBAC + append-only `audit_logs` Have; **encryption at rest** = MariaDB TDE (`file_key_management`) + `encrypt_binlog`/`_log`/`_tmp` wired into compose + LUKS documented (P2.7, 2026-09-08); in transit = Caddy TLS (P1.9), MariaDB `REQUIRE SSL` still owed; consent ledger + data-subject-request workflow + DPO register + flag-only retention schedule = `routers/pdpa.py` + `app/retention.py` (P2.10, 2026-09-08 -- no erasure flow: Malaysian PDPA has none) |
 | | Security control module: access by role | Have | `permissions.py` + Access Control tab |
 | | Credentials + **LDAP** | Gap | [[Integration Engine and LDAP]] |
 | | Intelligent anomaly detection | Gap | Login/access analytics + framing |

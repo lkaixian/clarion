@@ -1404,3 +1404,135 @@ class ClinicalRecordAnnotation(Base):
     signature_mime = Column(String(128), nullable=True)
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
+
+# ==========================================================================
+# PDPA (roadmap P2.10, the tender). Research: Malaysia's PDPA has NO
+# right to erasure -- clinical records run on the s.40 "medical purposes"
+# basis and are kept per Act 586 / MMC retention rules. So this is
+# consent-for-OPTIONAL-purposes + a data-subject-request workflow (access /
+# correction / portability / withdraw-consent -- never delete) + a DPO
+# register + a retention-schedule config. See healthcare/Malaysia Health
+# Regulation.md.
+# ==========================================================================
+
+# Optional processing purposes a patient can consent to / withdraw. Clinical
+# treatment is NOT here -- it needs no consent (s.40).
+CONSENT_PURPOSES = ("pdpa_notice", "research", "marketing", "sms_reminders", "cross_facility_sharing")
+DSR_KINDS = ("access", "correction", "portability", "withdraw_consent", "objection")
+DSR_STATUSES = ("open", "in_progress", "completed", "rejected")
+
+
+class ConsentRecord(Base):
+    """Append-only consent ledger. A grant and a later withdrawal are two
+    rows; the *effective* consent for a (patient, purpose) is the newest row
+    (see routers/pdpa.py::_effective_consent). Never updated or deleted --
+    same discipline as ClinicalRecordAnnotation. `pdpa_notice` records that
+    the patient was shown the PDPA privacy notice (transparency, not a
+    processing gate).
+    """
+    __tablename__ = "consent_records"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    purpose = Column(String(64), nullable=False, index=True)
+    granted = Column(Boolean, nullable=False)          # True = grant, False = withdrawal
+    source = Column(String(32), nullable=False)        # registration | portal | staff
+    note = Column(Text, nullable=True)
+    recorded_by = Column(String(36), nullable=True)    # users.id -- the patient's own id, or the staff who recorded it
+    recorded_by_role = Column(String(64), nullable=True)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class DataSubjectRequest(Base):
+    """A PDPA data-subject request and its handling workflow (tender
+). `kind` is one of DSR_KINDS -- crucially NOT "erasure"
+    (Malaysian PDPA has no such right; a withdraw_consent request toggles the
+    consent ledger, it does not delete records). `due_at` = requested_at + 21
+    days (the PDPA data-access-request statutory period, +14 extendable).
+    An `access` / `portability` request's generated export lands in the
+    object store (`export_object_key`, `clarion-reports-archive` bucket).
+    """
+    __tablename__ = "data_subject_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(32), nullable=False)
+    status = Column(String(16), nullable=False, default="open", index=True)
+    detail = Column(Text, nullable=True)              # the patient's own description of the ask
+    facility_name = Column(String(255), nullable=True, index=True)  # where it was filed
+    requested_by = Column(String(36), nullable=True)  # users.id (patient's own, or staff on behalf)
+    requested_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    due_at = Column(TZDateTime, nullable=True)
+
+    assigned_to = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    resolution_note = Column(Text, nullable=True)
+    resolved_by = Column(String(36), nullable=True)
+    resolved_at = Column(TZDateTime, nullable=True)
+    export_object_key = Column(String(512), nullable=True)
+
+
+class DpoRegister(Base):
+    """One row per facility -- the Data Protection Officer contact registered
+    with the Commissioner (JPDP). PDPA 2024 makes a DPO mandatory once a
+    controller processes >=20,000 subjects (or >=10,000 sensitive-data
+    subjects) -- University PKU is well over both. Lazily created on first read of
+    GET /admin/dpo-register (same create-on-read pattern as HospitalSetting).
+    """
+    __tablename__ = "dpo_register"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, unique=True, index=True)
+    dpo_name = Column(String(255), nullable=True)
+    dpo_email = Column(String(255), nullable=True)
+    dpo_phone = Column(String(64), nullable=True)
+    jpdp_registration_ref = Column(String(128), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class RetentionPolicy(Base):
+    """The retention schedule, one row per record category. `retain_years` is
+    counted from the record's last-activity date; NULL = keep indefinitely
+    (medico-legal). The retention scan (db/retention_scan.py) FLAGS rows past
+    their window into `RetentionReviewItem` for an admin to review -- it
+    never deletes (the audit chain is append-only and disposal is a DBA
+    partition-drop job anyway). Seeded from the Malaysian defaults
+    (healthcare/Malaysia Health Regulation.md); admin-editable.
+    """
+    __tablename__ = "retention_policies"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    category = Column(String(48), nullable=False, unique=True)   # patient | encounter | condition | medication | allergy | document | audit | obstetric | paediatric | medicolegal
+    retain_years = Column(Integer, nullable=True)                # NULL = indefinite
+    basis = Column(Text, nullable=True)                          # the legal reference
+    updated_by = Column(String(36), nullable=True)
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class RetentionReviewItem(Base):
+    """One row per record flagged by the retention scan as past its window.
+    FLAG ONLY -- an admin dispositions it (`disposed`) after the actual
+    partition-drop / archival; the scan re-flags anything still present and
+    not yet dispositioned. Keyed on (entity_type, entity_id) for the UPSERT.
+    """
+    __tablename__ = "retention_review_items"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    entity_type = Column(String(32), nullable=False)
+    entity_id = Column(String(36), nullable=False)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=True, index=True)
+    category = Column(String(48), nullable=False)
+    last_activity_at = Column(TZDateTime, nullable=True)
+    retain_until = Column(TZDateTime, nullable=True)
+    first_flagged_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_flagged_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    disposed = Column(Boolean, nullable=False, default=False, index=True)
+    disposed_by = Column(String(36), nullable=True)
+    disposed_at = Column(TZDateTime, nullable=True)
+    disposition_note = Column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("entity_type", "entity_id", name="uq_retention_review_items_entity"),
+    )
+

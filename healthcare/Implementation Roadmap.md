@@ -23,6 +23,43 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-08 — P2.10 PDPA
+
+- **P2.10** — consent + data-subject requests + DPO register + retention,
+  decisions confirmed with the user after the [[Malaysia Health Regulation]]
+  research pass (**no right to erasure** in Malaysian PDPA; clinical records
+  run on the s.40 medical-purposes basis, kept per Act 586; retention = flag
+  only). Migration `d4a9c1e6f2b8` (5 tables, additive).
+  - `app/routers/pdpa.py` (NEW): `GET/POST /pdpa/consent` (append-only
+    ledger, newest-wins), `POST/GET /pdpa/requests` + `/{id}` +
+    `/assign|complete|reject|export`. `export` = the patient's own record as
+    `clarion-patient-record/v1` JSON (s.30 / s.43A portability). DSR `kind`
+    excludes "erasure" (400). 21-day SLA. Portal-filed (no-facility) requests
+    visible to every RO until assigned. Facility-scoped list + break-glass.
+  - `admin.py`: `GET/PUT /admin/dpo-register` (per-facility, create-on-read),
+    `GET/PUT /admin/retention-policies` (seeded Malaysian defaults),
+    `POST /admin/retention/scan` + `GET /admin/retention/review` +
+    `POST .../{id}/disposition`.
+  - `app/retention.py` + `db/retention_scan.py` (cron): flags encounters /
+    documents / patients past their category's `retain_years` into
+    `retention_review_items` (UPSERT, disposition-aware). **Never deletes.**
+  - `seed.py`: seeds the retention schedule + a DPO-register placeholder +
+    the demo patient's `pdpa_notice` acknowledgement.
+  - `test_pdpa.py`. `docs/deployment.md` "PDPA" + Compliance Matrix.
+  - **voltagent security review actioned:** DSR *detail* / *export* / staff
+    *consent* read+write were platform-wide for any RO/admin (the *list* was
+    already facility-scoped) — now all facility-scoped via the P2.2
+    `_patient_known_to_facility` + a `break_glass_reason`; `get_request` /
+    `view_consent_ledger` now `log_access`-ed (M2/M3). Staff `/export` needs
+    the request assigned-to-self + `in_progress` (H1); `bypass_sharing_filter`
+    kept for the subject's own data only. Retention schedule + scan +
+    disposition → **platform-admin-only** (M4, matching the LDAP-mapping
+    precedent). Portal-filed orphan DSRs no longer broadcast (M5). Added the
+    s.30 `+14` extension endpoint (L8); `retain_years` min 1 (L10);
+    leap-adjusted year math (L11). Legal correctness confirmed SOUND.
+  - Verified: full `ci/run.sh` green, `db.check_schema` PASS.
+    **P2 is now complete** (P2.1–P2.12 all ✅; MariaDB migration runs owed).
+
 ### 2026-09-08 — P2.8 backup / DR
 
 - **P2.8** — `backend/backup/` script bundle + a compose `backup` service
@@ -308,7 +345,7 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 | P2.7 | Encryption at rest — MariaDB encrypted tablespaces + on-prem key management | M | | ✅ 2026-09-08 (Community file_key_management path wired into compose; LUKS + Enterprise/Vault documented; not container-tested) |
 | P2.8 | **Backup / DR regime** — daily incr + weekly full + binlog shipping, encrypted, 30-day, pre-update image, quarterly restore test, documented RPO/RTO | L | **** | ✅ 2026-09-08 (`backend/backup/` scripts + compose `backup` service + DR runbook; offsite target = config; not container-run) |
 | P2.9 | Audit **hash-chain** + daily WORM seal + retention/partition policy | M | | ✅ 2026-09-08 (SQLite-verified; MariaDB migration written, pending a run with creds) |
-| P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | — |
+| P2.10 | PDPA — consent model + data-subject-request flow + DPO register + retention config | M | | ✅ 2026-09-08 (backend + API; no erasure flow — Malaysian PDPA has none; retention = flag-only; no web UI) |
 | P2.11 | Offline CI: Gitea + ruff/pytest/bandit/semgrep/pip-audit/trivy + alembic up/down check | M | | ✅ 2026-09-08 (portable `ci/run.sh` + Woodpecker YAML + Makefile; osv-scanner not pip-audit; forge-agnostic) |
 | P2.12 | `data_quality_alerts` — batch validators (missing values, dup patients, bad coding) | S | | ✅ 2026-09-08 (backend + admin API; no web UI yet) |
 

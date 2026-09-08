@@ -1924,6 +1924,78 @@ class DataQualityAlertOut(BaseModel):
         from_attributes = True
 
 
+# ---------- PDPA (P2.10) ----------
+class ConsentRecordIn(BaseModel):
+    purpose: str
+    granted: bool
+    patient_id: Optional[str] = None   # staff only; a patient omits it
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ConsentRecordOut(BaseModel):
+    id: str
+    patient_id: str
+    purpose: str
+    granted: bool
+    source: str
+    note: Optional[str] = None
+    recorded_by_role: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DataSubjectRequestIn(BaseModel):
+    kind: str
+    detail: Optional[str] = Field(default=None, max_length=4000)
+    patient_id: Optional[str] = None   # staff filing on behalf
+
+
+class DataSubjectRequestOut(BaseModel):
+    id: str
+    patient_id: str
+    kind: str
+    status: str
+    detail: Optional[str] = None
+    facility_name: Optional[str] = None
+    requested_at: datetime
+    due_at: Optional[datetime] = None
+    assigned_to: Optional[str] = None
+    resolution_note: Optional[str] = None
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DpoRegisterIn(BaseModel):
+    dpo_name: Optional[str] = Field(default=None, max_length=255)
+    dpo_email: Optional[str] = Field(default=None, max_length=255)
+    dpo_phone: Optional[str] = Field(default=None, max_length=64)
+    jpdp_registration_ref: Optional[str] = Field(default=None, max_length=128)
+
+
+class DpoRegisterOut(DpoRegisterIn):
+    facility_name: str
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RetentionPolicyIn(BaseModel):
+    category: str
+    retain_years: Optional[int] = Field(default=None, ge=1, le=200)   # None = keep indefinitely
+    basis: Optional[str] = Field(default=None, max_length=2000)
+
+
+class RetentionPolicyOut(RetentionPolicyIn):
+    class Config:
+        from_attributes = True
+
+
 # ---------- AI ----------
 class SummaryRequest(BaseModel):
     patient_id: str

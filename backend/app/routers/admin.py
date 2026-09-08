@@ -2173,3 +2173,189 @@ def resolve_data_quality_alert(
                "resolve_data_quality_alert", detail=f"id={alert_id} rule={row.rule}",
                actor_facility=current_user.facility)
     return row
+
+
+# --------------------------------------------------------------------------
+# PDPA -- DPO register + retention schedule + retention review (P2.10)
+# --------------------------------------------------------------------------
+
+@router.get("/dpo-register", response_model=schemas.DpoRegisterOut)
+def get_dpo_register(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """The DPO contact registered with the Commissioner (JPDP) for this
+    admin's facility. Lazily created (same create-on-read pattern as
+    hospital-settings). PDPA 2024 makes a DPO mandatory for the University."""
+    if not current_user.facility:
+        raise HTTPException(status_code=400, detail="This admin has no assigned facility")
+    row = (
+        db.query(models.DpoRegister)
+        .filter(models.DpoRegister.facility_name == current_user.facility)
+        .first()
+    )
+    if row is None:
+        row = models.DpoRegister(facility_name=current_user.facility)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+@router.put("/dpo-register", response_model=schemas.DpoRegisterOut)
+def update_dpo_register(
+    payload: schemas.DpoRegisterIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    if not current_user.facility:
+        raise HTTPException(status_code=400, detail="This admin has no assigned facility")
+    row = (
+        db.query(models.DpoRegister)
+        .filter(models.DpoRegister.facility_name == current_user.facility)
+        .first()
+    ) or models.DpoRegister(facility_name=current_user.facility)
+    for f in ("dpo_name", "dpo_email", "dpo_phone", "jpdp_registration_ref"):
+        setattr(row, f, getattr(payload, f))
+    row.updated_by = current_user.id
+    row.updated_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, None, current_user.id, current_user.role, "update_dpo_register",
+               actor_facility=current_user.facility)
+    return row
+
+
+def _require_platform_admin(current_user: models.User) -> None:
+    """The retention schedule + scan + disposition act platform-wide (the
+    scan walks every facility's records; a bad `retain_years` could put the
+    whole system's history in the disposal queue). Same rule as
+    `_check_mapping_authz` for admin-granting LDAP mappings: only an admin
+    with no facility assigned."""
+    if current_user.facility:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a platform admin (no facility assigned) may change the "
+                   "retention schedule or run / act on the retention review.")
+
+
+@router.get("/retention-policies", response_model=List[schemas.RetentionPolicyOut])
+def list_retention_policies(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """The retention schedule (one row per record category). Platform-global:
+    it's a legal/config table, not facility data. Seeded from the Malaysian
+    defaults by seed.py; lazily topped-up here if a default is missing."""
+    from ..retention import DEFAULT_RETENTION_POLICIES
+
+    have = {p.category for p in db.query(models.RetentionPolicy).all()}
+    added = False
+    for cat, years, basis in DEFAULT_RETENTION_POLICIES:
+        if cat not in have:
+            db.add(models.RetentionPolicy(category=cat, retain_years=years, basis=basis))
+            added = True
+    if added:
+        db.commit()
+    return db.query(models.RetentionPolicy).order_by(models.RetentionPolicy.category).all()
+
+
+@router.put("/retention-policies/{category}", response_model=schemas.RetentionPolicyOut)
+def update_retention_policy(
+    category: str,
+    payload: schemas.RetentionPolicyIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    row = (
+        db.query(models.RetentionPolicy)
+        .filter(models.RetentionPolicy.category == category)
+        .first()
+    ) or models.RetentionPolicy(category=category)
+    _require_platform_admin(current_user)
+    row.retain_years = payload.retain_years
+    if payload.basis is not None:
+        row.basis = payload.basis
+    row.updated_by = current_user.id
+    row.updated_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, None, current_user.id, current_user.role, "update_retention_policy",
+               detail=f"category={category} retain_years={payload.retain_years}",
+               actor_facility=current_user.facility)
+    return row
+
+
+@router.post("/retention/scan")
+def run_retention_scan_now(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Trigger the retention scan (the cron `db/retention_scan.py` is the
+    routine path). FLAGS records past their window -- never deletes."""
+    _require_platform_admin(current_user)
+    from ..retention import run_retention_scan
+
+    res = run_retention_scan(db)
+    log_access(db, None, current_user.id, current_user.role, "run_retention_scan",
+               detail=f"scanned={res.scanned} new={res.flagged_new} open={res.flagged_total}",
+               actor_facility=current_user.facility)
+    return res.as_dict()
+
+
+@router.get("/retention/review")
+def list_retention_review(
+    db: Session = Depends(get_db),
+    include_disposed: bool = Query(False),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    _require_platform_admin(current_user)
+    q = db.query(models.RetentionReviewItem)
+    if not include_disposed:
+        q = q.filter(models.RetentionReviewItem.disposed.is_(False))
+    rows = (
+        q.order_by(models.RetentionReviewItem.retain_until.asc())
+        .offset(skip).limit(limit).all()
+    )
+    return [
+        {
+            "id": r.id, "entity_type": r.entity_type, "entity_id": r.entity_id,
+            "patient_id": r.patient_id, "category": r.category,
+            "last_activity_at": str(r.last_activity_at) if r.last_activity_at else None,
+            "retain_until": str(r.retain_until) if r.retain_until else None,
+            "first_flagged_at": str(r.first_flagged_at),
+            "disposed": r.disposed,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/retention/review/{item_id}/disposition")
+def disposition_retention_item(
+    item_id: str,
+    note: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Mark a flagged record as dispositioned (archived / partition-dropped
+    by the DBA). The scan then leaves it alone. This does NOT delete the
+    record -- that is a MariaDB DDL job outside the app."""
+    _require_platform_admin(current_user)
+    row = db.query(models.RetentionReviewItem).filter(models.RetentionReviewItem.id == item_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Retention review item not found")
+    row.disposed = True
+    row.disposed_by = current_user.id
+    row.disposed_at = datetime.now(timezone.utc)
+    row.disposition_note = note.strip()
+    db.add(row)
+    db.commit()
+    log_access(db, row.patient_id, current_user.id, current_user.role,
+               "disposition_retention_item",
+               detail=f"id={item_id} {row.entity_type}:{row.entity_id}",
+               actor_facility=current_user.facility)
+    return {"detail": "dispositioned"}

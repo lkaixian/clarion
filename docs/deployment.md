@@ -303,6 +303,52 @@ flag** — the P2.8 backup pipeline pipes its `--stream` output through
 
 ---
 
+## PDPA (P2.10, the tender)
+
+Research settled the shape (`healthcare/Malaysia Health Regulation.md`):
+**Malaysia's PDPA has no right to erasure.** Clinical records run on the
+s.40 "medical purposes" basis and are kept per Act 586 / MMC. So CLARION
+does **not** delete records on request — it does consent-for-optional-purposes,
+data-subject requests (access / correction / portability / withdraw-consent),
+a DPO register, and a flag-only retention schedule.
+
+- **Consent** — `consent_records` is an append-only ledger; the newest row
+  for a `(patient, purpose)` wins. Purposes: `pdpa_notice` (the notice
+  acknowledgement), `research`, `marketing`, `sms_reminders`,
+  `cross_facility_sharing`. `GET/POST /pdpa/consent` (patient acts on own;
+  RO/admin on behalf).
+- **Data-subject requests** — `POST /pdpa/requests` (patient or staff),
+  `kind ∈ {access, correction, portability, withdraw_consent, objection}` —
+  **`erasure` is rejected.** 21-day SLA (`due_at`), `+14` via
+  `POST /pdpa/requests/{id}/extend` (once). RO/admin workflow: `assign` →
+  `complete` / `reject`. `GET /pdpa/requests/{id}/export` returns the
+  patient's record as portable JSON (`clarion-patient-record/v1`) for an
+  `access` / `portability` request — the **subject** any time; a **staff
+  handler only once the request is assigned to them and `in_progress`**.
+  Staff DSR access (detail / workflow / export) is **facility-scoped** (own
+  facility, a patient the facility has a P2.2 relationship to, or an audited
+  `break_glass_reason`); a portal-filed request for a patient with no
+  facility relationship surfaces only to a **platform admin**
+  (`facility` unset).
+- **DPO register** — `GET/PUT /admin/dpo-register` (per facility, create-on-read).
+  PDPA 2024 makes a DPO **mandatory for the University** (>20k data subjects). Fill in
+  the real name / JPDP registration ref at deploy.
+- **Retention schedule** — `GET /admin/retention-policies` (any admin;
+  seeded from the Malaysian defaults: 7 yr adult, 21 obstetric, indefinite
+  medico-legal). `PUT /admin/retention-policies/{cat}`,
+  `POST /admin/retention/scan`, `GET /admin/retention/review`, and
+  `POST .../{id}/disposition` are **platform-admin only** (`facility` unset)
+  — the scan and the schedule act platform-wide, and a bad `retain_years`
+  could queue the whole system's history for disposal. **The scan never
+  deletes** — it flags into `retention_review_items`; actual disposal is the
+  MariaDB partition-drop (P2.9) by `clarion_migrate`, then `disposition`ed
+  back here (there's no automated re-check that the drop happened — a
+  follow-up).
+- Every read/write is `log_access`-ed (`view_consent_ledger`,
+  `view_data_subject_request`, `data_subject_export_generated`, …).
+
+---
+
 ## Backup / DR (P2.8, the tender)
 
 `backend/backup/` — `backup.sh` (scheduled), `restore-test.sh` (quarterly),
