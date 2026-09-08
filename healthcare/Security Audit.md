@@ -1,7 +1,7 @@
 ---
 title: Security Audit
 type: assessment
-updated: 2026-09-07
+updated: 2026-09-08
 tags: [security, owasp, pdpa, audit, clarion]
 ---
 
@@ -157,6 +157,20 @@ tablespaces + on-prem KMS) — still open.
   ✅ **RESOLVED 2026-08-30 (P1.5).** Deleted; Alembic is the only schema path.
   `_ensure_schema()` auto-migrates SQLite and *verifies-or-refuses* on MariaDB;
   `db/check_schema.py` gates migration integrity.
+
+## Append-only / integrity (P2.9, 2026-09-08)
+
+`audit_logs` is now tamper-evident + physically append-only: a per-row keyed
+hash chain (`seq` / `prev_hash` / `row_hash`, advanced in-transaction by the
+single `log_access` chokepoint) plus `BEFORE UPDATE` / `BEFORE DELETE`
+triggers that `SIGNAL` / `RAISE(ABORT)` for **every** account. `verify_chain`
++ `db/verify_audit_chain.py` + `GET /admin/audit/chain-status` walk it;
+`db/seal_audit_day.py` writes a daily WORM anchor. Retention is now a
+partition-drop DDL job (clarion_migrate), never a `DELETE`. Detail:
+[[Implementation Roadmap]] P2.9 changelog. Residual: the chain's forgery
+resistance rests on `SECRET_KEY` secrecy — an attacker with both the key and
+write access to the raw datadir can rewrite the in-DB chain; the off-box
+daily seal is the backstop for that.
 
 ---
 

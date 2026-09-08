@@ -1935,3 +1935,32 @@ def delete_ldap_role_mapping(
         detail=f"id={mapping_id} group_dn={group_dn}",
     )
     return {"detail": "LDAP role mapping deleted"}
+
+
+# --------------------------------------------------------------------------
+# Audit hash-chain integrity (P2.9)
+# --------------------------------------------------------------------------
+
+@router.get("/audit/chain-status")
+def get_audit_chain_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Walk the whole `audit_logs` hash chain and report whether it is
+    intact. Deliberately platform-global, not facility-scoped: chain
+    integrity is a system-health signal, and the response carries only
+    counts + hash digests -- no patient data, no per-facility records. The
+    full recompute is O(rows) but read-only; run it from an integrity
+    dashboard / a nightly check, not on a hot path.
+
+    `db/verify_audit_chain.py` is the same check as a CLI (for cron / CI).
+    """
+    from ..audit import verify_chain
+
+    report = verify_chain(db)
+    log_access(
+        db, None, current_user.id, current_user.role, "verify_audit_chain",
+        detail=f"ok={report.ok} rows={report.total_rows} last_seq={report.last_seq}",
+        actor_facility=current_user.facility,
+    )
+    return report.as_dict()
