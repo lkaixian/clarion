@@ -181,6 +181,61 @@ default with a warning in the container log.
 
 ---
 
+## Encryption at rest (P2.7, the tender)
+
+Two layers, both expected for a healthcare / ISO-27001 deployment:
+
+1. **LUKS / dm-crypt** on the data LUN (`/var/lib/mysql`, the MinIO volume,
+   `/app/data`). Covers a stolen disk. It is transparent while the host is
+   running — necessary but not sufficient on its own. This is a host / VM
+   provisioning step (`On-Prem Architecture.md`), not something compose does.
+2. **MariaDB transparent data encryption (TDE)** — covers a logical / OS-level
+   read while the server is up (an attacker with filesystem access but not a
+   DB session, a mis-scoped ops account, a copied datadir).
+
+### MariaDB TDE — what compose does
+
+`backend/db/mariadb/encryption.cnf` (mounted at
+`/etc/mysql/mariadb.conf.d/99-encryption.cnf`) turns on:
+`innodb_encrypt_tables=FORCE` (every InnoDB + Aria table, existing and new;
+FORCE blocks creating an unencrypted one), `innodb_encrypt_log`,
+`innodb_encrypt_temporary_tables`, `encrypt_tmp_files`, and `encrypt_binlog`
+(the binlog carries full row images for PITR — it must be encrypted too).
+Overhead is ~3–10%, lowest for our mostly memory-bound workload (the buffer
+pool stays plaintext; encryption is at disk I/O).
+
+### Key management
+
+Community-server path: the **`file_key_management`** plugin with an
+openssl-encrypted keyfile on the DB host.
+
+```
+bash backend/db/mariadb/generate-encryption-key.sh    # once, before first `up`
+docker compose --env-file .env.docker up -d mariadb   # first start does the sweep
+docker compose exec mariadb mariadb -uroot -p -e "SHOW STATUS LIKE 'Innodb_encryption%'"
+```
+
+The key material (`backend/db/mariadb/encryption/keyfile.{key,enc}`) is
+git-ignored and **must be backed up separately from the database** — losing
+it makes the data unrecoverable, and co-locating it with the DB backup
+defeats the purpose. Rotation: see `backend/db/mariadb/encryption/README.md`
+(`SET GLOBAL innodb_encryption_rotate_key_age = 1`).
+
+For a hardware HSM or HashiCorp Vault / KMIP, the University moves to **MariaDB
+Enterprise Server** — those key-management plugins are Enterprise-only; the
+schema and `innodb_encrypt_*` settings are unchanged, only the plugin lines
+in `encryption.cnf`. Whether that licence is worth it is a campus decision
+(the tender makes the DBMS "subject to university licensing").
+
+### Backups
+
+`mariadb-backup` copies encrypted pages as-is but has **no `--encrypt`
+flag** — the P2.8 backup pipeline pipes its `--stream` output through
+`age`/openssl so the backup files themselves are encrypted at rest (tender
+).
+
+---
+
 ## Audit hash chain (P2.9, the tender)
 
 `audit_logs` is tamper-evident and physically append-only.
@@ -449,7 +504,9 @@ mean "log out everywhere."
      `CLARION_FORCE_DROP_LEGACY_PATH_COLUMNS=1` to drop the columns and accept
      the loss.
   2. Run the app using the runtime account: `DATABASE_URL=mysql+pymysql://clarion_app:PASSWORD@mariadb:3306/clarion?charset=utf8mb4`
-  3. (TODO P2.7) enable `--log-bin=ROW` for point-in-time recovery.
+  3. Before the first `up` of `mariadb`, provision the encryption key:
+     `bash backend/db/mariadb/generate-encryption-key.sh` (P2.7 — see
+     "Encryption at rest" above). `--log-bin` (ROW) is already in compose.
 - **P1.6 -- ObjectStore: DONE in code, MinIO wiring + WORM provisioning owed.**
   `backend/app/storage.py` (abstraction), `*_object_key`/`_sha256`/`_bytes`/`_mime`
   columns, Alembic `84f653e6c999`+`b7f1c0d94a2e`, and

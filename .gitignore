@@ -58,6 +58,12 @@ proxy/certs/*
 !proxy/certs/.gitkeep
 proxy/caddy_data/
 
+# MariaDB data-at-rest encryption key material (P2.7) -- generated per
+# deployment by backend/db/mariadb/generate-encryption-key.sh. Losing these
+# = unrecoverable data; back them up SEPARATELY from the DB.
+backend/db/mariadb/encryption/*
+!backend/db/mariadb/encryption/README.md
+
 # Android release signing secrets (P1.13) -- never commit the real keystore
 # or its passwords. See mobile_flutter/android/key.properties.example.
 /mobile_flutter/android/key.properties

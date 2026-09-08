@@ -1,0 +1,53 @@
+# CLARION -- MariaDB data-at-rest encryption (roadmap P2.7, the tender).
+#
+# Mounted read-only into /etc/mysql/mariadb.conf.d/ by docker-compose.yml.
+# The two key files it references are NOT in git -- generate them once per
+# deployment with backend/db/mariadb/generate-encryption-key.sh and mount the
+# directory (see that script + docs/deployment.md "Encryption at rest").
+#
+# This is the Community-server path: the `file_key_management` plugin with a
+# GPG/openssl-encrypted keyfile on the DB host. For a hardware HSM or
+# HashiCorp Vault / KMIP integration the University would move to MariaDB Enterprise
+# Server (the Vault + KMIP key-management plugins are Enterprise-only) -- the
+# on-disk schema does not change, only these few lines.
+#
+# LUKS full-disk encryption of the data LUN is still expected UNDERNEATH this
+# (it covers a stolen disk; this covers a logical / OS-level read while the
+# server runs). Both layers, per healthcare/ISO-27001 practice.
+
+[mariadb]
+# --- key source ---------------------------------------------------------
+# Plaintext keyfile: one line "1;<64 hex>" (generate-encryption-key.sh),
+# 0400, on the LUKS volume. To harden, encrypt the keyfile itself and add
+# `file_key_management_filekey = FILE:/etc/mysql/encryption/keyfile.key`
+# plus `file_key_management_encryption_algorithm = AES_CTR` -- see
+# https://mariadb.com/kb/en/file-key-management-encryption-plugin/.
+plugin_load_add = file_key_management
+file_key_management_filename = /etc/mysql/encryption/keyfile
+
+# --- what gets encrypted ----------------------------------------------
+# Tables: every InnoDB tablespace + Aria table, new and existing. FORCE
+# refuses to create an unencrypted table (so a future migration can't
+# silently opt out). The background threads do the initial sweep of
+# already-existing tablespaces on first start after this is enabled.
+innodb_encrypt_tables = FORCE
+innodb_encryption_threads = 4
+aria_encrypt_tables = ON
+
+# Redo log, undo, and the doublewrite buffer.
+innodb_encrypt_log = ON
+
+# Internal on-disk temp tables + temp files (sorts, large joins).
+innodb_encrypt_temporary_tables = ON
+encrypt_tmp_files = ON
+
+# Binary + relay logs -- these carry full row images for PITR (P2.8), so
+# they must be encrypted too. --log-bin itself is set in compose (needed
+# for point-in-time recovery regardless of encryption).
+encrypt_binlog = ON
+
+# --- key rotation ----------------------------------------------------
+# Re-encrypt a page whose key version is older than this many seconds on
+# its next write. 1 day. To force a full rotation after replacing the
+# keyfile: SET GLOBAL innodb_encryption_rotate_key_age = 1; (then restore).
+innodb_encryption_rotate_key_age = 86400
