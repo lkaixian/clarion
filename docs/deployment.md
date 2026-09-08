@@ -15,24 +15,43 @@ wait on wiring the DB into that TLS story. See
 
 ## TL;DR
 
+### Demo stack (SQLite, no DB service)
+
 ```bash
 cp .env.docker.example .env.docker
 # edit .env.docker: set SECRET_KEY and OTP_HMAC_KEY (required), change passwords
 python -c "import secrets; print(secrets.token_hex(32))"   # run twice
 
-docker compose --env-file .env.docker config          # validate
-docker compose --env-file .env.docker up -d --build    # start
+docker compose --env-file .env.docker config           # validate
+docker compose --env-file .env.docker up -d --build     # start
+docker compose exec backend python /app/seed.py         # first run only
+docker compose exec proxy caddy trust                   # trust the demo CA
+```
 
-# first run only -- seed demo data into the fresh SQLite volume:
-docker compose exec backend python /app/seed.py
+Default `up` brings: `proxy` (Caddy, TLS), `web`, `backend` (SQLite on a
+volume), `minio`, `redis`, `orthanc(+pg)`. `mariadb` / `migrate` / `backup`
+are behind profiles.
 
-# demo TLS uses Caddy's local CA -- trust it to drop the browser warning:
-docker compose exec proxy caddy trust
+### Adopt MariaDB (P1.3 / P2.7)
+
+```bash
+bash backend/db/mariadb/generate-encryption-key.sh                # P2.7, once
+docker compose --env-file .env.docker --profile mariadb up -d mariadb
+docker compose --env-file .env.docker --profile migrate run --rm migrate
+# then point the backend at it: DATABASE_URL=mysql+pymysql://clarion_app:...@mariadb:3306/clarion
+docker compose --env-file .env.docker --profile mariadb up -d --build backend
+```
+
+### Enable the backup service (P2.8)
+
+```bash
+# set RESTIC_REPOSITORY / RESTIC_PASSWORD / BACKUP_AGE_RECIPIENTS in .env.docker
+docker compose --env-file .env.docker --profile backup up -d backup   # installs the cron
 ```
 
 - Web console: <https://localhost/>  (HTTP -> HTTPS auto-redirect)
 - API:         <https://localhost/api/>  (docs at `/api/docs`)
-- `backend` and `web` no longer publish host ports -- everything is via the
+- `backend` and `web` do not publish host ports -- everything is via the
   proxy. For ad-hoc direct access: `docker compose run --service-ports backend`.
 
 Stop / wipe:
