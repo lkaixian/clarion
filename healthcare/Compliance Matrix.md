@@ -56,10 +56,10 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | System Configuration: notifications, content/text/appearance | Partial | `hospital_settings` + admin config; content/appearance CMS = Gap | — |
 | | Security Management: data recovery/backup, security protocol | Have | `backend/backup/` + DR runbook (P2.8); security protocol via [[Security Audit]] | — |
 | | **Billing Module** | Gap | New module: `bills`, `bill_items`, `payments`, `claims`, charge master | Yes |
-| | **Procedure Module** | Gap | Reference implementation of the shared ancillary pattern | Partial |
-| | **Laboratory Module** (+ direct reg, result-interpretation AI, trend analysis) | Gap | New module + analyser integration + AI + longitudinal trends | Yes |
-| | **X-ray Module** (+ direct reg) | Gap | New module; ties to PACS | Yes |
-| | **Physiotherapy Module** (+ direct reg) | Gap | New module | Partial |
+| | **Procedure Module** | Partial | P3.1 ✅ 2026-09-11: shared order→result→sign-off→document engine + catalog. No procedure-specific UI polish yet | Yes |
+| | **Laboratory Module** (+ direct reg, result-interpretation AI, trend analysis) | Partial | P3.1 ✅ shared engine covers order/result/sign-off/document; analyser HL7 (P4.8), AI interpretation + trend analysis (P4.5/8.4-8.5) still Gap | Yes |
+| | **X-ray Module** (+ direct reg) | Partial | P3.1 ✅ shared engine covers order/result/sign-off/document; PACS/DICOM tie-in (P4.7) still Gap | Yes |
+| | **Physiotherapy Module** (+ direct reg) | Partial | P3.1 ✅ fully covered by the shared engine — no external integration needed for this module | Yes |
 | | **Dental Module** (sign-off, dental chart, references, medication, reporting) | Gap | New module; dental chart = bespoke UI | Partial |
 | | Reporting: admission/discharge summaries, disease-specific, TAT, PDF+Excel | Partial | AI handover ≈ discharge summary; rest = Gap | Yes |
 | | Operational performance reports; auto daily/weekly/monthly | Gap | Reporting engine + scheduled jobs | — |

@@ -673,4 +673,61 @@ export const revokeWaitingRoomDisplay = (id) =>
 export const getPublicDisplay = (token) =>
   axios.get(`${API_BASE}/display/${token}`).then((r) => r.data);
 
+// --- Ancillary engine: Procedure / Laboratory / X-ray / Physiotherapy
+// (P3.1, routers/ancillary.py) --------------------------------------------
+// One shared order -> result -> sign-off -> document pipeline behind all
+// four modules; `module` is just a value ("procedure" | "laboratory" |
+// "xray" | "physiotherapy"), not a separate API. Gated by
+// require_page_access("ancillary"); sign-off/catalog-write additionally
+// need admin/records_officer/clinician server-side (see
+// SIGNOFF_ROLES in ancillary.py) — receptionist can place/cancel orders
+// only.
+export const getAncillaryCatalog = ({ module, includeInactive } = {}) =>
+  client
+    .get("/ancillary/catalog", { params: { module, include_inactive: includeInactive || undefined } })
+    .then((r) => r.data);
+export const createAncillaryCatalogItem = (body) => client.post("/ancillary/catalog", body).then((r) => r.data);
+export const updateAncillaryCatalogItem = (itemId, body) =>
+  client.patch(`/ancillary/catalog/${itemId}`, body).then((r) => r.data);
+
+export const listAncillaryRequests = ({ module, status, patientId, limit, offset } = {}) =>
+  client
+    .get("/ancillary/requests", { params: { module, status, patient_id: patientId, limit, offset } })
+    .then((r) => r.data);
+export const getAncillaryRequest = (requestId) => client.get(`/ancillary/requests/${requestId}`).then((r) => r.data);
+// body: { patient_id, module, catalog_item_id, source, source_encounter_id?,
+// clinical_indication?, priority? }. source_encounter_id is required when
+// source === "physician_order".
+export const createAncillaryRequest = (body) => client.post("/ancillary/requests", body).then((r) => r.data);
+export const cancelAncillaryRequest = (requestId, reason) =>
+  client.post(`/ancillary/requests/${requestId}/cancel`, { reason }).then((r) => r.data);
+
+// body: { result_text?, flag_abnormal?, flag_critical?, signature_b64? }.
+// Same "strip the data: URL prefix, only send as a fallback when the caller
+// has no saved signature" rule as addPatientAnnotation/
+// completeConsultationTicket above.
+export const signOffAncillaryResult = (requestId, body) => {
+  const payload = { ...body };
+  if (typeof payload.signature_b64 === "string" && payload.signature_b64.startsWith("data:")) {
+    const comma = payload.signature_b64.indexOf(",");
+    if (comma >= 0) payload.signature_b64 = payload.signature_b64.slice(comma + 1);
+  }
+  return client.post(`/ancillary/requests/${requestId}/result`, payload).then((r) => r.data);
+};
+export const uploadAncillaryResultDocument = (requestId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post(`/ancillary/requests/${requestId}/result/document`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+// Fetched as a blob (Bearer-authed, same reasoning as getDocumentFileBlob
+// above) — caller revokes the object URL when done with it.
+export const getAncillaryResultDocumentBlob = (requestId) =>
+  client.get(`/ancillary/requests/${requestId}/result/document`, { responseType: "blob" }).then((r) => r.data);
+
+export const getAncillaryStats = () => client.get("/ancillary/stats").then((r) => r.data);
+
 export default client;

@@ -1869,7 +1869,9 @@ class WaitingRoomDisplayOut(BaseModel):
 
 
 # ---------- Clinical-record annotations (append-only sign-off) ----------
-ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter"}
+# "service_result" (P3.1) lets a correction be appended to a signed ancillary
+# result (routers/patients.py::_ANNOTATION_MODEL -> models.ServiceResult).
+ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter", "service_result"}
 ANNOTATION_KINDS = {"resolved", "discontinued", "correction", "note"}
 
 
@@ -1994,6 +1996,188 @@ class RetentionPolicyIn(BaseModel):
 class RetentionPolicyOut(RetentionPolicyIn):
     class Config:
         from_attributes = True
+
+
+# ---------- Ancillary engine: Procedure / Laboratory / X-ray / Physiotherapy
+# (P3.1, the tender) -- see models.py's "Ancillary engine" section
+# comment for the shared order -> result -> sign-off -> document pipeline
+# these four modules share.
+ANCILLARY_MODULES = {"procedure", "laboratory", "xray", "physiotherapy"}
+SERVICE_REQUEST_SOURCES = {"frontdesk", "physician_order"}
+SERVICE_REQUEST_PRIORITIES = {"routine", "urgent", "stat"}
+
+
+class ServiceCatalogItemCreate(BaseModel):
+    """Body for POST /ancillary/catalog. A non-admin's item is always scoped
+    to their own facility regardless of what they send here -- only an admin
+    may set `facility_name=None` to publish a shared/global item (the router
+    enforces this, not this schema)."""
+
+    module: str
+    name: str = Field(min_length=1, max_length=255)
+    code: Optional[str] = Field(default=None, max_length=64)
+    unit_price_cents: int = Field(default=0, ge=0)
+    facility_name: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("module")
+    @classmethod
+    def _check_module(cls, v: str) -> str:
+        if v not in ANCILLARY_MODULES:
+            raise ValueError(f"module must be one of: {', '.join(sorted(ANCILLARY_MODULES))}")
+        return v
+
+
+class ServiceCatalogItemUpdate(BaseModel):
+    """Body for PATCH /ancillary/catalog/{id}. No `module`/`facility_name`
+    change -- moving an item between modules or facilities is a new item, not
+    an edit (same reasoning as everywhere else immutable-identity columns
+    stay off the PATCH schema)."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    code: Optional[str] = Field(default=None, max_length=64)
+    unit_price_cents: Optional[int] = Field(default=None, ge=0)
+    active: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ServiceCatalogItemOut(BaseModel):
+    id: str
+    module: str
+    name: str
+    code: Optional[str] = None
+    unit_price_cents: int
+    facility_name: Optional[str] = None
+    active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ServiceRequestCreate(BaseModel):
+    """Body for POST /ancillary/requests -- the 'order'. `source_encounter_id`
+    is required when `source == 'physician_order'` (checked here so the 400
+    fires before any DB work) and ignored otherwise."""
+
+    patient_id: str
+    module: str
+    catalog_item_id: str
+    source: str
+    source_encounter_id: Optional[str] = None
+    clinical_indication: Optional[str] = Field(default=None, max_length=4000)
+    priority: str = "routine"
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("module")
+    @classmethod
+    def _check_module(cls, v: str) -> str:
+        if v not in ANCILLARY_MODULES:
+            raise ValueError(f"module must be one of: {', '.join(sorted(ANCILLARY_MODULES))}")
+        return v
+
+    @field_validator("source")
+    @classmethod
+    def _check_source(cls, v: str) -> str:
+        if v not in SERVICE_REQUEST_SOURCES:
+            raise ValueError(f"source must be one of: {', '.join(sorted(SERVICE_REQUEST_SOURCES))}")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def _check_priority(cls, v: str) -> str:
+        if v not in SERVICE_REQUEST_PRIORITIES:
+            raise ValueError(f"priority must be one of: {', '.join(sorted(SERVICE_REQUEST_PRIORITIES))}")
+        return v
+
+    @model_validator(mode="after")
+    def _check_physician_order_needs_encounter(self):
+        if self.source == "physician_order" and not self.source_encounter_id:
+            raise ValueError("source_encounter_id is required when source='physician_order'")
+        return self
+
+
+class ServiceRequestCancel(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ServiceResultCreate(BaseModel):
+    """Body for POST /ancillary/requests/{id}/result -- performs AND signs
+    off in one atomic action (same shape as
+    routers/consultation.py::ConsultationCompleteRequest). REQUIRES the
+    caller to already have a saved digital signature, or pass
+    `signature_b64` to save one on the spot."""
+
+    result_text: Optional[str] = Field(default=None, max_length=8000)
+    flag_abnormal: bool = False
+    flag_critical: bool = False
+    signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)  # ~1MB PNG as base64
+
+    class Config:
+        extra = "forbid"
+
+
+class ServiceResultOut(BaseModel):
+    id: str
+    service_request_id: str
+    patient_id: str
+    result_text: Optional[str] = None
+    flag_abnormal: bool
+    flag_critical: bool
+    performed_by_name: Optional[str] = None
+    performed_by_role: Optional[str] = None
+    performed_at: Optional[datetime] = None
+    facility_name: Optional[str] = None
+    signed_by_name: Optional[str] = None
+    signed_by_role: Optional[str] = None
+    # Whether a softcopy attachment exists -- never the raw object key (see
+    # GET /ancillary/requests/{id}/result/document to fetch it).
+    has_document: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ServiceRequestOut(BaseModel):
+    id: str
+    patient_id: str
+    module: str
+    catalog_item_id: str
+    catalog_item_name: Optional[str] = None
+    source: str
+    source_encounter_id: Optional[str] = None
+    clinical_indication: Optional[str] = None
+    priority: str
+    status: str
+    unit_price_cents: int
+    requested_by_name: Optional[str] = None
+    requested_by_role: Optional[str] = None
+    ordering_facility_name: Optional[str] = None
+    created_at: datetime
+    cancelled_at: Optional[datetime] = None
+    cancelled_reason: Optional[str] = None
+    result: Optional[ServiceResultOut] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AncillaryStatsOut(BaseModel):
+    """GET /ancillary/stats -- the minimal 'Reporting Management: data &
+    statistics' surface each module clause asks for. Counts are scoped to
+    the caller's own facility, current open orders + a rolling 30-day
+    signed-off count, grouped by module."""
+
+    facility_name: Optional[str] = None
+    open_by_module: dict
+    signed_off_last_30d_by_module: dict
 
 
 # ---------- AI ----------

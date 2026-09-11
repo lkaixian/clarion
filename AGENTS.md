@@ -148,16 +148,25 @@ text + Compliance Matrix, not built as app code).
 
 ## Next up
 
-The whole **P2 High/Medium security wave is done** (P2.1–P2.6), and **P2.9**
-(audit-log hash chain + append-only triggers + daily WORM seal) landed
-2026-09-08. The live plan + full narrative is in
+The **whole P2 security/compliance wave is done** (P2.1–P2.12, landed across
+2026-09-07/08). **P3.1 (Ancillary engine — Procedure/Laboratory/X-ray/
+Physiotherapy, one shared order→result→sign-off→document pipeline) landed
+2026-09-11**: `backend/app/routers/ancillary.py`, models
+`ServiceCatalogItem`/`ServiceRequest`/`ServiceResult`, migration
+`cd1edecdbb37`, the `ancillary` page permission, and
+`web/src/pages/Ancillary.jsx`. The live plan + full narrative is in
 `healthcare/Implementation Roadmap.md` — that changelog is the source of
 truth, this file is not kept blow-by-blow.
 
-Remaining P2 items (all need an infra/product decision, not just code —
-surface them, don't start autonomously): **P2.7** encryption at rest,
-**P2.8** backup/DR, **P2.10** PDPA consent + DSR, **P2.11** offline CI,
-**P2.12** data-quality alerts. After that: the P3 tender modules.
+Next: the rest of **P3 — tender modules** (`healthcare/Implementation
+Roadmap.md`'s P3 table), roughly in order: P3.2 dental, P3.3 billing (wires
+into P3.1's `unit_price_cents` snapshots), P3.4 SOAP notes, P3.5 document
+generation, P3.6 reporting engine. Per the vault's "Demo priorities" section,
+**P4.3 (on-prem AI, replacing the Claude-API calls — the tender's clause
+ differentiator and the thing that actually closes Security Audit
+C1 for real)** is a live alternative track ranked #1 for the competition
+demo — surface the choice rather than assuming P3 order, same as when P2
+finished.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

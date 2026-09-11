@@ -28,15 +28,18 @@ from . import models
 PAGE_PATIENTS = "patients"
 PAGE_RECEPTION = "reception"
 PAGE_PHARMACY = "pharmacy"
+# P3.1: the shared Procedure/Laboratory/X-ray/Physiotherapy worklist -- one
+# page, module-tabbed, backed by app/routers/ancillary.py.
+PAGE_ANCILLARY = "ancillary"
 PAGE_ADMIN = "admin"
 
 # Every page key the app knows about. `admin` last -- it's always admin-only.
-ALL_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ADMIN]
+ALL_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_ADMIN]
 
 # The pages an admin may assign to a non-admin staff role -- the columns of
 # the permissions matrix in the web console. `admin` is intentionally
 # excluded: it is ALWAYS admin-only and NEVER a configurable checkbox.
-CONFIGURABLE_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY]
+CONFIGURABLE_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY]
 
 # The staff roles whose page access is governed by a RolePagePermission row
 # (the rows of the permissions matrix). Deliberately excludes:
@@ -55,15 +58,32 @@ DEFAULT_ROLE_PAGES = {
     # Reception page at all. admin / records_officer still get `reception`
     # (they cover the desk). See rewrite_legacy_clinician_pages below for the
     # one-time migration of already-stored rows that hold the OLD default.
-    "clinician": [PAGE_PATIENTS],
-    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION],
-    "receptionist": [PAGE_RECEPTION],
+    # P3.1: clinicians perform/sign results and can also place a
+    # physician-order request; records_officer and receptionist can both
+    # register a patient into a module directly from Frontdesk (every
+    # ancillary clause explicitly allows this) but
+    # only clinician/records_officer may sign a result off
+    # (routers/ancillary.py::sign_off_service_request role gate) --
+    # receptionist's page access only lets them place/cancel orders.
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY],
+    "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY],
     "pharmacist": [PAGE_PHARMACY],
 }
 
 # The exact OLD stored default for a clinician row, before the Consultation
 # page landed -- see rewrite_legacy_clinician_pages.
 _LEGACY_CLINICIAN_PAGES = [PAGE_PATIENTS, PAGE_RECEPTION]
+
+# The exact OLD stored defaults (per role), before PAGE_ANCILLARY (P3.1)
+# existed -- see add_ancillary_to_legacy_role_pages. Deliberately the
+# pre-ancillary values of DEFAULT_ROLE_PAGES above, not derived from it, so
+# this stays correct even if DEFAULT_ROLE_PAGES changes again later.
+_PRE_ANCILLARY_ROLE_PAGES = {
+    "clinician": [PAGE_PATIENTS],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION],
+    "receptionist": [PAGE_RECEPTION],
+}
 
 # What an admin token resolves to -- every page, including `admin` itself.
 ADMIN_PAGES: List[str] = list(ALL_PAGES)
@@ -128,6 +148,34 @@ def rewrite_legacy_clinician_pages(db: Session) -> int:
     for row in rows:
         if list(row.allowed_pages or []) == _LEGACY_CLINICIAN_PAGES:
             row.allowed_pages = [PAGE_PATIENTS]
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def add_ancillary_to_legacy_role_pages(db: Session) -> int:
+    """One-time, best-effort migration companion to
+    rewrite_legacy_clinician_pages: every stored RolePagePermission row for a
+    role in _PRE_ANCILLARY_ROLE_PAGES whose allowed_pages is EXACTLY that
+    role's pre-P3.1 default gets PAGE_ANCILLARY appended.
+
+    Deliberately only touches rows that still hold the exact legacy default
+    -- a facility that customised its row (added/removed a page) is left
+    completely alone, same discipline as rewrite_legacy_clinician_pages.
+    Idempotent: a second run finds nothing left to change. Called from
+    seed.py's idempotent block; safe to call anytime.
+    """
+    changed = 0
+    rows = (
+        db.query(models.RolePagePermission)
+        .filter(models.RolePagePermission.role.in_(list(_PRE_ANCILLARY_ROLE_PAGES)))
+        .all()
+    )
+    for row in rows:
+        legacy = _PRE_ANCILLARY_ROLE_PAGES.get(row.role)
+        if legacy is not None and list(row.allowed_pages or []) == legacy:
+            row.allowed_pages = _canonical_order(legacy + [PAGE_ANCILLARY])
             changed += 1
     if changed:
         db.commit()

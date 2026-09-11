@@ -1406,6 +1406,155 @@ class ClinicalRecordAnnotation(Base):
 
 
 # ==========================================================================
+# Ancillary engine (roadmap P3.1, the tender). One shared
+# order -> result -> sign-off -> document pipeline behind the near-identical
+# Procedure / Laboratory / X-ray / Physiotherapy module text -- each module
+# is just a `module` value plus its own ServiceCatalogItem rows, not a
+# separate schema. Reporting/AI enrichment (intelligent
+# result interpretation, longitudinal trends) is P4.5/P4.6, layered on top
+# of `flag_abnormal`/`flag_critical` later without a schema change.
+# ==========================================================================
+
+ANCILLARY_MODULES = ("procedure", "laboratory", "xray", "physiotherapy")
+SERVICE_REQUEST_SOURCES = ("frontdesk", "physician_order")
+SERVICE_REQUEST_PRIORITIES = ("routine", "urgent", "stat")
+# Deliberately just 3 states, not the fuller ordered/in_progress/resulted/
+# signed_off/cancelled state machine a bigger build might want: this demo's
+# "perform + sign off" is one atomic action (see routers/ancillary.py
+# ::sign_off_service_request, same shape as consultation.py::complete_ticket),
+# so there's no separately-observable "in progress" or "resulted-but-unsigned"
+# state to persist yet.
+SERVICE_REQUEST_STATUSES = ("ordered", "signed_off", "cancelled")
+
+
+class ServiceCatalogItem(Base):
+    """One orderable/billable ancillary test, procedure or treatment
+    definition -- the shared 'Parameter Management' surface behind
+    Procedure/Laboratory/X-ray/Physiotherapy's near-identical clause text
+`facility_name` NULL = a shared/global item
+    every facility can order (demo-seeded); set = one facility's own
+    addition, invisible to other facilities. No delete endpoint -- toggle
+    `active` off instead, same reasoning as MedicineInventoryItem/
+    InventoryDeleteRequest (an existing ServiceRequest FKs to this row and
+    must never be orphaned)."""
+    __tablename__ = "service_catalog_items"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    module = Column(String(32), nullable=False, index=True)  # one of ANCILLARY_MODULES
+    name = Column(String(255), nullable=False)
+    code = Column(String(64), nullable=True)  # local code, free text (no LOINC/CPT mapping yet)
+    unit_price_cents = Column(Integer, nullable=False, default=0)
+    facility_name = Column(String(255), nullable=True, index=True)
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    requests = relationship("ServiceRequest", back_populates="catalog_item")
+
+
+class ServiceRequest(Base):
+    """The 'order': a registered patient routed into one ancillary module,
+    either straight from Frontdesk or off a physician's order raised during
+    a consultation (-- every module explicitly
+    accepts both paths). One request carries at most one ServiceResult; a
+    repeat test is a NEW request, never an edit to an old one -- the same
+    append-only discipline as Condition/Encounter."""
+    __tablename__ = "service_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    module = Column(String(32), nullable=False, index=True)
+    catalog_item_id = Column(String(36), ForeignKey("service_catalog_items.id"), nullable=False)
+    source = Column(String(32), nullable=False)  # frontdesk | physician_order
+    # Set when source == physician_order -- the consultation Encounter this
+    # order was raised from. Not a facility-scoping signal by itself; see
+    # ordering_facility_name below for that.
+    source_encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    clinical_indication = Column(Text, nullable=True)
+    priority = Column(String(16), nullable=False, default="routine")
+    status = Column(String(32), nullable=False, default="ordered", index=True)
+    # Snapshot of the catalog item's price at order time (P3.3 billing will
+    # read this rather than the live catalog row, so a later price change
+    # never reprices an already-placed order).
+    unit_price_cents = Column(Integer, nullable=False, default=0)
+
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    requested_by_name = Column(String(255), nullable=True)
+    requested_by_role = Column(String(64), nullable=True)
+    # The AUTHORING facility -- same cross-facility PATCH-immutability
+    # semantics as Condition.authored_by_facility (see routers/patients.py
+    # ::_FACILITY_RELATIONSHIP_SOURCES / _patient_present_at): only this
+    # facility may cancel the request or perform/sign its result while it's
+    # still open. NULL legacy rows (pre-this-column) are immutable to
+    # everyone by design -- same safe default as the rest of the clinical
+    # tables. Indexed: it's one of the _FACILITY_RELATIONSHIP_SOURCES scanned
+    # by list_patients' facility scope.
+    ordering_facility_name = Column(String(255), nullable=True, index=True)
+
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    cancelled_at = Column(TZDateTime, nullable=True)
+    cancelled_reason = Column(Text, nullable=True)
+
+    patient = relationship("Patient")
+    catalog_item = relationship("ServiceCatalogItem", back_populates="requests")
+    result = relationship("ServiceResult", back_populates="request", uselist=False)
+
+
+class ServiceResult(Base):
+    """The signed result for one ServiceRequest -- same snapshot-signature,
+    immutable-once-signed discipline as Encounter
+    (routers/consultation.py::complete_ticket) and ClinicalRecordAnnotation.
+    No PATCH endpoint exists once `signed_by` is set; a correction is a NEW
+    ClinicalRecordAnnotation with target_type='service_result' (registered in
+    routers/patients.py::_ANNOTATION_MODEL), never an edit to this row."""
+    __tablename__ = "service_results"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    service_request_id = Column(
+        String(36), ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    result_text = Column(Text, nullable=True)
+    # Manually set by the signing clinician for now (no AI yet) -- the column
+    # exists so P4.5's AI audit-trail / P4.6 predictive layer, and P4.4's
+    # medication/lab-safety rule engine, have somewhere to write a computed
+    # flag later without a schema change.
+    flag_abnormal = Column(Boolean, default=False, nullable=False)
+    flag_critical = Column(Boolean, default=False, nullable=False)
+
+    performed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    performed_by_name = Column(String(255), nullable=True)
+    performed_by_role = Column(String(64), nullable=True)
+    performed_at = Column(TZDateTime, nullable=True)
+    # Authoring facility, same semantics as ServiceRequest.ordering_facility_name.
+    facility_name = Column(String(255), nullable=True, index=True)
+
+    # Softcopy attachment (scanned lab/X-ray report, etc.) -- same 4-column
+    # object-store pattern as ClinicalDocument (P1.6): `clarion-documents`
+    # bucket, key `service-results/{id}_{sanitized_basename}`. NULL if none
+    # was uploaded.
+    file_object_key = Column(String(512), nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
+    file_bytes = Column(Integer, nullable=True)
+    file_mime = Column(String(128), nullable=True)
+
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_by_role = Column(String(64), nullable=True)
+    # A COPY of the signer's profile signature PNG taken at sign-off time,
+    # `clarion-signatures` bucket, key `service-results/{id}.png` (see
+    # app/storage.py), so it stays fixed even if the clinician later
+    # changes/clears their profile signature. (P1.6 pattern)
+    signature_object_key = Column(String(512), nullable=True)
+    signature_sha256 = Column(String(64), nullable=True)
+    signature_bytes = Column(Integer, nullable=True)
+    signature_mime = Column(String(128), nullable=True)
+
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    request = relationship("ServiceRequest", back_populates="result")
+
+
+# ==========================================================================
 # PDPA (roadmap P2.10, the tender). Research: Malaysia's PDPA has NO
 # right to erasure -- clinical records run on the s.40 "medical purposes"
 # basis and are kept per Act 586 / MMC retention rules. So this is

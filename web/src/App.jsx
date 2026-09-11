@@ -7,6 +7,7 @@ import Profile from "./pages/Profile";
 import AdminConsole from "./pages/AdminConsole";
 import Reception from "./pages/Reception";
 import Pharmacy from "./pages/Pharmacy";
+import Ancillary from "./pages/Ancillary";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/admin" element={<Protected><RequirePage page="admin"><AdminConsole /></RequirePage></Protected>} />
         <Route path="/reception" element={<Protected><RequirePage page="reception"><Reception /></RequirePage></Protected>} />
         <Route path="/pharmacy" element={<Protected><RequirePage page="pharmacy"><Pharmacy /></RequirePage></Protected>} />
+        <Route path="/ancillary" element={<Protected><RequirePage page="ancillary"><Ancillary /></RequirePage></Protected>} />
       </Routes>
     </BrowserRouter>
   );
