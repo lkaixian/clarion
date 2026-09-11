@@ -60,7 +60,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -379,6 +379,12 @@ app.include_router(display.router)
 # the DPO / records-officer handling workflow. Patient-facing routes -- NOT
 # page-gated (like profile.py); staff routes carry their own require_roles.
 app.include_router(pdpa.router)
+# Ancillary engine (P3.1): Procedure / Laboratory / X-ray / Physiotherapy,
+# one shared order -> result -> sign-off pipeline (routers/ancillary.py).
+app.include_router(
+    ancillary.router,
+    dependencies=[Depends(auth.require_page_access("ancillary"))],
+)
 
 
 @app.get("/")

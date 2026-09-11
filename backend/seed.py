@@ -558,6 +558,81 @@ try:
     if _rewritten:
         print(f"Rewrote {_rewritten} legacy clinician page-permission row(s) -> ['patients']")
 
+    _ancillary_added = _permissions.add_ancillary_to_legacy_role_pages(db)
+    if _ancillary_added:
+        print(f"Added PAGE_ANCILLARY to {_ancillary_added} legacy role-permission row(s)")
+
+    # Ancillary engine (P3.1): a starter catalog (2 items per module, GLOBAL
+    # -- facility_name=None -- so every facility can order them out of the
+    # box) plus one already-signed-off demo result so the Ancillary tab
+    # isn't empty on first login. Catalog is seeded once, keyed on "does any
+    # ServiceCatalogItem exist at all yet" -- a real deployment's admin is
+    # expected to curate their own from here on, same as MedicineInventoryItem.
+    if db.query(models.ServiceCatalogItem).first() is None:
+        for _module, _name, _code, _cents in [
+            ("procedure", "Wound Dressing", "PROC-WD", 3000),
+            ("procedure", "Suture Removal", "PROC-SR", 2000),
+            ("laboratory", "Full Blood Count (FBC)", "LAB-FBC", 4500),
+            ("laboratory", "Fasting Blood Sugar", "LAB-FBS", 2500),
+            ("xray", "Chest X-ray (PA)", "XR-CXR", 8000),
+            ("xray", "Limb X-ray", "XR-LIMB", 7000),
+            ("physiotherapy", "Initial Assessment", "PHYSIO-INIT", 6000),
+            ("physiotherapy", "Follow-up Session", "PHYSIO-FU", 4000),
+        ]:
+            db.add(models.ServiceCatalogItem(
+                module=_module, name=_name, code=_code, unit_price_cents=_cents, facility_name=None,
+            ))
+        db.commit()
+        print("Seeded starter service catalog (8 items across 4 ancillary modules)")
+
+    _lab_item = db.query(models.ServiceCatalogItem).filter(
+        models.ServiceCatalogItem.module == "laboratory", models.ServiceCatalogItem.code == "LAB-FBC",
+    ).first()
+    _demo_patient_for_ancillary = (
+        db.query(models.Patient).filter(models.Patient.national_id == "520314-01-1234").first()
+    )
+    _demo_clinician = db.query(models.User).filter(models.User.email == "clinician@clarion.demo").first()
+    if (
+        _lab_item is not None and _demo_patient_for_ancillary is not None and _demo_clinician is not None
+        and db.query(models.ServiceRequest).filter(
+            models.ServiceRequest.patient_id == _demo_patient_for_ancillary.id,
+            models.ServiceRequest.catalog_item_id == _lab_item.id,
+        ).first() is None
+    ):
+        _req = models.ServiceRequest(
+            patient_id=_demo_patient_for_ancillary.id, module="laboratory", catalog_item_id=_lab_item.id,
+            source="physician_order", clinical_indication="Routine monitoring -- diabetes follow-up",
+            priority="routine", status="signed_off", unit_price_cents=_lab_item.unit_price_cents,
+            requested_by=_demo_clinician.id, requested_by_name=_demo_clinician.full_name,
+            requested_by_role=_demo_clinician.role, ordering_facility_name=_demo_clinician.facility,
+        )
+        db.add(_req)
+        db.flush()
+        _result = models.ServiceResult(
+            service_request_id=_req.id, patient_id=_demo_patient_for_ancillary.id,
+            result_text="Hb 13.2 g/dL, WBC 6.8 x10^9/L, Platelets 250 x10^9/L -- all within normal range.",
+            flag_abnormal=False, flag_critical=False,
+            performed_by=_demo_clinician.id, performed_by_name=_demo_clinician.full_name,
+            performed_by_role=_demo_clinician.role, performed_at=_req.created_at,
+            facility_name=_demo_clinician.facility,
+            signed_by=_demo_clinician.id, signed_by_name=_demo_clinician.full_name,
+            signed_by_role=_demo_clinician.role,
+        )
+        db.add(_result)
+        db.flush()
+        if _demo_clinician.signature_object_key:
+            try:
+                _src_bytes = _store.get(_BUCKET_SIGNATURES, _demo_clinician.signature_object_key)
+                _res_meta = _store.put(
+                    _BUCKET_SIGNATURES, f"service-results/{_result.id}.png", _src_bytes, mime="image/png",
+                )
+                _apply_object_meta(_result, _res_meta, "signature")
+            except Exception:
+                pass
+        db.add(_result)
+        db.commit()
+        print("Added demo signed-off ServiceRequest+ServiceResult: Full Blood Count (laboratory)")
+
     # Backfill the DEMO patient's clinical records that predate the
     # authoring-facility columns (a clarion.db seeded before the immutability
     # wave). seed.py's fresh-seed block already stamps these; this catches an

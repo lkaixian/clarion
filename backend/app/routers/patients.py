@@ -403,6 +403,7 @@ _FACILITY_RELATIONSHIP_SOURCES = (
     (models.Admission, models.Admission.facility_name),
     (models.QueueTicket, models.QueueTicket.facility_name),
     (models.Appointment, models.Appointment.facility_name),
+    (models.ServiceRequest, models.ServiceRequest.ordering_facility_name),
 )
 
 
@@ -1184,6 +1185,7 @@ _ANNOTATION_MODEL = {
     "medication": models.MedicationStatement,
     "allergy": models.AllergyIntolerance,
     "encounter": models.Encounter,
+    "service_result": models.ServiceResult,
 }
 
 # kind -> the one target_type it is valid for (kinds not listed here --
