@@ -36,7 +36,6 @@ const PRIORITY_STYLE = {
 
 export default function Ancillary() {
   const user = getCurrentUser();
-  const canOrder = true;
   const canSignOff = ["admin", "records_officer", "clinician"].includes(user?.role);
   const canManageCatalog = ["admin", "records_officer"].includes(user?.role);
 
@@ -91,9 +90,16 @@ export default function Ancillary() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(refresh, [module, viewStatus]);
 
+  // GET /patients (behind listPatients) is gated to
+  // admin/records_officer/clinician -- receptionist deliberately does NOT
+  // have the `patients` page (see app/permissions.py::DEFAULT_ROLE_PAGES),
+  // so it always 403s for them. A receptionist places an order by typing
+  // the patient id directly instead (see OrderForm's `canBrowsePatients`).
+  const canBrowsePatients = user?.role !== "receptionist";
+
   useEffect(() => {
     if (!showOrderForm) return;
-    if (!patientsLoaded) {
+    if (canBrowsePatients && !patientsLoaded) {
       listPatients({ limit: 200 })
         .then((data) => {
           setPatients(data);
@@ -106,7 +112,7 @@ export default function Ancillary() {
     getAncillaryCatalog({ module, includeInactive: false })
       .then(setOrderCatalogItems)
       .catch(() => {});
-  }, [showOrderForm, module, patientsLoaded]);
+  }, [showOrderForm, module, patientsLoaded, canBrowsePatients]);
 
   function showMsg(type, text) {
     setNotice({ type, text });
@@ -213,6 +219,7 @@ export default function Ancillary() {
           module={module}
           catalogItems={orderCatalogItems}
           patients={patients}
+          canBrowsePatients={canBrowsePatients}
           onCancel={() => setShowOrderForm(false)}
           onSuccess={() => { setShowOrderForm(false); loadWorklist(); showMsg("success", "Order created."); }}
           onError={(msg) => showMsg("error", msg)}
@@ -229,10 +236,9 @@ export default function Ancillary() {
         ) : (
           <div className="space-y-3">
             {requests.map(req => (
-              <RequestRow 
-                key={req.id} 
-                req={req} 
-                canOrder={canOrder} 
+              <RequestRow
+                key={req.id}
+                req={req}
                 canSignOff={canSignOff}
                 hasSignature={user?.has_signature}
                 onCancel={() => handleCancelRequest(req.id)}
@@ -294,7 +300,7 @@ export default function Ancillary() {
   );
 }
 
-function OrderForm({ module, catalogItems, patients, onCancel, onSuccess, onError }) {
+function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel, onSuccess, onError }) {
   const [patientSearch, setPatientSearch] = useState("");
   const [patientId, setPatientId] = useState("");
   const [catalogId, setCatalogId] = useState("");
@@ -339,9 +345,19 @@ function OrderForm({ module, catalogItems, patients, onCancel, onSuccess, onErro
       
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Patient</label>
-        {patientId ? (
+        {!canBrowsePatients ? (
+          // Receptionist has no `patients` page access (GET /patients 403s
+          // for that role by design -- see app/permissions.py), so there's
+          // no searchable list to offer here. They already have the
+          // patient's id from Reception check-in; paste it directly.
+          <input
+            type="text" placeholder="Patient ID (from Reception check-in)"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            value={patientId} onChange={e => setPatientId(e.target.value.trim())}
+          />
+        ) : patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
-            <span>{patients.find(p => p.id === patientId)?.full_name}</span>
+            <span>{patients.find(p => p.id === patientId)?.full_name || patientId}</span>
             <button type="button" onClick={() => setPatientId("")} className="text-blue-700 hover:underline">Change</button>
           </div>
         ) : (
@@ -409,7 +425,7 @@ function OrderForm({ module, catalogItems, patients, onCancel, onSuccess, onErro
   );
 }
 
-function RequestRow({ req, canOrder, canSignOff, hasSignature, onCancel, onDownload, onRefresh, showMsg }) {
+function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRefresh, showMsg }) {
   const [showSignOff, setShowSignOff] = useState(false);
   
   return (
@@ -422,8 +438,7 @@ function RequestRow({ req, canOrder, canSignOff, hasSignature, onCancel, onDownl
             <span className="text-xs text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{req.status}</span>
           </div>
           <p className="text-xs text-slate-600 mb-1">
-            {/* Future pass could join patient name here. For now just show ID + View link */}
-            Patient: {req.patient_id} 
+            Patient: {req.patient_full_name || req.patient_id}
             <Link to={`/patients/${req.patient_id}`} className="ml-2 text-blue-700 hover:underline">View Record</Link>
           </p>
           <p className="text-xs text-slate-500">Ordered {formatDateTime(req.created_at)} · {req.source}</p>
@@ -436,7 +451,7 @@ function RequestRow({ req, canOrder, canSignOff, hasSignature, onCancel, onDownl
               {showSignOff ? "Cancel Sign-off" : "Sign off"}
             </button>
           )}
-          {req.status === "ordered" && canOrder && (
+          {req.status === "ordered" && (
             <button onClick={onCancel} className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">
               Cancel
             </button>

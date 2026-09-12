@@ -107,7 +107,22 @@ def test_catalog_create_rbac_and_facility_scoping(test_client, make_user, auth_h
     # facility_name they sent.
     assert resp.json()["facility_name"] == facility_a
 
-    assert test_client.post("/ancillary/catalog", json=body, headers=auth_headers(admin)).status_code == 201
+    # An admin may NOT plant an item under an arbitrary OTHER facility's
+    # name either -- only their own facility or null (global).
+    assert test_client.post("/ancillary/catalog", json=body, headers=auth_headers(admin)).status_code == 403
+
+    resp = test_client.post(
+        "/ancillary/catalog", json={**body, "facility_name": facility_a}, headers=auth_headers(admin)
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["facility_name"] == facility_a
+
+    resp = test_client.post(
+        "/ancillary/catalog", json={**body, "facility_name": None}, headers=auth_headers(admin)
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["facility_name"] is None
+
     assert test_client.post("/ancillary/catalog", json=body, headers=auth_headers(clinician)).status_code == 403
     assert test_client.post("/ancillary/catalog", json=body, headers=auth_headers(receptionist)).status_code == 403
 
@@ -132,6 +147,13 @@ def test_catalog_patch_ownership_not_forbidden_convention(test_client, make_user
 
     resp = test_client.patch(f"/ancillary/catalog/{global_item.id}", json={"active": False}, headers=auth_headers(admin))
     assert resp.status_code == 200
+
+    # No admin override: an admin from a DIFFERENT facility than item_a's
+    # owner is denied exactly like anyone else (fixed 2026-09-12,
+    # /code-review -- this used to skip the ownership check for role=='admin').
+    admin_b = make_user(role="admin", facility=facility_b)
+    resp = test_client.patch(f"/ancillary/catalog/{item_a.id}", json={"active": True}, headers=auth_headers(admin_b))
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -475,3 +497,159 @@ def test_service_result_registered_as_annotation_target(test_client, make_user, 
         headers=auth_headers(clinician),
     )
     assert resp.status_code == 200, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Code-review follow-up (2026-09-12): admin has NO cross-facility override
+# on write paths, receptionist gets no clinical result content, catalog
+# visibility is enforced at order-TIME (not just at listing), records_shared_
+# publicly is respected on cross-facility ancillary reads, and a genuine
+# double sign-off raises a clean 409 instead of an unhandled 500.
+# ---------------------------------------------------------------------------
+def test_admin_has_no_cross_facility_write_override(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    admin_b = make_user(role="admin", facility=facility_b)
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician_a)
+    ).json()
+
+    resp = test_client.post(f"/ancillary/requests/{created['id']}/cancel", json={}, headers=auth_headers(admin_b))
+    assert resp.status_code == 404
+
+    resp = test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "forged", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(admin_b),
+    )
+    assert resp.status_code == 404
+
+
+def test_catalog_item_facility_scoping_enforced_at_order_time(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    private_item = _make_catalog_item(db_session, facility_name=facility_a, name="Facility A Private Test")
+    clinician_b = make_user(role="clinician", facility=facility_b)
+
+    resp = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, private_item.id), headers=auth_headers(clinician_b),
+    )
+    assert resp.status_code == 404
+
+
+def test_receptionist_never_sees_clinical_result_content(test_client, make_user, auth_headers, db_session):
+    facility_a = _facility("Facility A")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician = make_user(role="clinician", facility=facility_a)
+    receptionist = make_user(role="receptionist", facility=facility_a)
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician)
+    ).json()
+    test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "Hb 13.0 -- sensitive", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician),
+    )
+
+    # Own-facility default worklist -- result must be stripped.
+    resp = test_client.get("/ancillary/requests", params={"module": "laboratory"}, headers=auth_headers(receptionist))
+    assert resp.status_code == 200
+    rows = [r for r in resp.json() if r["id"] == created["id"]]
+    assert len(rows) == 1
+    assert rows[0]["result"] is None
+
+    # Single-request detail -- same stripping.
+    resp = test_client.get(f"/ancillary/requests/{created['id']}", headers=auth_headers(receptionist))
+    assert resp.status_code == 200
+    assert resp.json()["result"] is None
+
+    # The document endpoint itself is SIGNOFF_ROLES-only now, not
+    # ORDER_ROLES -- a receptionist can't fetch a result attachment even
+    # by guessing/knowing the request_id.
+    resp = test_client.get(f"/ancillary/requests/{created['id']}/result/document", headers=auth_headers(receptionist))
+    assert resp.status_code == 403
+
+
+def test_cross_facility_document_upload_denied(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    clinician_b = make_user(role="clinician", facility=facility_b)
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician_a)
+    ).json()
+    test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "x", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician_a),
+    )
+
+    resp = test_client.post(
+        f"/ancillary/requests/{created['id']}/result/document",
+        files={"file": ("report.pdf", b"%PDF-1.4 not yours", "application/pdf")},
+        headers=auth_headers(clinician_b),
+    )
+    assert resp.status_code == 404
+
+
+def test_records_shared_publicly_hides_cross_facility_ancillary_reads(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    clinician_b = make_user(role="clinician", facility=facility_b)
+
+    db_session.add(models.HospitalSetting(facility_name=facility_a, records_shared_publicly=False))
+    db_session.commit()
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician_a)
+    ).json()
+
+    # A facility-B clinician's cross-facility patient-history view no
+    # longer includes facility A's opted-out request.
+    resp = test_client.get(
+        "/ancillary/requests", params={"patient_id": patient.id}, headers=auth_headers(clinician_b)
+    )
+    assert resp.status_code == 200
+    assert all(r["id"] != created["id"] for r in resp.json())
+
+    resp = test_client.get(f"/ancillary/requests/{created['id']}", headers=auth_headers(clinician_b))
+    assert resp.status_code == 404
+
+    # Facility A's own staff are never hidden from their own data.
+    resp = test_client.get(f"/ancillary/requests/{created['id']}", headers=auth_headers(clinician_a))
+    assert resp.status_code == 200
+
+
+def test_signoff_double_insert_race_returns_409_not_500(test_client, make_user, auth_headers, db_session):
+    """Simulates the race sign_off_service_request's IntegrityError handler
+    guards against: a ServiceResult already exists for this request (as a
+    concurrent second sign-off would produce) while the request's own
+    status column hasn't been updated yet. Constructed directly via
+    db_session rather than real threads/concurrency."""
+    facility_a = _facility("Facility A")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician = make_user(role="clinician", facility=facility_a)
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician)
+    ).json()
+
+    db_session.add(models.ServiceResult(service_request_id=created["id"], patient_id=patient.id))
+    db_session.commit()
+
+    resp = test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "racing", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 409
