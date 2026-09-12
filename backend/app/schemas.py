@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from . import permissions
+from . import models as _models
 
 # Minimum acceptable length for any newly-set password (staff-issued temp
 # passwords are exempt -- they're generated server-side via
@@ -2001,10 +2002,14 @@ class RetentionPolicyOut(RetentionPolicyIn):
 # ---------- Ancillary engine: Procedure / Laboratory / X-ray / Physiotherapy
 # (P3.1, the tender) -- see models.py's "Ancillary engine" section
 # comment for the shared order -> result -> sign-off -> document pipeline
-# these four modules share.
-ANCILLARY_MODULES = {"procedure", "laboratory", "xray", "physiotherapy"}
-SERVICE_REQUEST_SOURCES = {"frontdesk", "physician_order"}
-SERVICE_REQUEST_PRIORITIES = {"routine", "urgent", "stat"}
+# these four modules share. Single source of truth for these three sets is
+# models.py (code-review follow-up 2026-09-12 -- they were briefly
+# duplicated here as literal sets, drifting from SERVICE_REQUEST_STATUSES,
+# which was already correctly defined only in models.py and referenced
+# from ancillary.py as `models.SERVICE_REQUEST_STATUSES`).
+ANCILLARY_MODULES = set(_models.ANCILLARY_MODULES)
+SERVICE_REQUEST_SOURCES = set(_models.SERVICE_REQUEST_SOURCES)
+SERVICE_REQUEST_PRIORITIES = set(_models.SERVICE_REQUEST_PRIORITIES)
 
 
 class ServiceCatalogItemCreate(BaseModel):
@@ -2148,6 +2153,7 @@ class ServiceResultOut(BaseModel):
 class ServiceRequestOut(BaseModel):
     id: str
     patient_id: str
+    patient_full_name: Optional[str] = None
     module: str
     catalog_item_id: str
     catalog_item_name: Optional[str] = None

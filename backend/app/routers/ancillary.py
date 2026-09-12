@@ -33,9 +33,11 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
 
 from .. import models, schemas, auth
 from ..database import get_db
@@ -49,7 +51,7 @@ from ..storage import (
     sanitize_filename,
 )
 from ._uploads import enforce_upload_size, sniff_document_mime
-from .patients import SAFE_DOCUMENT_MEDIA_TYPES
+from .patients import SAFE_DOCUMENT_MEDIA_TYPES, _hidden_author_facilities
 from .profile import save_signature_from_b64, copy_signature_snapshot
 
 router = APIRouter(prefix="/ancillary", tags=["ancillary"])
@@ -86,21 +88,55 @@ def _visible_catalog_item_or_404(db: Session, catalog_item_id: str, current_user
 def _request_or_404(
     db: Session, request_id: str, current_user: models.User, *, require_same_facility: bool = False
 ) -> models.ServiceRequest:
-    req = db.query(models.ServiceRequest).filter(models.ServiceRequest.id == request_id).first()
+    """`require_same_facility=True` is the WRITE-path guard (cancel/sign-off/
+    document-upload) -- deliberately NO admin override, matching
+    patients.py::_guard_cross_facility_amend's documented "no global admin
+    override" invariant (a normal admin has a facility and is walled inside
+    it, same as anyone else; a platform/bootstrap admin has no facility to
+    begin with, so `current_user.facility` is None and this still denies
+    correctly). Fixed 2026-09-12 (voltagent + /code-review): this used to
+    exempt role=='admin', letting any facility's admin cancel or forge a
+    signed result at any OTHER facility."""
+    req = (
+        db.query(models.ServiceRequest)
+        .options(
+            joinedload(models.ServiceRequest.catalog_item),
+            joinedload(models.ServiceRequest.result),
+            joinedload(models.ServiceRequest.patient),
+        )
+        .filter(models.ServiceRequest.id == request_id)
+        .first()
+    )
     if req is None:
         raise HTTPException(status_code=404, detail="Service request not found")
-    if require_same_facility and current_user.role != "admin" and req.ordering_facility_name != current_user.facility:
+    if require_same_facility and req.ordering_facility_name != current_user.facility:
         raise HTTPException(status_code=404, detail="Service request not found")
     return req
 
 
-def _serialize_request(req: models.ServiceRequest) -> schemas.ServiceRequestOut:
+def _serialize_request(req: models.ServiceRequest, current_user: models.User) -> schemas.ServiceRequestOut:
     out = schemas.ServiceRequestOut.model_validate(req)
     out.catalog_item_name = req.catalog_item.name if req.catalog_item else None
-    if req.result is not None:
+    out.patient_full_name = req.patient.full_name if req.patient else None
+    # A receptionist places/cancels orders but is not a clinical reader --
+    # same "front-desk role, not a clinical reader" line this module's
+    # docstring already draws elsewhere (list_service_requests' patient_id
+    # branch). Fixed 2026-09-12 (/code-review): this used to leak full
+    # result_text/flags/attachment-availability to a receptionist through
+    # their own facility's default worklist view, which no endpoint's role
+    # gate was actually blocking.
+    if req.result is not None and current_user.role != "receptionist":
         result_out = schemas.ServiceResultOut.model_validate(req.result)
         result_out.has_document = bool(req.result.file_object_key)
         out.result = result_out
+    else:
+        # model_validate(req) above already auto-populated `out.result` by
+        # reading the ORM relationship straight off `req` (pydantic's
+        # from_attributes nested validation) -- for a receptionist, or a
+        # not-yet-resulted request, that population must be explicitly
+        # undone here, not just skipped, or the stripped branch above is a
+        # no-op and the full result leaks through anyway.
+        out.result = None
     return out
 
 
@@ -136,12 +172,24 @@ def create_catalog_item(
 ):
     """A non-admin's item is always scoped to their own facility regardless
     of what `facility_name` they send -- only an admin may publish a
-    shared/global item by explicitly sending `facility_name=null`."""
+    shared/global item by explicitly sending `facility_name=null`.
+
+    An admin may ALSO only target their own facility or null (global) --
+    never an arbitrary other facility's name (fixed 2026-09-12, /code-review:
+    this used to trust an admin's `facility_name` verbatim, letting any
+    admin plant/contaminate a catalog item under a facility they have no
+    relationship to). Same "facility must be omitted or match your own"
+    rule as admin.py::_check_mapping_authz."""
     facility_name = payload.facility_name
     if current_user.role != "admin":
         if not current_user.facility:
             raise HTTPException(status_code=400, detail="Your account has no facility assigned.")
         facility_name = current_user.facility
+    elif facility_name is not None and facility_name != current_user.facility:
+        raise HTTPException(
+            status_code=403,
+            detail="facility_name must be omitted (global) or match your own facility.",
+        )
 
     item = models.ServiceCatalogItem(
         module=payload.module, name=payload.name, code=payload.code,
@@ -161,13 +209,16 @@ def update_catalog_item(
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer")),
 ):
     """No delete endpoint -- toggle `active` off instead (see
-    models.ServiceCatalogItem's docstring)."""
+    models.ServiceCatalogItem's docstring).
+
+    No admin override: an admin may edit a global item (facility_name IS
+    NULL) or their OWN facility's item, exactly like everyone else -- never
+    another facility's private item (fixed 2026-09-12, /code-review: this
+    used to skip the ownership check entirely for role=='admin')."""
     item = db.query(models.ServiceCatalogItem).filter(models.ServiceCatalogItem.id == item_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Service catalog item not found")
-    if current_user.role != "admin" and item.facility_name != current_user.facility:
-        # Covers global (facility_name IS NULL) items too -- a non-admin may
-        # SEE them (list_catalog) but only an admin may edit the shared catalog.
+    if item.facility_name is not None and item.facility_name != current_user.facility:
         raise HTTPException(status_code=404, detail="Service catalog item not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
@@ -226,7 +277,7 @@ def create_service_request(
         detail=f"module={req.module} catalog_item={item.name} request_id={req.id}",
         actor_facility=current_user.facility,
     )
-    return _serialize_request(req)
+    return _serialize_request(req, current_user)
 
 
 @router.get("/requests", response_model=List[schemas.ServiceRequestOut])
@@ -253,7 +304,12 @@ def list_service_requests(
             detail=f"status must be one of: {', '.join(models.SERVICE_REQUEST_STATUSES)}",
         )
 
-    q = db.query(models.ServiceRequest)
+    q = db.query(models.ServiceRequest).options(
+        joinedload(models.ServiceRequest.catalog_item),
+        joinedload(models.ServiceRequest.result),
+        joinedload(models.ServiceRequest.patient),
+    )
+    cross_facility = False
     if patient_id:
         if current_user.role == "receptionist":
             raise HTTPException(status_code=403, detail="Not permitted to view cross-facility patient history")
@@ -261,6 +317,7 @@ def list_service_requests(
         if patient is None:
             raise HTTPException(status_code=404, detail="Patient not found")
         q = q.filter(models.ServiceRequest.patient_id == patient_id)
+        cross_facility = True
         log_access(
             db, patient_id, current_user.id, current_user.role, "view_ancillary_history",
             actor_facility=current_user.facility,
@@ -276,7 +333,18 @@ def list_service_requests(
         q = q.filter(models.ServiceRequest.status == status)
 
     rows = q.order_by(models.ServiceRequest.created_at.desc()).offset(offset).limit(limit).all()
-    return [_serialize_request(r) for r in rows]
+    if cross_facility:
+        # Same records_shared_publicly opt-out as patients.py's other
+        # cross-facility clinical reads (_hidden_author_facilities) --
+        # never hides the caller's OWN facility's rows. Filtered in Python
+        # rather than a SQL NOT IN(...) so a legacy NULL
+        # ordering_facility_name (never actually produced by
+        # create_service_request, but the column is nullable) can't be
+        # silently dropped by SQL's NULL-vs-IN(...) three-valued logic.
+        hidden = _hidden_author_facilities(db, current_user.facility)
+        if hidden:
+            rows = [r for r in rows if r.ordering_facility_name not in hidden]
+    return [_serialize_request(r, current_user) for r in rows]
 
 
 @router.get("/requests/{request_id}", response_model=schemas.ServiceRequestOut)
@@ -287,10 +355,15 @@ def get_service_request(
 ):
     # A receptionist only sees their own facility's orders; every other
     # ORDER_ROLES role gets the same universal cross-facility clinical read
-    # as get_patient_full_record.
+    # as get_patient_full_record -- MINUS whatever the ordering facility has
+    # opted out of public sharing (HospitalSetting.records_shared_publicly),
+    # same as patients.py's other cross-facility clinical reads.
     require_same_facility = current_user.role == "receptionist"
     req = _request_or_404(db, request_id, current_user, require_same_facility=require_same_facility)
-    return _serialize_request(req)
+    if not require_same_facility and req.ordering_facility_name != current_user.facility:
+        if req.ordering_facility_name in _hidden_author_facilities(db, current_user.facility):
+            raise HTTPException(status_code=404, detail="Service request not found")
+    return _serialize_request(req, current_user)
 
 
 @router.post("/requests/{request_id}/cancel", response_model=schemas.ServiceRequestOut)
@@ -314,7 +387,7 @@ def cancel_service_request(
         db, req.patient_id, current_user.id, current_user.role, "ancillary_request_cancelled",
         detail=f"request_id={req.id}", actor_facility=current_user.facility,
     )
-    return _serialize_request(req)
+    return _serialize_request(req, current_user)
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +433,19 @@ def sign_off_service_request(
         signed_by_role=current_user.role,
     )
     db.add(result)
-    db.flush()  # need result.id for the per-row signature snapshot key
+    try:
+        # need result.id for the per-row signature snapshot key below.
+        # ServiceResult.service_request_id is UNIQUE -- a concurrent
+        # double sign-off (double-click, or two staff racing the same
+        # order) hits that constraint here rather than silently creating
+        # two results. Same race-to-409 discipline as
+        # consultation.py::start_session's claim race (code-review
+        # follow-up 2026-09-12: this used to have no handling at all,
+        # so a race would surface as an unhandled 500).
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This request already has a result.")
 
     apply_object_meta(
         result,
@@ -378,7 +463,7 @@ def sign_off_service_request(
         detail=f"module={req.module} request_id={req.id} result_id={result.id}" + (f" flags={flags}" if flags else ""),
         actor_facility=current_user.facility,
     )
-    return _serialize_request(req)
+    return _serialize_request(req, current_user)
 
 
 @router.post("/requests/{request_id}/result/document", response_model=schemas.ServiceRequestOut)
@@ -409,7 +494,13 @@ async def upload_result_document(
     safe_name = sanitize_filename(file.filename, fallback="result")
     key = f"service-results/{req.result.id}_{safe_name}"
     try:
-        meta = get_object_store().put(BUCKET_DOCUMENTS, key, raw, mime=mime)
+        # .put() does blocking file/network I/O -- this endpoint is `async
+        # def` (needed for `await file.read()`), so a direct call here would
+        # stall the whole event loop for the write. run_in_threadpool is the
+        # same fix ai_router.py::digitise_document already applies to the
+        # identical call (code-review follow-up 2026-09-12: this endpoint
+        # was the one place that copy-pasted the pattern without it).
+        meta = await run_in_threadpool(get_object_store().put, BUCKET_DOCUMENTS, key, raw, mime=mime)
     except ObjectStoreError:
         raise HTTPException(status_code=503, detail="Document storage is temporarily unavailable.")
 
@@ -422,17 +513,26 @@ async def upload_result_document(
         db, req.patient_id, current_user.id, current_user.role, "ancillary_result_document_uploaded",
         detail=f"request_id={req.id}", actor_facility=current_user.facility,
     )
-    return _serialize_request(req)
+    return _serialize_request(req, current_user)
 
 
 @router.get("/requests/{request_id}/result/document")
 def get_result_document(
     request_id: str,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles(*ORDER_ROLES)),
+    # SIGNOFF_ROLES, not ORDER_ROLES -- a result document is clinical
+    # content (a scanned lab/X-ray report), same "receptionist is
+    # front-desk, not a clinical reader" line as _serialize_request's
+    # result-stripping above. Fixed 2026-09-12 (/code-review): this used to
+    # sit on ORDER_ROLES, so a receptionist who knew/guessed a request_id
+    # could fetch the raw attachment even though the JSON payload already
+    # hides it from them.
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
 ):
-    require_same_facility = current_user.role == "receptionist"
-    req = _request_or_404(db, request_id, current_user, require_same_facility=require_same_facility)
+    req = _request_or_404(db, request_id, current_user, require_same_facility=False)
+    if req.ordering_facility_name != current_user.facility:
+        if req.ordering_facility_name in _hidden_author_facilities(db, current_user.facility):
+            raise HTTPException(status_code=404, detail="No result document available")
     if req.result is None or not req.result.file_object_key:
         raise HTTPException(status_code=404, detail="No result document available")
     result = req.result

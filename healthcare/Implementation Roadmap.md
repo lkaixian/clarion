@@ -1,7 +1,7 @@
 ---
 title: Implementation Roadmap
 type: plan
-updated: 2026-09-11
+updated: 2026-09-12
 tags: [plan, roadmap, clarion, campus]
 ---
 
@@ -22,6 +22,64 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 > notes). Full implementation detail is in git — search the commit log for the task id.
 
 ## Changelog
+
+### 2026-09-12 — P3.1 code-review follow-up
+
+9-agent `/code-review` (test/lint/reviewer/security/quality/test-quality/perf/
+deps/simplification, run in parallel) plus a direct security audit of
+`routers/ancillary.py` against `patients.py`'s established cross-facility
+invariants, on the P3.1 diff. Verdict was Needs Attention, not Needs Work --
+tests, lint, schema check, and build were all clean; the real findings were
+concentrated in RBAC edge cases the initial implementation missed. Fixed:
+
+- **[High]** `_request_or_404`'s write-path guard (`cancel`/`sign_off`/
+  `upload_result_document`) used to exempt `role == "admin"` from the
+  facility match -- any facility's admin could cancel or forge a signed
+  result at ANY other facility. Removed the exemption entirely, matching
+  `patients.py::_guard_cross_facility_amend`'s documented "deliberately NO
+  global admin override" invariant. Same bug existed in `create_catalog_item`
+  (an admin's `facility_name` was trusted verbatim -- could plant an item
+  under an arbitrary facility's name) and `update_catalog_item` (admin could
+  edit any facility's private item); both now confine an admin to their own
+  facility or a global/null item, mirroring `admin.py::_check_mapping_authz`.
+- **[High]** A receptionist's own-facility default worklist and single-request
+  view leaked full clinical result content (`result_text`, critical/abnormal
+  flags, attachment availability) despite the module's own docstring stating
+  "receptionist orders but never clinically signs" -- no endpoint was
+  actually stripping it. `_serialize_request` now omits `result` entirely for
+  a receptionist caller; `GET .../result/document` moved from `ORDER_ROLES`
+  to `SIGNOFF_ROLES` so a receptionist can't fetch the raw attachment either
+  even by guessing a request_id.
+- **[Med]** Cross-facility ancillary reads (`patient_id`-scoped list, single
+  GET, result-document GET) didn't respect
+  `HospitalSetting.records_shared_publicly`, unlike every other cross-facility
+  clinical read in `patients.py`. Now filtered through the same
+  `_hidden_author_facilities` helper.
+- **[Med]** No `IntegrityError` handling around `ServiceResult`'s
+  UNIQUE(service_request_id) insert at sign-off -- a genuine double sign-off
+  race would have surfaced as an unhandled 500 instead of a clean 409, unlike
+  `consultation.py::start_session`'s equivalent claim-race handling. Fixed.
+- **[Perf]** N+1 queries in `list_service_requests` (up to ~400 queries for a
+  200-row worklist against MariaDB) -- fixed with `joinedload` on
+  `catalog_item`/`result`/`patient`. `upload_result_document` (an `async def`
+  endpoint) called the object store's blocking `.put()` directly, stalling
+  the event loop for the write -- wrapped in `run_in_threadpool`, matching
+  `ai_router.py::digitise_document`'s existing pattern for the identical call.
+- **[Bug]** The web order form called `listPatients()` unconditionally, which
+  403s for a receptionist (no `patients` page access by design) -- the
+  "New order" patient search silently never worked for the one role every
+  module clause explicitly names as a Frontdesk-direct-registration actor.
+  Receptionist now gets a plain patient-ID input (from Reception check-in)
+  instead of the searchable list.
+- Minor: deduped `ANCILLARY_MODULES`/`SERVICE_REQUEST_SOURCES`/
+  `SERVICE_REQUEST_PRIORITIES` (were briefly literal sets in both `models.py`
+  and `schemas.py`) to `models.py` as the single source, matching
+  `SERVICE_REQUEST_STATUSES`'s already-correct pattern; joined
+  `patient_full_name` into `ServiceRequestOut` (was a raw UUID in the UI);
+  removed a dead `const canOrder = true` in `Ancillary.jsx`.
+
+6 new tests added (`test_ancillary.py`: 16 → 22) covering every fix above.
+Full suite 271/271, `check_schema` PASS, web lint/build clean.
 
 ### 2026-09-11 — P3.1 Ancillary engine
 
