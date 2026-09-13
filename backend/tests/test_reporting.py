@@ -38,6 +38,14 @@ def _service_result(db_session, req, performed_at, flag_abnormal=False):
     return res
 
 
+def _condition(db_session, patient_id, facility, name="Dengue Fever", **overrides):
+    cond = models.Condition(patient_id=patient_id, name=name, authored_by_facility=facility, **overrides)
+    db_session.add(cond)
+    db_session.commit()
+    db_session.refresh(cond)
+    return cond
+
+
 def _encounter(db_session, patient_id, facility, **overrides):
     enc = models.Encounter(
         patient_id=patient_id, facility_name=facility,
@@ -272,3 +280,139 @@ def test_template_invalid_selection_rejected_at_save(test_client, make_user, aut
         headers=auth_headers(clinician),
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# P3.7: period-bucket fields + anonymization
+# ---------------------------------------------------------------------------
+
+def test_period_bucket_groups_by_day(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session)
+    day = datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc)
+    _encounter(db_session, patient.id, facility, started_at=day)
+    _encounter(db_session, patient.id, facility, started_at=day.replace(hour=15))
+    _encounter(db_session, patient.id, facility, started_at=day + timedelta(days=1))
+
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run",
+        json={"dataset": "encounters", "fields": ["started_at_day"], "group_by": ["started_at_day"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    by_day = {row[0]: row[1] for row in resp.json()["rows"]}
+    assert by_day["2026-03-05"] == 2
+    assert by_day["2026-03-06"] == 1
+
+
+def test_anonymize_replaces_pii_fields_only(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session, full_name="Ah Kow")
+    _encounter(db_session, patient.id, facility, encounter_type="outpatient")
+
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run",
+        json={"dataset": "encounters", "fields": ["patient_name", "encounter_type"], "anonymize": True},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    row = resp.json()["rows"][0]
+    assert row[0] != "Ah Kow"
+    assert row[0].startswith("Case-")
+    assert row[1] == "outpatient"  # non-PII field untouched
+
+
+def test_dataset_specs_expose_pii_flag(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.get("/reports/datasets", headers=auth_headers(clinician))
+    encounters = next(d for d in resp.json() if d["key"] == "encounters")
+    assert encounters["fields"]["patient_name"]["pii"] is True
+    assert encounters["fields"]["encounter_type"]["pii"] is False
+
+
+# ---------------------------------------------------------------------------
+# P3.7: notifiable disease reporting workflow
+# ---------------------------------------------------------------------------
+
+def test_notifiable_disease_full_workflow(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session, full_name="Case Patient")
+    condition = _condition(db_session, patient.id, facility, name="Dengue Fever (confirmed)")
+    clinician = make_user(role="clinician", facility=facility)
+    headers = auth_headers(clinician)
+
+    candidates = test_client.get("/reports/notifiable-diseases/candidates", headers=headers).json()
+    match = next(c for c in candidates if c["condition_id"] == condition.id)
+    assert match["matched_disease"] == "Dengue Fever"
+    assert match["patient_name"] == "Case Patient"
+
+    create = test_client.post(
+        "/reports/notifiable-diseases",
+        json={"patient_id": patient.id, "condition_id": condition.id, "disease_name": "Dengue Fever", "onset_date": "2026-03-01"},
+        headers=headers,
+    )
+    assert create.status_code == 201, create.text
+    report_id = create.json()["id"]
+    assert create.json()["status"] == "pending"
+    assert create.json()["patient_name"] == "Case Patient"
+
+    # No longer suggested once filed.
+    candidates_after = test_client.get("/reports/notifiable-diseases/candidates", headers=headers).json()
+    assert condition.id not in {c["condition_id"] for c in candidates_after}
+
+    # Duplicate filing against the same condition is rejected.
+    dup = test_client.post(
+        "/reports/notifiable-diseases",
+        json={"patient_id": patient.id, "condition_id": condition.id, "disease_name": "Dengue Fever"},
+        headers=headers,
+    )
+    assert dup.status_code == 409
+
+    doc = test_client.get(f"/reports/notifiable-diseases/{report_id}/document", headers=headers)
+    assert doc.status_code == 200, doc.text
+    assert doc.content[:4] == b"%PDF"
+
+    submitted = test_client.post(f"/reports/notifiable-diseases/{report_id}/submitted", headers=headers)
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "submitted"
+    assert submitted.json()["submitted_at"] is not None
+
+    resubmit = test_client.post(f"/reports/notifiable-diseases/{report_id}/submitted", headers=headers)
+    assert resubmit.status_code == 409
+
+
+def test_notifiable_disease_free_text_not_gated_on_suggestion_list(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session)
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/notifiable-diseases",
+        json={"patient_id": patient.id, "disease_name": "Some Emerging Illness Not On The List"},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 201, resp.text
+
+
+def test_notifiable_disease_is_facility_scoped(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("A"), _facility("B")
+    patient = _make_patient(db_session)
+    condition = _condition(db_session, patient.id, facility_a, name="Cholera")
+
+    clinician_b = make_user(role="clinician", facility=facility_b)
+    candidates_b = test_client.get("/reports/notifiable-diseases/candidates", headers=auth_headers(clinician_b)).json()
+    assert condition.id not in {c["condition_id"] for c in candidates_b}
+
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    create = test_client.post(
+        "/reports/notifiable-diseases",
+        json={"patient_id": patient.id, "condition_id": condition.id, "disease_name": "Cholera"},
+        headers=auth_headers(clinician_a),
+    )
+    report_id = create.json()["id"]
+
+    # Facility B cannot see or act on facility A's notification.
+    assert test_client.get(f"/reports/notifiable-diseases/{report_id}/document", headers=auth_headers(clinician_b)).status_code == 404
+    assert test_client.post(f"/reports/notifiable-diseases/{report_id}/submitted", headers=auth_headers(clinician_b)).status_code == 404

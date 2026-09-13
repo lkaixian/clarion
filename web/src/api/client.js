@@ -835,4 +835,16 @@ export const createReportTemplate = (body) => client.post("/reports/templates", 
 export const deleteReportTemplate = (templateId) =>
   client.delete(`/reports/templates/${templateId}`).then((r) => r.data);
 
+// Notifiable disease reporting (P3.7). No public e-Notifikasi
+// API exists -- these generate the notification + a PDF for a human to
+// file at enotifikasi.moh.gov.my, and track whether that's been done.
+export const listNotifiableDiseaseCandidates = () => client.get("/reports/notifiable-diseases/candidates").then((r) => r.data);
+export const listNotifiableDiseaseReports = (status) =>
+  client.get("/reports/notifiable-diseases", { params: { status: status || undefined } }).then((r) => r.data);
+export const createNotifiableDiseaseReport = (body) => client.post("/reports/notifiable-diseases", body).then((r) => r.data);
+export const markNotifiableDiseaseSubmitted = (reportId) =>
+  client.post(`/reports/notifiable-diseases/${reportId}/submitted`).then((r) => r.data);
+export const getNotifiableDiseaseDocumentBlob = (reportId) =>
+  client.get(`/reports/notifiable-diseases/${reportId}/document`, { responseType: "blob" }).then((r) => r.data);
+
 export default client;

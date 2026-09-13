@@ -19,6 +19,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas as _canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
@@ -79,4 +80,50 @@ def render_excel(title: str, result: Dict[str, Any]) -> bytes:
 
     buf = io.BytesIO()
     wb.save(buf)
+    return buf.getvalue()
+
+
+def render_notifiable_disease_pdf(report, patient) -> bytes:
+    """P3.7: a single-page notification form in the shape
+    MOH's e-Notifikasi portal (enotifikasi.moh.gov.my) asks for. There is
+    no public submission API (see healthcare/National Interoperability.md
+    -- same situation as MHNexus/FHIR) so this PDF is the artifact a human
+    re-keys from when filing there -- same "simplest tool that draws a
+    form" choice as app/document_generation.py's raw Canvas use, reused
+    directly here rather than routing a one-off form through the
+    table-shaped render_pdf above."""
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=A4)
+    _, page_h = A4
+    x = 20 * mm
+    y = [page_h - 20 * mm]  # boxed so the nested closure can mutate it
+
+    def line(text: str, size: int = 11, bold: bool = False, gap: float = 7 * mm) -> None:
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        c.drawString(x, y[0], text)
+        y[0] -= gap
+
+    line("NOTIFIABLE DISEASE REPORT", 16, bold=True, gap=9 * mm)
+    line("Prevention & Control of Infectious Diseases Act 1988 (Act 342)", 9)
+    line("For submission at enotifikasi.moh.gov.my", 9, gap=10 * mm)
+
+    line(f"Patient: {patient.full_name}", bold=True)
+    line(f"NRIC / ID: {patient.national_id or '-'}")
+    line(f"Date of birth: {patient.date_of_birth}")
+    line(f"Gender: {patient.gender or '-'}", gap=10 * mm)
+
+    line(f"Disease: {report.disease_name}", bold=True)
+    line(f"Onset date: {report.onset_date or '-'}")
+    if report.notes:
+        line(f"Notes: {report.notes}", gap=10 * mm)
+    else:
+        y[0] -= 3 * mm
+
+    line(f"Reporting facility: {report.facility_name}")
+    line(f"Reported by: {report.reported_by_name or '-'} at {report.reported_at.isoformat()}")
+    if report.submitted_at:
+        line(f"Marked submitted at: {report.submitted_at.isoformat()}")
+
+    c.showPage()
+    c.save()
     return buf.getvalue()

@@ -14,6 +14,8 @@ import Layout from "../components/Layout";
 import {
   getReportDatasets, runReport, exportReport,
   listReportTemplates, createReportTemplate, deleteReportTemplate,
+  listNotifiableDiseaseCandidates, listNotifiableDiseaseReports,
+  createNotifiableDiseaseReport, markNotifiableDiseaseSubmitted, getNotifiableDiseaseDocumentBlob,
 } from "../api/client";
 
 function emptyFilterValue(type) {
@@ -114,6 +116,124 @@ function FilterInput({ spec, value, onChange }) {
   );
 }
 
+// P3.7 ("notifiable disease reports"). No public e-Notifikasi
+// API exists, so this is deliberately a checklist + PDF generator, not a
+// live submission -- "File" records the notification and lets staff mark
+// it submitted once they've filed it at enotifikasi.moh.gov.my by hand.
+function NotifiableDiseasePanel() {
+  const [candidates, setCandidates] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [filingCondition, setFilingCondition] = useState(null); // candidate being filed, or null
+  const [onsetDate, setOnsetDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+
+  function refresh() {
+    listNotifiableDiseaseCandidates().then(setCandidates).catch(() => {});
+    listNotifiableDiseaseReports().then(setReports).catch(() => {});
+  }
+  useEffect(refresh, []);
+
+  function startFiling(candidate) {
+    setFilingCondition(candidate);
+    setOnsetDate(candidate.diagnosed_at || "");
+    setNotes("");
+  }
+
+  function confirmFiling() {
+    createNotifiableDiseaseReport({
+      patient_id: filingCondition.patient_id,
+      condition_id: filingCondition.condition_id,
+      disease_name: filingCondition.matched_disease,
+      onset_date: onsetDate || undefined,
+      notes: notes || undefined,
+    })
+      .then(() => { setFilingCondition(null); refresh(); })
+      .catch((e) => setError(e?.response?.data?.detail || "Failed to file notification."));
+  }
+
+  function markSubmitted(reportId) {
+    markNotifiableDiseaseSubmitted(reportId).then(refresh)
+      .catch((e) => setError(e?.response?.data?.detail || "Failed to update."));
+  }
+
+  function openDocument(reportId) {
+    getNotifiableDiseaseDocumentBlob(reportId).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }).catch((e) => setError(e?.response?.data?.detail || "Failed to open document."));
+  }
+
+  return (
+    <div className="mt-6 bg-white rounded-xl border border-slate-200 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 mb-1">Notifiable disease reports</h2>
+      <p className="text-xs text-slate-400 mb-3">
+        Suggested from diagnoses matching MOH's notifiable disease list -- file, then submit at{" "}
+        <a href="https://enotifikasi.moh.gov.my" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">enotifikasi.moh.gov.my</a>{" "}
+        (no public API exists to do this automatically) and mark it done here.
+      </p>
+      {error && (
+        <div className="mb-3 text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700 flex items-start justify-between gap-3">
+          <span>{error}</span>
+          <button onClick={() => setError("")} className="shrink-0 font-medium">✕</button>
+        </div>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs font-semibold text-slate-500 mb-1">Candidates</div>
+          <div className="space-y-2">
+            {candidates.map((c) => (
+              <div key={c.condition_id} className="text-sm border border-slate-100 rounded-lg p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{c.patient_name} -- {c.matched_disease} <span className="text-xs text-slate-400">({c.condition_name})</span></span>
+                  <button onClick={() => startFiling(c)} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded shrink-0">File</button>
+                </div>
+                {filingCondition?.condition_id === c.condition_id && (
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <div>
+                      <div className="text-xs text-slate-500">Onset date</div>
+                      <input type="text" value={onsetDate} onChange={(e) => setOnsetDate(e.target.value)}
+                        placeholder="YYYY-MM-DD" className="border border-slate-300 rounded px-2 py-1 text-xs w-32" />
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                      <div className="text-xs text-slate-500">Notes</div>
+                      <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
+                        className="border border-slate-300 rounded px-2 py-1 text-xs w-full" />
+                    </div>
+                    <button onClick={confirmFiling} className="text-xs bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded">Confirm</button>
+                    <button onClick={() => setFilingCondition(null)} className="text-xs text-slate-500 hover:underline">Cancel</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs font-semibold text-slate-500 mb-1">Filed</div>
+      {reports.length === 0 && <p className="text-xs text-slate-400">None filed yet.</p>}
+      <div className="space-y-1">
+        {reports.map((r) => (
+          <div key={r.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 py-1">
+            <span>
+              {r.patient_name} -- {r.disease_name}{" "}
+              <span className={`text-xs ${r.status === "submitted" ? "text-green-600" : "text-amber-600"}`}>({r.status})</span>
+            </span>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => openDocument(r.id)} className="text-xs text-blue-700 hover:underline">PDF</button>
+              {r.status !== "submitted" && (
+                <button onClick={() => markSubmitted(r.id)} className="text-xs text-slate-500 hover:underline">Mark submitted</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Reporting() {
   const [datasets, setDatasets] = useState([]);
   const [datasetKey, setDatasetKey] = useState("");
@@ -122,6 +242,7 @@ export default function Reporting() {
   const [groupBy, setGroupBy] = useState([]);
   const [sortField, setSortField] = useState("");
   const [sortDir, setSortDir] = useState("asc");
+  const [anonymize, setAnonymize] = useState(false);
 
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
@@ -185,8 +306,11 @@ export default function Reporting() {
       filters: cleanFilters(filterState, fieldSpecs),
       group_by: groupBy.length ? groupBy : undefined,
       sort: sortField ? { field: sortField, dir: sortDir } : undefined,
+      anonymize,
     };
   }
+
+  const hasPiiField = fields.some((k) => fieldSpecs[k]?.pii);
 
   function run() {
     setRunning(true);
@@ -309,6 +433,13 @@ export default function Reporting() {
               </div>
             </div>
 
+            {hasPiiField && (
+              <label className="flex items-center gap-2 text-xs text-slate-500 mt-4">
+                <input type="checkbox" checked={anonymize} onChange={(e) => setAnonymize(e.target.checked)} />
+                Anonymize patient name / NRIC
+              </label>
+            )}
+
             <button onClick={run} disabled={running || !fields.length}
               className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg">
               {running ? "Running..." : "Run report"}
@@ -397,6 +528,8 @@ export default function Reporting() {
           </div>
         </div>
       </div>
+
+      <NotifiableDiseasePanel />
     </Layout>
   );
 }

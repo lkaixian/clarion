@@ -1,9 +1,10 @@
-"""P3.6: Reporting (canned operational reports +
-Custom Report Builder). The query/filter/group/sort logic lives in
-app/reporting_engine.py (dataset registry -- see its docstring for why this
-is deliberately NOT a generic SQL builder); PDF/Excel rendering lives in
-app/report_export.py. This file is just the HTTP surface + RBAC + template
-CRUD.
+"""P3.6/P3.7: Reporting (canned operational reports +
+Custom Report Builder + notifiable-disease reporting). The
+query/filter/group/sort logic lives in app/reporting_engine.py (dataset
+registry -- see its docstring for why this is deliberately NOT a generic
+SQL builder); PDF/Excel rendering lives in app/report_export.py. This file
+is just the HTTP surface + RBAC + template CRUD + the notifiable-disease
+notification workflow (bottom of the file).
 
 RBAC: REPORTING_ROLES (admin/records_officer/clinician) -- a management/
 clinical tool, not a frontdesk task, so unlike billing/ancillary it does NOT
@@ -41,7 +42,7 @@ def _run(db: Session, facility: str, payload) -> dict:
         return reporting_engine.run_report(
             db, facility, payload.dataset,
             fields=payload.fields, filters=payload.filters,
-            group_by=payload.group_by, sort=payload.sort,
+            group_by=payload.group_by, sort=payload.sort, anonymize=payload.anonymize,
         )
     except reporting_engine.ReportError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -188,4 +189,160 @@ def delete_template(
         db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
         action="report_template_deleted", detail=f"template_id={template_id}",
         actor_facility=current_user.facility,
+    )
+
+
+# ---------- Notifiable disease reporting ----------
+# No public e-Notifikasi API exists (see models.NotifiableDiseaseReport's
+# docstring) -- these endpoints generate the notification record + a PDF
+# for a human to file at enotifikasi.moh.gov.my, and track whether that's
+# been done. `candidates` only SUGGESTS cases (Condition.name matched
+# against models.NOTIFIABLE_DISEASES); `disease_name` on create is always
+# free text, so filing isn't gated on the suggestion list.
+
+_NOTIFIABLE_LOWER = [d.lower() for d in models.NOTIFIABLE_DISEASES]
+
+
+def _serialize_notification(row: models.NotifiableDiseaseReport) -> schemas.NotifiableDiseaseReportOut:
+    return schemas.NotifiableDiseaseReportOut(
+        id=row.id, facility_name=row.facility_name, patient_id=row.patient_id,
+        patient_name=row.patient.full_name if row.patient else None,
+        condition_id=row.condition_id, disease_name=row.disease_name, onset_date=row.onset_date,
+        notes=row.notes, status=row.status, reported_by=row.reported_by, reported_by_name=row.reported_by_name,
+        reported_at=row.reported_at, submitted_by=row.submitted_by, submitted_at=row.submitted_at,
+    )
+
+
+def _matches_notifiable(condition_name: str) -> Optional[str]:
+    name = (condition_name or "").strip().lower()
+    for i, candidate in enumerate(_NOTIFIABLE_LOWER):
+        if candidate == name or candidate in name:
+            return models.NOTIFIABLE_DISEASES[i]
+    return None
+
+
+@router.get("/notifiable-diseases/candidates")
+def list_notifiable_disease_candidates(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    facility = _require_facility(current_user)
+    already_filed = {
+        row.condition_id
+        for row in db.query(models.NotifiableDiseaseReport.condition_id)
+        .filter(models.NotifiableDiseaseReport.facility_name == facility, models.NotifiableDiseaseReport.condition_id.isnot(None))
+        .all()
+    }
+    conditions = db.query(models.Condition).filter(models.Condition.authored_by_facility == facility).all()
+    out = []
+    for cond in conditions:
+        if cond.id in already_filed:
+            continue
+        matched = _matches_notifiable(cond.name)
+        if not matched:
+            continue
+        patient = db.query(models.Patient).filter(models.Patient.id == cond.patient_id).first()
+        out.append({
+            "condition_id": cond.id, "patient_id": cond.patient_id,
+            "patient_name": patient.full_name if patient else None,
+            "matched_disease": matched, "condition_name": cond.name, "diagnosed_at": cond.diagnosed_at,
+        })
+    return out
+
+
+@router.get("/notifiable-diseases", response_model=list[schemas.NotifiableDiseaseReportOut])
+def list_notifiable_disease_reports(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    q = db.query(models.NotifiableDiseaseReport).filter(models.NotifiableDiseaseReport.facility_name == current_user.facility)
+    if status:
+        q = q.filter(models.NotifiableDiseaseReport.status == status)
+    rows = q.order_by(models.NotifiableDiseaseReport.reported_at.desc()).all()
+    return [_serialize_notification(r) for r in rows]
+
+
+@router.post("/notifiable-diseases", response_model=schemas.NotifiableDiseaseReportOut, status_code=201)
+def create_notifiable_disease_report(
+    payload: schemas.NotifiableDiseaseReportCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    facility = _require_facility(current_user)
+    patient = db.query(models.Patient).filter(models.Patient.id == payload.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if payload.condition_id:
+        condition = db.query(models.Condition).filter(models.Condition.id == payload.condition_id).first()
+        if not condition or condition.patient_id != payload.patient_id:
+            raise HTTPException(status_code=404, detail="Condition not found for this patient")
+        dup = (
+            db.query(models.NotifiableDiseaseReport)
+            .filter(models.NotifiableDiseaseReport.condition_id == payload.condition_id)
+            .first()
+        )
+        if dup:
+            raise HTTPException(status_code=409, detail="A notification already exists for this condition")
+
+    row = models.NotifiableDiseaseReport(
+        facility_name=facility, patient_id=payload.patient_id, condition_id=payload.condition_id,
+        disease_name=payload.disease_name, onset_date=payload.onset_date, notes=payload.notes,
+        reported_by=current_user.id, reported_by_name=current_user.full_name,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(
+        db, patient_id=payload.patient_id, actor=current_user.id, actor_role=current_user.role,
+        action="notifiable_disease_reported", detail=f"report_id={row.id} disease={row.disease_name!r}",
+        actor_facility=facility,
+    )
+    return _serialize_notification(row)
+
+
+def _notification_or_404(db: Session, report_id: str, current_user: models.User) -> models.NotifiableDiseaseReport:
+    row = db.query(models.NotifiableDiseaseReport).filter(models.NotifiableDiseaseReport.id == report_id).first()
+    if row is None or row.facility_name != current_user.facility:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return row
+
+
+@router.post("/notifiable-diseases/{report_id}/submitted", response_model=schemas.NotifiableDiseaseReportOut)
+def mark_notifiable_disease_submitted(
+    report_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    row = _notification_or_404(db, report_id, current_user)
+    if row.status == "submitted":
+        raise HTTPException(status_code=409, detail="Already marked submitted")
+    row.status = "submitted"
+    row.submitted_by = current_user.id
+    row.submitted_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    log_access(
+        db, patient_id=row.patient_id, actor=current_user.id, actor_role=current_user.role,
+        action="notifiable_disease_marked_submitted", detail=f"report_id={row.id}",
+        actor_facility=current_user.facility,
+    )
+    return _serialize_notification(row)
+
+
+@router.get("/notifiable-diseases/{report_id}/document")
+def get_notifiable_disease_document(
+    report_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    row = _notification_or_404(db, report_id, current_user)
+    patient = db.query(models.Patient).filter(models.Patient.id == row.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    body = report_export.render_notifiable_disease_pdf(row, patient)
+    filename = f"notifiable-disease-{row.id}.pdf"
+    return Response(
+        content=body, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

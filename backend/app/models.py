@@ -2025,6 +2025,64 @@ class RetentionReviewItem(Base):
     )
 
 
+# P3.7: a starter list of diseases notifiable to MOH
+# under the Prevention & Control of Infectious Diseases Act 1988 (Act 342),
+# Second Schedule -- NOT a legally-exhaustive or gazette-synced list (the
+# Schedule is periodically amended, e.g. COVID-19's addition). Used only to
+# SUGGEST candidate cases in GET /reports/notifiable-diseases/candidates;
+# NotifiableDiseaseReport.disease_name is always free text, so a disease
+# missing from this tuple can still be filed manually. Verify against the
+# current gazette before any production use -- same disclaimer as the SaMD/
+# accreditation items in healthcare/Malaysia Health Regulation.md.
+NOTIFIABLE_DISEASES = (
+    "Cholera", "Typhoid Fever", "Paratyphoid Fever", "Dysentery", "Food Poisoning",
+    "Hand, Foot and Mouth Disease", "Hepatitis A", "Hepatitis B", "Hepatitis C", "Hepatitis E",
+    "Poliomyelitis", "Acute Flaccid Paralysis", "Measles", "Rubella", "Diphtheria", "Pertussis",
+    "Tetanus", "Neonatal Tetanus", "Meningococcal Disease", "Tuberculosis", "Leprosy",
+    "Dengue Fever", "Dengue Haemorrhagic Fever", "Chikungunya", "Zika Virus Infection",
+    "Japanese Encephalitis", "Malaria", "Leptospirosis", "Rabies", "Anthrax", "Plague",
+    "Yellow Fever", "Viral Haemorrhagic Fever", "Severe Acute Respiratory Syndrome (SARS)",
+    "COVID-19", "Influenza A (H5N1)", "Middle East Respiratory Syndrome (MERS)",
+    "HIV Infection", "AIDS", "Sexually Transmitted Infection",
+)
+
+
+class NotifiableDiseaseReport(Base):
+    """One filed (or in-progress) MOH notification for a case of a
+    notifiable infectious disease (Prevention & Control of Infectious
+    Diseases Act 1988 / Act 342, the tender: "notifiable disease
+    reports"). There is no public e-Notifikasi API (see healthcare/National
+    Interoperability.md / Malaysia Health Regulation.md -- same "schema-
+    readiness, not a live integration" situation as MHNexus/FHIR) -- the
+    clause's own wording is "must GENERATE these", so this row + its PDF
+    (routers/reporting.py's notification document) is the artifact a human
+    then submits at enotifikasi.moh.gov.my; `status`/`submitted_at` is a
+    manual self-report of having done so, not a verified portal ack.
+
+    `condition_id` links back to the triggering Condition for traceability
+    only -- this is its own append-only record, independent of whatever
+    later happens to that Condition (resolved, corrected, etc.)."""
+    __tablename__ = "notifiable_disease_reports"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    condition_id = Column(String(36), ForeignKey("conditions.id"), nullable=True)
+    disease_name = Column(String(255), nullable=False, index=True)
+    onset_date = Column(String(64), nullable=True)  # ISO date, free text -- same convention as Condition.diagnosed_at
+    notes = Column(Text, nullable=True)
+    status = Column(String(32), nullable=False, default="pending", index=True)  # pending | submitted
+
+    reported_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    reported_by_name = Column(String(255), nullable=True)
+    reported_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    submitted_at = Column(TZDateTime, nullable=True)
+
+    patient = relationship("Patient")
+
+
 class ReportTemplate(Base):
     """A saved Custom Report Builder query (: "select fields from
     all modules; filter/sort/group; save & share templates"). Stores the

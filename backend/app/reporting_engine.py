@@ -22,6 +22,7 @@ SQL-side pagination -- not before.
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field as dc_field
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -45,9 +46,16 @@ class Field:
     groupable: bool = False
     filterable: bool = False
     options: Optional[List[str]] = None  # only for type == "enum"
+    # P3.7 ("data anonymization"): true for a field that
+    # identifies a specific patient (name, NRIC). run_report(anonymize=True)
+    # replaces its value with a stable pseudonym -- see _pseudonym below.
+    pii: bool = False
 
     def spec(self) -> dict:
-        d = {"label": self.label, "type": self.type, "groupable": self.groupable, "filterable": self.filterable}
+        d = {
+            "label": self.label, "type": self.type, "groupable": self.groupable,
+            "filterable": self.filterable, "pii": self.pii,
+        }
         if self.options is not None:
             d["options"] = self.options
         return d
@@ -68,6 +76,34 @@ def _minutes_between(start_attr: str, end_attr: str) -> Callable[[Any], Optional
             return None
         return round((end - start).total_seconds() / 60.0, 1)
     return getter
+
+
+# P3.7 ("automate daily/weekly/monthly reporting" + 12.3 HMIS
+# "attendance ... service provision" returns): a groupable date-bucket
+# string, so "group by month" is just another groupable field -- no
+# separate scheduling/period-parameter machinery. Not timezone-bucketed
+# (uses the stored TZDateTime's own date/isocalendar directly); fine at
+# clinic scale/timezone (single-country deployment).
+def _period_bucket(attr: str, granularity: str) -> Callable[[Any], Optional[str]]:
+    def getter(row):
+        dt = getattr(row, attr, None)
+        if not dt:
+            return None
+        if granularity == "day":
+            return dt.date().isoformat()
+        if granularity == "week":
+            iso = dt.isocalendar()
+            return f"{iso[0]}-W{iso[1]:02d}"
+        return dt.strftime("%Y-%m")
+    return getter
+
+
+def _period_fields(attr: str) -> Dict[str, "Field"]:
+    return {
+        f"{attr}_day": Field("Day", "string", _period_bucket(attr, "day"), groupable=True),
+        f"{attr}_week": Field("Week", "string", _period_bucket(attr, "week"), groupable=True),
+        f"{attr}_month": Field("Month", "string", _period_bucket(attr, "month"), groupable=True),
+    }
 
 
 def _encounters_query(db: Session, facility: str):
@@ -162,8 +198,8 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
             query=_encounters_query,
             default_fields=["patient_name", "encounter_type", "started_at", "signed_by_name"],
             fields={
-                "patient_name": Field("Patient", "string", patient_name, filterable=True),
-                "patient_nric": Field("NRIC / ID", "string", patient_nric, filterable=True),
+                "patient_name": Field("Patient", "string", patient_name, filterable=True, pii=True),
+                "patient_nric": Field("NRIC / ID", "string", patient_nric, filterable=True, pii=True),
                 "encounter_type": Field(
                     "Encounter type", "enum", lambda r: r.encounter_type,
                     groupable=True, filterable=True,
@@ -171,6 +207,7 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
                 ),
                 "reason": Field("Reason", "string", lambda r: r.reason),
                 "started_at": Field("Started at", "date", lambda r: r.started_at, filterable=True),
+                **_period_fields("started_at"),
                 "signed_by_name": Field("Signed by", "string", lambda r: r.signed_by_name, groupable=True, filterable=True),
                 "signed_by_role": Field("Signer role", "string", lambda r: r.signed_by_role, groupable=True),
             },
@@ -180,7 +217,7 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
             query=_admissions_query,
             default_fields=["patient_name", "ward_name", "admitted_at", "discharged_at", "status"],
             fields={
-                "patient_name": Field("Patient", "string", patient_name, filterable=True),
+                "patient_name": Field("Patient", "string", patient_name, filterable=True, pii=True),
                 "ward_name": Field("Ward", "string", ward_name, groupable=True, filterable=True),
                 "bed_number": Field("Bed", "number", lambda r: r.bed_number),
                 "admitted_at": Field("Admitted at", "date", lambda r: r.admitted_at, filterable=True),
@@ -202,13 +239,14 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
                     options=list(models.ANCILLARY_MODULES),
                 ),
                 "catalog_item_name": Field("Item", "string", catalog_item_name, groupable=True, filterable=True),
-                "patient_name": Field("Patient", "string", patient_name, filterable=True),
+                "patient_name": Field("Patient", "string", patient_name, filterable=True, pii=True),
                 "status": Field(
                     "Status", "enum", lambda r: r.status, groupable=True, filterable=True,
                     options=["ordered", "signed_off", "cancelled"],
                 ),
                 "priority": Field("Priority", "enum", lambda r: r.priority, groupable=True, filterable=True, options=["routine", "urgent"]),
                 "created_at": Field("Requested at", "date", lambda r: r.created_at, filterable=True),
+                **_period_fields("created_at"),
                 "tat_minutes": Field(
                     "Turnaround (min)", "number",
                     _minutes_between("created_at", "_performed_at"),
@@ -223,8 +261,8 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
             query=_conditions_query,
             default_fields=["patient_name", "name", "status", "is_chronic"],
             fields={
-                "patient_name": Field("Patient", "string", patient_name, filterable=True),
-                "patient_nric": Field("NRIC / ID", "string", patient_nric, filterable=True),
+                "patient_name": Field("Patient", "string", patient_name, filterable=True, pii=True),
+                "patient_nric": Field("NRIC / ID", "string", patient_nric, filterable=True, pii=True),
                 "name": Field("Diagnosis", "string", lambda r: r.name, groupable=True, filterable=True),
                 "status": Field("Status", "enum", lambda r: r.status, groupable=True, filterable=True, options=["active", "resolved"]),
                 "is_chronic": Field("Chronic", "bool", lambda r: bool(r.is_chronic), filterable=True),
@@ -243,7 +281,7 @@ def build_datasets(db: Session) -> Dict[str, Dataset]:
             query=_bills_query,
             default_fields=["patient_name", "status", "created_at", "total_amount_cents", "paid_amount_cents"],
             fields={
-                "patient_name": Field("Patient", "string", lambda r: r.patient.full_name if r.patient else None, filterable=True),
+                "patient_name": Field("Patient", "string", lambda r: r.patient.full_name if r.patient else None, filterable=True, pii=True),
                 "status": Field("Status", "enum", lambda r: r.status, groupable=True, filterable=True, options=["open", "finalized", "voided"]),
                 "created_at": Field("Created at", "date", lambda r: r.created_at, filterable=True),
                 "finalized_at": Field("Finalized at", "date", lambda r: r.finalized_at, filterable=True),
@@ -314,6 +352,24 @@ def _matches_filter(f: Field, value: Any, spec: Any) -> bool:
     return bool(spec) and str(spec).lower() in str(value or "").lower()
 
 
+def _pseudonym(value: Any) -> Optional[str]:
+    """A stable, non-reversible stand-in for a PII value ("data
+    anonymization"). Same pseudonym for the same raw value within one
+    report, so rows for the same case still correlate -- e.g. grouping by
+    disease still lets you count distinct cases -- without carrying the
+    real name/NRIC into the export.
+
+    ponytail: unsalted hash -- adequate for de-identifying an ad-hoc
+    compliance export; if this ever needs to resist a dictionary attack
+    against a small name-space (unlikely for a full name/NRIC, but a
+    genuine requirement for a stronger anonymization guarantee), swap in a
+    per-facility keyed HMAC, same upgrade path app/audit_hash.py already
+    uses for the audit chain."""
+    if value is None:
+        return None
+    return "Case-" + hashlib.sha256(str(value).encode()).hexdigest()[:8]
+
+
 def run_report(
     db: Session,
     facility: str,
@@ -322,6 +378,7 @@ def run_report(
     filters: Optional[Dict[str, Any]] = None,
     group_by: Optional[List[str]] = None,
     sort: Optional[Dict[str, str]] = None,
+    anonymize: bool = False,
 ) -> Dict[str, Any]:
     datasets = build_datasets(db)
     dataset = datasets.get(dataset_key)
@@ -376,6 +433,12 @@ def run_report(
     else:
         columns = [{"key": k, "label": dataset.fields[k].label, "type": dataset.fields[k].type} for k in fields]
         out_rows = [[_jsonsafe(dataset.fields[k].getter(r)) for k in fields] for r in rows]
+
+    if anonymize:
+        pii_idx = [i for i, c in enumerate(columns) if dataset.fields.get(c["key"]) and dataset.fields[c["key"]].pii]
+        for row in out_rows:
+            for i in pii_idx:
+                row[i] = _pseudonym(row[i])
 
     # Sort applies uniformly to either shape -- an unrecognised sort field
     # (e.g. one that only exists pre-grouping) is silently ignored rather

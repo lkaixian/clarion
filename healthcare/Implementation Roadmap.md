@@ -23,6 +23,62 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P3.7 MOH / statutory reporting
+
+: "notifiable disease reports", "quality & safety compliance
+reports", "data anonymization" -- 12.2's "automate daily/weekly/monthly
+reporting" folded in too since it's the same mechanism. Reused P3.6's
+engine throughout rather than building a parallel one:
+
+- **Data anonymization:** NEW `Field.pii` flag on `reporting_engine`'s
+  field registry (set on every patient-name/NRIC field across all 5
+  datasets) + `run_report(..., anonymize=True)` replacing any selected
+  `pii` field's value with a stable per-value pseudonym
+  (`sha256(value)[:8]`, unsalted -- ponytail-flagged: fine for de-
+  identifying an ad-hoc export, a keyed HMAC would be the upgrade if
+  cross-export unlinkability ever becomes a real requirement, same
+  pattern `audit_hash.py` already uses). Generic across every dataset, not
+  a notifiable-disease-only feature. `GET /reports/datasets` now exposes
+  `pii` per field so the UI can show the checkbox only when relevant.
+- **Automated periodic reporting:** NEW groupable `<field>_day`/`_week`/
+  `_month` bucket fields on `encounters`/`ancillary_results` (a date
+  column run through `_period_bucket`) -- "group by month" is just another
+  groupable field, no separate scheduling/period-parameter machinery. This
+  is also HMIS's "attendance ... service provision" ask; "morbidity"
+  (top diagnoses) was already covered by grouping `conditions` by `name`.
+- **Notifiable disease reports:** NEW `models.NotifiableDiseaseReport`
+  (migration `cf87c9db42e8`) + a small workflow in `routers/reporting.py`.
+  No public e-Notifikasi API exists (confirmed against `healthcare/
+  National Interoperability.md` / `Malaysia Health Regulation.md` -- same
+  "schema-readiness, not a live integration" situation as MHNexus/FHIR),
+  so per the clause's own wording ("must GENERATE these") this is a
+  checklist + PDF generator, not a live submission: `GET .../candidates`
+  suggests cases from `Condition.name` matched against a new
+  `models.NOTIFIABLE_DISEASES` starter list (Act 342, explicitly disclaimed
+  as not gazette-synced -- free-text filing is never gated on the match),
+  `POST .../notifiable-diseases` files one (409 on a duplicate against the
+  same condition), `.../submitted` self-reports the manual portal
+  submission, `.../document` renders a one-page PDF via NEW
+  `report_export.render_notifiable_disease_pdf` (raw reportlab Canvas,
+  same "simplest tool that draws a form" choice as
+  `document_generation.py`). Facility-local, same as every other P3.6/P3.7
+  surface.
+- **Quality & safety compliance reports:** no new code -- this is P2.9's
+  audit hash-chain (`GET /admin/audit/chain-status`) + P2.12's
+  `data_quality_alerts`, already built. Documented here rather than
+  re-derived, same "thin, reuse existing engine" call P3.2 made for its
+  clause overlaps.
+
+Frontend: `Reporting.jsx` gained an "Anonymize" checkbox (shown only when
+the current field selection includes a `pii` field) and a new
+"Notifiable disease reports" panel (candidate list with an inline
+file-with-onset-date/notes form, filed-reports list with a PDF link and
+"Mark submitted" action).
+
+6 new tests. Full suite 348 → 354 passed. `check_schema.py` PASS
+(upgrade / autogenerate-empty / downgrade round-trip). `ruff check
+--config ci/ruff.toml` clean. `oxlint` + `npm run build` clean.
+
 ### 2026-09-13 — P3.6 Reporting engine
 
 Canned operational reports + Custom Report Builder
@@ -967,7 +1023,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.4 | Consultation: structured **SOAP** notes, treatment plan, follow-up scheduling, referral UI | M | –4 | ✅ 2026-09-13 |
 | P3.5 | Document generation — Digital Medical Certificate, Referral Letter, Timeslip (PDF) | M | | ✅ 2026-09-13 |
 | P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | ✅ 2026-09-13 |
-| P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | |
+| P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | ✅ 2026-09-13 |
 | P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | |
 | P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | |
 | P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | |

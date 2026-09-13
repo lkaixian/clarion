@@ -2693,6 +2693,10 @@ class ReportRunRequest(BaseModel):
     filters: Dict[str, Any] = Field(default_factory=dict)
     group_by: Optional[List[str]] = None
     sort: Optional[Dict[str, str]] = None
+    # "data anonymization": replace every field the dataset
+    # marks `pii` (patient name/NRIC) with a stable pseudonym -- see
+    # reporting_engine._pseudonym.
+    anonymize: bool = False
 
     class Config:
         extra = "forbid"
@@ -2737,6 +2741,40 @@ class ReportTemplateOut(BaseModel):
     created_by_name: Optional[str] = None
     created_at: datetime
     editable: bool  # true if the CALLER (not necessarily the creator) may edit/delete this row
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- P3.7 Notifiable disease reporting ----------
+
+class NotifiableDiseaseReportCreate(BaseModel):
+    patient_id: str
+    disease_name: str = Field(min_length=1, max_length=255)
+    condition_id: Optional[str] = None
+    onset_date: Optional[str] = Field(default=None, max_length=64)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+        str_strip_whitespace = True
+
+
+class NotifiableDiseaseReportOut(BaseModel):
+    id: str
+    facility_name: str
+    patient_id: str
+    patient_name: Optional[str] = None
+    condition_id: Optional[str] = None
+    disease_name: str
+    onset_date: Optional[str] = None
+    notes: Optional[str] = None
+    status: str
+    reported_by: str
+    reported_by_name: Optional[str] = None
+    reported_at: datetime
+    submitted_by: Optional[str] = None
+    submitted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
