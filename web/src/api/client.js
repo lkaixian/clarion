@@ -847,4 +847,10 @@ export const markNotifiableDiseaseSubmitted = (reportId) =>
 export const getNotifiableDiseaseDocumentBlob = (reportId) =>
   client.get(`/reports/notifiable-diseases/${reportId}/document`, { responseType: "blob" }).then((r) => r.data);
 
+// Management Dashboard (P3.8, routers/dashboard.py). Facility-local, live-
+// computed off existing rows -- no separate "refresh" action needed beyond
+// re-fetching.
+export const getDashboardSummary = () => client.get("/dashboard/summary").then((r) => r.data);
+export const getDashboardFlowForecast = () => client.get("/dashboard/flow-forecast").then((r) => r.data);
+
 export default client;

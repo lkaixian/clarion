@@ -14,7 +14,7 @@ import { Section } from "./_shared";
 // billing/reporting were missing here even after their pages landed (P3.3/
 // P3.6) -- harmless (the column still rendered, just with a blank header),
 // fixed in passing while touching this line for reporting.
-const PAGE_LABELS = { patients: "Patients", reception: "Reception", pharmacy: "Pharmacy", ancillary: "Ancillary", dental: "Dental", billing: "Billing", reporting: "Reporting" };
+const PAGE_LABELS = { patients: "Patients", reception: "Reception", pharmacy: "Pharmacy", ancillary: "Ancillary", dental: "Dental", billing: "Billing", reporting: "Reporting", dashboard: "Dashboard" };
 
 function roleLabel(role) {
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -59,7 +59,7 @@ export default function AccessControlTab() {
   const columns =
     entries.find((e) => e.editable)?.configurable_pages ||
     entries[0]?.configurable_pages ||
-    ["patients", "reception", "pharmacy", "ancillary", "dental", "billing", "reporting"];
+    ["patients", "reception", "pharmacy", "ancillary", "dental", "billing", "reporting", "dashboard"];
 
   function toggle(role, page) {
     setJustSaved(false);

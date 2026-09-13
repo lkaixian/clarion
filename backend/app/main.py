@@ -60,7 +60,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, dental, billing, reporting
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, dental, billing, reporting, dashboard
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -397,11 +397,18 @@ app.include_router(
     billing.router,
     dependencies=[Depends(auth.require_page_access("billing"))],
 )
-# Reporting (P3.6): canned reports + Custom Report Builder
-# (routers/reporting.py) -- facility-local only, same as billing.
+# Reporting (P3.6/P3.7): canned reports + Custom Report Builder + MOH
+# notifiable-disease reporting (routers/reporting.py) -- facility-local
+# only, same as billing.
 app.include_router(
     reporting.router,
     dependencies=[Depends(auth.require_page_access("reporting"))],
+)
+# Management Dashboard (P3.8): KPI summary + patient-flow forecast +
+# operational health score (routers/dashboard.py) -- facility-local only.
+app.include_router(
+    dashboard.router,
+    dependencies=[Depends(auth.require_page_access("dashboard"))],
 )
 
 

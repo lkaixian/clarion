@@ -574,6 +574,10 @@ try:
     if _reporting_added:
         print(f"Added PAGE_REPORTING to {_reporting_added} legacy role-permission row(s)")
 
+    _dashboard_added = _permissions.add_dashboard_to_legacy_role_pages(db)
+    if _dashboard_added:
+        print(f"Added PAGE_DASHBOARD to {_dashboard_added} legacy role-permission row(s)")
+
     # Ancillary engine (P3.1): a starter catalog (2 items per module, GLOBAL
     # -- facility_name=None -- so every facility can order them out of the
     # box) plus one already-signed-off demo result so the Ancillary tab
