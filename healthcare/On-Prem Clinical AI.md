@@ -20,7 +20,11 @@ CI4/Linux environment.
 > narrower dependency (drug-identity lookup, not an AI cloud API) — still open, P4.4.
 > **CDS hint landed 2026-09-13 (P4.3b):** `ai/cds_hint.py` +
 > `POST /consultation/tickets/{id}/cds-hint`, wired into the sign-off modal.
-> **Not yet built:** voice→SOAP, NL report narrative (P4.3c).
+> **Voice→SOAP landed 2026-09-13 (P4.3c):** `ai/voice_soap.py`
+> (`faster-whisper` + local LLM segmentation) + `POST
+> /consultation/tickets/{id}/voice-to-soap`, wired into the same modal via
+> the browser's native `MediaRecorder`. **Not yet built:** NL report
+> narrative.
 
 ## "ALi.ai" — what it actually is
 **MAIA Sdn Bhd** ("Medical Augmented Intelligence Automation"), Cyberjaya — a

@@ -23,6 +23,93 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P4.3c Voice→SOAP (demo priority #2)
+
+New second local model alongside the Ollama LLM: `faster-whisper`
+(CTranslate2, MIT — pinned `1.2.1` in `requirements.txt`) transcribes a
+clinician's dictation, then the same local LLM (`ai/local_llm.py`)
+segments the transcript into SOAP fields. Fully local after the one-time
+model download (same category as `ollama pull`, see `docs/deployment.md`).
+
+NEW `backend/app/ai/voice_soap.py`: `transcribe()` (lazy, process-wide
+`WhisperModel` singleton; `CLARION_WHISPER_MODEL`/`CLARION_WHISPER_DEVICE`
+env-configurable, `int8`/CPU by default so it runs on a demo laptop with
+no GPU) and `structure_as_soap()` (strict-JSON prompt, same
+parse-defensively pattern as `ai/nric_ocr.py`). Never loses what was said:
+a segmentation failure still returns the full transcript in `subjective`
+rather than dropping it. NEW endpoint `POST
+/consultation/tickets/{id}/voice-to-soap` (multipart audio upload, 15MB
+cap via the existing `enforce_upload_size` helper, same room-claim gate as
+sign-off and cds-hint, blocking work off-threaded via
+`run_in_threadpool`) + schemas `SoapDraftOut`/`VoiceToSoapOut`.
+
+Web: `CompleteConsultationModal` gained a "🎙 Dictate SOAP" button using
+the browser's native `MediaRecorder` API (no new frontend dependency) —
+records, uploads the blob, fills only the SOAP fields still empty (never
+silently overwrites text the clinician already typed), and shows the raw
+transcript for reference. Recording is stopped on modal unmount so a
+dropped session doesn't leave the mic open.
+
+Verified: NEW `backend/tests/test_voice_soap.py` (7 tests — model-
+unavailable degrades cleanly at both `transcribe()` and the full
+`voice_to_soap()` pipeline, JSON segmentation happy path, unparseable-JSON
+and LLM-unavailable both fall back to the raw transcript, the endpoint
+round-trips a mocked transcription end-to-end, 409 when the caller hasn't
+claimed the ticket's room). None of this touches real Whisper weights —
+offline-CI-safe (P2.11) regardless of whether `faster-whisper` happens to
+be installed. Full backend suite green, web build clean, `pyflakes` clean.
+
+**voltagent security-auditor review:** one Medium, one Low, rest clean.
+Medium — the 15MB upload cap bounds bytes, not audio *duration* (a
+low-bitrate clip packs a long recording into few bytes), so an over-long
+clip could tie up a shared threadpool worker for minutes; also flagged
+in-process media decoding (PyAV/ffmpeg, a decoder family with a CVE
+history) as a longer-term hardening item. Fixed the duration side:
+`_duration_seconds` (via PyAV container metadata, already a
+`faster-whisper` transitive dep) refuses a clip over
+`CLARION_WHISPER_MAX_SECONDS` (default 600s) before the expensive
+`model.transcribe` call — best-effort (proceeds if duration can't be read,
+so a legitimate short clip with unusual container metadata isn't wrongly
+rejected). **Accepted as a residual, matching existing precedent:**
+in-process decoding without subprocess isolation — every other upload path
+in this codebase (Pillow for images/PDFs, Tesseract, RxNorm's httpx calls)
+runs the same way, in the same process, with no sandboxing; this endpoint
+is also only reachable by an authenticated clinician account (same trust
+level as those), not the public internet. Low finding (a transient
+model-load failure latches "unavailable" until process restart) — no fix,
+availability nit only, matches the existing degrade-forever design of
+every other `ai/` lazy-load.
+
+Verified again: NEW 2 tests (over-duration clip refused without reaching
+the model, unknown-duration clip still proceeds) — 9/9 in
+`test_voice_soap.py`, full backend suite green, `pyflakes` clean.
+
+**voltagent ponytail-review + code-reviewer pass, same session:**
+ponytail-review cut `schemas.SoapDraftOut` (one-caller wrapper model —
+`VoiceToSoapOut.soap` is now a plain `dict[str, str]`) and collapsed
+`voice_soap.py`'s two-variable model-load-singleton into one `_UNSET`
+sentinel — which caught a real bug the "simplification" itself would have
+introduced (the faster-whisper-not-installed branch never wrote `_model`,
+so every call would re-attempt the import instead of caching "unavailable"
+once); fixed before it shipped. Considered and **rejected** a third
+finding (extracting `MAX_AUDIO_UPLOAD_BYTES` as a "duplicate" of
+`ai_router.py`/`self_registration.py`'s own upload caps) — `self_registration.py`
+already documents why each endpoint keeps its own named cap rather than a
+shared one; not real duplication. code-reviewer pass found one real Medium:
+a race in `PatientList.jsx` where closing the modal while the browser's
+mic-permission prompt was still pending left `isMountedRef`-less code with
+nothing to stop, so granting permission after the modal was gone would
+start (and never stop) recording. Fixed with an `isMountedRef` guard
+checked after the `getUserMedia` await and in the `onstop`/catch paths.
+Added the 2 tests code-reviewer flagged as a coverage gap (the markdown
+code-fence-stripping path in both `voice_soap.py` and `nric_ocr.py` was
+real, previously-untested logic). Final tally: 384/384 backend tests
+passing, web build clean, `pyflakes` clean.
+
+**Not done here:** NL report narrative (the other P4.3c item) — a smaller,
+separate piece (local LLM over Reporting engine's already-structured
+output), not started.
+
 ### 2026-09-13 — P4.3b CDS hint (demo priority #1)
 
 New clinician-facing reference aid, built on P4.3's local-LLM plumbing —
@@ -1169,7 +1256,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | — |
 | P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
-| P4.3c | On-prem AI, remaining features — `faster-whisper` voice→SOAP, NL report narrative | M |, → [[On-Prem Clinical AI]] | — |
+| P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`); NL report narrative still open | M |, → [[On-Prem Clinical AI]] | 🟡 2026-09-13 (voice→SOAP done, NL report narrative not started) |
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | — |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |

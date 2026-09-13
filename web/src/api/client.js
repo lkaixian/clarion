@@ -671,6 +671,17 @@ export const cancelConsultationTicket = (id) =>
 // may be omitted.
 export const getCdsHint = (id, body) =>
   client.post(`/consultation/tickets/${id}/cds-hint`, body || {}).then((r) => r.data);
+// P4.3c — dictation blob in, {transcript, soap} back. Same
+// nothing-persisted, advisory-only contract as getCdsHint above.
+export const getVoiceToSoap = (id, audioBlob) => {
+  const form = new FormData();
+  form.append("file", audioBlob, "dictation.webm");
+  return client
+    .post(`/consultation/tickets/${id}/voice-to-soap`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
 
 // --- Waiting-room displays ---------------------------------------------
 // getWaitingRoomDisplays/create/revoke are admin-only (routers/admin.py).

@@ -20,10 +20,12 @@ Encounter into the patient's cross-facility history.
 reception.py does NOT import this module, so importing its helpers here is
 cycle-free (same direction as admin.py importing reception.py).
 """
+import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .. import models, schemas, auth
 from ..database import get_db
@@ -49,14 +51,21 @@ from .profile import (
     copy_signature_snapshot,
 )
 from .patients import _serialize_patient
+from ._uploads import enforce_upload_size
 from ..storage import apply_object_meta
 from ..ai.cds_hint import generate_cds_hint
+from ..ai.voice_soap import voice_to_soap
 
 router = APIRouter(prefix="/consultation", tags=["consultation"])
 
 # admin / records_officer keep the Reception page and could equally work
 # from there; a clinician can ONLY work from here now.
 CONSULTATION_ROLES = ("admin", "records_officer", "clinician")
+
+# A few minutes of compressed browser dictation audio (webm/opus) is well
+# under this -- same value/convention as ai_router.py's/self_registration.py's
+# MAX_UPLOAD_BYTES for their own upload kinds.
+MAX_AUDIO_UPLOAD_BYTES = 15 * 1024 * 1024
 
 
 def _ticket_in_my_room_or_404(ticket_id: str, current_user: models.User, db: Session) -> models.QueueTicket:
@@ -422,6 +431,40 @@ def get_cds_hint(
 
     log_access(
         db, ticket.patient_id, current_user.id, current_user.role, "generate_cds_hint",
+        actor_facility=current_user.facility,
+    )
+    return result
+
+
+@router.post("/tickets/{ticket_id}/voice-to-soap", response_model=schemas.VoiceToSoapOut)
+async def get_voice_to_soap(
+    ticket_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*CONSULTATION_ROLES)),
+):
+    """Dictate -> transcribe -> segment into SOAP fields (P4.3c). Advisory
+    only, same as cds-hint: nothing here is persisted -- the clinician
+    reviews/edits the returned fields before Complete & sign actually
+    writes the note. Same room-claim gate as every other ticket action."""
+    ticket = _ticket_in_my_room_or_404(ticket_id, current_user, db)
+
+    enforce_upload_size(file, MAX_AUDIO_UPLOAD_BYTES, "Audio")
+    audio_bytes = await file.read()
+    if len(audio_bytes) > MAX_AUDIO_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Audio too large — max {MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)}MB",
+        )
+    suffix = os.path.splitext(file.filename or "")[1] or ".webm"
+
+    # Blocking (Whisper transcription + a local-LLM call) -- off-thread so
+    # it doesn't stall the event loop for other in-flight requests, same
+    # discipline as self_registration.py's OCR calls.
+    result = await run_in_threadpool(voice_to_soap, audio_bytes, suffix)
+
+    log_access(
+        db, ticket.patient_id, current_user.id, current_user.role, "voice_to_soap",
         actor_facility=current_user.facility,
     )
     return result

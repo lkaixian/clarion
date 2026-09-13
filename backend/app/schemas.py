@@ -1945,6 +1945,15 @@ class CdsHintOut(BaseModel):
     disclaimer: str
 
 
+class VoiceToSoapOut(BaseModel):
+    # None only when speech-to-text itself is unavailable/failed -- a
+    # segmentation failure still returns the raw transcript in `soap.subjective`.
+    transcript: Optional[str] = None
+    # Always exactly the 4 SOAP keys (voice_soap.py's _EMPTY_SOAP) -- a
+    # one-caller wrapper model would say the same thing in more lines.
+    soap: dict[str, str]
+
+
 class ConsultationTicketOut(QueueTicketOut):
     """A queued consultation ticket routed to the caller's claimed room, with
     the patient's name + DOB joined in so the worklist is readable without a
