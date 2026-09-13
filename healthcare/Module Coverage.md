@@ -12,12 +12,12 @@ codebase today. Full clause-level detail in [[Compliance Matrix]].
 
 | Module | Clause | Coverage | Missing |
 |---|---|---|---|
-| **Calling System** | | ~80% | ticket printer, audio call-out |
+| **Calling System** | | ~100% (Demo on the printer) | P3.9 (2026-09-14) closed the printer + audio call-out gaps — see [[Compliance Matrix]] |
 | **Pharmacy & Inventory** | | ~75% | label printing, per-patient billing |
 | **Admin** | | ~70% | real backup, content CMS, change notifications |
 | **Frontdesk** | | ~65% | billing, SMP/SMS/e-klinik, Registrar eligibility |
 | **Consultation** | | ~55% | references, structured SOAP, CDS, med-safety wiring, voice |
-| **Mobile Apps** | | ~55% | slot booking, vitals view, server push, announcements |
+| **Mobile Apps** | | ~95% | P3.10 (2026-09-14) closed slot booking/vitals view/announcements — see [[Compliance Matrix]]. Real-time alerts use polling, not FCM push (deliberate, see that file's note); no distinct "test result available" alert yet |
 | **Dashboard** | | ~30% | management KPI view, flow prediction, health score |
 | **Reporting** | | ~20% | MOH reporting, report builder, analytics, predictive, NL insight, stratification |
 | **Billing** | | ~5% | entire module — invoices, charges, payments, claims |

@@ -164,10 +164,18 @@ local-LLM segmentation), both wired into the sign-off modal
 deterministic allergy-vs-active-medication conflict flag, and a "🎙
 Dictate SOAP" button.
 
+**P3.9 + P3.10 landed 2026-09-14** (calling-system ESC/POS ticket +
+sample-label printing + TV audio/branding; mobile self-service booking by
+dept/doctor, vitals view, visit-summary PDF, announcements). Pushed to
+`main` in 2 commits (backend+web, then mobile) — see
+`healthcare/Implementation Roadmap.md`'s changelog for full detail
+including 3 bugs the review pass caught before commit. voltagent
+security-auditor + flutter-expert review pass launched, verdict TBD.
+
 Next: **NL report narrative** (P4.3c's other half — vault "Demo
-priorities" #4) **or P3.9/P3.10** (calling-system hardware, mobile
-booking/vitals) — surface the choice rather than assuming order, same
-discipline as every prior phase boundary.
+priorities" #4) is the only demo-priority item left unstarted — surface
+this rather than assuming order, same discipline as every prior phase
+boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

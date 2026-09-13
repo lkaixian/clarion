@@ -71,11 +71,11 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | **Automated clinical insight engine** (NL summary reports) | Partial | `ai/summarize.py` pattern; local model + report framing | Yes (flagship) |
 | | **Population health stratification** (risk clustering) | Gap | Analytics over conditions/encounters | Yes |
 | –2 | Mobile via secure API; full API support | Have | FastAPI is API-first; Flutter consumes it | Yes |
-| | Mobile pre-registration (location/dept/doctor, slot, confirm, reschedule) | Partial | Flutter self_register + scan_checkin + queue_status; slot selection = Gap | Yes |
-| | Mobile: view visits, vitals, notes, prescriptions, PDF summary | Partial | Flutter home shows record + AI brief; vitals display + PDF = Gap | Yes |
-| | Mobile real-time alerts (reminders, test results, announcements) | Partial | Flutter local notifications; server push + announcements = Gap | Yes |
+| | Mobile pre-registration (location/dept/doctor, slot, confirm, reschedule) | Have | P3.10 (2026-09-14): `GET /patients/booking-options` + `/appointment-slots` + `POST.../self-book`; Flutter `book_appointment_screen.dart`. Reschedule/cancel already existed (P2-era). Facility picker sourced from the patient's own encounter history (no facility directory table exists) — documented limitation, not a gap in the booking mechanics themselves | Yes |
+| | Mobile: view visits, vitals, notes, prescriptions, PDF summary | Have | P3.10: `ConsultationNote.bp_systolic/diastolic/temperature_c/pulse_bpm` captured at sign-off, surfaced on the patient's own record read; `GET /patients/{id}/encounters/{id}/visit-summary.pdf` rendered on the fly (reportlab, reuses the P3.5 signed-document pattern); Flutter home_screen.dart encounter card + share button. Prescriptions were already Have via `activeMedications` | Yes |
+| | Mobile real-time alerts (reminders, test results, announcements) | Have | P3.10: `Announcement` model + admin CRUD + `GET /patients/announcements`, polled the same way server-published appointments already were (`RemindersProvider.syncAnnouncements`) — deliberately polling, not FCM/push, to avoid a third-party cloud dependency (no Firebase project available, and it keeps the on-prem posture the rest of this project has held). "Test-result availability" alerts specifically are still not a distinct notification — ancillary results are visible on next app open/poll but don't yet trigger their own push-style alert | Partial |
 | | Calling System: queue numbers by type, auto-assign | Have | `reception.py` `queue_tickets` + per-section | Yes |
-| | Ticket **printer** | Gap | Printer integration; demo with ESC/POS or PDF | Demo |
+| | Ticket **printer** | Demo | P3.9 (2026-09-14): `backend/app/printing.py` builds real ESC/POS ticket bytes, `GET /reception/queue/{id}/ticket.escpos` + a web "Print ticket" button. No physical thermal printer attached in this environment to test against — wiring the bytes to real hardware (a local print-spooler/kiosk config) is a documented deploy-time step, same as the TLS cert pair at P1.9 | Demo |
 | | Central **TV display** of queue + counters/rooms | Have | `display.py` `/display/{token}` full-screen auto-refresh | Yes |
 | | Role-based call next / hold / skip; monitor per type | Have | `reception.py` call/complete/cancel/no-show | Yes |
 | –5 | **PACS / DICOM** | Gap | Orthanc + web viewer → [[PACS and DICOM]] | Yes (impressive) |
@@ -88,7 +88,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Linux OS | Have | uvicorn on Linux |
 | | Web responsive | Partial | React + Tailwind; audit responsiveness |
 | –6,.9–10 | The University provides hosting/network/AV; security via PTM | N/A | Contractual |
-| | Integrate label printer, blood-test machine, X-ray viewer | Gap | |
+| | Integrate label printer, blood-test machine, X-ray viewer | Partial | Label printer = Demo (P3.9, see the tender); blood-test machine / X-ray viewer integration itself still Gap → |
 | | Integrate SMP / SMS / e-klinik | Gap | Mock adapters + integration layer |
 | –13 | DB/hosting compatibility, secure/scalable config | Partial | [[On-Prem Architecture]] |
 | | Resize uploaded images | Gap | Pillow resize on upload (easy) |
@@ -138,8 +138,8 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Integrate with the University hosting, collaborate with infra team | N/A | Contractual |
 | | ≥2 onsite support staff, 2 years | N/A | Contractual / bid |
 | | Lab machine API integration (bidirectional, standards, test env) | Gap | HL7 v2 / ASTM → [[Integration Engine and LDAP]] |
-| | Label printer + calling-system printer (templates: name, IC, barcode) | Gap | ESC/POS or CUPS; label template engine |
-| | Calling-system TV: queue, counters, names/initials, visual + **audio** | Partial | `display.py` visual; audio + branding = Gap |
+| | Label printer + calling-system printer (templates: name, IC, barcode) | Demo | P3.9: `printing.py::build_sample_label_png` (patient name/IC/item + QR, `GET /ancillary/requests/{id}/label`) + `build_ticket_escpos` (`GET /reception/queue/{id}/ticket.escpos`). QR used in place of Code128 (this codebase already depends on `qrcode`, not a barcode symbology lib, and has no Code128 reader anywhere to justify adding one). No physical printer attached to test against — real hardware wiring is a deploy-time step |
+| | Calling-system TV: queue, counters, names/initials, visual + **audio** | Have | P3.9: `display.py` visual (pre-existing) + Web Audio chime/SpeechSynthesis call-out + branding (logo/accent color from `HospitalSetting`) in `WaitingRoomDisplay.jsx` |
 
 ## 10.1 / 10.3 (process / personnel)
 

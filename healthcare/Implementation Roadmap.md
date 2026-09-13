@@ -1,7 +1,7 @@
 ---
 title: Implementation Roadmap
 type: plan
-updated: 2026-09-13
+updated: 2026-09-14
 tags: [plan, roadmap, clarion, campus]
 ---
 
@@ -22,6 +22,83 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 > notes). Full implementation detail is in git — search the commit log for the task id.
 
 ## Changelog
+
+### 2026-09-14 — P3.9 + P3.10: calling-system hardware + mobile booking/vitals/PDF/announcements
+
+Both remaining P3 rows, done together (share the same review/verify pass).
+
+**P3.9**: NEW `backend/app/printing.py` — pure-
+stdlib ESC/POS queue-ticket byte formatter + Pillow+`qrcode` sample-label
+PNG builder (QR stands in for Code128 — this codebase already depends on
+`qrcode`, not a barcode-symbology lib, and has no Code128 reader anywhere).
+`GET /reception/queue/{id}/ticket.escpos`, `GET /ancillary/requests/{id}/
+label`, web "Print ticket"/"Label" buttons. No thermal/label printer
+attached in this environment — wiring the bytes to real hardware is a
+documented deploy-time step, same call P1.9 made for the TLS cert pair.
+TV display: `HospitalSetting.brand_primary_color`/`logo_data_url` (small
+inline data URI, not a new ObjectStore bucket — cosmetic/non-clinical/not
+WORM) + Web Audio chime/SpeechSynthesis call-out on `WaitingRoomDisplay.jsx`
+when a ticket transitions to "called".
+
+**P3.10**: `Appointment.department/clinician_id/
+self_booked` + `GET /patients/appointment-slots` (fixed 30-min grid within
+Malaysia-local clinic hours, recomputed server-side on both list AND book
+so a double-booking race / out-of-hours booking is actually prevented) +
+`GET /patients/booking-options` + `POST .../self-book`. `ConsultationNote`
+gained `bp_systolic/diastolic/temperature_c/pulse_bpm`, captured in the
+existing SOAP sign-off flow and surfaced on the patient's own record read
+(previously staff-only per-facility — see `_serialize_encounter`).
+Visit-summary PDF rendered on the fly from an already-signed
+Encounter/ConsultationNote (reuses the P3.5 reportlab pattern, zero new
+dependency, deliberately not stored as a second WORM copy). NEW
+`Announcement` model + admin CRUD + patient read, filtered to
+currently-live ones server-side — **real-time alerts use the EXISTING
+`RemindersProvider` polling pattern, not FCM/push**: no Firebase project
+available, and polling keeps the on-prem/no-third-party-cloud posture this
+project has held everywhere else (P4.3's local-LLM wave, P1.9's edge proxy,
+etc.). Flutter: NEW `book_appointment_screen.dart` (facility picker sourced
+from the patient's own encounter history — no facility-directory endpoint
+exists anywhere in this system, documented limitation not a bug — →
+department → clinician → date → slot), home_screen.dart encounter card
+gained department/vitals/diagnosis lines + a per-encounter PDF share button
+(`share_plus`, the one new pubspec dependency — Bearer-auth means a plain
+`url_launcher` can't fetch the PDF), reminders_screen.dart gained an
+Announcements section. l10n: every new string in all 4 languages.
+
+Backend: 1 additive Alembic migration (`e1c0629c392f`), verified full
+downgrade/upgrade round-trip + autogenerate-empty on SQLite. NEW
+`backend/tests/test_p3_9_p3_10.py` (17 tests) — full suite 401/401 pass.
+Flutter: `flutter analyze` clean (0 errors/warnings beyond pre-existing
+style infos), `flutter pub get` resolves cleanly.
+
+**Caught and fixed during implementation** (the kind of thing this
+project's review discipline exists for):
+- `GET /patients/appointment-slots` was originally defined on
+  `appointments.router`, which shares the `/patients` prefix with
+  `patients.router` but is included into the app AFTER it — `patients.
+  router`'s `GET /{patient_id}` would have silently swallowed
+  "appointment-slots" as a patient_id before the real route was ever
+  reached. Fixed by moving both new literal routes onto `patients.router`,
+  ahead of `/{patient_id}` (see the inline comment there for the rule going
+  forward: any literal top-level `/patients/...` route belongs on that
+  router, never a sibling one sharing the prefix).
+- A vitals-only sign-off (no SOAP text typed) would have silently dropped
+  the vitals — `consultation.py`'s `structured_values` guard only checked
+  the SOAP fields before vitals were added to it.
+- `_serialize_appointment`'s manual response dict was missing the 3 new
+  `Appointment` fields, so a successful self-book response reported
+  `self_booked=false` back to the caller (data was correct in the DB, only
+  the echo was wrong) — caught by the test suite, not by inspection.
+
+Delegation note: the mobile Flutter work was originally planned for
+antigravity (agy) per this project's usual split, but agy's `--yolo`
+(needed for file-write permission) was blocked outright by the harness's
+own safety classifier this session — built directly by Claude instead.
+
+Next: voltagent security-auditor + flutter-expert review pass (in
+progress as this entry is written); update this section's verdict once
+that lands. Compliance Matrix / Module Coverage already updated to
+reflect P3.9=Demo-on-hardware / P3.10=Have.
 
 ### 2026-09-13 — P4.3c Voice→SOAP (demo priority #2)
 
@@ -1246,8 +1323,8 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | ✅ 2026-09-13 |
 | P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | ✅ 2026-09-13 |
 | P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | ✅ 2026-09-13 |
-| P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | |
-| P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | |
+| P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | ✅ 2026-09-14 (review pending) |
+| P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | ✅ 2026-09-14 (review pending) |
 
 ## P4 — Interoperability, AI & imaging
 | # | Task | Size | Clause | Status |
