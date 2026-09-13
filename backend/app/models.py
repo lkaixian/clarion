@@ -332,6 +332,13 @@ class Encounter(Base):
     reason = Column(Text, nullable=True)
     started_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text, nullable=True)
+    # P3.10: snapshotted from the originating QueueTicket.
+    # department at consultation sign-off (routers/consultation.py::
+    # complete_consultation_ticket) -- same free-text/FacilitySection.name
+    # vocabulary as QueueTicket.department, same snapshot-not-live-join
+    # reasoning as facility_name/room_name elsewhere in this file. NULL for
+    # any encounter not raised off a queue ticket, or a legacy row.
+    department = Column(String(64), nullable=True)
 
     # --- Consultation sign-off (routers/consultation.py::complete_ticket) ---
     signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -375,6 +382,19 @@ class ConsultationNote(Base):
     signed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     signed_by_name = Column(String(255), nullable=True)
     signed_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # P3.10: structured vital signs taken at this visit --
+    # nothing recorded vitals anywhere before this (grep the whole schema:
+    # there was no BP/temp/pulse column at all). Folded onto the existing
+    # sign-off row rather than a new VitalSigns table + relationship: one
+    # consultation captures at most one set of vitals, at the same moment
+    # the SOAP note is signed, by the same clinician -- a separate table
+    # would only add a join for data that always has exactly this lifecycle.
+    # All nullable/optional, same as every other structured field here.
+    bp_systolic = Column(Integer, nullable=True)
+    bp_diastolic = Column(Integer, nullable=True)
+    temperature_c = Column(Float, nullable=True)
+    pulse_bpm = Column(Integer, nullable=True)
 
     encounter = relationship("Encounter", back_populates="consultation_note")
     patient = relationship("Patient")
@@ -527,6 +547,20 @@ class Appointment(Base):
     previous_scheduled_at = Column(TZDateTime, nullable=True)
     reschedule_reason_code = Column(String(64), nullable=True)  # see schemas.STAFF_RESCHEDULE_REASON_CODES
     reschedule_reason_other = Column(Text, nullable=True)  # only meaningful when reschedule_reason_code == "other"
+
+    # P3.10: department/doctor selection for patient self-
+    # booking. `department` shares FacilitySection.name's vocabulary (same
+    # free-text-joined-by-convention pattern as QueueTicket.department --
+    # see FacilitySection's docstring). `clinician_id` is optional (a patient
+    # may book "any doctor in this department"); both additive/nullable so
+    # every pre-existing staff-published appointment is unaffected.
+    department = Column(String(64), nullable=True)
+    clinician_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    # True only for a self-book row created by routers/appointments.py::
+    # self_book_appointment -- distinguishes "the patient picked this slot
+    # themself" from a staff-published appointment for the same patient, so
+    # the UI can render/manage them differently (see AppointmentOut).
+    self_booked = Column(Boolean, nullable=False, default=False)
 
     patient = relationship("Patient", back_populates="appointments")
 
@@ -1327,6 +1361,47 @@ class HospitalSetting(Base):
     records_shared_publicly = Column(Boolean, nullable=False, default=True)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # P3.9: calling-system TV branding. `brand_primary_color`
+    # is a plain "#rrggbb" string validated at the schema layer. `logo_data_url`
+    # is a small inline "data:image/png;base64,..." URI (size-capped at the
+    # schema layer, see schemas.MAX_LOGO_DATA_URL_LENGTH) rather than a new
+    # ObjectStore bucket -- unlike a signature/clinical scan this is
+    # cosmetic, non-clinical, not WORM, and small enough that a dedicated
+    # bucket + MinIO provisioning entry would be infrastructure for a logo.
+    brand_primary_color = Column(String(16), nullable=True)
+    logo_data_url = Column(Text, nullable=True)
+
+
+class Announcement(Base):
+    """P3.10: a clinic-published notice (health campaign,
+    service change, clinic closure). `facility_name` NULL means shown to
+    every facility's patients; set, it's scoped to one facility -- same
+    nullable-means-global convention as nothing else in this file needed
+    until now, but mirrors the plain optional-scoping idiom used throughout
+    (e.g. WaitingRoomDisplay.section). No FacilitySection-style soft-
+    active flag: `expires_at` (nullable = never expires) already gives a
+    natural, date-driven retirement, so a separate boolean would be a second
+    way to say the same thing. The mobile app polls for these alongside
+    server-published appointments (see RemindersProvider) rather than a
+    push channel -- see the P3.10 progress-log note for why.
+
+    BRAND-NEW table -- create_all picks it up fresh; Alembic adds it for an
+    existing DB."""
+    __tablename__ = "announcements"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    starts_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = Column(TZDateTime, nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index("ix_announcements_facility_starts", "facility_name", "starts_at"),
+    )
 
 
 class RolePagePermission(Base):

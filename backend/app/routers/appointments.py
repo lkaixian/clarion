@@ -1,13 +1,14 @@
-from datetime import datetime
-from typing import List
+from datetime import datetime, timezone
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
-from ..appointments import compute_reminder_offsets
+from ..appointments import MALAYSIA_TZ, compute_available_slots, compute_reminder_offsets
 from ..clinical_access import _patient_known_to_facility
 
 # Roles allowed to read/write another person's appointments. Matches the
@@ -49,6 +50,9 @@ def _serialize_appointment(a: models.Appointment, db: Session) -> dict:
         "status": a.status,
         "created_by": a.created_by,
         "created_at": a.created_at,
+        "department": a.department,
+        "clinician_id": a.clinician_id,
+        "self_booked": a.self_booked,
         "previous_scheduled_at": a.previous_scheduled_at,
         "reschedule_reason_code": a.reschedule_reason_code,
         "reschedule_reason_other": a.reschedule_reason_other,
@@ -403,3 +407,103 @@ def reject_reschedule_request(
         actor_facility=current_user.facility,
     )
     return schemas.RescheduleRequestOut.model_validate(request_row)
+
+
+# ---------------------------------------------------------------------------
+# P3.10: patient self-service booking by department/doctor.
+# ---------------------------------------------------------------------------
+
+def _naive_utc(dt: datetime) -> datetime:
+    """models.Appointment.scheduled_at may come back tz-aware or naive
+    depending on backend (see TZDateTime's docstring in models.py) --
+    normalise to naive-UTC, the convention compute_available_slots and
+    compute_reminder_offsets both already use."""
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def _clinicians_for(
+    db: Session, facility_name: str, department: Optional[str], clinician_id: Optional[str]
+) -> list[models.User]:
+    """Candidate clinicians for a self-booking query: an exact clinician_id
+    if given, else every clinician at this facility either pinned to
+    `department` or unscoped (User.section is NULL means "sees the whole
+    facility" everywhere else this column is used -- see User.section's
+    docstring -- so an unscoped clinician is a valid "general" pick too)."""
+    q = db.query(models.User).filter(models.User.role == "clinician", models.User.facility == facility_name)
+    if clinician_id:
+        q = q.filter(models.User.id == clinician_id)
+    elif department:
+        q = q.filter(or_(models.User.section == department, models.User.section.is_(None)))
+    return q.order_by(models.User.full_name.asc()).all()
+
+
+def _booked_times_for_clinician(db: Session, clinician_id: str) -> set[datetime]:
+    rows = (
+        db.query(models.Appointment.scheduled_at)
+        .filter(models.Appointment.clinician_id == clinician_id, models.Appointment.status == "scheduled")
+        .all()
+    )
+    return {_naive_utc(dt) for (dt,) in rows}
+
+
+@router.post("/{patient_id}/appointments/self-book", response_model=schemas.AppointmentOut)
+def self_book_appointment(
+    patient_id: str,
+    payload: schemas.SelfBookAppointmentRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Patient self-service booking -- own record only. Reuses the
+    Appointment table (self_booked=True distinguishes this from a
+    staff-published appointment, see models.Appointment's docstring) through
+    a deliberately narrower schema than AppointmentCreate: no reason/
+    precaution_notes/fasting fields, those stay staff-only clinical calls
+    (see _APPOINTMENT_STAFF_ROLES above).
+
+    The requested scheduled_at is NEVER trusted as a bare value -- it must
+    exactly match a slot compute_available_slots would currently offer for
+    the resolved clinician, recomputed here against live data. That's what
+    actually prevents a double-booking race and an out-of-hours/arbitrary-
+    time booking, not just client-side UI discipline."""
+    if current_user.role != "patient" or current_user.patient_id != patient_id:
+        raise HTTPException(status_code=403, detail="Only the patient themself can self-book an appointment.")
+
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    clinicians = _clinicians_for(db, payload.facility_name, payload.department, payload.clinician_id)
+    if not clinicians:
+        raise HTTPException(status_code=400, detail="No clinician available for that facility/department")
+
+    requested = _naive_utc(payload.scheduled_at)
+    local_date = (requested.replace(tzinfo=timezone.utc)).astimezone(MALAYSIA_TZ).date()
+
+    matched_clinician = None
+    for clinician in clinicians:
+        booked = _booked_times_for_clinician(db, clinician.id)
+        if requested in compute_available_slots(local_date, booked):
+            matched_clinician = clinician
+            break
+    if matched_clinician is None:
+        raise HTTPException(status_code=409, detail="That slot is no longer available — please pick another.")
+
+    appointment = models.Appointment(
+        patient_id=patient_id,
+        facility_name=payload.facility_name,
+        department=payload.department,
+        clinician_id=matched_clinician.id,
+        scheduled_at=requested,
+        status="scheduled",
+        self_booked=True,
+        created_by=current_user.id,
+    )
+    db.add(appointment)
+    db.commit()
+    db.refresh(appointment)
+
+    log_access(
+        db, patient_id, current_user.id, current_user.role, "self_book_appointment",
+        detail=f"facility={payload.facility_name} clinician={matched_clinician.id}",
+    )
+    return _serialize_appointment(appointment, db)

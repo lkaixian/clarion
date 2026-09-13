@@ -83,6 +83,11 @@ def get_display_feed(token: str, request: Request, db: Session = Depends(get_db)
     facility_display_name = (
         (setting.display_name if setting and setting.display_name else None) or facility_name
     )
+    # P3.9: TV branding -- see models.HospitalSetting's
+    # docstring for why the logo is a small inline data URI, not an
+    # ObjectStore upload.
+    brand_primary_color = setting.brand_primary_color if setting else None
+    logo_data_url = setting.logo_data_url if setting else None
 
     _utc_start, queue_date = _malaysia_today()
     q = (
@@ -137,4 +142,6 @@ def get_display_feed(token: str, request: Request, db: Session = Depends(get_db)
         "generated_at": datetime.utcnow().isoformat(),
         "now_serving": now_serving,
         "up_next": up_next,
+        "brand_primary_color": brand_primary_color,
+        "logo_data_url": logo_data_url,
     }

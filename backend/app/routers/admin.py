@@ -1511,6 +1511,84 @@ def delete_section(
     return {"detail": "Facility section deleted"}
 
 
+# ---------- Announcements (P3.10) ----------
+# Health-campaign / clinic-notice publishing for the mobile app. Same
+# "manager admin, not super admin" forced-facility boundary as sections
+# above -- see models.Announcement's docstring for why facility_name is
+# always the acting admin's own facility in practice, never client input.
+def _get_announcement_or_404(db: Session, announcement_id: str, facility: str) -> models.Announcement:
+    row = (
+        db.query(models.Announcement)
+        .filter(models.Announcement.id == announcement_id, models.Announcement.facility_name == facility)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return row
+
+
+@router.get("/announcements", response_model=List[schemas.AnnouncementOut])
+def list_announcements_admin(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Every announcement (past, current, future) this admin's facility has
+    published, newest first -- management view, unfiltered by expiry (the
+    patient-facing read in routers/patients.py filters to currently-live
+    ones instead)."""
+    if not current_user.facility:
+        return []
+    rows = (
+        db.query(models.Announcement)
+        .filter(models.Announcement.facility_name == current_user.facility)
+        .order_by(models.Announcement.starts_at.desc())
+        .all()
+    )
+    return [schemas.AnnouncementOut.model_validate(r) for r in rows]
+
+
+@router.post("/announcements", response_model=schemas.AnnouncementOut)
+def create_announcement(
+    payload: schemas.AnnouncementCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    facility = _require_facility(current_user)
+    row = models.Announcement(
+        facility_name=facility,
+        title=payload.title,
+        body=payload.body,
+        starts_at=payload.starts_at or datetime.now(timezone.utc),
+        expires_at=payload.expires_at,
+        created_by=current_user.id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(
+        db, None, current_user.id, current_user.role, "create_announcement",
+        detail=row.title, actor_facility=facility,
+    )
+    return schemas.AnnouncementOut.model_validate(row)
+
+
+@router.delete("/announcements/{announcement_id}")
+def delete_announcement(
+    announcement_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    facility = _require_facility(current_user)
+    row = _get_announcement_or_404(db, announcement_id, facility)
+    db.delete(row)
+    db.commit()
+    log_access(
+        db, None, current_user.id, current_user.role, "delete_announcement",
+        detail=row.title, actor_facility=facility,
+    )
+    return {"detail": "Announcement deleted"}
+
+
 # ---------- Staff roster (read-only) ----------
 # Deliberately READ-ONLY: no admin-initiated clock actions and no account
 # editing/deactivation here -- staff clock themselves in/out via

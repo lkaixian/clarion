@@ -16,6 +16,7 @@ import {
   signOffAncillaryResult,
   uploadAncillaryResultDocument,
   getAncillaryResultDocumentBlob,
+  getServiceRequestLabelBlob,
   getAncillaryStats,
   listPatients,
 } from "../api/client";
@@ -446,6 +447,24 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
         </div>
         
         <div className="flex gap-2">
+          {req.status === "ordered" && (
+            <button
+              onClick={() => {
+                // P3.9: sample-label PNG for the physical
+                // specimen — see app/printing.py's module docstring.
+                getServiceRequestLabelBlob(req.id)
+                  .then((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, "_blank");
+                    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                  })
+                  .catch(() => showMsg("error", "Could not generate label."));
+              }}
+              className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg"
+            >
+              🏷️ Label
+            </button>
+          )}
           {req.status === "ordered" && canSignOff && (
             <button onClick={() => setShowSignOff(!showSignOff)} className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg">
               {showSignOff ? "Cancel Sign-off" : "Sign off"}

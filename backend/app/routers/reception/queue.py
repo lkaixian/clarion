@@ -2,12 +2,13 @@
 assign-room) + a patient's own queue status."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from ... import models, schemas, auth
 from ...database import get_db
 from ...audit import log_access
+from ...printing import build_ticket_escpos
 from ._common import (
     STAFF_ROLES,
     _call_ticket_impl,
@@ -176,6 +177,36 @@ def assign_ticket_room(
         actor_facility=current_user.facility,
     )
     return schemas.QueueTicketOut.model_validate(ticket)
+
+
+@router.get("/queue/{ticket_id}/ticket.escpos")
+def print_ticket(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*STAFF_ROLES)),
+):
+    """P3.9: this ticket as raw ESC/POS command bytes for a
+    compatible receipt printer -- see app/printing.py's module docstring for
+    why this hands back bytes rather than talking to a printer directly.
+    Same own-facility scoping as every other per-ticket action here
+    (_get_ticket_for_staff)."""
+    ticket = _get_ticket_for_staff(ticket_id, current_user, db)
+    setting = (
+        db.query(models.HospitalSetting)
+        .filter(models.HospitalSetting.facility_name == ticket.facility_name)
+        .first()
+    )
+    facility_display_name = (
+        (setting.display_name if setting and setting.display_name else None) or ticket.facility_name
+    )
+    ticket_bytes = build_ticket_escpos(
+        facility_display_name=facility_display_name,
+        queue_number=ticket.queue_number,
+        department=ticket.department,
+        room_name=ticket.room_name,
+        checked_in_at=ticket.checked_in_at,
+    )
+    return Response(content=ticket_bytes, media_type="application/vnd.escpos")
 
 
 @router.get("/queue/status/{patient_id}", response_model=schemas.QueueStatusOut)

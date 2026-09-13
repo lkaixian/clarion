@@ -6,6 +6,7 @@ import {
   assignTicketRoom, getReceptionRooms, claimRoom, releaseRoom, getMyRoom,
   getReceptionSections,
   getCurrentUser,
+  getTicketPrintBlob,
 } from "../api/client";
 import WardMap from "../components/WardMap";
 import { formatTime } from "../lib/format";
@@ -413,6 +414,27 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
           <p className="text-3xl font-bold text-green-900 mt-1">
             Number {confirmation.ticket.queue_number}
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              // P3.9: hands the ESC/POS bytes to whatever the
+              // browser does with an unrecognised content type (normally a
+              // download) — a local print-agent/kiosk browser is configured
+              // to route that straight to the receipt printer; see
+              // app/printing.py's module docstring for why this app itself
+              // doesn't talk to the printer directly.
+              getTicketPrintBlob(confirmation.ticket.id)
+                .then((blob) => {
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, "_blank");
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                })
+                .catch(() => {});
+            }}
+            className="mt-2 text-sm text-green-800 underline hover:no-underline"
+          >
+            🖨 Print ticket
+          </button>
         </div>
       )}
     </Section>

@@ -354,6 +354,7 @@ def complete_consultation_ticket(
         facility_name=current_user.facility or ticket.facility_name,
         encounter_type="outpatient",
         reason=ticket.reason,
+        department=ticket.department,
         notes=payload.note,
         started_at=ticket.checked_in_at,
         signed_by=current_user.id,
@@ -366,6 +367,10 @@ def complete_consultation_ticket(
     structured_values = (
         payload.subjective, payload.objective, payload.assessment, payload.plan,
         payload.treatment_plan, payload.follow_up_at, payload.referral_service_request_id,
+        # P3.10: vitals-only sign-off (no SOAP text typed) must still create
+        # the row -- otherwise vitals silently vanish with no ConsultationNote
+        # to hold them.
+        payload.bp_systolic, payload.bp_diastolic, payload.temperature_c, payload.pulse_bpm,
     )
     if any(value is not None for value in structured_values):
         db.add(models.ConsultationNote(
@@ -382,6 +387,10 @@ def complete_consultation_ticket(
             signed_by=current_user.id,
             signed_by_name=current_user.full_name,
             signed_at=now,
+            bp_systolic=payload.bp_systolic,
+            bp_diastolic=payload.bp_diastolic,
+            temperature_c=payload.temperature_c,
+            pulse_bpm=payload.pulse_bpm,
         ))
 
     apply_object_meta(

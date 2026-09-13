@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, date, time
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -603,6 +604,41 @@ class AppointmentUpdate(BaseModel):
         extra = "forbid"
 
 
+# P3.10: patient self-service booking. Deliberately a much
+# narrower surface than AppointmentCreate -- no reason/precaution_notes/
+# fasting fields (clinical judgment calls, staff-only; see
+# _APPOINTMENT_STAFF_ROLES in routers/appointments.py) -- a patient only
+# ever picks WHERE and WHEN.
+class SelfBookAppointmentRequest(BaseModel):
+    facility_name: str
+    department: Optional[str] = None
+    clinician_id: Optional[str] = None
+    scheduled_at: datetime
+
+    class Config:
+        extra = "forbid"
+
+
+class AppointmentSlotOut(BaseModel):
+    """One bookable slot returned by GET /patients/appointment-slots."""
+    scheduled_at: datetime
+    clinician_id: Optional[str] = None
+    clinician_name: Optional[str] = None
+
+
+class BookingClinicianOut(BaseModel):
+    id: str
+    full_name: str
+    department: Optional[str] = None  # the clinician's pinned User.section, if any
+
+
+class BookingOptionsOut(BaseModel):
+    """GET /patients/booking-options -- the pickers a self-booking flow
+    needs for one facility."""
+    departments: List[str] = []
+    clinicians: List[BookingClinicianOut] = []
+
+
 class AppointmentOut(BaseModel):
     id: str
     patient_id: str
@@ -617,6 +653,10 @@ class AppointmentOut(BaseModel):
     status: str
     created_by: str
     created_at: datetime
+    # P3.10 -- see models.Appointment's docstring.
+    department: Optional[str] = None
+    clinician_id: Optional[str] = None
+    self_booked: bool = False
     # Reschedule tracking -- see models.Appointment's docstring. All null on
     # an appointment that's never been rescheduled.
     previous_scheduled_at: Optional[datetime] = None
@@ -1079,11 +1119,21 @@ class HospitalSettingOut(BaseModel):
     # ALWAYS ignores this flag (life-safety override), and the patient's own
     # view is never filtered.
     records_shared_publicly: bool = True
+    brand_primary_color: Optional[str] = None
+    logo_data_url: Optional[str] = None
     updated_by: Optional[str] = None
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+# P3.9: a small inline logo, not an ObjectStore upload -- see
+# models.HospitalSetting's docstring for why. 200KB caps the base64 text
+# (comfortably enough for a clinic-logo PNG/JPEG at TV-display size; this is
+# a wordmark on a waiting-room screen, not a print-resolution asset).
+MAX_LOGO_DATA_URL_LENGTH = 200_000
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class HospitalSettingUpdate(BaseModel):
@@ -1096,6 +1146,22 @@ class HospitalSettingUpdate(BaseModel):
     contact_phone: Optional[str] = None
     timezone: Optional[str] = None
     records_shared_publicly: Optional[bool] = None
+    brand_primary_color: Optional[str] = None
+    logo_data_url: Optional[str] = Field(default=None, max_length=MAX_LOGO_DATA_URL_LENGTH)
+
+    @field_validator("brand_primary_color")
+    @classmethod
+    def _check_color(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            raise ValueError("brand_primary_color must be a '#rrggbb' hex string")
+        return v
+
+    @field_validator("logo_data_url")
+    @classmethod
+    def _check_logo(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.startswith("data:image/"):
+            raise ValueError("logo_data_url must be a data:image/... URI")
+        return v
 
     class Config:
         extra = "forbid"
@@ -1829,6 +1895,36 @@ class FacilitySectionOut(BaseModel):
         from_attributes = True
 
 
+# ---------- Announcements (P3.10) ----------
+class AnnouncementCreate(BaseModel):
+    """facility_name is FORCED server-side to the acting admin's own
+    facility -- same "manager admin, not super admin" boundary as
+    FacilitySectionCreate (see routers/admin.py's module docstring); this
+    schema has no such field. models.Announcement.facility_name can still
+    be NULL (global) in principle, but nothing in this API can currently
+    produce that -- there is no cross-facility "super admin" action here."""
+    title: str = Field(max_length=255)
+    body: str = Field(max_length=4000)
+    starts_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class AnnouncementOut(BaseModel):
+    id: str
+    facility_name: Optional[str] = None
+    title: str
+    body: str
+    starts_at: datetime
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class StaffSectionAssign(BaseModel):
     """Body for PATCH /admin/staff/{user_id}. `section` is required in the
     payload (send explicit null to un-assign) -- a section string must be
@@ -1901,6 +1997,14 @@ class ConsultationCompleteRequest(BaseModel):
     # way). Ignored if the caller already has a saved signature.
     signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)  # ~1MB PNG as base64
 
+    # P3.10: vitals taken at this visit -- see
+    # models.ConsultationNote's docstring. Bounds are generous physiological
+    # limits (catch a fat-fingered typo, not a medical judgment call).
+    bp_systolic: Optional[int] = Field(default=None, ge=40, le=300)
+    bp_diastolic: Optional[int] = Field(default=None, ge=20, le=200)
+    temperature_c: Optional[float] = Field(default=None, ge=25.0, le=45.0)
+    pulse_bpm: Optional[int] = Field(default=None, ge=20, le=300)
+
     class Config:
         extra = "forbid"
 
@@ -1920,6 +2024,10 @@ class ConsultationNoteOut(BaseModel):
     signed_by: str
     signed_by_name: Optional[str] = None
     signed_at: datetime
+    bp_systolic: Optional[int] = None
+    bp_diastolic: Optional[int] = None
+    temperature_c: Optional[float] = None
+    pulse_bpm: Optional[int] = None
 
     class Config:
         from_attributes = True

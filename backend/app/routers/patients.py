@@ -33,6 +33,8 @@ from ..clinical_access import (
     _row_author_facility,
 )
 from .auth_router import _resolve_patient_by_nric
+from .appointments import _booked_times_for_clinician, _clinicians_for
+from ..appointments import compute_available_slots
 from .profile import save_signature_from_b64, copy_signature_snapshot
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -172,6 +174,23 @@ def _serialize_patient(
     # allergy/encounter (a 40-record patient was ~80 redundant queries).
     present_here = _patient_present_at(db, p.id, caller_facility) if caller_facility else False
 
+    # P3.10: one batched query for every signed-off ConsultationNote
+    # (vitals + SOAP text) on this patient's encounters, keyed by
+    # encounter_id -- same "one query, not one per row" discipline as
+    # ann_groups above, rather than letting _serialize_encounter lazy-load
+    # Encounter.consultation_note per encounter (an N+1 the P3.1 review
+    # round already flagged this codebase for elsewhere).
+    encounter_ids = [e.id for e in p.encounters]
+    notes_by_encounter = (
+        {
+            n.encounter_id: n
+            for n in db.query(models.ConsultationNote)
+            .filter(models.ConsultationNote.encounter_id.in_(encounter_ids))
+            .all()
+        }
+        if encounter_ids else {}
+    )
+
     return {
         "id": p.id, "full_name": p.full_name, "date_of_birth": p.date_of_birth,
         "gender": p.gender, "national_id": p.national_id, "blood_type": p.blood_type,
@@ -192,7 +211,7 @@ def _serialize_patient(
             for a in p.allergies if _visible(a)
         ],
         "encounters": [
-            _serialize_encounter(e, db, current_user, ann_groups.get(e.id), present_here)
+            _serialize_encounter(e, db, current_user, ann_groups.get(e.id), present_here, notes_by_encounter.get(e.id))
             for e in p.encounters if _visible(e)
         ],
         # Flat list of every annotation on this patient (newest first) --
@@ -219,6 +238,106 @@ def _serialize_patient(
             if not hidden or d.uploaded_by_facility not in hidden
         ],
     }
+
+
+@router.get("/announcements", response_model=List[schemas.AnnouncementOut])
+def list_announcements(
+    facility_name: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """P3.10: currently-live announcements for one facility
+    (`starts_at` already passed, `expires_at` NULL or still in the future).
+    Any authenticated caller may query this -- same "publicly-relevant, not
+    patient-specific" posture as GET /patients/appointment-slots; management
+    (unfiltered, admin-only) is GET /admin/announcements."""
+    now = datetime.now(timezone.utc)
+    rows = (
+        db.query(models.Announcement)
+        .filter(
+            models.Announcement.facility_name == facility_name,
+            models.Announcement.starts_at <= now,
+            or_(models.Announcement.expires_at.is_(None), models.Announcement.expires_at >= now),
+        )
+        .order_by(models.Announcement.starts_at.desc())
+        .all()
+    )
+    return [schemas.AnnouncementOut.model_validate(r) for r in rows]
+
+
+@router.get("/appointment-slots", response_model=List[schemas.AppointmentSlotOut])
+def list_appointment_slots(
+    facility_name: str,
+    date: str,
+    department: Optional[str] = None,
+    clinician_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """P3.10: bookable slots for a given day (Malaysia-local
+    `date`, "YYYY-MM-DD"). Any authenticated caller may query this -- it
+    discloses only which times are free, the same "publicly-relevant
+    scheduling info" posture as GET /display/{token}. Union of every
+    matching clinician's free slots (see appointments.py's _clinicians_for)
+    when clinician_id isn't pinned, so a patient picking "any doctor" still
+    sees a real, bookable time per row.
+
+    Deliberately defined HERE, not on appointments.router (which also
+    mounts under the "/patients" prefix) -- appointments.router is included
+    into the app AFTER this router (see main.py), so a literal route
+    registered there would be shadowed by GET /{patient_id} below matching
+    "appointment-slots" as a patient_id first. Every literal top-level
+    /patients/... route (this one, /announcements, /booking-options) must
+    stay in THIS router, ahead of /{patient_id}, for the same reason."""
+    try:
+        local_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+
+    clinicians = _clinicians_for(db, facility_name, department, clinician_id)
+    if clinician_id and not clinicians:
+        raise HTTPException(status_code=404, detail="Clinician not found for that facility/department")
+
+    results: list[schemas.AppointmentSlotOut] = []
+    for clinician in clinicians:
+        booked = _booked_times_for_clinician(db, clinician.id)
+        for slot in compute_available_slots(local_date, booked):
+            results.append(schemas.AppointmentSlotOut(
+                scheduled_at=slot, clinician_id=clinician.id, clinician_name=clinician.full_name,
+            ))
+    results.sort(key=lambda s: (s.scheduled_at, s.clinician_name or ""))
+    return results
+
+
+@router.get("/booking-options", response_model=schemas.BookingOptionsOut)
+def list_booking_options(
+    facility_name: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """P3.10: the department + clinician pickers a patient's
+    self-booking flow needs, at one facility. Same visibility posture as
+    list_appointment_slots above (and same reason this lives here, not on
+    appointments.router)."""
+    departments = [
+        name for (name,) in db.query(models.FacilitySection.name)
+        .filter(models.FacilitySection.facility_name == facility_name, models.FacilitySection.active.is_(True))
+        .order_by(models.FacilitySection.name.asc())
+        .all()
+    ]
+    clinicians = (
+        db.query(models.User)
+        .filter(models.User.role == "clinician", models.User.facility == facility_name)
+        .order_by(models.User.full_name.asc())
+        .all()
+    )
+    return schemas.BookingOptionsOut(
+        departments=departments,
+        clinicians=[
+            schemas.BookingClinicianOut(id=c.id, full_name=c.full_name, department=c.section)
+            for c in clinicians
+        ],
+    )
 
 
 @router.post("", response_model=schemas.PatientOut)
@@ -452,11 +571,14 @@ def _serialize_allergy(a: models.AllergyIntolerance, db: Session, current_user, 
     }
 
 
-def _serialize_encounter(e: models.Encounter, db: Session, current_user, anns=(), present_here=None) -> dict:
+def _serialize_encounter(
+    e: models.Encounter, db: Session, current_user, anns=(), present_here=None, note: "models.ConsultationNote | None" = None,
+) -> dict:
     ann_list = list(anns or [])
     return {
         "id": e.id, "facility_name": e.facility_name, "encounter_type": e.encounter_type,
         "reason": e.reason, "notes": e.notes, "started_at": str(e.started_at),
+        "department": e.department,
         # facility_name doubles as the author facility for encounters.
         "authored_by_facility": e.facility_name,
         "editable": _record_editable(db, e.patient_id, e, current_user, present_here),
@@ -469,6 +591,19 @@ def _serialize_encounter(e: models.Encounter, db: Session, current_user, anns=()
         "signed_by_role": e.signed_by_role,
         "signature_url": f"/staff/{e.signed_by}/signature" if e.signed_by else None,
         "annotations": _annotation_dicts(ann_list),
+        # P3.10: diagnosis/treatment notes + vitals for this
+        # visit -- was previously staff-only via GET /consultation/encounters/
+        # {id}/note (see that endpoint's docstring: "cross-facility clinical
+        # sharing stays centralised in patients.py"). None when the sign-off
+        # never recorded structured data (legacy free-text-only encounters).
+        "consultation_note": (
+            {
+                "assessment": note.assessment, "plan": note.plan, "treatment_plan": note.treatment_plan,
+                "bp_systolic": note.bp_systolic, "bp_diastolic": note.bp_diastolic,
+                "temperature_c": note.temperature_c, "pulse_bpm": note.pulse_bpm,
+            }
+            if note else None
+        ),
     }
 
 
@@ -1043,6 +1178,105 @@ def get_document_thumbnail(
     return Response(
         content=thumb, media_type="image/jpeg",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
+    )
+
+
+@router.get("/{patient_id}/encounters/{encounter_id}/visit-summary.pdf")
+def get_visit_summary_pdf(
+    patient_id: str,
+    encounter_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """P3.10: a read-only PDF rendered on the fly from an
+    already-signed Encounter + its ConsultationNote. Deliberately NOT stored
+    as a ClinicalDocument the way POST /documents/generate's 3 doc_types
+    are -- there is no free-text/staff-entered content being issued here,
+    it's fully derived from records that are themselves already immutable,
+    so regenerating on every request is simpler than a second WORM copy that
+    could drift from the source encounter. The signature drawn on the page
+    is the EXISTING per-encounter snapshot taken at sign-off time
+    (Encounter.signature_object_key -- see models.Encounter's docstring),
+    not a signature belonging to whoever is downloading -- a patient has no
+    clinical signature of their own to substitute.
+
+    The patient may fetch their own; staff get the same cross-facility
+    visibility rule as get_patient_full_record (a facility that opted out
+    of records_shared_publicly can't pull another facility's visit as a PDF
+    either)."""
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    is_own_record = current_user.role == "patient" and current_user.patient_id == patient_id
+    if not is_own_record and current_user.role not in ("admin", "records_officer", "clinician"):
+        raise HTTPException(status_code=403, detail="Not authorized to view this visit summary")
+
+    encounter = (
+        db.query(models.Encounter)
+        .filter(models.Encounter.id == encounter_id, models.Encounter.patient_id == patient_id)
+        .first()
+    )
+    # Only a SIGNED encounter is a "visit" worth summarising -- an unsigned/
+    # legacy row has no doctor or signature to render.
+    if not encounter or not encounter.signed_by:
+        raise HTTPException(status_code=404, detail="Visit summary not available")
+
+    if not is_own_record:
+        hidden = _hidden_author_facilities(db, current_user.facility)
+        if encounter.facility_name in hidden:
+            raise HTTPException(status_code=404, detail="Visit summary not available")
+
+    note = (
+        db.query(models.ConsultationNote)
+        .filter(models.ConsultationNote.encounter_id == encounter_id)
+        .first()
+    )
+
+    vitals_parts = []
+    if note and note.bp_systolic is not None and note.bp_diastolic is not None:
+        vitals_parts.append(f"BP {note.bp_systolic}/{note.bp_diastolic} mmHg")
+    if note and note.temperature_c is not None:
+        vitals_parts.append(f"Temp {note.temperature_c:.1f} °C")
+    if note and note.pulse_bpm is not None:
+        vitals_parts.append(f"Pulse {note.pulse_bpm} bpm")
+
+    fields = {
+        "visit_date": str(encounter.started_at),
+        "doctor_name": encounter.signed_by_name,
+        "department": encounter.department,
+        "vitals_line": ", ".join(vitals_parts) or None,
+        "assessment": note.assessment if note else None,
+        "plan": note.plan if note else None,
+        "treatment_plan": note.treatment_plan if note else None,
+    }
+
+    signature_png = None
+    if encounter.signature_object_key:
+        try:
+            signature_png = get_object_store().get_checked(
+                BUCKET_SIGNATURES, encounter.signature_object_key, encounter.signature_sha256
+            )
+        except ObjectStoreError:
+            pass  # render without the image rather than failing the whole download
+
+    signed_at = encounter.started_at if isinstance(encounter.started_at, datetime) else datetime.now(timezone.utc)
+    pdf_bytes, _plain_text = render_document(
+        "visit_summary", patient, fields,
+        facility_name=encounter.facility_name,
+        signer_name=encounter.signed_by_name or "-",
+        signer_role=encounter.signed_by_role,
+        signed_at=signed_at,
+        signature_png=signature_png,
+    )
+
+    log_access(
+        db, patient_id, current_user.id, current_user.role, "view_visit_summary_pdf",
+        detail=encounter_id, actor_facility=current_user.facility,
+    )
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="visit_summary_{encounter_id}.pdf"'},
     )
 
 

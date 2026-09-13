@@ -253,6 +253,15 @@ export const getDocumentFileBlob = (id, documentId) =>
 export const generateDocument = (id, body) =>
   client.post(`/patients/${id}/documents/generate`, body).then((r) => r.data);
 
+// P3.9: raw ESC/POS ticket bytes for a compatible printer --
+// same Bearer-auth-needs-a-blob-fetch reasoning as getDocumentFileBlob.
+export const getTicketPrintBlob = (ticketId) =>
+  client.get(`/reception/queue/${ticketId}/ticket.escpos`, { responseType: "blob" }).then((r) => r.data);
+
+// P3.9: a printable sample-label PNG for an ancillary order.
+export const getServiceRequestLabelBlob = (requestId) =>
+  client.get(`/ancillary/requests/${requestId}/label`, { responseType: "blob" }).then((r) => r.data);
+
 export const getSummary = (id) => client.get(`/ai/summary/${id}`).then((r) => r.data);
 export const getInteractionCheck = (id) => client.get(`/ai/interaction-check/${id}`).then((r) => r.data);
 export const digitiseDocument = (id, docType, file) => {
@@ -445,6 +454,11 @@ export const setBudget = (payload) => client.put("/admin/budget", payload).then(
 // records_shared_publicly} and rejects unknown keys — send only what changed.
 export const getHospitalSettings = () => client.get("/admin/hospital-settings").then((r) => r.data);
 export const updateHospitalSettings = (body) => client.put("/admin/hospital-settings", body).then((r) => r.data);
+
+// P3.10: clinic-published notices the mobile app polls for.
+export const listAnnouncements = () => client.get("/admin/announcements").then((r) => r.data);
+export const createAnnouncement = (body) => client.post("/admin/announcements", body).then((r) => r.data);
+export const deleteAnnouncement = (id) => client.delete(`/admin/announcements/${id}`).then((r) => r.data);
 
 // Per-facility role → console-page access matrix (routers/admin.py, admin-only).
 // GET returns one entry per configurable staff role (clinician, records_officer,

@@ -19,13 +19,44 @@ change (e.g. product decides on 48h instead of 24h), there is exactly one
 place to edit.
 """
 
-from datetime import datetime, timedelta
+from datetime import date as date_cls, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from . import models
 
 # Always-on reminder offsets (hours before scheduled_at), regardless of
 # fasting/extra reminders. See module docstring for why these live only here.
 STANDARD_REMINDER_HOURS_BEFORE = [24, 3]
+
+# P3.10 self-booking slot grid. Same "Asia/Kuala_Lumpur,
+# hardcoded rather than a per-facility configurable schedule" hackathon-scope
+# call routers/reception/_common.py::_malaysia_today already made for the
+# queue-reset hour -- a real deployment would want per-facility opening
+# hours, not built here since nothing today needs it.
+MALAYSIA_TZ = ZoneInfo("Asia/Kuala_Lumpur")
+SLOT_MINUTES = 30
+CLINIC_OPEN_HOUR = 8
+CLINIC_CLOSE_HOUR = 17
+
+
+def compute_available_slots(local_date: date_cls, booked_at: set[datetime]) -> list[datetime]:
+    """Fixed `SLOT_MINUTES`-wide grid within clinic hours on `local_date`
+    (Malaysia-local), minus any start time already in `booked_at`. Returns
+    naive-UTC datetimes -- same convention models.Appointment.scheduled_at is
+    read/written in elsewhere in this module (see compute_reminder_offsets's
+    use of datetime.utcnow()) -- so callers must pass `booked_at` as
+    naive-UTC too. Past slots (earlier than "now") are dropped so a patient
+    can never book a time that has already gone by."""
+    now = datetime.utcnow()
+    cursor = datetime(local_date.year, local_date.month, local_date.day, CLINIC_OPEN_HOUR, tzinfo=MALAYSIA_TZ)
+    close = datetime(local_date.year, local_date.month, local_date.day, CLINIC_CLOSE_HOUR, tzinfo=MALAYSIA_TZ)
+    slots = []
+    while cursor < close:
+        slot_utc = cursor.astimezone(timezone.utc).replace(tzinfo=None)
+        if slot_utc > now and slot_utc not in booked_at:
+            slots.append(slot_utc)
+        cursor += timedelta(minutes=SLOT_MINUTES)
+    return slots
 
 
 def compute_reminder_offsets(appointment: models.Appointment) -> list[dict]:

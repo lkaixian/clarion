@@ -30,7 +30,24 @@ function hospitalFormFrom(s) {
     contact_phone: s.contact_phone ?? "",
     timezone: s.timezone ?? "Asia/Kuala_Lumpur",
     records_shared_publicly: !!s.records_shared_publicly,
+    brand_primary_color: s.brand_primary_color ?? "",
+    logo_data_url: s.logo_data_url ?? "",
   };
+}
+
+// P3.9: 200KB caps the base64 text server-side
+// (schemas.MAX_LOGO_DATA_URL_LENGTH) -- a waiting-room-TV-sized wordmark,
+// not a print-resolution asset, so reject an oversized file client-side
+// with a clear message instead of a 422 after upload.
+const MAX_LOGO_FILE_BYTES = 150_000; // base64 inflates ~33%, stays under the 200KB server cap
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function HospitalSettingsTab() {
@@ -57,9 +74,9 @@ export default function HospitalSettingsTab() {
   function changedFields() {
     if (!settings || !form) return {};
     const diff = {};
-    for (const k of ["display_name", "address", "contact_phone", "timezone"]) {
+    for (const k of ["display_name", "address", "contact_phone", "timezone", "brand_primary_color", "logo_data_url"]) {
       const next = form[k].trim();
-      if (next !== (settings[k] ?? "")) diff[k] = next;
+      if (next !== (settings[k] ?? "")) diff[k] = next || null;
     }
     if (form.records_shared_publicly !== !!settings.records_shared_publicly) {
       diff.records_shared_publicly = form.records_shared_publicly;
@@ -162,6 +179,53 @@ export default function HospitalSettingsTab() {
             )}
             {COMMON_TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
           </select>
+        </div>
+
+        <div className="border border-slate-200 rounded-lg p-3">
+          <p className="text-xs font-medium text-slate-600 mb-2">Calling-system TV branding</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Accent color</label>
+              <input
+                type="color"
+                className="h-8 w-14 border border-slate-300 rounded cursor-pointer"
+                value={form.brand_primary_color || "#10b981"}
+                onChange={(e) => setForm((f) => ({ ...f, brand_primary_color: e.target.value }))}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-slate-500 mb-1">Logo</label>
+              <div className="flex items-center gap-3">
+                {form.logo_data_url && (
+                  <img src={form.logo_data_url} alt="Logo preview" className="h-10 w-10 object-contain border border-slate-200 rounded" />
+                )}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="text-xs"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > MAX_LOGO_FILE_BYTES) {
+                      setError("Logo image is too large (150KB max) — pick a smaller file.");
+                      return;
+                    }
+                    setError("");
+                    setForm((f) => ({ ...f, logo_data_url: await readFileAsDataUrl(file) }));
+                  }}
+                />
+                {form.logo_data_url && (
+                  <button
+                    type="button"
+                    className="text-xs text-slate-500 underline hover:no-underline"
+                    onClick={() => setForm((f) => ({ ...f, logo_data_url: "" }))}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">

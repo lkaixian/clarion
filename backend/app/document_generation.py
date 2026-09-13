@@ -25,12 +25,13 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-GENERATED_DOC_TYPES = {"medical_certificate", "referral_letter", "timeslip"}
+GENERATED_DOC_TYPES = {"medical_certificate", "referral_letter", "timeslip", "visit_summary"}
 
 _TITLES = {
     "medical_certificate": "DIGITAL MEDICAL CERTIFICATE",
     "referral_letter": "REFERRAL LETTER",
     "timeslip": "CLINIC ATTENDANCE TIMESLIP",
+    "visit_summary": "VISIT SUMMARY",
 }
 
 _PAGE_W, _PAGE_H = A4
@@ -88,6 +89,27 @@ def _content_lines(doc_type: str, patient, fields: dict) -> list[str]:
         ]
         if fields.get("purpose"):
             body += ["", *_wrapped("Purpose", fields["purpose"])]
+    elif doc_type == "visit_summary":
+        # P3.10: rendered read-only from an already-signed
+        # Encounter/ConsultationNote -- unlike the 3 types above, the
+        # caller here is routers/patients.py::get_visit_summary_pdf, not
+        # POST /documents/generate (see schemas.VALID_GENERATED_DOC_TYPES,
+        # which deliberately does NOT include "visit_summary" -- nothing
+        # free-text/staff-entered is being issued, so it doesn't belong on
+        # that surface).
+        body = [
+            f"Visit date: {fields['visit_date']}",
+            f"Doctor: {fields.get('doctor_name') or '-'}",
+            f"Department: {fields.get('department') or '-'}",
+            "",
+        ]
+        if fields.get("vitals_line"):
+            body += [f"Vitals: {fields['vitals_line']}", ""]
+        if fields.get("assessment"):
+            body += _wrapped("Diagnosis", fields["assessment"]) + [""]
+        if fields.get("plan") or fields.get("treatment_plan"):
+            treatment = " ".join(x for x in (fields.get("plan"), fields.get("treatment_plan")) if x)
+            body += _wrapped("Treatment", treatment)
     else:  # pragma: no cover -- guarded by schemas.VALID_GENERATED_DOC_TYPES before this is called
         raise ValueError(f"Unknown generated doc_type: {doc_type}")
     return header + body

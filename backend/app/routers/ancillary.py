@@ -32,7 +32,7 @@ import mimetypes
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
@@ -52,6 +52,7 @@ from ..storage import (
 )
 from ._uploads import enforce_upload_size, sniff_document_mime
 from ..clinical_access import _hidden_author_facilities
+from ..printing import build_sample_label_png
 from .patients import SAFE_DOCUMENT_MEDIA_TYPES
 from .profile import save_signature_from_b64, copy_signature_snapshot
 
@@ -415,6 +416,28 @@ def get_service_request(
         if req.ordering_facility_name in _hidden_author_facilities(db, current_user.facility):
             raise HTTPException(status_code=404, detail="Service request not found")
     return _serialize_request(req, current_user)
+
+
+@router.get("/requests/{request_id}/label")
+def get_service_request_label(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*ORDER_ROLES)),
+):
+    """P3.9: a printable sample-label image (patient name, IC,
+    item, scannable code) for this order -- own-facility only, same as every
+    other write/print action against a request (a label is only ever
+    printed where the sample is physically taken). See app/printing.py's
+    module docstring for why this returns image bytes rather than talking to
+    a label printer directly."""
+    req = _request_or_404(db, request_id, current_user, require_same_facility=True)
+    png_bytes = build_sample_label_png(
+        patient_name=req.patient.full_name,
+        national_id=req.patient.national_id,
+        item_name=req.catalog_item.name,
+        request_id=req.id,
+    )
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.post("/requests/{request_id}/cancel", response_model=schemas.ServiceRequestOut)

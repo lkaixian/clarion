@@ -35,6 +35,10 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   const hasSignature = !!user?.has_signature;
   const [note, setNote] = useState("");
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "", treatment_plan: "" });
+  // P3.10: vitals taken at this visit. Plain strings in state
+  // (not numbers) so an empty field submits as empty, not 0/NaN — parsed
+  // just before submit, same as followUpAt's datetime-local -> ISO step.
+  const [vitals, setVitals] = useState({ bp_systolic: "", bp_diastolic: "", temperature_c: "", pulse_bpm: "" });
   const [followUpAt, setFollowUpAt] = useState("");
   const [referralId, setReferralId] = useState("");
   const [referralOptions, setReferralOptions] = useState([]);
@@ -159,6 +163,10 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
       await completeConsultationTicket(ticket.id, {
         note: note.trim() || undefined,
         ...Object.fromEntries(Object.entries(soap).map(([key, value]) => [key, value.trim() || undefined])),
+        bp_systolic: vitals.bp_systolic ? Number(vitals.bp_systolic) : undefined,
+        bp_diastolic: vitals.bp_diastolic ? Number(vitals.bp_diastolic) : undefined,
+        temperature_c: vitals.temperature_c ? Number(vitals.temperature_c) : undefined,
+        pulse_bpm: vitals.pulse_bpm ? Number(vitals.pulse_bpm) : undefined,
         follow_up_at: followUpAt ? new Date(followUpAt).toISOString() : undefined,
         referral_service_request_id: referralId || undefined,
         // JSON field wants RAW base64 — strip the "data:image/png;base64,"
@@ -208,6 +216,31 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
               </span>
             )}
             {voiceError && <span className="text-xs text-red-600">{voiceError}</span>}
+          </div>
+          <div className="border border-slate-200 rounded-lg p-2">
+            <p className="text-xs font-medium text-slate-600 mb-2">Vitals (optional)</p>
+            <div className="grid grid-cols-4 gap-2">
+              <label className="block text-xs text-slate-500">
+                BP sys
+                <input type="number" min="40" max="300" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  value={vitals.bp_systolic} onChange={(e) => setVitals((v) => ({ ...v, bp_systolic: e.target.value }))} />
+              </label>
+              <label className="block text-xs text-slate-500">
+                BP dia
+                <input type="number" min="20" max="200" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  value={vitals.bp_diastolic} onChange={(e) => setVitals((v) => ({ ...v, bp_diastolic: e.target.value }))} />
+              </label>
+              <label className="block text-xs text-slate-500">
+                Temp °C
+                <input type="number" step="0.1" min="25" max="45" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  value={vitals.temperature_c} onChange={(e) => setVitals((v) => ({ ...v, temperature_c: e.target.value }))} />
+              </label>
+              <label className="block text-xs text-slate-500">
+                Pulse
+                <input type="number" min="20" max="300" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  value={vitals.pulse_bpm} onChange={(e) => setVitals((v) => ({ ...v, pulse_bpm: e.target.value }))} />
+              </label>
+            </div>
           </div>
           <div className="grid gap-2">
             {[
