@@ -330,6 +330,24 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
+  String encounterDepartmentLabel(String department) {
+    return 'Jabatan: $department';
+  }
+
+  @override
+  String encounterVitalsLabel(String vitals) {
+    return 'Tanda vital: $vitals';
+  }
+
+  @override
+  String get downloadVisitSummary =>
+      'Muat turun / kongsi ringkasan lawatan (PDF)';
+
+  @override
+  String get visitSummaryUnavailable =>
+      'Ringkasan lawatan belum tersedia untuk lawatan ini.';
+
+  @override
   String get documentsTitle => 'Dokumen';
 
   @override
@@ -357,6 +375,9 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get remindersButton => 'Peringatan Ubat & Temu Janji';
+
+  @override
+  String get bookAppointmentButton => 'Tempah Temu Janji';
 
   @override
   String get whoViewedRecord => 'Siapa yang melihat rekod saya?';
@@ -460,6 +481,9 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get remindersTitle => 'Peringatan';
+
+  @override
+  String get announcementsSectionTitle => 'Pengumuman';
 
   @override
   String get medicationsSection => 'Ubat-ubatan';
@@ -931,6 +955,51 @@ class AppLocalizationsMs extends AppLocalizations {
   @override
   String get noActiveQueueTicketDesc =>
       'Daftar masuk di kaunter penerimaan untuk mendapatkan nombor giliran.';
+
+  @override
+  String get bookAppointmentTitle => 'Tempah Temu Janji';
+
+  @override
+  String get bookAppointmentFacilityLabel => 'Fasiliti';
+
+  @override
+  String get bookAppointmentOtherFacility => 'Lain (taip secara manual)';
+
+  @override
+  String get bookAppointmentFacilityManualHint => 'Nama fasiliti';
+
+  @override
+  String get bookAppointmentUseFacility => 'Guna fasiliti ini';
+
+  @override
+  String get bookAppointmentDepartmentLabel => 'Jabatan';
+
+  @override
+  String get bookAppointmentAnyDepartment => 'Mana-mana jabatan';
+
+  @override
+  String get bookAppointmentClinicianLabel => 'Doktor';
+
+  @override
+  String get bookAppointmentAnyClinician => 'Mana-mana doktor';
+
+  @override
+  String get bookAppointmentPickDate => 'Pilih tarikh';
+
+  @override
+  String get bookAppointmentNoSlots =>
+      'Tiada slot kosong pada tarikh ini — cuba hari lain.';
+
+  @override
+  String get bookAppointmentSuccess => 'Temu janji berjaya ditempah.';
+
+  @override
+  String get bookAppointmentSlotTaken =>
+      'Slot itu baru sahaja diambil — pilih slot lain.';
+
+  @override
+  String get bookAppointmentGenericError =>
+      'Tempahan tidak dapat diselesaikan. Sila cuba lagi.';
 
   @override
   String get scanCheckinButton => 'Imbas untuk Daftar Masuk';

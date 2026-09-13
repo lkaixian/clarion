@@ -66,6 +66,17 @@ class _RemindersScreenState extends State<RemindersScreen>
           patient.id,
           context.read<ApiClient>(),
         );
+        // P3.10: announcements for every facility this
+        // patient has actually been seen at — there is no "list all
+        // facilities" endpoint (and no single canonical "home facility" for
+        // a patient with a cross-hospital record), so the patient's own
+        // encounter history is the best available source. A brand-new
+        // patient with no encounters yet simply sees no announcements,
+        // which is the correct behaviour (nothing to announce to them yet).
+        final facilities = patient.encounters.map((e) => e.facilityName).toSet().toList();
+        if (facilities.isNotEmpty) {
+          reminders.syncAnnouncements(facilities, context.read<ApiClient>());
+        }
       }
     });
   }
@@ -238,6 +249,43 @@ class _RemindersScreenState extends State<RemindersScreen>
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
+                  if (remindersState.announcements.isNotEmpty) ...[
+                    Text(
+                      l10n.announcementsSectionTitle,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    ...remindersState.announcements.map(
+                      (a) => Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: context.palette.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: context.palette.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              a.title,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(a.body, style: const TextStyle(fontSize: 13)),
+                            const SizedBox(height: 6),
+                            Text(
+                              DateFormat('d MMM yyyy, h:mm a').format(a.startsAt.toLocal()),
+                              style: TextStyle(fontSize: 11, color: context.palette.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   if (remindersState.isLoaded &&
                       !remindersState.notificationsGranted)
                     Container(

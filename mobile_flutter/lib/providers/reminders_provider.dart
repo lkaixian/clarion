@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/appointment_reminder.dart';
+import '../models/booking.dart';
 import '../models/patient.dart';
 import '../models/server_appointment.dart';
 import '../services/api_client.dart';
@@ -36,6 +37,7 @@ class RemindersProvider extends ChangeNotifier {
   Set<String> _mutedMedications = {};
   List<AppointmentReminder> _appointments = [];
   List<ServerAppointment> _serverAppointments = [];
+  List<Announcement> _announcements = [];
   bool _notificationsGranted = false;
   bool _notificationsPermanentlyDenied = false;
   bool _loaded = false;
@@ -51,6 +53,12 @@ class RemindersProvider extends ChangeNotifier {
   /// [Patient.activeMedications] filters at the call site rather than here).
   List<ServerAppointment> get serverAppointments =>
       List.unmodifiable(_serverAppointments);
+
+  /// P3.10: clinic-published notices, as last fetched via
+  /// [syncAnnouncements]. Purely a read-through cache — nothing device-local
+  /// is scheduled for these (unlike appointment/medication reminders), so
+  /// there's no notification bookkeeping to mirror here.
+  List<Announcement> get announcements => List.unmodifiable(_announcements);
   bool get notificationsGranted => _notificationsGranted;
 
   /// True once Android has permanently denied the notification-permission
@@ -314,6 +322,32 @@ class RemindersProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('RemindersProvider: failed to sync server appointments ($e)');
     }
+  }
+
+  /// P3.10: fetch currently-live announcements for each of
+  /// `facilityNames` (deduped by id — a patient seen at two facilities that
+  /// both happen to publish the same notice would otherwise see it twice)
+  /// and expose via [announcements]. Deliberately simpler than
+  /// [syncServerAppointments]'s sibling: no local notification scheduling,
+  /// this is a plain read-through cache, and a failure leaves whatever was
+  /// previously loaded untouched (same "never crash the app or block
+  /// anything else in this provider" rule as every other sync method here).
+  Future<void> syncAnnouncements(List<String> facilityNames, ApiClient api) async {
+    if (facilityNames.isEmpty) return;
+    final byId = <String, Announcement>{};
+    for (final facility in facilityNames) {
+      try {
+        for (final a in await api.getAnnouncements(facility)) {
+          byId[a.id] = a;
+        }
+      } catch (e) {
+        debugPrint('RemindersProvider: failed to fetch announcements for $facility ($e)');
+        // Keep going for the other facilities rather than aborting entirely.
+      }
+    }
+    _announcements = byId.values.toList()
+      ..sort((a, b) => b.startsAt.compareTo(a.startsAt)); // newest first
+    notifyListeners();
   }
 
   /// FIX for "web-published appointments never show up / update in the

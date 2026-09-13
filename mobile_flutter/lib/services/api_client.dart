@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
+import '../models/booking.dart';
 import '../models/emergency_card.dart';
 import '../models/patient.dart';
 import '../models/audit_log_entry.dart';
@@ -359,6 +360,105 @@ class ApiClient {
         },
       );
       return RescheduleRequestInfo.fromJson(response.data!);
+    });
+  }
+
+  /// `GET /patients/appointment-slots` — P3.10. Bookable
+  /// slots for one Malaysia-local calendar `date` ("YYYY-MM-DD"), already
+  /// excluding anything already booked. `department`/`clinicianId` narrow
+  /// the search; omitting `clinicianId` returns the union of every matching
+  /// clinician's free slots (see backend/app/routers/patients.py::
+  /// list_appointment_slots).
+  Future<List<AppointmentSlot>> getAppointmentSlots({
+    required String facilityName,
+    required String date,
+    String? department,
+    String? clinicianId,
+  }) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/patients/appointment-slots',
+        queryParameters: {
+          'facility_name': facilityName,
+          'date': date,
+          if (department != null) 'department': department,
+          if (clinicianId != null) 'clinician_id': clinicianId,
+        },
+      );
+      return (response.data ?? [])
+          .map((e) => AppointmentSlot.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  /// `GET /patients/booking-options` — the department/clinician pickers a
+  /// self-booking flow needs for one facility.
+  Future<BookingOptions> getBookingOptions(String facilityName) {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/patients/booking-options',
+        queryParameters: {'facility_name': facilityName},
+      );
+      return BookingOptions.fromJson(response.data!);
+    });
+  }
+
+  /// `POST /patients/{patient_id}/appointments/self-book` — patient JWT,
+  /// own record only. `scheduledAt` MUST be one of the exact values
+  /// [getAppointmentSlots] just returned (copied verbatim, not reformatted)
+  /// -- the backend re-validates it's still a real offered slot and 409s
+  /// otherwise (someone else took it in the meantime).
+  Future<ServerAppointment> selfBookAppointment({
+    required String patientId,
+    required String facilityName,
+    String? department,
+    String? clinicianId,
+    required DateTime scheduledAt,
+  }) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/patients/$patientId/appointments/self-book',
+        data: {
+          'facility_name': facilityName,
+          if (department != null) 'department': department,
+          if (clinicianId != null) 'clinician_id': clinicianId,
+          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        },
+      );
+      return ServerAppointment.fromJson(response.data!);
+    });
+  }
+
+  /// `GET /patients/announcements` — P3.10. Already filtered
+  /// server-side to currently-live ones; no client-side expiry check needed.
+  Future<List<Announcement>> getAnnouncements(String facilityName) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/patients/announcements',
+        queryParameters: {'facility_name': facilityName},
+      );
+      return (response.data ?? [])
+          .map((e) => Announcement.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  /// `GET /patients/{patient_id}/encounters/{encounter_id}/visit-summary.pdf`
+  /// — P3.10, raw PDF bytes for the caller to write to a temp
+  /// file and hand to [Share.shareXFiles] (see BookAppointmentScreen's
+  /// sibling usage in home_screen.dart's encounter card) -- the endpoint is
+  /// Bearer-authed like everything else here, so a plain url_launcher can't
+  /// fetch it directly.
+  Future<List<int>> getVisitSummaryPdfBytes({
+    required String patientId,
+    required String encounterId,
+  }) {
+    return _guard(() async {
+      final response = await _dio.get<List<int>>(
+        '/patients/$patientId/encounters/$encounterId/visit-summary.pdf',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return response.data!;
     });
   }
 

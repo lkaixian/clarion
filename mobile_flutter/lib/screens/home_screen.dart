@@ -1,18 +1,23 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 import '../providers/reminders_provider.dart';
 import '../services/api_client.dart';
+import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import '../widgets/expandable_item_list.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/missing_profile_banner.dart';
 import '../widgets/section_card.dart';
 import 'audit_log_screen.dart';
+import 'book_appointment_screen.dart';
 import 'edit_profile_screen.dart';
 import 'emergency_scanner_screen.dart';
 import 'emergency_screen.dart';
@@ -62,6 +67,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _signOut() async {
     await context.read<AuthProvider>().logout();
+  }
+
+  /// P3.10: fetch the visit-summary PDF and hand it to the
+  /// OS share/open sheet. The endpoint is Bearer-authed like everything
+  /// else here, so a plain url_launcher can't fetch it directly -- fetched
+  /// via Dio into memory, written to a temp file, then share_plus wraps the
+  /// Android FileProvider/iOS share-sheet plumbing a raw file:// URI hits
+  /// StrictMode/FileUriExposedException on (see pubspec.yaml's comment on
+  /// this dependency).
+  Future<void> _shareVisitSummary(String patientId, String encounterId) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final bytes = await context.read<ApiClient>().getVisitSummaryPdfBytes(
+        patientId: patientId,
+        encounterId: encounterId,
+      );
+      final dir = await Directory.systemTemp.createTemp('clarion_pdf');
+      final file = File('${dir.path}/visit_summary.pdf');
+      await file.writeAsBytes(bytes);
+      if (!mounted) return;
+      await Share.shareXFiles([XFile(file.path)]);
+    } catch (e) {
+      if (!mounted) return;
+      // A 404 (this particular visit was never signed off with structured
+      // data) is a normal, expected outcome for some encounters, not a
+      // scary error -- same ApiException.message-first pattern used
+      // everywhere else in this app for a caught form/network failure.
+      final message = e is ApiException ? e.message : l10n.visitSummaryUnavailable;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
@@ -290,6 +327,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+                // P3.10: patient self-service booking.
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const BookAppointmentScreen(),
+                      ),
+                    ),
+                    icon: Icon(Icons.event_available_outlined, color: context.palette.primary),
+                    label: Text(l10n.bookAppointmentButton),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: context.palette.chipBg,
+                      foregroundColor: context.palette.primary,
+                      padding: const EdgeInsets.all(16),
+                      side: BorderSide.none,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 20),
                 // "Health record" umbrella-groups every read-only medical
                 // SectionCard below so it's visually obvious they're all
@@ -403,9 +460,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             final subtitleLines = <String>[];
                             final reason = e.reason;
                             final notes = e.notes;
+                            final department = e.department;
+                            final note = e.consultationNote;
                             if (reason != null && reason.trim().isNotEmpty) {
                               subtitleLines.add(
                                 l10n.encounterReasonLabel(reason),
+                              );
+                            }
+                            if (department != null && department.trim().isNotEmpty) {
+                              subtitleLines.add(
+                                l10n.encounterDepartmentLabel(department),
                               );
                             }
                             if (notes != null && notes.trim().isNotEmpty) {
@@ -413,11 +477,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                 l10n.encounterNotesLabel(notes),
                               );
                             }
+                            // P3.10: diagnosis/treatment +
+                            // vitals from the signed consultation, if any.
+                            final assessment = note?.assessment;
+                            if (assessment != null && assessment.trim().isNotEmpty) {
+                              subtitleLines.add(assessment);
+                            }
+                            if (note != null && note.hasVitals) {
+                              subtitleLines.add(
+                                l10n.encounterVitalsLabel(note.vitalsLine),
+                              );
+                            }
                             return _BulletLine(
                               '${e.encounterType} @ ${e.facilityName} — ${e.startedAt}',
                               subtitle: subtitleLines.isEmpty
                                   ? null
                                   : subtitleLines.join('\n'),
+                              maxLines: subtitleLines.length.clamp(2, 5),
+                              trailing: IconButton(
+                                tooltip: l10n.downloadVisitSummary,
+                                icon: Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  size: 20,
+                                  color: context.palette.primary,
+                                ),
+                                onPressed: () => _shareVisitSummary(patient.id, e.id),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -537,42 +622,55 @@ String _docTypeLabel(AppLocalizations l10n, String docType) {
 }
 
 class _BulletLine extends StatelessWidget {
-  const _BulletLine(this.text, {this.subtitle});
+  // `trailing`/`maxLines` are additive (default null/2, matching every
+  // existing call site's behaviour unchanged) -- added for P3.10's
+  // per-encounter "download/share visit summary" button and its longer
+  // (department + vitals) subtitle, without touching the plain-text-only
+  // shape every other caller (documents/conditions/etc.) still relies on.
+  const _BulletLine(this.text, {this.subtitle, this.trailing, this.maxLines = 2});
   final String text;
   final String? subtitle;
+  final Widget? trailing;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     final subtitleText = subtitle;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '•  $text',
-            style: TextStyle(
-              fontSize: 14,
-              color: context.palette.textBody,
-              height: 1.4,
-            ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '•  $text',
+          style: TextStyle(
+            fontSize: 14,
+            color: context.palette.textBody,
+            height: 1.4,
           ),
-          if (subtitleText != null && subtitleText.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 18, top: 1),
-              child: Text(
-                subtitleText,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.palette.textMuted,
-                  height: 1.3,
-                ),
+        ),
+        if (subtitleText != null && subtitleText.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 18, top: 1),
+            child: Text(
+              subtitleText,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.palette.textMuted,
+                height: 1.3,
               ),
             ),
-        ],
-      ),
+          ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: trailing == null
+          ? content
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [Expanded(child: content), trailing!],
+            ),
     );
   }
 }

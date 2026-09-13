@@ -101,6 +101,16 @@ dependencies:
   # philosophy as every other dependency in this section.
   image_picker: ^1.1.2
 
+  # P3.10: "download/share visit summaries as PDF". The PDF
+  # endpoint is Bearer-authed (same as every other API call), so it must be
+  # fetched via Dio into memory first — plain url_launcher can't attach that
+  # header. share_plus is the standard, minimal package for the remaining
+  # step ("hand these bytes to the OS share/open sheet"): it writes to a
+  # temp file and wraps the Android FileProvider/iOS share-sheet plumbing
+  # that a raw file:// URI hits StrictMode/FileUriExposedException on --
+  # there's no stdlib or already-installed path that does this safely.
+  share_plus: ^10.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -84,6 +84,54 @@ class Allergy {
       );
 }
 
+/// P3.10: vitals + diagnosis/treatment for one signed visit,
+/// mirroring the `consultation_note` object nested inside `AppointmentOut`-
+/// adjacent `Encounter` JSON (see backend/app/routers/patients.py::
+/// _serialize_encounter). Only the fields a patient is meant to see are
+/// exposed here — raw subjective/objective free text is deliberately not
+/// surfaced (same trim the backend already applies).
+class ConsultationNoteSummary {
+  final String? assessment;
+  final String? plan;
+  final String? treatmentPlan;
+  final int? bpSystolic;
+  final int? bpDiastolic;
+  final double? temperatureC;
+  final int? pulseBpm;
+
+  const ConsultationNoteSummary({
+    this.assessment,
+    this.plan,
+    this.treatmentPlan,
+    this.bpSystolic,
+    this.bpDiastolic,
+    this.temperatureC,
+    this.pulseBpm,
+  });
+
+  bool get hasVitals => bpSystolic != null || bpDiastolic != null || temperatureC != null || pulseBpm != null;
+
+  /// "BP 130/85 mmHg · Temp 36.8°C · Pulse 72 bpm" — omits any missing part
+  /// rather than printing "null"; empty string if no vitals were recorded.
+  String get vitalsLine {
+    final parts = <String>[];
+    if (bpSystolic != null && bpDiastolic != null) parts.add('BP $bpSystolic/$bpDiastolic mmHg');
+    if (temperatureC != null) parts.add('Temp ${temperatureC!.toStringAsFixed(1)}°C');
+    if (pulseBpm != null) parts.add('Pulse $pulseBpm bpm');
+    return parts.join(' · ');
+  }
+
+  factory ConsultationNoteSummary.fromJson(Map<String, dynamic> json) => ConsultationNoteSummary(
+        assessment: json['assessment'] as String?,
+        plan: json['plan'] as String?,
+        treatmentPlan: json['treatment_plan'] as String?,
+        bpSystolic: (json['bp_systolic'] as num?)?.toInt(),
+        bpDiastolic: (json['bp_diastolic'] as num?)?.toInt(),
+        temperatureC: (json['temperature_c'] as num?)?.toDouble(),
+        pulseBpm: (json['pulse_bpm'] as num?)?.toInt(),
+      );
+}
+
 class Encounter {
   final String id;
   final String facilityName;
@@ -91,6 +139,12 @@ class Encounter {
   final String? reason;
   final String? notes;
   final String startedAt;
+  // P3.10: the department this visit was checked into (may be
+  // null — not every facility uses sections, and legacy encounters predate
+  // this column server-side), and the signed-off vitals/assessment/plan for
+  // this visit (null until a clinician has signed off with structured data).
+  final String? department;
+  final ConsultationNoteSummary? consultationNote;
 
   const Encounter({
     required this.id,
@@ -99,6 +153,8 @@ class Encounter {
     this.reason,
     this.notes,
     required this.startedAt,
+    this.department,
+    this.consultationNote,
   });
 
   factory Encounter.fromJson(Map<String, dynamic> json) => Encounter(
@@ -108,6 +164,10 @@ class Encounter {
         reason: json['reason'] as String?,
         notes: json['notes'] as String?,
         startedAt: json['started_at'] as String? ?? '',
+        department: json['department'] as String?,
+        consultationNote: json['consultation_note'] != null
+            ? ConsultationNoteSummary.fromJson(json['consultation_note'] as Map<String, dynamic>)
+            : null,
       );
 }
 
