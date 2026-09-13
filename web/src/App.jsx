@@ -8,6 +8,8 @@ import AdminConsole from "./pages/AdminConsole";
 import Reception from "./pages/Reception";
 import Pharmacy from "./pages/Pharmacy";
 import Ancillary from "./pages/Ancillary";
+import Dental from "./pages/Dental";
+import Billing from "./pages/Billing";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
@@ -61,6 +63,8 @@ export default function App() {
         <Route path="/reception" element={<Protected><RequirePage page="reception"><Reception /></RequirePage></Protected>} />
         <Route path="/pharmacy" element={<Protected><RequirePage page="pharmacy"><Pharmacy /></RequirePage></Protected>} />
         <Route path="/ancillary" element={<Protected><RequirePage page="ancillary"><Ancillary /></RequirePage></Protected>} />
+        <Route path="/dental" element={<Protected><RequirePage page="dental"><Dental /></RequirePage></Protected>} />
+        <Route path="/billing" element={<Protected><RequirePage page="billing"><Billing /></RequirePage></Protected>} />
       </Routes>
     </BrowserRouter>
   );

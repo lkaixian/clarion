@@ -15,13 +15,16 @@ export const PAGE_ROUTE = {
   reception: "/reception",
   pharmacy: "/pharmacy",
   ancillary: "/ancillary",
+  dental: "/dental",
+  billing: "/billing",
   admin: "/admin",
 };
 
 // The landing page for a user right after login, for the "home" logo link,
 // and the redirect target when a guard bounces someone off a page they can't
 // open. Order = priority: admin console first, then the clinical desk, then
-// reception, then ancillary, then pharmacy.
+// reception, then ancillary, then dental, then billing, then pharmacy —
+// billing isn't anyone's primary landing page (P3.3).
 export function landingPathFor(user) {
   if (!user) return "/";
   // A patient account can't call GET /patients (the staff list) — their only
@@ -33,6 +36,8 @@ export function landingPathFor(user) {
   if (pages.includes("patients")) return "/patients";
   if (pages.includes("reception")) return "/reception";
   if (pages.includes("ancillary")) return "/ancillary";
+  if (pages.includes("dental")) return "/dental";
+  if (pages.includes("billing")) return "/billing";
   if (pages.includes("pharmacy")) return "/pharmacy";
   return "/"; // staff with no pages at all — shouldn't happen, but don't crash
 }

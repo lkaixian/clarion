@@ -6,43 +6,11 @@ here (every test user gets a real facility, so the lazy-created
 RolePagePermission row picks up app/permissions.py's real defaults) but is
 not this file's focus -- see test_auth_rbac_immutability.py for that.
 """
-import uuid
+import time
 
 from app import models
 from app.routers.patients import _ANNOTATION_MODEL
-
-# RolePagePermission is unique per (facility_name, role) and gets
-# lazily-created as a side effect of any authenticated request through a
-# page-gated router (see app/permissions.py::get_or_create_role_permission).
-# This file's DB is session-scoped and shared with every OTHER test module
-# (conftest.py::db_session has no per-test rollback), so a literal facility
-# name like "Facility A" reused for the same role across files/tests risks
-# a stale accumulated row -- or, worse, a UNIQUE-constraint collision with
-# another test file that inserts its own row for that exact (facility,
-# role) pair unconditionally. Every facility name in this file is therefore
-# manufactured fresh per test via this helper.
-def _facility(label="Facility"):
-    return f"{label} {uuid.uuid4().hex[:8]}"
-
-# A genuine 4x4 white PNG (Pillow-decodable) -- required by
-# save_signature_from_b64 -> _persist_signature_bytes -> _validate_png_bytes
-# on the FIRST sign-off call from a user with no saved signature yet.
-_TEST_SIGNATURE_B64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGP8//8/AwwwwVl4"
-    "OQCWbgMF7ZjH1AAAAABJRU5ErkJggg=="
-)
-
-
-def _make_patient(db_session, **overrides):
-    patient = models.Patient(
-        full_name=overrides.pop("full_name", "Test Patient"),
-        date_of_birth=overrides.pop("date_of_birth", "1990-01-01"),
-        **overrides,
-    )
-    db_session.add(patient)
-    db_session.commit()
-    db_session.refresh(patient)
-    return patient
+from conftest import _facility, _make_patient, _TEST_SIGNATURE_B64
 
 
 def _make_catalog_item(db_session, module="laboratory", **overrides):
@@ -653,3 +621,215 @@ def test_signoff_double_insert_race_returns_409_not_500(test_client, make_user, 
         headers=auth_headers(clinician),
     )
     assert resp.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# P3.1 follow-up fixes (2026-09-12): re-upload guard, filename round-trip,
+# cross-facility pagination-before-filter, NULL-facility guard, catalog
+# audit logging, service_result annotation facility-hiding.
+# ---------------------------------------------------------------------------
+def test_result_document_reupload_guard(test_client, make_user, auth_headers, db_session):
+    """upload_result_document must refuse a second upload rather than
+    silently replacing the object-store pointer (which would orphan the
+    first file and violate the 'signed result is immutable' framing)."""
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician = make_user(role="clinician", facility=_facility("Facility A"))
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician)
+    ).json()
+    test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "see attached", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician),
+    )
+
+    resp1 = test_client.post(
+        f"/ancillary/requests/{created['id']}/result/document",
+        files={"file": ("report1.pdf", b"%PDF-1.4 first attempt", "application/pdf")},
+        headers=auth_headers(clinician),
+    )
+    assert resp1.status_code == 200
+
+    result_row = db_session.query(models.ServiceResult).filter_by(service_request_id=created["id"]).first()
+    original_key = result_row.file_object_key
+    assert original_key is not None
+
+    resp2 = test_client.post(
+        f"/ancillary/requests/{created['id']}/result/document",
+        files={"file": ("report2.pdf", b"%PDF-1.4 second attempt", "application/pdf")},
+        headers=auth_headers(clinician),
+    )
+    assert resp2.status_code == 409
+
+    db_session.refresh(result_row)
+    assert result_row.file_object_key == original_key
+
+
+def test_result_document_filename_round_trip(test_client, make_user, auth_headers, db_session):
+    """The downloaded Content-Disposition filename must survive an original
+    filename that itself contains underscores -- the object key's
+    id/filename separator is '/', not '_'."""
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician = make_user(role="clinician", facility=_facility("Facility A"))
+
+    created = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician)
+    ).json()
+    test_client.post(
+        f"/ancillary/requests/{created['id']}/result",
+        json={"result_text": "see attached", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician),
+    )
+    test_client.post(
+        f"/ancillary/requests/{created['id']}/result/document",
+        files={"file": ("blood_test_results.pdf", b"%PDF-1.4 fake pdf bytes", "application/pdf")},
+        headers=auth_headers(clinician),
+    )
+
+    resp = test_client.get(f"/ancillary/requests/{created['id']}/result/document", headers=auth_headers(clinician))
+    assert resp.status_code == 200
+    assert 'filename="blood_test_results.pdf"' in resp.headers.get("Content-Disposition", "")
+
+
+def test_cross_facility_pagination_boundary(test_client, make_user, auth_headers, db_session):
+    """A page must contain exactly `limit` VISIBLE rows, not `limit` raw
+    rows minus whatever got stripped out after the fact -- the
+    records_shared_publicly exclusion has to run in SQL before
+    offset/limit, not in Python after."""
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    clinician_b = make_user(role="clinician", facility=facility_b)
+
+    db_session.add(models.HospitalSetting(facility_name=facility_b, records_shared_publicly=False))
+    db_session.commit()
+
+    # Interleaved so order by created_at desc is A, B, A, B, A.
+    for fac_user in (clinician_a, clinician_b, clinician_a, clinician_b, clinician_a):
+        test_client.post(
+            "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(fac_user)
+        )
+        time.sleep(0.01)  # distinct created_at for a stable sort order
+
+    # Facility B's rows fall inside the naive first-3-rows window. If the
+    # hidden-facility filter ran AFTER limit/offset (the bug this fixes),
+    # this would come back with only 2 (of the 3 real) visible rows.
+    resp = test_client.get(
+        "/ancillary/requests", params={"patient_id": patient.id, "limit": 3}, headers=auth_headers(clinician_a)
+    )
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 3
+    assert all(r["ordering_facility_name"] == facility_a for r in rows)
+
+
+def test_null_facility_guard(test_client, make_user, auth_headers, db_session):
+    """A NULL ordering_facility_name row must be immutable to EVERYONE,
+    including a facility-less (platform/bootstrap) admin -- `None != None`
+    must not silently bypass the same-facility write guard."""
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+
+    req = models.ServiceRequest(
+        patient_id=patient.id,
+        module="laboratory",
+        catalog_item_id=item.id,
+        source="frontdesk",
+        priority="routine",
+        unit_price_cents=1000,
+        ordering_facility_name=None,
+    )
+    db_session.add(req)
+    db_session.commit()
+
+    admin = make_user(role="admin", facility=None)
+
+    resp = test_client.post(
+        f"/ancillary/requests/{req.id}/cancel", json={"reason": "test"}, headers=auth_headers(admin)
+    )
+    assert resp.status_code == 404
+
+    resp = test_client.post(
+        f"/ancillary/requests/{req.id}/result",
+        json={"result_text": "x", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 404
+
+
+def test_catalog_audit_logging(test_client, make_user, auth_headers, db_session):
+    """Catalog create/update are billing-relevant (unit_price_cents feeds
+    P3.3) and must leave an audit trail like every other write in this
+    router."""
+    facility_a = _facility("Facility A")
+    admin = make_user(role="admin", facility=facility_a)
+
+    body = {"module": "laboratory", "name": "Audit Test Item", "unit_price_cents": 1000, "facility_name": facility_a}
+    resp = test_client.post("/ancillary/catalog", json=body, headers=auth_headers(admin))
+    assert resp.status_code == 201
+    item_id = resp.json()["id"]
+
+    created_row = (
+        db_session.query(models.AuditLog)
+        .filter_by(action="ancillary_catalog_item_created", actor=admin.id)
+        .order_by(models.AuditLog.id.desc())
+        .first()
+    )
+    assert created_row is not None
+    assert item_id in created_row.detail
+
+    resp = test_client.patch(f"/ancillary/catalog/{item_id}", json={"active": False}, headers=auth_headers(admin))
+    assert resp.status_code == 200
+
+    updated_row = (
+        db_session.query(models.AuditLog)
+        .filter_by(action="ancillary_catalog_item_updated", actor=admin.id)
+        .order_by(models.AuditLog.id.desc())
+        .first()
+    )
+    assert updated_row is not None
+    assert item_id in updated_row.detail
+
+
+def test_service_result_annotation_facility_hiding(test_client, make_user, auth_headers, db_session):
+    """A 'correction' annotation on a ServiceResult from a facility that has
+    opted out of cross-facility sharing must be hidden from other
+    facilities' annotation reads, same as the result itself already is
+    through the ancillary endpoints -- but never hidden from the
+    authoring facility's own view."""
+    facility_a, facility_b = _facility("Facility A"), _facility("Facility B")
+    patient = _make_patient(db_session)
+    item = _make_catalog_item(db_session, facility_name=None)
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    clinician_b = make_user(role="clinician", facility=facility_b)
+
+    req_a = test_client.post(
+        "/ancillary/requests", json=_order_body(patient.id, item.id), headers=auth_headers(clinician_a)
+    ).json()
+    res_a = test_client.post(
+        f"/ancillary/requests/{req_a['id']}/result",
+        json={"result_text": "res a", "signature_b64": _TEST_SIGNATURE_B64},
+        headers=auth_headers(clinician_a),
+    ).json()
+
+    resp = test_client.post(
+        f"/patients/{patient.id}/annotations",
+        json={"target_type": "service_result", "target_id": res_a["result"]["id"], "kind": "correction", "note": "oops"},
+        headers=auth_headers(clinician_a),
+    )
+    assert resp.status_code == 200
+
+    db_session.add(models.HospitalSetting(facility_name=facility_a, records_shared_publicly=False))
+    db_session.commit()
+
+    resp_b = test_client.get(f"/patients/{patient.id}/annotations", headers=auth_headers(clinician_b))
+    assert resp_b.status_code == 200
+    assert resp_b.json() == []
+
+    resp_a = test_client.get(f"/patients/{patient.id}/annotations", headers=auth_headers(clinician_a))
+    assert resp_a.status_code == 200
+    assert len(resp_a.json()) == 1

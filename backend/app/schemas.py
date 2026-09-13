@@ -425,7 +425,7 @@ class EncounterCreate(BaseModel):
 class EncounterUpdate(BaseModel):
     # facility_name is deliberately NOT editable here -- an encounter always
     # happens AT one facility, and that facility is the authoring facility for
-    # the cross-hospital immutability guard (patients.py::_row_author_facility).
+    # the cross-hospital immutability guard (clinical_access.py::_row_author_facility).
     # Letting an editor rewrite it would let them hand the row's edit rights to
     # another facility or hide it by pointing it at an opted-out one.
     encounter_type: Optional[str] = None
@@ -1811,10 +1811,41 @@ class ConsultationSessionStartRequest(BaseModel):
 
 class ConsultationCompleteRequest(BaseModel):
     note: Optional[str] = Field(default=None, max_length=4000)
+    subjective: Optional[str] = Field(default=None, max_length=8000)
+    objective: Optional[str] = Field(default=None, max_length=8000)
+    assessment: Optional[str] = Field(default=None, max_length=8000)
+    plan: Optional[str] = Field(default=None, max_length=8000)
+    treatment_plan: Optional[str] = Field(default=None, max_length=8000)
+    follow_up_at: Optional[datetime] = None
+    # Optional link to an already-created in-facility ancillary referral.
+    referral_service_request_id: Optional[str] = None
     # Base64 PNG of a signature to save on the caller's profile first, for a
     # clinician who hasn't saved one yet (POST /me/signature is the other
     # way). Ignored if the caller already has a saved signature.
     signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)  # ~1MB PNG as base64
+
+    class Config:
+        extra = "forbid"
+
+
+class ConsultationNoteOut(BaseModel):
+    id: str
+    encounter_id: str
+    patient_id: str
+    facility_name: str
+    subjective: Optional[str] = None
+    objective: Optional[str] = None
+    assessment: Optional[str] = None
+    plan: Optional[str] = None
+    treatment_plan: Optional[str] = None
+    follow_up_at: Optional[datetime] = None
+    referral_service_request_id: Optional[str] = None
+    signed_by: str
+    signed_by_name: Optional[str] = None
+    signed_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class ConsultationTicketOut(QueueTicketOut):
@@ -1872,7 +1903,7 @@ class WaitingRoomDisplayOut(BaseModel):
 # ---------- Clinical-record annotations (append-only sign-off) ----------
 # "service_result" (P3.1) lets a correction be appended to a signed ancillary
 # result (routers/patients.py::_ANNOTATION_MODEL -> models.ServiceResult).
-ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter", "service_result"}
+ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter", "service_result", "dental_chart_entry"}
 ANNOTATION_KINDS = {"resolved", "discontinued", "correction", "note"}
 
 
@@ -2184,6 +2215,391 @@ class AncillaryStatsOut(BaseModel):
     facility_name: Optional[str] = None
     open_by_module: dict
     signed_off_last_30d_by_module: dict
+
+
+# ---------- Dental (P3.2, the tender) ----------
+DENTAL_TOOTH_CODES = set(_models.DENTAL_TOOTH_CODES)
+DENTAL_FINDINGS = set(_models.DENTAL_FINDINGS)
+DENTAL_TREATMENTS = set(_models.DENTAL_TREATMENTS)
+
+
+class DentalChartEntryCreate(BaseModel):
+    """Body for POST /dental/chart -- create-with-signature is the sign-off
+same shape as ServiceResultCreate. REQUIRES a saved
+    digital signature; pass `signature_b64` to save one on the spot."""
+
+    patient_id: str
+    encounter_id: Optional[str] = None
+    tooth_code: str
+    finding: str
+    treatment: str = "none"
+    notes: Optional[str] = None
+    signature_b64: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("tooth_code")
+    @classmethod
+    def _check_tooth_code(cls, v: str) -> str:
+        if v not in DENTAL_TOOTH_CODES:
+            raise ValueError("tooth_code must be a valid FDI permanent-dentition code (11-18/21-28/31-38/41-48)")
+        return v
+
+    @field_validator("finding")
+    @classmethod
+    def _check_finding(cls, v: str) -> str:
+        if v not in DENTAL_FINDINGS:
+            raise ValueError(f"finding must be one of: {', '.join(sorted(DENTAL_FINDINGS))}")
+        return v
+
+    @field_validator("treatment")
+    @classmethod
+    def _check_treatment(cls, v: str) -> str:
+        if v not in DENTAL_TREATMENTS:
+            raise ValueError(f"treatment must be one of: {', '.join(sorted(DENTAL_TREATMENTS))}")
+        return v
+
+
+class DentalChartEntryOut(BaseModel):
+    id: str
+    patient_id: str
+    encounter_id: Optional[str] = None
+    tooth_code: str
+    finding: str
+    treatment: str
+    notes: Optional[str] = None
+    facility_name: Optional[str] = None
+    recorded_by_name: Optional[str] = None
+    recorded_by_role: Optional[str] = None
+    signed_by_name: Optional[str] = None
+    signed_by_role: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DentalChartOptionsOut(BaseModel):
+    """GET /dental/chart-options -- the static FDI tooth codes + finding/
+    treatment vocabularies, so the tooth-chart UI never hardcodes them."""
+
+    tooth_codes: list
+    findings: list
+    treatments: list
+
+
+# ---------- Billing (P3.3, the tender + per-module billing) --
+# see models.py's "Billing engine" section comment. Single source of truth
+# for these five sets is models.py, same discipline as the Ancillary block
+# above (2026-09-12 code-review follow-up).
+CHARGE_MASTER_CATEGORIES = set(_models.CHARGE_MASTER_CATEGORIES)
+BILL_ITEM_SOURCE_TYPES = set(_models.BILL_ITEM_SOURCE_TYPES)
+PAYMENT_METHODS = set(_models.PAYMENT_METHODS)
+CLAIM_STATUSES = set(_models.CLAIM_STATUSES)
+
+
+class ChargeMasterItemCreate(BaseModel):
+    """Body for POST /billing/charge-master. A non-admin's item is always
+    scoped to their own facility regardless of what they send here -- only
+    an admin may set `facility_name=None` to publish a shared/global item
+    (the router enforces this, same convention as
+    ServiceCatalogItemCreate)."""
+
+    category: str
+    code: Optional[str] = Field(default=None, max_length=64)
+    name: str = Field(min_length=1, max_length=255)
+    # le= is defensive (overflow/fat-finger guard, quality-review finding),
+    # same RM 1,000,000 ceiling as PaymentCreate/ClaimCreate -- this price
+    # feeds `amount_cents = quantity * unit_price_cents` (billing.py), which
+    # is otherwise the one money field this session's earlier bound pass missed.
+    unit_price_cents: int = Field(default=0, ge=0, le=100_000_000)
+    facility_name: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("category")
+    @classmethod
+    def _check_category(cls, v: str) -> str:
+        if v not in CHARGE_MASTER_CATEGORIES:
+            raise ValueError(f"category must be one of: {', '.join(sorted(CHARGE_MASTER_CATEGORIES))}")
+        return v
+
+
+class ChargeMasterItemUpdate(BaseModel):
+    """Body for PATCH /billing/charge-master/{id}. No `category`/
+    `facility_name` change -- same reasoning as ServiceCatalogItemUpdate."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    code: Optional[str] = Field(default=None, max_length=64)
+    unit_price_cents: Optional[int] = Field(default=None, ge=0, le=100_000_000)
+    active: Optional[bool] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ChargeMasterItemOut(BaseModel):
+    id: str
+    category: str
+    code: Optional[str] = None
+    name: str
+    unit_price_cents: int
+    facility_name: Optional[str] = None
+    active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BillCreate(BaseModel):
+    patient_id: str
+    encounter_id: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class BillItemCreate(BaseModel):
+    """Body for POST /billing/bills/{id}/items. Exactly one of
+    `charge_master_item_id` / `service_request_id` /
+    `medicine_inventory_item_id` must be set, matching `source_type` --
+    there is deliberately no client-supplied price field anywhere on this
+    schema (Design decision 2: every BillItem price is server-derived from
+    the referenced source, never trusted from the caller)."""
+
+    source_type: str
+    charge_master_item_id: Optional[str] = None
+    service_request_id: Optional[str] = None
+    medicine_inventory_item_id: Optional[str] = None
+    # Upper bound is defensive, not a business rule -- security-review
+    # finding: `amount_cents = quantity * unit_price_cents` (billing.py)
+    # is stored into a plain Integer column, so an unbounded quantity from
+    # a trusted-but-fat-fingerable BILLING_WRITE_ROLES caller could
+    # overflow it on a 32-bit-int DB backend and 500 the write.
+    quantity: int = Field(default=1, ge=1, le=100_000)
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("source_type")
+    @classmethod
+    def _check_source_type(cls, v: str) -> str:
+        if v not in BILL_ITEM_SOURCE_TYPES:
+            raise ValueError(f"source_type must be one of: {', '.join(sorted(BILL_ITEM_SOURCE_TYPES))}")
+        return v
+
+    @model_validator(mode="after")
+    def _check_exactly_one_source(self):
+        by_type = {
+            "charge_master": self.charge_master_item_id,
+            "service_request": self.service_request_id,
+            "pharmacy_item": self.medicine_inventory_item_id,
+        }
+        provided = [k for k, v in by_type.items() if v]
+        if len(provided) != 1:
+            raise ValueError(
+                "exactly one of charge_master_item_id/service_request_id/"
+                "medicine_inventory_item_id must be set"
+            )
+        if provided[0] != self.source_type:
+            raise ValueError(f"source_type must be '{provided[0]}' to match the id field provided")
+        return self
+
+
+class BillItemVoid(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class BillItemOut(BaseModel):
+    id: str
+    bill_id: str
+    source_type: str
+    charge_master_item_id: Optional[str] = None
+    service_request_id: Optional[str] = None
+    medicine_inventory_item_id: Optional[str] = None
+    description: str
+    quantity: int
+    unit_price_cents: int
+    amount_cents: int
+    created_by_name: Optional[str] = None
+    created_by_role: Optional[str] = None
+    created_at: datetime
+    voided_at: Optional[datetime] = None
+    voided_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaymentCreate(BaseModel):
+    """Body for POST /billing/bills/{id}/payments. `claim_id`, when set,
+    links this payment to the Claim it settles -- the router requires the
+    claim belong to the same bill and `method` be 'insurance' or 'panel'
+    in that case (Design decision 6)."""
+
+    # Upper bound is defensive (overflow/fat-finger guard, security-review
+    # finding), not a cap on legitimate overpayment/deposits -- deliberately
+    # NOT compared against the bill's amount_due_cents in the router, since
+    # a patient overpaying (rounding, advance deposit) is a real scenario.
+    amount_cents: int = Field(ge=1, le=100_000_000)  # RM 1,000,000 ceiling
+    method: str
+    reference_no: Optional[str] = Field(default=None, max_length=128)
+    claim_id: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("method")
+    @classmethod
+    def _check_method(cls, v: str) -> str:
+        if v not in PAYMENT_METHODS:
+            raise ValueError(f"method must be one of: {', '.join(sorted(PAYMENT_METHODS))}")
+        return v
+
+    @model_validator(mode="after")
+    def _check_claim_payment_method(self):
+        if self.claim_id and self.method not in ("insurance", "panel"):
+            raise ValueError("method must be 'insurance' or 'panel' when claim_id is set")
+        return self
+
+
+class PaymentVoid(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class PaymentOut(BaseModel):
+    id: str
+    bill_id: str
+    claim_id: Optional[str] = None
+    amount_cents: int
+    method: str
+    reference_no: Optional[str] = None
+    received_by_name: Optional[str] = None
+    received_by_role: Optional[str] = None
+    received_at: datetime
+    voided_at: Optional[datetime] = None
+    voided_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ClaimCreate(BaseModel):
+    """Body for POST /billing/bills/{id}/claims. `claim_amount_cents` may
+    be less than the bill's total -- the copay/split case (Design decision
+    6) -- the router 400s if it exceeds the bill's current unclaimed
+    balance (`patient_due_cents`, NOT raw `amount_due_cents` -- a
+    security-review fix: capping against `amount_due_cents` alone let two
+    full-amount claims be created against the same bill, since only a
+    Payment reduces that figure, not a claim)."""
+
+    payer_name: str = Field(min_length=1, max_length=255)
+    claim_amount_cents: int = Field(ge=1, le=100_000_000)  # RM 1,000,000 ceiling, same defensive bound as PaymentCreate
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class ClaimUpdate(BaseModel):
+    """Body for PATCH /billing/claims/{id} -- content fields, only
+    accepted while the claim is still `draft` (Design decision 4)."""
+
+    payer_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    claim_amount_cents: Optional[int] = Field(default=None, ge=1, le=100_000_000)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class ClaimRejectRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class ClaimVoidRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class ClaimOut(BaseModel):
+    id: str
+    bill_id: str
+    payer_name: str
+    claim_amount_cents: int
+    status: str
+    notes: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    facility_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BillVoidRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+    class Config:
+        extra = "forbid"
+
+
+class BillOut(BaseModel):
+    id: str
+    patient_id: str
+    patient_full_name: Optional[str] = None
+    encounter_id: Optional[str] = None
+    facility_name: str
+    status: str
+    created_by_name: Optional[str] = None
+    created_by_role: Optional[str] = None
+    created_at: datetime
+    finalized_at: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    voided_reason: Optional[str] = None
+    items: List[BillItemOut] = []
+    payments: List[PaymentOut] = []
+    claims: List[ClaimOut] = []
+    # Computed in routers/billing.py::_serialize_bill, never stored -- see
+    # models.py's Bill docstring and Design decision 6 for the exact
+    # arithmetic (patient_due_cents excludes claimed-but-not-yet-paid
+    # amounts so front desk only collects the copay/remainder).
+    total_cents: int = 0
+    paid_cents: int = 0
+    claimed_pending_cents: int = 0
+    amount_due_cents: int = 0
+    patient_due_cents: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class BillingStatsOut(BaseModel):
+    """GET /billing/stats -- a light facility-level summary, explicitly a
+    stand-in: the full 'Financial performance reports' clause
+    is P3.6's job."""
+
+    facility_name: Optional[str] = None
+    total_billed_cents: int
+    total_collected_cents: int
+    total_outstanding_cents: int
+    bills_by_status: dict
+    claims_by_status: dict
 
 
 # ---------- AI ----------

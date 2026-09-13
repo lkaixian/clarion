@@ -562,6 +562,14 @@ try:
     if _ancillary_added:
         print(f"Added PAGE_ANCILLARY to {_ancillary_added} legacy role-permission row(s)")
 
+    _dental_added = _permissions.add_dental_to_legacy_role_pages(db)
+    if _dental_added:
+        print(f"Added PAGE_DENTAL to {_dental_added} legacy role-permission row(s)")
+
+    _billing_added = _permissions.add_billing_to_legacy_role_pages(db)
+    if _billing_added:
+        print(f"Added PAGE_BILLING to {_billing_added} legacy role-permission row(s)")
+
     # Ancillary engine (P3.1): a starter catalog (2 items per module, GLOBAL
     # -- facility_name=None -- so every facility can order them out of the
     # box) plus one already-signed-off demo result so the Ancillary tab
@@ -632,6 +640,108 @@ try:
         db.add(_result)
         db.commit()
         print("Added demo signed-off ServiceRequest+ServiceResult: Full Blood Count (laboratory)")
+
+    # Dental module (P3.2): one signed demo chart entry so the Dental tab
+    # isn't empty on first login -- same "seed a demo signed-off record"
+    # pattern as the ancillary block above.
+    if (
+        _demo_patient_for_ancillary is not None and _demo_clinician is not None
+        and db.query(models.DentalChartEntry).filter(
+            models.DentalChartEntry.patient_id == _demo_patient_for_ancillary.id,
+        ).first() is None
+    ):
+        _dental_entry = models.DentalChartEntry(
+            patient_id=_demo_patient_for_ancillary.id, tooth_code="16",
+            finding="caries", treatment="filling", notes="Occlusal caries, composite filling placed.",
+            facility_name=_demo_clinician.facility,
+            recorded_by=_demo_clinician.id, recorded_by_name=_demo_clinician.full_name,
+            recorded_by_role=_demo_clinician.role,
+            signed_by=_demo_clinician.id, signed_by_name=_demo_clinician.full_name,
+            signed_by_role=_demo_clinician.role,
+        )
+        db.add(_dental_entry)
+        db.flush()
+        if _demo_clinician.signature_object_key:
+            try:
+                _src_bytes = _store.get(_BUCKET_SIGNATURES, _demo_clinician.signature_object_key)
+                _dental_meta = _store.put(
+                    _BUCKET_SIGNATURES, f"dental-chart/{_dental_entry.id}.png", _src_bytes, mime="image/png",
+                )
+                _apply_object_meta(_dental_entry, _dental_meta, "signature")
+            except Exception:
+                pass
+        db.add(_dental_entry)
+        db.commit()
+        print("Added demo signed DentalChartEntry: tooth 16, caries -> filling")
+
+    # Billing (P3.3): a starter charge master (GLOBAL, facility_name=None,
+    # same "every facility gets it out of the box" reasoning as the
+    # ancillary catalog above) plus one demo bill combining a consultation
+    # fee and the ancillary lab result seeded above, with a panel claim
+    # covering half and the patient paying the rest -- demonstrates the
+    # copay split (Design decision 6) on first login.
+    if db.query(models.ChargeMasterItem).first() is None:
+        for _category, _name, _code, _cents in [
+            ("consultation", "General Consultation", "CONS-GEN", 3000),
+            ("consultation", "Specialist Consultation", "CONS-SPEC", 8000),
+            ("misc", "Medical Report Fee", "MISC-REPORT", 2000),
+        ]:
+            db.add(models.ChargeMasterItem(
+                category=_category, name=_name, code=_code, unit_price_cents=_cents, facility_name=None,
+            ))
+        db.commit()
+        print("Seeded starter charge master (3 items)")
+
+    _cons_item = db.query(models.ChargeMasterItem).filter(models.ChargeMasterItem.code == "CONS-GEN").first()
+    _demo_lab_request = (
+        db.query(models.ServiceRequest)
+        .filter(
+            models.ServiceRequest.patient_id == _demo_patient_for_ancillary.id,
+            models.ServiceRequest.status == "signed_off",
+        )
+        .first()
+        if _demo_patient_for_ancillary is not None else None
+    )
+    if (
+        _cons_item is not None and _demo_patient_for_ancillary is not None and _demo_clinician is not None
+        and db.query(models.Bill).filter(models.Bill.patient_id == _demo_patient_for_ancillary.id).first() is None
+    ):
+        _bill = models.Bill(
+            patient_id=_demo_patient_for_ancillary.id, facility_name=_demo_clinician.facility,
+            status="open", created_by=_demo_clinician.id, created_by_name=_demo_clinician.full_name,
+            created_by_role=_demo_clinician.role,
+        )
+        db.add(_bill)
+        db.flush()
+        db.add(models.BillItem(
+            bill_id=_bill.id, source_type="charge_master", charge_master_item_id=_cons_item.id,
+            description=_cons_item.name, quantity=1, unit_price_cents=_cons_item.unit_price_cents,
+            amount_cents=_cons_item.unit_price_cents, created_by=_demo_clinician.id,
+            created_by_name=_demo_clinician.full_name, created_by_role=_demo_clinician.role,
+        ))
+        _items_total = _cons_item.unit_price_cents
+        if _demo_lab_request is not None:
+            db.add(models.BillItem(
+                bill_id=_bill.id, source_type="service_request", service_request_id=_demo_lab_request.id,
+                description="Full Blood Count (FBC)", quantity=1,
+                unit_price_cents=_demo_lab_request.unit_price_cents,
+                amount_cents=_demo_lab_request.unit_price_cents, created_by=_demo_clinician.id,
+                created_by_name=_demo_clinician.full_name, created_by_role=_demo_clinician.role,
+            ))
+            _items_total += _demo_lab_request.unit_price_cents
+        _claim_amount = _items_total // 2
+        db.add(models.Claim(
+            bill_id=_bill.id, payer_name="Panel Sdn Bhd", claim_amount_cents=_claim_amount,
+            status="submitted", submitted_at=_bill.created_at, submitted_by=_demo_clinician.id,
+            facility_name=_demo_clinician.facility,
+        ))
+        db.add(models.Payment(
+            bill_id=_bill.id, amount_cents=_items_total - _claim_amount, method="cash",
+            received_by=_demo_clinician.id, received_by_name=_demo_clinician.full_name,
+            received_by_role=_demo_clinician.role, facility_name=_demo_clinician.facility,
+        ))
+        db.commit()
+        print("Added demo Bill: consultation + lab fee, panel claim (submitted) + patient copay payment")
 
     # Backfill the DEMO patient's clinical records that predate the
     # authoring-facility columns (a clarion.db seeded before the immutability

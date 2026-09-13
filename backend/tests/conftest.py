@@ -125,6 +125,48 @@ def make_user(db_session):
     db_session.commit()
 
 
+def _facility(label="Facility"):
+    """A fresh, collision-proof facility name. RolePagePermission is
+    unique per (facility_name, role) and gets lazily-created as a side
+    effect of any authenticated request through a page-gated router (see
+    app/permissions.py::get_or_create_role_permission). This DB is
+    session-scoped and shared across every test module (db_session above
+    has no per-test rollback), so a literal facility name like "Facility A"
+    reused for the same role across files/tests risks a stale accumulated
+    row -- or, worse, a UNIQUE-constraint collision with another test file
+    that inserts its own row for that exact (facility, role) pair
+    unconditionally. Extracted from test_ancillary.py/test_dental.py's
+    byte-for-byte-identical copies (2026-09-13, P3.3 housekeeping -- both
+    files' own comments flagged this duplication as due for extraction
+    once a third P3.x test file needed it)."""
+    return f"{label} {uuid.uuid4().hex[:8]}"
+
+
+def _make_patient(db_session, **overrides):
+    """Bare-minimum persisted models.Patient for a router test that only
+    needs a valid patient_id, not a full clinical record. Same extraction
+    note as _facility above."""
+    patient = models.Patient(
+        full_name=overrides.pop("full_name", "Test Patient"),
+        date_of_birth=overrides.pop("date_of_birth", "1990-01-01"),
+        **overrides,
+    )
+    db_session.add(patient)
+    db_session.commit()
+    db_session.refresh(patient)
+    return patient
+
+
+# A genuine 4x4 white PNG (Pillow-decodable) -- required by
+# save_signature_from_b64 -> _persist_signature_bytes -> _validate_png_bytes
+# on the FIRST sign-off call from a user with no saved signature yet. Same
+# extraction note as _facility above.
+_TEST_SIGNATURE_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGP8//8/AwwwwVl4"
+    "OQCWbgMF7ZjH1AAAAABJRU5ErkJggg=="
+)
+
+
 @pytest.fixture
 def auth_headers(test_client):
     """`auth_headers(user)` -> {"Authorization": "Bearer ..."} by actually

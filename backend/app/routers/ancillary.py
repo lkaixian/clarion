@@ -20,7 +20,7 @@ explicitly allows Frontdesk-direct registration. Only SIGNOFF_ROLES
 the catalog -- a receptionist orders but never clinically signs.
 Cross-facility scoping mirrors patients.py's cross-hospital immutability
 pattern: ServiceRequest.ordering_facility_name is the authoring facility
-(added to patients.py::_FACILITY_RELATIONSHIP_SOURCES), and this build
+(added to clinical_access.py::_FACILITY_RELATIONSHIP_SOURCES), and this build
 confines perform/sign/cancel to that facility -- no cross-facility referral
 routing yet (a real deployment sending e.g. a lab sample to an external
 reference lab is out of scope for this pass). A signed ServiceResult is
@@ -35,7 +35,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -51,7 +51,8 @@ from ..storage import (
     sanitize_filename,
 )
 from ._uploads import enforce_upload_size, sniff_document_mime
-from .patients import SAFE_DOCUMENT_MEDIA_TYPES, _hidden_author_facilities
+from ..clinical_access import _hidden_author_facilities
+from .patients import SAFE_DOCUMENT_MEDIA_TYPES
 from .profile import save_signature_from_b64, copy_signature_snapshot
 
 router = APIRouter(prefix="/ancillary", tags=["ancillary"])
@@ -85,6 +86,27 @@ def _visible_catalog_item_or_404(db: Session, catalog_item_id: str, current_user
     return item
 
 
+def _load_request_with_relations(db: Session, request_id: str) -> Optional[models.ServiceRequest]:
+    """The one place that fetches a ServiceRequest with catalog_item/result/
+    patient eagerly joinedloaded -- used both for the initial lookup and to
+    re-load after a write, so `_serialize_request` never triggers a lazy
+    (N+1) query. Fixed 2026-09-12 (review follow-up): cancel/sign-off/
+    upload used to call `db.commit(); db.refresh(req)` and then serialize --
+    `refresh()` expires relationship attributes without reloading them, so
+    every subsequent `req.result`/`req.catalog_item`/`req.patient` access
+    issued its own extra SELECT."""
+    return (
+        db.query(models.ServiceRequest)
+        .options(
+            joinedload(models.ServiceRequest.catalog_item),
+            joinedload(models.ServiceRequest.result),
+            joinedload(models.ServiceRequest.patient),
+        )
+        .filter(models.ServiceRequest.id == request_id)
+        .first()
+    )
+
+
 def _request_or_404(
     db: Session, request_id: str, current_user: models.User, *, require_same_facility: bool = False
 ) -> models.ServiceRequest:
@@ -96,20 +118,21 @@ def _request_or_404(
     begin with, so `current_user.facility` is None and this still denies
     correctly). Fixed 2026-09-12 (voltagent + /code-review): this used to
     exempt role=='admin', letting any facility's admin cancel or forge a
-    signed result at any OTHER facility."""
-    req = (
-        db.query(models.ServiceRequest)
-        .options(
-            joinedload(models.ServiceRequest.catalog_item),
-            joinedload(models.ServiceRequest.result),
-            joinedload(models.ServiceRequest.patient),
-        )
-        .filter(models.ServiceRequest.id == request_id)
-        .first()
-    )
+    signed result at any OTHER facility.
+
+    A NULL `ordering_facility_name` (never produced by create_service_request
+    today, but the column is nullable -- e.g. a future data import) is
+    immutable to EVERYONE, including a facility-less platform/bootstrap
+    admin: `None != None` would otherwise silently evaluate to False and
+    skip this guard entirely. Fixed 2026-09-12 (voltagent security audit):
+    matches clinical_access.py::_record_editable's `not owner or owner != caller`
+    idiom rather than a bare `!=`."""
+    req = _load_request_with_relations(db, request_id)
     if req is None:
         raise HTTPException(status_code=404, detail="Service request not found")
-    if require_same_facility and req.ordering_facility_name != current_user.facility:
+    if require_same_facility and (
+        not req.ordering_facility_name or req.ordering_facility_name != current_user.facility
+    ):
         raise HTTPException(status_code=404, detail="Service request not found")
     return req
 
@@ -198,6 +221,16 @@ def create_catalog_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # Fixed 2026-09-12 (voltagent security audit): catalog writes are
+    # billing-relevant (unit_price_cents is snapshotted onto every
+    # subsequent order, feeding P3.3) but had no audit trail at all, unlike
+    # every patient-scoped write in this file.
+    log_access(
+        db, None, current_user.id, current_user.role, "ancillary_catalog_item_created",
+        detail=f"module={item.module} name={item.name!r} item_id={item.id}",
+        actor_facility=current_user.facility,
+    )
     return item
 
 
@@ -220,10 +253,17 @@ def update_catalog_item(
         raise HTTPException(status_code=404, detail="Service catalog item not found")
     if item.facility_name is not None and item.facility_name != current_user.facility:
         raise HTTPException(status_code=404, detail="Service catalog item not found")
+    changed_fields = sorted(payload.model_dump(exclude_unset=True).keys())
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
     db.commit()
     db.refresh(item)
+
+    log_access(
+        db, None, current_user.id, current_user.role, "ancillary_catalog_item_updated",
+        detail=f"item_id={item.id} fields={','.join(changed_fields)}",
+        actor_facility=current_user.facility,
+    )
     return item
 
 
@@ -270,7 +310,7 @@ def create_service_request(
     )
     db.add(req)
     db.commit()
-    db.refresh(req)
+    req = _load_request_with_relations(db, req.id)
 
     log_access(
         db, patient.id, current_user.id, current_user.role, "ancillary_request_created",
@@ -332,18 +372,29 @@ def list_service_requests(
     if status:
         q = q.filter(models.ServiceRequest.status == status)
 
-    rows = q.order_by(models.ServiceRequest.created_at.desc()).offset(offset).limit(limit).all()
     if cross_facility:
         # Same records_shared_publicly opt-out as patients.py's other
         # cross-facility clinical reads (_hidden_author_facilities) --
-        # never hides the caller's OWN facility's rows. Filtered in Python
-        # rather than a SQL NOT IN(...) so a legacy NULL
+        # never hides the caller's OWN facility's rows. Applied in SQL
+        # BEFORE offset/limit (fixed 2026-09-12, review follow-up: this used
+        # to filter hidden rows out of the already-paginated Python list,
+        # so a page could silently come back under-filled, and successive
+        # offset-based pages would skip/misalign rows once hidden rows were
+        # stripped out from under a fixed offset). A NULL
         # ordering_facility_name (never actually produced by
-        # create_service_request, but the column is nullable) can't be
-        # silently dropped by SQL's NULL-vs-IN(...) three-valued logic.
+        # create_service_request, but the column is nullable) is explicitly
+        # kept rather than risking SQL's NULL-vs-NOT IN(...) three-valued
+        # logic silently dropping it.
         hidden = _hidden_author_facilities(db, current_user.facility)
         if hidden:
-            rows = [r for r in rows if r.ordering_facility_name not in hidden]
+            q = q.filter(
+                or_(
+                    models.ServiceRequest.ordering_facility_name.is_(None),
+                    models.ServiceRequest.ordering_facility_name.notin_(hidden),
+                )
+            )
+
+    rows = q.order_by(models.ServiceRequest.created_at.desc()).offset(offset).limit(limit).all()
     return [_serialize_request(r, current_user) for r in rows]
 
 
@@ -381,7 +432,7 @@ def cancel_service_request(
     req.cancelled_at = datetime.now(timezone.utc)
     req.cancelled_reason = payload.reason
     db.commit()
-    db.refresh(req)
+    req = _load_request_with_relations(db, req.id)
 
     log_access(
         db, req.patient_id, current_user.id, current_user.role, "ancillary_request_cancelled",
@@ -455,7 +506,7 @@ def sign_off_service_request(
     req.status = "signed_off"
     db.add(result)
     db.commit()
-    db.refresh(req)
+    req = _load_request_with_relations(db, req.id)
 
     flags = " ".join(f for f, on in (("critical", result.flag_critical), ("abnormal", result.flag_abnormal)) if on)
     log_access(
@@ -482,6 +533,15 @@ async def upload_result_document(
     req = _request_or_404(db, request_id, current_user, require_same_facility=True)
     if req.result is None:
         raise HTTPException(status_code=400, detail="Sign off the result before attaching a document")
+    if req.result.file_object_key:
+        # Fixed 2026-09-12 (review follow-up): this endpoint had no guard
+        # against a second upload, which silently replaced the object-store
+        # pointer -- overwriting an already-attached document's metadata on
+        # this immutable, signed-off result and orphaning the original
+        # object in MinIO (never deleted, never reachable again). A genuine
+        # replacement is a records_officer/admin action from Admin, not a
+        # second call to this endpoint.
+        raise HTTPException(status_code=409, detail="A document is already attached to this result.")
 
     enforce_upload_size(file, MAX_RESULT_UPLOAD_BYTES, "File")
     raw = await file.read()
@@ -492,7 +552,15 @@ async def upload_result_document(
 
     mime = sniff_document_mime(raw)
     safe_name = sanitize_filename(file.filename, fallback="result")
-    key = f"service-results/{req.result.id}_{safe_name}"
+    # "/" as the id/filename separator, not "_" (fixed 2026-09-12, review
+    # follow-up): get_result_document below recovers the download filename
+    # by splitting the key, and "_" is a character sanitize_filename allows
+    # THROUGH -- an original name like "blood_test_results.pdf" corrupted
+    # the recovered name to "results.pdf". "/" can't appear in safe_name
+    # (sanitize_filename strips any path separators), so it's an
+    # unambiguous split point; storage.validate_key already allows "/" as a
+    # segment separator (see the existing "service-results/" prefix).
+    key = f"service-results/{req.result.id}/{safe_name}"
     try:
         # .put() does blocking file/network I/O -- this endpoint is `async
         # def` (needed for `await file.read()`), so a direct call here would
@@ -507,7 +575,7 @@ async def upload_result_document(
     apply_object_meta(req.result, meta, "file")
     db.add(req.result)
     db.commit()
-    db.refresh(req)
+    req = _load_request_with_relations(db, req.id)
 
     log_access(
         db, req.patient_id, current_user.id, current_user.role, "ancillary_result_document_uploaded",
@@ -558,8 +626,13 @@ def get_result_document(
     # patients.py::get_document_file.
     guessed_type, _ = mimetypes.guess_type(result.file_object_key)
     media_type = guessed_type if guessed_type in SAFE_DOCUMENT_MEDIA_TYPES else "application/octet-stream"
+    # Split on "/" (the id/filename separator upload_result_document writes),
+    # not "_" (fixed 2026-09-12, review follow-up: rsplit("_", 1) corrupted
+    # any original filename that itself contained an underscore, e.g.
+    # "blood_test_results.pdf" downloaded as "results.pdf").
+    original_name = result.file_object_key.rsplit("/", 1)[-1]
     headers = {
-        "Content-Disposition": f'attachment; filename="{sanitize_filename(result.file_object_key.rsplit("_", 1)[-1], fallback=f"result_{result.id}")}"',
+        "Content-Disposition": f'attachment; filename="{sanitize_filename(original_name, fallback=f"result_{result.id}")}"',
         "X-Content-Type-Options": "nosniff",
     }
     if result.file_bytes:

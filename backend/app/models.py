@@ -348,6 +348,37 @@ class Encounter(Base):
     signature_mime = Column(String(128), nullable=True)
 
     patient = relationship("Patient", back_populates="encounters")
+    consultation_note = relationship("ConsultationNote", back_populates="encounter", uselist=False)
+
+
+class ConsultationNote(Base):
+    """The structured, signed clinical record for an outpatient encounter.
+
+    ``Encounter.notes`` remains the legacy free-text field.  New SOAP data lives
+    here so its lifecycle is explicit: a note is created together with the
+    signed encounter and is never overwritten.  Corrections use the existing
+    ClinicalRecordAnnotation mechanism with ``target_type='consultation_note'``.
+    """
+    __tablename__ = "consultation_notes"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    encounter_id = Column(String(36), ForeignKey("encounters.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    subjective = Column(Text, nullable=True)
+    objective = Column(Text, nullable=True)
+    assessment = Column(Text, nullable=True)
+    plan = Column(Text, nullable=True)
+    treatment_plan = Column(Text, nullable=True)
+    follow_up_at = Column(TZDateTime, nullable=True)
+    referral_service_request_id = Column(String(36), ForeignKey("service_requests.id"), nullable=True, index=True)
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    encounter = relationship("Encounter", back_populates="consultation_note")
+    patient = relationship("Patient")
+    referral_service_request = relationship("ServiceRequest")
 
 
 class Condition(Base):
@@ -510,7 +541,7 @@ class AppointmentRescheduleRequest(Base):
 
     id = Column(String(36), primary_key=True, default=gen_id)
     appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=False, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
     requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     reason_code = Column(String(64), nullable=False)  # see schemas.PATIENT_RESCHEDULE_REASON_CODES
     reason_other = Column(Text, nullable=True)  # only meaningful when reason_code == "other"
@@ -747,7 +778,7 @@ class Admission(Base):
 
     id = Column(String(36), primary_key=True, default=gen_id)
     facility_name = Column(String(255), nullable=False, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
     ward_id = Column(String(36), ForeignKey("wards.id"), nullable=False, index=True)
     bed_number = Column(Integer, nullable=False)
     admitted_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
@@ -908,7 +939,7 @@ class EmergencyToken(Base):
     __tablename__ = "emergency_tokens"
 
     id = Column(String(36), primary_key=True, default=gen_id)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
     token = Column(String(64), unique=True, nullable=False)
     card_reference = Column(String(64), unique=True, nullable=True)  # printed on physical card / encoded in QR
     nfc_uid = Column(String(64), unique=True, nullable=True)  # M7: HMAC of the UID, never the raw UID
@@ -946,7 +977,7 @@ class SelfRegistrationAttempt(Base):
     __tablename__ = "self_registration_attempts"
 
     id = Column(String(36), primary_key=True, default=gen_id)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, unique=True, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     # The address provided at /start -- becomes Patient.email on successful
     # /complete IF Patient.email is still null (never clobbers an existing
     # value). This is where the OTP below is actually emailed.
@@ -1025,7 +1056,7 @@ class QueueTicket(Base):
     __tablename__ = "queue_tickets"
 
     id = Column(String(36), primary_key=True, default=gen_id)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
     facility_name = Column(String(255), nullable=False)
     queue_date = Column(String(64), nullable=False)  # Malaysia-local ISO date, e.g. "2026-08-19" -- see class docstring
     queue_number = Column(Integer, nullable=False)
@@ -1385,7 +1416,7 @@ class ClinicalRecordAnnotation(Base):
     __tablename__ = "clinical_record_annotations"
 
     id = Column(String(36), primary_key=True, default=gen_id)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
     target_type = Column(String(64), nullable=False)  # condition | medication | allergy | encounter
     target_id = Column(String(36), nullable=False, index=True)
     kind = Column(String(64), nullable=False)  # resolved | discontinued | correction | note
@@ -1555,6 +1586,303 @@ class ServiceResult(Base):
 
 
 # ==========================================================================
+# Dental engine (P3.2, the tender). ONLY the genuinely bespoke piece --
+# the tooth chart -- gets new tables. Everything else the clause asks for is
+# an existing engine, reused as-is:
+# "Sign-off" -> DentalChartEntry is create-with-signature,
+#                                     same immutable-once-signed shape as
+#                                     ServiceResult (routers/dental.py).
+# Queue/appointments -> Reception's existing department-tagged
+#                                     ConsultationRoom/QueueTicket ("Dental" is
+#                                     just a string value there already, see
+#                                     routers/reception/checkin.py -- no
+#                                     schema change needed) + appointments.py.
+# Progress notes/chart -> DentalChartEntry.notes + tooth_code.
+# X-ray references -> routers/ancillary.py's existing
+#                                     ServiceRequest(module="xray",
+#                                     source_encounter_id=...) directly --
+#                                     no new backend code.
+# Medication -> existing
+#                                     routers/patients.py::add_medication /
+#                                     update_medication (MedicationStatement),
+#                                     unchanged.
+# Reporting -> X-ray report already covered above;
+#                                     diagnosis reuses the existing Condition
+#                                     model/CRUD. Digital Medical Certificate /
+#                                     Referral Letter / Timeslip need an actual
+#                                     document-generation engine, which is
+#                                     P3.5's job -- out of scope for this pass
+#                                     (same "defer the piece that needs a
+#                                     not-yet-built engine" call as P3.1's
+#                                     "no cross-facility referral routing yet").
+def _fdi_tooth_codes() -> tuple:
+    """The 32 permanent-dentition FDI codes: quadrants 1-4, 8 teeth each
+    (11-18, 21-28, 31-38, 41-48). Deciduous (51-55/61-65/71-75/81-85) is a
+    later add if a paediatric dental workflow is ever built."""
+    return tuple(f"{quadrant}{tooth}" for quadrant in (1, 2, 3, 4) for tooth in range(1, 9))
+
+
+DENTAL_TOOTH_CODES = _fdi_tooth_codes()
+DENTAL_FINDINGS = (
+    "sound", "caries", "filled", "missing", "crown", "root_canal",
+    "impacted", "fractured", "mobile", "other",
+)
+DENTAL_TREATMENTS = (
+    "none", "filling", "extraction", "root_canal", "crown", "scaling",
+    "cleaning", "referral", "other",
+)
+
+
+class DentalChartEntry(Base):
+    """One signed tooth-level observation. Append-only, same
+    immutable-once-signed discipline as ServiceResult/Encounter -- no PATCH
+    endpoint exists; a correction is a NEW ClinicalRecordAnnotation with
+    target_type='dental_chart_entry' (routers/patients.py::_ANNOTATION_MODEL),
+    never an edit to this row."""
+    __tablename__ = "dental_chart_entries"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    # The visit this observation was made during, if any -- lets an X-ray
+    # referral raised mid-visit (routers/ancillary.py) share
+    # source_encounter_id with the chart entry for the same encounter.
+    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    tooth_code = Column(String(8), nullable=False, index=True)  # FDI notation, e.g. "11".."48"
+    finding = Column(String(32), nullable=False)
+    treatment = Column(String(32), nullable=False, default="none")
+    notes = Column(Text, nullable=True)
+
+    # Authoring facility -- same cross-facility PATCH-immutability semantics
+    # as Condition.authored_by_facility / ServiceRequest.ordering_facility_name.
+    # There IS no PATCH here at all (append-only), so this column's only job
+    # is _FACILITY_RELATIONSHIP_SOURCES scoping + the records_shared_publicly
+    # opt-out on cross-facility reads.
+    facility_name = Column(String(255), nullable=True, index=True)
+
+    recorded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    recorded_by_name = Column(String(255), nullable=True)
+    recorded_by_role = Column(String(64), nullable=True)
+
+    # Same "perform AND sign in one atomic action" shape as ServiceResult --
+    # recorded_by/signed_by are always the same actor today (no separate
+    # countersignature step yet), kept as distinct columns for the same
+    # future-proofing reason ServiceResult does.
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_by_role = Column(String(64), nullable=True)
+    signature_object_key = Column(String(512), nullable=True)
+    signature_sha256 = Column(String(64), nullable=True)
+    signature_bytes = Column(Integer, nullable=True)
+    signature_mime = Column(String(128), nullable=True)
+
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    patient = relationship("Patient")
+
+
+# ==========================================================================
+# Billing engine (P3.3, the tender + per-module billing:
+#). Reuses every already-hardened P3.1/P3.2 pattern
+# (id/facility_name/TZDateTime conventions, snapshot-not-live-price,
+# append-only + void-instead-of-delete) rather than re-deriving them.
+# Deliberately facility-local, not cross-facility like Ancillary/Dental --
+# billing is a front-desk/administrative function, not a shared clinical
+# record, so there's no records_shared_publicly opt-out here and no
+# _hidden_author_facilities filtering to get wrong. Consultation/pharmacy/
+# ancillary fees are wired (BillItem.source_type below); dental is
+# deliberately NOT wired -- P3.2 shipped with no price field and the
+# tender's own text never asks for dental billing.
+# ==========================================================================
+
+CHARGE_MASTER_CATEGORIES = ("consultation", "misc")
+BILL_STATUSES = ("open", "finalized", "voided")
+BILL_ITEM_SOURCE_TYPES = ("charge_master", "service_request", "pharmacy_item")
+PAYMENT_METHODS = ("cash", "card", "insurance", "panel", "other")
+CLAIM_STATUSES = ("draft", "submitted", "approved", "rejected", "paid", "void")
+
+
+class ChargeMasterItem(Base):
+    """One billable catalog entry that isn't already priced by another
+    module's own catalog (Ancillary already has ServiceCatalogItem,
+    Pharmacy already has MedicineInventoryItem.unit_cost -- this table
+    only covers consultation fees and generic front-desk/admin charges,
+    the tender's "charge master"). `facility_name` NULL = shared/global
+    item; set = one facility's own addition -- same convention as
+    ServiceCatalogItem. No delete endpoint -- toggle `active` off instead,
+    same reasoning (an existing BillItem FKs to this row and must never be
+    orphaned)."""
+    __tablename__ = "charge_master_items"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    category = Column(String(32), nullable=False, index=True)  # one of CHARGE_MASTER_CATEGORIES
+    code = Column(String(64), nullable=True)  # local code, free text
+    name = Column(String(255), nullable=False)
+    unit_price_cents = Column(Integer, nullable=False, default=0)
+    facility_name = Column(String(255), nullable=True, index=True)
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    bill_items = relationship("BillItem", back_populates="charge_master_item")
+
+
+class Bill(Base):
+    """One invoice for a patient at one facility. Deliberately
+    facility-local -- unlike Ancillary/Dental there is no cross-facility
+    view: the tender's billing clauses are all front-desk/admin/pharmacy
+    facility functions, not shared clinical continuity, so there's no
+    records_shared_publicly opt-out to apply here. `amount_due_cents` /
+    `patient_due_cents` / etc. are computed at read time from `items` +
+    `payments` + `claims` (see routers/billing.py::_serialize_bill), never
+    stored -- avoids any denormalized-total drift across void/add
+    sequences."""
+    __tablename__ = "bills"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    # The visit this bill is for, if any -- a walk-in pharmacy-only sale
+    # has no encounter. Not cascade-deleted: an Encounter is never
+    # hard-deleted in practice, but a bill must never be silently dropped
+    # if it ever is.
+    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    # The billing facility -- same _FACILITY_RELATIONSHIP_SOURCES scoping
+    # role as ServiceRequest.ordering_facility_name, but here it's also the
+    # ONLY facility that can ever see or act on this bill (no cross-
+    # facility read mode exists for Billing at all).
+    facility_name = Column(String(255), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="open", index=True)
+
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by_name = Column(String(255), nullable=True)
+    created_by_role = Column(String(64), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    finalized_at = Column(TZDateTime, nullable=True)
+    finalized_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    voided_at = Column(TZDateTime, nullable=True)
+    voided_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    voided_reason = Column(Text, nullable=True)
+
+    patient = relationship("Patient")
+    items = relationship("BillItem", back_populates="bill", order_by="BillItem.created_at")
+    payments = relationship("Payment", back_populates="bill", order_by="Payment.received_at")
+    claims = relationship("Claim", back_populates="bill", order_by="Claim.created_at")
+
+
+class BillItem(Base):
+    """One line item on a bill. Immutable once created (no PATCH) -- same
+    append-only discipline as ServiceResult/DentalChartEntry; a mistake is
+    voided (`voided_at`/`voided_by`/`voided_reason`), never edited. Exactly
+    one of `charge_master_item_id` / `service_request_id` /
+    `medicine_inventory_item_id` is set, matching `source_type` (enforced
+    in schemas.py/routers/billing.py, not a DB CHECK -- same house style
+    as the rest of this codebase's conditional-required-field validation).
+    `unit_price_cents` is a SNAPSHOT taken at creation from the source's
+    own price (ChargeMasterItem.unit_price_cents /
+    ServiceRequest.unit_price_cents / MedicineInventoryItem.unit_cost
+    converted to cents) -- never client-supplied, and never re-read from
+    the live source afterwards, so a later price change never reprices an
+    already-billed item (same reasoning as ServiceRequest's own snapshot
+    of ServiceCatalogItem, one level up)."""
+    __tablename__ = "bill_items"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    bill_id = Column(String(36), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_type = Column(String(32), nullable=False)  # one of BILL_ITEM_SOURCE_TYPES
+    charge_master_item_id = Column(String(36), ForeignKey("charge_master_items.id"), nullable=True)
+    service_request_id = Column(String(36), ForeignKey("service_requests.id"), nullable=True)
+    medicine_inventory_item_id = Column(String(36), ForeignKey("medicine_inventory.id"), nullable=True)
+    description = Column(String(255), nullable=False)  # snapshot of the source's name
+    quantity = Column(Integer, nullable=False, default=1)
+    unit_price_cents = Column(Integer, nullable=False, default=0)
+    amount_cents = Column(Integer, nullable=False, default=0)  # quantity * unit_price_cents, stored at creation
+
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by_name = Column(String(255), nullable=True)
+    created_by_role = Column(String(64), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    voided_at = Column(TZDateTime, nullable=True)
+    voided_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    voided_reason = Column(Text, nullable=True)
+
+    bill = relationship("Bill", back_populates="items")
+    charge_master_item = relationship("ChargeMasterItem", back_populates="bill_items")
+
+
+class Claim(Base):
+    """One insurance/panel claim against part or all of a bill (the
+    copay/split model: `claim_amount_cents` may be less than the bill's
+    total -- routers/billing.py validates it never exceeds the bill's
+    current unclaimed balance, i.e. `amount_due_cents` net of every OTHER
+    submitted/approved claim, not raw `amount_due_cents` -- capping against
+    the latter alone would let two full-amount claims be created against
+    the same bill). The one genuinely mutable
+    row in this module: content fields (`payer_name`/`claim_amount_cents`/
+    `notes`) are PATCH-able only while `status == 'draft'`; once
+    submitted, further change is a status transition only (submit/
+    approve/reject/void, plus the automatic "paid" transition tied to a
+    settling Payment -- see routers/billing.py::record_payment), never a
+    free-field edit. "Delete" per
+    the tender is the `void` status, never a DB delete --
+    same never-hard-delete-a-financial-row discipline as the rest of this
+    module. No separate Payer/Insurer master table this pass (`payer_name`
+    is free text) -- same "no licensed lookup table yet" scope decision as
+    Pharmacy's missing MIMS integration."""
+    __tablename__ = "claims"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    bill_id = Column(String(36), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    payer_name = Column(String(255), nullable=False)
+    # The portion of the bill being claimed -- may be less than the bill's
+    # total (the copay case). See routers/billing.py::_serialize_bill for
+    # how claimed_pending_cents/patient_due_cents are derived from this.
+    claim_amount_cents = Column(Integer, nullable=False)
+    status = Column(String(32), nullable=False, default="draft", index=True)
+    notes = Column(Text, nullable=True)
+
+    submitted_at = Column(TZDateTime, nullable=True)
+    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    facility_name = Column(String(255), nullable=True, index=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    bill = relationship("Bill", back_populates="claims")
+
+
+class Payment(Base):
+    """One payment received against a bill. Immutable once created (no
+    PATCH) -- a mis-recorded payment is voided, never edited, same
+    discipline as BillItem. `claim_id` links an insurance/panel payment
+    back to the Claim it settles (see Claim above); NULL for a direct
+    patient payment (cash/card/other)."""
+    __tablename__ = "payments"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    bill_id = Column(String(36), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    claim_id = Column(String(36), ForeignKey("claims.id"), nullable=True)
+    amount_cents = Column(Integer, nullable=False)
+    method = Column(String(32), nullable=False)  # one of PAYMENT_METHODS
+    reference_no = Column(String(128), nullable=True)  # receipt/transaction reference, free text
+
+    received_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    received_by_name = Column(String(255), nullable=True)
+    received_by_role = Column(String(64), nullable=True)
+    received_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    facility_name = Column(String(255), nullable=True, index=True)
+
+    voided_at = Column(TZDateTime, nullable=True)
+    voided_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    voided_reason = Column(Text, nullable=True)
+
+    bill = relationship("Bill", back_populates="payments")
+    claim = relationship("Claim")
+
+
+# ==========================================================================
 # PDPA (roadmap P2.10, the tender). Research: Malaysia's PDPA has NO
 # right to erasure -- clinical records run on the s.40 "medical purposes"
 # basis and are kept per Act 586 / MMC retention rules. So this is
@@ -1684,4 +2012,3 @@ class RetentionReviewItem(Base):
     __table_args__ = (
         UniqueConstraint("entity_type", "entity_id", name="uq_retention_review_items_entity"),
     )
-

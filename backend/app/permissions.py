@@ -31,15 +31,29 @@ PAGE_PHARMACY = "pharmacy"
 # P3.1: the shared Procedure/Laboratory/X-ray/Physiotherapy worklist -- one
 # page, module-tabbed, backed by app/routers/ancillary.py.
 PAGE_ANCILLARY = "ancillary"
+# P3.2: the dental tooth-chart page, backed by app/routers/dental.py.
+PAGE_DENTAL = "dental"
+# P3.3: the billing page (charge master / bills / payments / claims),
+# backed by app/routers/billing.py. Every CONFIGURABLE_STAFF_ROLE gets it
+# by default -- unlike ancillary/dental it touches all four (frontdesk
+# billing, consultation fees, pharmacy billing
+#) -- the real write/read split is enforced by BILLING_WRITE_
+# ROLES/BILLING_READ_ROLES in routers/billing.py, this page flag is only
+# the coarse first gate (same two-layer pattern ancillary/dental use).
+PAGE_BILLING = "billing"
 PAGE_ADMIN = "admin"
 
 # Every page key the app knows about. `admin` last -- it's always admin-only.
-ALL_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_ADMIN]
+ALL_PAGES: List[str] = [
+    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_ADMIN,
+]
 
 # The pages an admin may assign to a non-admin staff role -- the columns of
 # the permissions matrix in the web console. `admin` is intentionally
 # excluded: it is ALWAYS admin-only and NEVER a configurable checkbox.
-CONFIGURABLE_PAGES: List[str] = [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY]
+CONFIGURABLE_PAGES: List[str] = [
+    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING,
+]
 
 # The staff roles whose page access is governed by a RolePagePermission row
 # (the rows of the permissions matrix). Deliberately excludes:
@@ -65,10 +79,19 @@ DEFAULT_ROLE_PAGES = {
     # only clinician/records_officer may sign a result off
     # (routers/ancillary.py::sign_off_service_request role gate) --
     # receptionist's page access only lets them place/cancel orders.
-    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY],
-    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY],
-    "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY],
-    "pharmacist": [PAGE_PHARMACY],
+    # P3.2: dental chart entries are a clinical write/read, same
+    # clinician/records_officer-only split as ancillary sign-off -- a
+    # receptionist places/cancels ancillary orders but has no dental-chart
+    # role at all (the dental clause's "Patient Management" piece is queue/
+    # appointments, already covered by reception + PAGE_RECEPTION).
+    # P3.3: billing touches every configurable staff role at least for
+    # reading (clinician "views... fees", pharmacist "pharmacy
+    # billing") -- routers/billing.py's BILLING_WRITE_ROLES/
+    # BILLING_READ_ROLES do the real per-endpoint split.
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
+    "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_BILLING],
+    "pharmacist": [PAGE_PHARMACY, PAGE_BILLING],
 }
 
 # The exact OLD stored default for a clinician row, before the Consultation
@@ -83,6 +106,30 @@ _PRE_ANCILLARY_ROLE_PAGES = {
     "clinician": [PAGE_PATIENTS],
     "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION],
     "receptionist": [PAGE_RECEPTION],
+}
+
+# The exact OLD stored defaults (per role), before PAGE_DENTAL (P3.2)
+# existed -- see add_dental_to_legacy_role_pages. Deliberately the
+# pre-dental (but post-ancillary) values of DEFAULT_ROLE_PAGES above, not
+# derived from it, for the same reason _PRE_ANCILLARY_ROLE_PAGES isn't.
+# receptionist isn't listed: PAGE_DENTAL was never added to its default, so
+# there's nothing to backfill there.
+_PRE_DENTAL_ROLE_PAGES = {
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY],
+}
+
+# The exact OLD stored defaults (per role), before PAGE_BILLING (P3.3)
+# existed -- see add_billing_to_legacy_role_pages. Deliberately the
+# pre-billing (but post-dental) values of DEFAULT_ROLE_PAGES above, not
+# derived from it, for the same reason _PRE_ANCILLARY_ROLE_PAGES/
+# _PRE_DENTAL_ROLE_PAGES aren't. Unlike those two, ALL FOUR configurable
+# staff roles get PAGE_BILLING added, so all four are listed here.
+_PRE_BILLING_ROLE_PAGES = {
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL],
+    "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY],
+    "pharmacist": [PAGE_PHARMACY],
 }
 
 # What an admin token resolves to -- every page, including `admin` itself.
@@ -176,6 +223,57 @@ def add_ancillary_to_legacy_role_pages(db: Session) -> int:
         legacy = _PRE_ANCILLARY_ROLE_PAGES.get(row.role)
         if legacy is not None and list(row.allowed_pages or []) == legacy:
             row.allowed_pages = _canonical_order(legacy + [PAGE_ANCILLARY])
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def add_dental_to_legacy_role_pages(db: Session) -> int:
+    """One-time, best-effort migration companion to
+    add_ancillary_to_legacy_role_pages: every stored RolePagePermission row
+    for a role in _PRE_DENTAL_ROLE_PAGES whose allowed_pages is EXACTLY that
+    role's pre-P3.2 default gets PAGE_DENTAL appended. Same
+    only-touch-still-default discipline; idempotent; called from seed.py's
+    idempotent block. See docs/deployment.md's "Role permissions on
+    upgrade" note -- this call is NOT wired into the automatic upgrade
+    path, only seed.py's first-run path, same as add_ancillary_to_legacy_role_pages.
+    """
+    changed = 0
+    rows = (
+        db.query(models.RolePagePermission)
+        .filter(models.RolePagePermission.role.in_(list(_PRE_DENTAL_ROLE_PAGES)))
+        .all()
+    )
+    for row in rows:
+        legacy = _PRE_DENTAL_ROLE_PAGES.get(row.role)
+        if legacy is not None and list(row.allowed_pages or []) == legacy:
+            row.allowed_pages = _canonical_order(legacy + [PAGE_DENTAL])
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def add_billing_to_legacy_role_pages(db: Session) -> int:
+    """One-time, best-effort migration companion to
+    add_dental_to_legacy_role_pages: every stored RolePagePermission row
+    for a role in _PRE_BILLING_ROLE_PAGES whose allowed_pages is EXACTLY
+    that role's pre-P3.3 default gets PAGE_BILLING appended. Same
+    only-touch-still-default discipline; idempotent; called from seed.py's
+    idempotent block, not the automatic upgrade path (see docs/
+    deployment.md's "Role permissions on upgrade" note).
+    """
+    changed = 0
+    rows = (
+        db.query(models.RolePagePermission)
+        .filter(models.RolePagePermission.role.in_(list(_PRE_BILLING_ROLE_PAGES)))
+        .all()
+    )
+    for row in rows:
+        legacy = _PRE_BILLING_ROLE_PAGES.get(row.role)
+        if legacy is not None and list(row.allowed_pages or []) == legacy:
+            row.allowed_pages = _canonical_order(legacy + [PAGE_BILLING])
             changed += 1
     if changed:
         db.commit()

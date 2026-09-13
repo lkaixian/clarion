@@ -730,4 +730,83 @@ export const getAncillaryResultDocumentBlob = (requestId) =>
 
 export const getAncillaryStats = () => client.get("/ancillary/stats").then((r) => r.data);
 
+// P3.2 Dental module. Only the tooth chart is a dedicated API here --
+// queue/appointments reuse Reception, X-ray references reuse
+// createAncillaryRequest (module: "xray"), medication reuses
+// add/updateMedication, diagnosis reuses add/updateCondition. Gated by
+// require_page_access("dental"); CHART_ROLES server-side
+// (admin/records_officer/clinician) -- no receptionist.
+export const getDentalChartOptions = () => client.get("/dental/chart-options").then((r) => r.data);
+export const getDentalChart = (patientId, { limit, offset } = {}) =>
+  client.get(`/dental/chart/${patientId}`, { params: { limit, offset } }).then((r) => r.data);
+// body: { patient_id, encounter_id?, tooth_code, finding, treatment?, notes?,
+// signature_b64? }. Create-with-signature IS the sign-off --
+// same "strip the data: URL prefix" rule as signOffAncillaryResult above.
+export const createDentalChartEntry = (body) => {
+  const payload = { ...body };
+  if (typeof payload.signature_b64 === "string" && payload.signature_b64.startsWith("data:")) {
+    const comma = payload.signature_b64.indexOf(",");
+    if (comma >= 0) payload.signature_b64 = payload.signature_b64.slice(comma + 1);
+  }
+  return client.post("/dental/chart", payload).then((r) => r.data);
+};
+
+// Billing (P3.3, routers/billing.py): charge master / bills / bill_items /
+// payments / claims. Facility-local only — unlike Ancillary/Dental there is
+// no cross-facility read mode at all. Every BillItem price is
+// server-derived (see billing.py's module docstring) — the client NEVER
+// sends a price, only a source reference + quantity. Gated by
+// require_page_access("billing"); write endpoints additionally need
+// admin/records_officer/receptionist server-side (BILLING_WRITE_ROLES),
+// claims need admin/records_officer (CLAIM_ROLES) — clinician/pharmacist
+// get read-only access.
+export const getChargeMasterItems = ({ category, includeInactive } = {}) =>
+  client
+    .get("/billing/charge-master", { params: { category, include_inactive: includeInactive || undefined } })
+    .then((r) => r.data);
+export const createChargeMasterItem = (body) => client.post("/billing/charge-master", body).then((r) => r.data);
+export const updateChargeMasterItem = (itemId, body) =>
+  client.patch(`/billing/charge-master/${itemId}`, body).then((r) => r.data);
+
+// body: { patient_id, encounter_id? }.
+export const createBill = (body) => client.post("/billing/bills", body).then((r) => r.data);
+export const listBills = ({ patientId, status, limit, offset } = {}) =>
+  client.get("/billing/bills", { params: { patient_id: patientId, status, limit, offset } }).then((r) => r.data);
+export const getBill = (billId) => client.get(`/billing/bills/${billId}`).then((r) => r.data);
+
+// body: { source_type: "charge_master"|"service_request"|"pharmacy_item",
+// charge_master_item_id? | service_request_id? | medicine_inventory_item_id?,
+// quantity? }. Exactly one of the three ids must match source_type — no price
+// field, the server derives it (see billing.py's module docstring).
+export const addBillItem = (billId, body) => client.post(`/billing/bills/${billId}/items`, body).then((r) => r.data);
+export const voidBillItem = (billId, itemId, reason) =>
+  client.post(`/billing/bills/${billId}/items/${itemId}/void`, { reason }).then((r) => r.data);
+export const finalizeBill = (billId) => client.post(`/billing/bills/${billId}/finalize`).then((r) => r.data);
+export const voidBill = (billId, reason) => client.post(`/billing/bills/${billId}/void`, { reason }).then((r) => r.data);
+
+// body: { amount_cents, method: "cash"|"card"|"insurance"|"panel"|"other",
+// reference_no?, claim_id? }. claim_id requires method "insurance"/"panel".
+export const recordPayment = (billId, body) =>
+  client.post(`/billing/bills/${billId}/payments`, body).then((r) => r.data);
+export const voidPayment = (paymentId, reason) =>
+  client.post(`/billing/payments/${paymentId}/void`, { reason }).then((r) => r.data);
+
+// Claims — admin/records_officer only server-side. `claim_amount_cents`
+// may be less than the bill's total (the copay/split model) but never more
+// than its current unclaimed balance (patient_due_cents -- net of every
+// OTHER submitted/approved claim; the server 400s otherwise). There is no
+// standalone "mark paid" action -- a claim moves to "paid" only via a
+// linked Payment (recordPayment's `claim_id`), so "paid" always has a real
+// amount behind it.
+export const createClaim = (billId, body) => client.post(`/billing/bills/${billId}/claims`, body).then((r) => r.data);
+export const updateClaim = (claimId, body) => client.patch(`/billing/claims/${claimId}`, body).then((r) => r.data);
+export const submitClaim = (claimId) => client.post(`/billing/claims/${claimId}/submit`).then((r) => r.data);
+export const approveClaim = (claimId) => client.post(`/billing/claims/${claimId}/approve`).then((r) => r.data);
+export const rejectClaim = (claimId, reason) =>
+  client.post(`/billing/claims/${claimId}/reject`, { reason }).then((r) => r.data);
+export const voidClaim = (claimId, reason) =>
+  client.post(`/billing/claims/${claimId}/void`, { reason }).then((r) => r.data);
+
+export const getBillingStats = () => client.get("/billing/stats").then((r) => r.data);
+
 export default client;

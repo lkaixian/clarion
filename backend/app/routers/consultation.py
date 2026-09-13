@@ -316,6 +316,24 @@ def complete_consultation_ticket(
     if payload.signature_b64 and not current_user.signature_object_key:
         save_signature_from_b64(db, current_user, payload.signature_b64)
 
+    referral = None
+    if payload.referral_service_request_id:
+        referral = (
+            db.query(models.ServiceRequest)
+            .filter(models.ServiceRequest.id == payload.referral_service_request_id)
+            .first()
+        )
+        # The reference must be real, for this patient, and authored by this
+        # facility.  A signed clinical record must never become a cross-site
+        # identifier oracle or point at another facility's work.
+        if (
+            referral is None
+            or referral.patient_id != ticket.patient_id
+            or not current_user.facility
+            or referral.ordering_facility_name != current_user.facility
+        ):
+            raise HTTPException(status_code=404, detail="Referral service request not found")
+
     now = datetime.utcnow()
     ticket.status = "done"
     ticket.completed_at = now
@@ -333,6 +351,27 @@ def complete_consultation_ticket(
     )
     db.add(encounter)
     db.flush()  # need encounter.id for the per-row signature snapshot key
+
+    structured_values = (
+        payload.subjective, payload.objective, payload.assessment, payload.plan,
+        payload.treatment_plan, payload.follow_up_at, payload.referral_service_request_id,
+    )
+    if any(value is not None for value in structured_values):
+        db.add(models.ConsultationNote(
+            encounter_id=encounter.id,
+            patient_id=ticket.patient_id,
+            facility_name=current_user.facility or ticket.facility_name,
+            subjective=payload.subjective,
+            objective=payload.objective,
+            assessment=payload.assessment,
+            plan=payload.plan,
+            treatment_plan=payload.treatment_plan,
+            follow_up_at=payload.follow_up_at,
+            referral_service_request_id=referral.id if referral else None,
+            signed_by=current_user.id,
+            signed_by_name=current_user.full_name,
+            signed_at=now,
+        ))
 
     apply_object_meta(
         encounter,
@@ -354,3 +393,24 @@ def complete_consultation_ticket(
         "ticket": schemas.QueueTicketOut.model_validate(ticket).model_dump(),
         "encounter_id": encounter.id,
     }
+
+
+@router.get("/encounters/{encounter_id}/note", response_model=schemas.ConsultationNoteOut)
+def get_consultation_note(
+    encounter_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*CONSULTATION_ROLES)),
+):
+    """Return a structured note only to its authoring facility.
+
+    Cross-facility clinical sharing stays centralised in patients.py; this
+    focused consultation endpoint deliberately has no broader read mode.
+    """
+    note = (
+        db.query(models.ConsultationNote)
+        .filter(models.ConsultationNote.encounter_id == encounter_id)
+        .first()
+    )
+    if note is None or not current_user.facility or note.facility_name != current_user.facility:
+        raise HTTPException(status_code=404, detail="Consultation note not found")
+    return schemas.ConsultationNoteOut.model_validate(note)

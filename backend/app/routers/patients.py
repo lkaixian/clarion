@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, union
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,8 +22,15 @@ from ..storage import (
     sanitize_filename,
 )
 from ..derived import get_or_make_thumbnail
+from ..clinical_access import (
+    _facility_known_patient_ids_select,
+    _hidden_author_facilities,
+    _patient_known_to_facility,
+    _patient_present_at,
+    _record_editable,
+    _row_author_facility,
+)
 from .auth_router import _resolve_patient_by_nric
-from .reception import _malaysia_today
 from .profile import save_signature_from_b64, copy_signature_snapshot
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -42,108 +49,10 @@ SAFE_DOCUMENT_MEDIA_TYPES = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Cross-hospital clinical-record immutability helpers
-# ---------------------------------------------------------------------------
-# A clinical sub-record (Condition / MedicationStatement / AllergyIntolerance
-# / Encounter) may be amended via PATCH ONLY when BOTH hold:
-#   1. the acting user's facility == the facility that AUTHORED that row, AND
-#   2. the patient is CURRENTLY PRESENT at that facility.
-# Otherwise the correction mechanism is to APPEND a new entry (the add_*
-# POST endpoints stay open to any facility for any patient). Legacy rows with
-# a NULL author facility can never satisfy rule #1 and are therefore
-# effectively immutable to everyone via PATCH -- the intended safe default.
-
-
-def _row_author_facility(row) -> "str | None":
-    """The facility that authored a clinical sub-record, whichever column
-    holds it for that resource type: Condition/AllergyIntolerance ->
-    `authored_by_facility`; MedicationStatement -> `recorded_by_facility`
-    (NOT `prescribed_by_facility`, which is the -- often external --
-    prescriber); Encounter -> `facility_name`."""
-    if isinstance(row, models.MedicationStatement):
-        return row.recorded_by_facility
-    if isinstance(row, models.Encounter):
-        return row.facility_name
-    # Condition / AllergyIntolerance
-    return getattr(row, "authored_by_facility", None)
-
-
-def _patient_present_at(db: Session, patient_id: str, facility: str) -> bool:
-    """True iff the patient is CURRENTLY at `facility` -- either an active
-    (undischarged) Admission there, or a same-day (Malaysia-local) queue
-    ticket in a still-open state ('waiting' / 'called'). This is rule #2 of
-    the cross-facility PATCH guard."""
-    if not facility:
-        return False
-
-    active_admission = (
-        db.query(models.Admission.id)
-        .filter(
-            models.Admission.patient_id == patient_id,
-            models.Admission.facility_name == facility,
-            models.Admission.discharged_at.is_(None),
-        )
-        .first()
-    )
-    if active_admission is not None:
-        return True
-
-    # Reuse reception's single source of truth for "today" in Malaysia-local
-    # terms (Asia/Kuala_Lumpur, UTC+8, no DST) -- see models.QueueTicket's
-    # docstring for why the queue day is deliberately not the UTC date.
-    _utc_start, queue_date = _malaysia_today()
-    open_ticket = (
-        db.query(models.QueueTicket.id)
-        .filter(
-            models.QueueTicket.patient_id == patient_id,
-            models.QueueTicket.facility_name == facility,
-            models.QueueTicket.status.in_(("waiting", "called")),
-            models.QueueTicket.queue_date == queue_date,
-        )
-        .first()
-    )
-    return open_ticket is not None
-
-
-def _record_editable(
-    db: Session, patient_id: str, row, current_user,
-    present_at_caller_facility: "bool | None" = None,
-) -> bool:
-    """Rule #1 AND rule #2 combined, for the `editable` flag exposed on every
-    serialized clinical sub-record. False whenever there is no user context
-    (e.g. the unauthenticated emergency scan) or the acting user has no
-    facility assigned.
-
-    `present_at_caller_facility` lets a bulk caller (`_serialize_patient`)
-    pass in the rule-#2 result it has already computed once for this
-    (patient, caller-facility) pair, instead of this function re-running the
-    two `_patient_present_at` queries for every clinical sub-record on the
-    patient. When None it is computed here as before (the single-row PATCH
-    return serializers)."""
-    if current_user is None or not getattr(current_user, "facility", None):
-        return False
-    owner = _row_author_facility(row)
-    if not owner or owner != current_user.facility:
-        return False
-    if present_at_caller_facility is not None:
-        return present_at_caller_facility
-    return _patient_present_at(db, patient_id, current_user.facility)
-
-
-def _hidden_author_facilities(db: Session, caller_facility: "str | None") -> set:
-    """Facilities whose authored clinical sub-records must be HIDDEN from
-    this caller because that facility has set HospitalSetting.records_shared_publicly
-    to False. A facility never hides records from its own staff, so
-    `caller_facility` is always excluded from the result. Computed once per
-    _serialize_patient call."""
-    rows = (
-        db.query(models.HospitalSetting.facility_name)
-        .filter(models.HospitalSetting.records_shared_publicly.is_(False))
-        .all()
-    )
-    return {f for (f,) in rows if f and f != caller_facility}
-
+# Cross-hospital clinical-record immutability helpers (_row_author_facility,
+# _patient_present_at, _record_editable, _hidden_author_facilities) now live
+# in ..clinical_access -- imported above, shared with every other clinical
+# router instead of being reached into here as "private" functions.
 
 # ---------------------------------------------------------------------------
 # Clinical-record annotations (append-only sign-off -- models.ClinicalRecordAnnotation)
@@ -395,54 +304,9 @@ def create_patient(
 # patient", not a single stricter source of truth. Shared by both helpers
 # below so the definition can't drift between the bulk (list) and
 # single-patient (detail) forms of the same check.
-_FACILITY_RELATIONSHIP_SOURCES = (
-    (models.Encounter, models.Encounter.facility_name),
-    (models.Condition, models.Condition.authored_by_facility),
-    (models.MedicationStatement, models.MedicationStatement.recorded_by_facility),
-    (models.AllergyIntolerance, models.AllergyIntolerance.authored_by_facility),
-    (models.Admission, models.Admission.facility_name),
-    (models.QueueTicket, models.QueueTicket.facility_name),
-    (models.Appointment, models.Appointment.facility_name),
-    (models.ServiceRequest, models.ServiceRequest.ordering_facility_name),
-)
-
-
-def _facility_known_patient_ids_select(facility: str):
-    """Bulk form: a `SELECT patient_id ...` UNION over every
-    _FACILITY_RELATIONSHIP_SOURCES table for `facility`, returned as a
-    subquery-able selectable (NOT executed here).
-
-    list_patients composes this straight into `Patient.id.in_(...)` so the
-    whole default scope -- filter, ORDER BY, LIMIT/OFFSET -- runs in one
-    database round-trip. Previously this ran 7 separate `SELECT DISTINCT`
-    queries, unioned them into a Python set, then passed the entire set back
-    as a literal `IN (...)` list (thousands of bind params at a large
-    facility, and the DISTINCT scans happened in full regardless of the
-    page requested). Code-review follow-up 2026-09-07 -- backed by the new
-    facility-column indexes in migration d5e8a1c4b6f2."""
-    return union(
-        *(
-            select(model.patient_id).where(facility_col == facility)
-            for model, facility_col in _FACILITY_RELATIONSHIP_SOURCES
-        )
-    ).subquery()
-
-
-def _patient_known_to_facility(db: Session, patient_id: str, facility: str) -> bool:
-    """Single-patient form: cheap existence check (short-circuits on the
-    first match) for get_patient_full_record's cross-facility audit flag --
-    deliberately NOT built from _facility_known_patient_ids_select and a
-    membership test, which would scan the facility's ENTIRE patient set just
-    to answer one yes/no question on every detail view."""
-    for model, facility_col in _FACILITY_RELATIONSHIP_SOURCES:
-        hit = (
-            db.query(model.patient_id)
-            .filter(model.patient_id == patient_id, facility_col == facility)
-            .first()
-        )
-        if hit is not None:
-            return True
-    return False
+# _FACILITY_RELATIONSHIP_SOURCES / _facility_known_patient_ids_select /
+# _patient_known_to_facility now live in ..clinical_access (imported above) --
+# register a new clinical module's table there, not here.
 
 
 _LIST_PATIENTS_MAX_LIMIT = 200
@@ -1186,6 +1050,7 @@ _ANNOTATION_MODEL = {
     "allergy": models.AllergyIntolerance,
     "encounter": models.Encounter,
     "service_result": models.ServiceResult,
+    "dental_chart_entry": models.DentalChartEntry,
 }
 
 # kind -> the one target_type it is valid for (kinds not listed here --
@@ -1194,6 +1059,62 @@ _ANNOTATION_KIND_REQUIRES_TARGET = {
     "resolved": "condition",
     "discontinued": "medication",
 }
+
+# target_type -> its model's authoring-facility column, for the subset of
+# annotation targets whose facility-opt-out this router actually enforces
+# (see _exclude_hidden_facility_scoped_annotations below). Both happen to be
+# named `facility_name` on their model today; kept as an explicit map rather
+# than assuming that, since it's not true of every _ANNOTATION_MODEL entry
+# (Condition/AllergyIntolerance use `authored_by_facility`,
+# MedicationStatement uses `recorded_by_facility`).
+_ANNOTATION_FACILITY_SCOPED_TARGETS = {
+    "service_result": (models.ServiceResult, models.ServiceResult.facility_name),
+    "dental_chart_entry": (models.DentalChartEntry, models.DentalChartEntry.facility_name),
+}
+
+
+def _exclude_hidden_facility_scoped_annotations(query, db: Session, caller_facility: Optional[str]):
+    """Filter OUT ClinicalRecordAnnotation rows targeting a
+    _ANNOTATION_FACILITY_SCOPED_TARGETS record whose authoring facility has
+    opted out of cross-facility sharing (HospitalSetting.records_shared_publicly)
+    -- same opt-out ancillary.py's own reads already respect for the
+    underlying ServiceResult (routers/ancillary.py::get_service_request /
+    list_service_requests), and dental.py for DentalChartEntry. Fixed
+    2026-09-12 (voltagent security audit, P3.1): list_record_annotations had
+    no facility scoping at all, so a 'correction' annotation quoting a hidden
+    facility's lab/X-ray result was readable here even though the result
+    itself is hidden through the ancillary endpoints. Extended to
+    dental_chart_entry (P3.2) at the same time it was introduced, rather than
+    recreating the same gap for a second type.
+
+    Applied to `query` BEFORE offset/limit -- a first version of this fix
+    fetched the page first and filtered hidden rows out in Python, which
+    reintroduced the exact under-filled-page/misaligned-offset bug that
+    ancillary.py::list_service_requests' own hidden-facility filter was
+    fixed for in the same diff this was first written in (caught in review).
+    A correlated subquery per target type keeps this a bounded number of
+    round trips regardless of page size.
+
+    Deliberately scoped to _ANNOTATION_FACILITY_SCOPED_TARGETS only. The
+    other _ANNOTATION_MODEL types (condition/medication/allergy/encounter)
+    have no facility scoping here either, but that is a wider PRE-EXISTING
+    gap this doesn't touch (tracked in healthcare/Implementation Roadmap.md
+    rather than fixed blind, since those endpoints' own direct reads have
+    their own established scoping rules this would need to mirror one at a
+    time)."""
+    hidden = _hidden_author_facilities(db, caller_facility)
+    if not hidden:
+        return query
+    clauses = [models.ClinicalRecordAnnotation.target_type.notin_(list(_ANNOTATION_FACILITY_SCOPED_TARGETS.keys()))]
+    for target_type, (model, facility_col) in _ANNOTATION_FACILITY_SCOPED_TARGETS.items():
+        hidden_ids = select(model.id).where(facility_col.in_(hidden))
+        clauses.append(
+            and_(
+                models.ClinicalRecordAnnotation.target_type == target_type,
+                models.ClinicalRecordAnnotation.target_id.notin_(hidden_ids),
+            )
+        )
+    return query.filter(or_(*clauses))
 
 
 @router.post("/{patient_id}/annotations")
@@ -1280,14 +1201,11 @@ def list_record_annotations(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    rows = (
-        db.query(models.ClinicalRecordAnnotation)
-        .filter(models.ClinicalRecordAnnotation.patient_id == patient_id)
-        .order_by(models.ClinicalRecordAnnotation.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
+    q = db.query(models.ClinicalRecordAnnotation).filter(
+        models.ClinicalRecordAnnotation.patient_id == patient_id
     )
+    q = _exclude_hidden_facility_scoped_annotations(q, db, current_user.facility)
+    rows = q.order_by(models.ClinicalRecordAnnotation.created_at.desc()).offset(skip).limit(limit).all()
     return [_serialize_annotation(a) for a in rows]
 
 

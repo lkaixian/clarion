@@ -34,6 +34,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   const user = getCurrentUser();
   const hasSignature = !!user?.has_signature;
   const [note, setNote] = useState("");
+  const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "", treatment_plan: "" });
   const [sigDataUrl, setSigDataUrl] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +46,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
     try {
       await completeConsultationTicket(ticket.id, {
         note: note.trim() || undefined,
+        ...Object.fromEntries(Object.entries(soap).map(([key, value]) => [key, value.trim() || undefined])),
         // JSON field wants RAW base64 — strip the "data:image/png;base64,"
         // prefix the canvas produced.
         signature_b64: sigDataUrl ? sigDataUrl.split(",").pop() : undefined,
@@ -74,6 +76,22 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
+          </div>
+          <div className="grid gap-2">
+            {[
+              ["subjective", "Subjective"], ["objective", "Objective"],
+              ["assessment", "Assessment"], ["plan", "Plan"], ["treatment_plan", "Treatment plan"],
+            ].map(([key, label]) => (
+              <label key={key} className="block text-xs font-medium text-slate-600">
+                {label}
+                <textarea
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  value={soap[key]}
+                  onChange={(e) => setSoap((current) => ({ ...current, [key]: e.target.value }))}
+                />
+              </label>
+            ))}
           </div>
           <p className="text-xs text-slate-500">Signing as {user?.full_name}</p>
           {!hasSignature && (

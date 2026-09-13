@@ -1,7 +1,7 @@
 ---
 title: Implementation Roadmap
 type: plan
-updated: 2026-09-12
+updated: 2026-09-13
 tags: [plan, roadmap, clarion, campus]
 ---
 
@@ -22,6 +22,326 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 > notes). Full implementation detail is in git — search the commit log for the task id.
 
 ## Changelog
+
+### 2026-09-13 — P3.3 Billing module
+
+The third P3 tender module (+ per-module billing:
+frontdesk billing, consultation fees, pharmacy
+billing, admin billing). New engine: `ChargeMasterItem` /
+`Bill` / `BillItem` / `Payment` / `Claim` (`routers/billing.py`, migration
+`190811a20bb0`). Design surfaced to and confirmed with the user before
+building (see the P3.3 plan): **facility-local only** (no cross-facility
+read mode at all, unlike Ancillary/Dental — removes that entire bug class
+by construction), every `BillItem` price **server-derived** from exactly
+one of a `ChargeMasterItem` / a signed-off `ServiceRequest` /
+`MedicineInventoryItem.unit_cost` (never client-supplied), and insurance/
+panel claims use a **copay/split model** — a claim can cover part or all
+of a bill, and `BillOut` exposes `patient_due_cents` (what front-desk
+collects now) separately from `amount_due_cents` (the true outstanding
+total) so a pending claim doesn't force collecting the insurer's share
+from the patient.
+
+Delegated the mechanical pieces to **antigravity/agy** per this session's
+routing policy: `test_billing.py` scaffolding succeeded (30 tests,
+independently verified against the router's actual behavior, not
+agy's self-report); the `Billing.jsx` frontend delegation was blocked by
+agy's own write-permission wall (no `write_file` grant for this repo path)
+and, per the standing "no `--yolo` on auth/money-shaped work" rule, was
+built directly instead. Went through the same review gauntlet as P3.1/
+P3.2 — a voltagent security audit, this session's own `/code-review`-style
+multi-pass, and a direct `agy-delegate --tier pro` diff cross-check
+(the latter also permission-blocked, produced no findings) — retried once
+after the session hit its own rate limit mid-review, same "wait rather
+than commit on partial verification" call as P3.2. Found and fixed:
+
+- **[High]** The claim-amount cap (`create_claim`/`update_claim`) compared
+  against raw `amount_due_cents` instead of `patient_due_cents` (net of
+  every OTHER submitted/approved claim) — let the SAME bill be claimed in
+  full against two different insurers simultaneously (e.g. a $50 bill
+  claimed in full to both AIA and Prudential). A real double-claim/
+  insurance-fraud-liability gap, not a display glitch. Fixed + extracted
+  into a shared `_check_claim_amount_cap` helper (was duplicated at both
+  call sites, which is exactly how the bug could get fixed in one place
+  and missed in the other) + regression test.
+- **[High]** `mark_claim_paid` was a bare status flip with no money
+  attached — a claim could become `"paid"` with nothing in `paid_cents`,
+  so `patient_due_cents` would silently snap back up on the next read.
+  **Removed the standalone endpoint entirely**: "paid" is now reachable
+  ONLY via `record_payment`'s `claim_id` linkage, so the status and the
+  money always move together. (Frontend/tests/client.js updated to match.)
+- **[Low]** N+1 in `GET /billing/stats` — reused `_serialize_bill` (which
+  touches `bill.patient`) without the `joinedload(patient)` every other
+  bill-fetch site has, and never even used the resulting name. Fixed by
+  removing the unnecessary full serialization from that loop's hot path.
+- **[Low]** No upper bound (`le=`) on `BillItemCreate.quantity`,
+  `PaymentCreate.amount_cents`, `ClaimCreate.claim_amount_cents`, and
+  `ChargeMasterItemCreate/Update.unit_price_cents` — a fat-fingered value
+  could overflow the plain `Integer` money columns. All four now capped
+  (RM 1,000,000 / 100,000 units).
+- **[Low-Med]** Pharmacy price conversion used plain `round(unit_cost *
+  100)` on a `Float` column — binary-float multiplication can misconvert
+  a specific decimal price by a cent, and the snapshot is immutable once
+  written. Switched to `Decimal(str(unit_cost))` before scaling.
+- **[Low]** `update_claim` didn't block editing a draft claim on an
+  already-voided bill (self-caught before the external review passes).
+
+**Investigated, accepted, not fixed:** voiding a `BillItem` doesn't
+re-validate already-submitted/approved claims against the bill's new
+(lower) total — `patient_due_cents` still floors correctly at 0 (no
+crash/negative value), but an existing claim can end up sized against a
+total that's since shrunk; front-desk would need to manually void/adjust
+the claim. Narrow edge case, not a security issue, deferred rather than
+adding cross-checking logic for it this pass.
+
+**Test-quality follow-ups identified, not done this pass** (flagged by
+the test-quality review; the module's core arithmetic/RBAC/facility-
+scoping/lifecycle paths are solidly covered, this is incremental):
+extract the repeated 5-6 line "facility → charge-master item → bill →
+item" setup (appears ~15× across `test_billing.py`) into a shared helper;
+add tests for `void_bill_item`'s three untested guard branches (already-
+voided item, voided bill, item-not-found), the `service_request`-belongs-
+to-a-different-patient 400, payment double-void, and overpayment
+clamping; RBAC-denial coverage on the charge-master PATCH and the claim
+status-transition endpoints is asserted only indirectly (same role tuples
+already independently confirmed correct by the security audit) rather
+than with dedicated tests per endpoint.
+
+30 tests (`test_billing.py`), full suite 290 → 320. `check_schema.py`
+PASS (upgrade/downgrade round-trip, zero autogenerate drift), `ruff`
+hard gate + `oxlint` clean, `npm run build` clean. Also folded in the
+`_facility`/`_make_patient`/`_TEST_SIGNATURE_B64` extraction from
+`test_ancillary.py`/`test_dental.py` into `conftest.py` that both files'
+own comments had flagged as due once a third P3.x test file needed them
+— this is that third file.
+
+### 2026-09-13 — P3.4 Consultation notes (separate session, reviewed here)
+
+A concurrent session built structured SOAP consultation notes
+(`ConsultationNote`, `routers/consultation.py::complete_consultation_ticket`
+extended to accept `subjective`/`objective`/`assessment`/`plan`/
+`treatment_plan`/`follow_up_at`/an optional same-facility ancillary
+`referral_service_request_id`, migration `2c4e6a8b0d12`, a new `GET
+/consultation/encounters/{id}/note`, `PatientList.jsx`'s consultation
+modal) while this session was independently working on P3.3 in the same
+working tree. Reviewed at the user's request once the mixed diff surfaced
+mid-review. Found and fixed one real bug: the migration created a
+`UniqueConstraint` on `encounter_id` where the model declares `Column(...,
+unique=True, index=True)` -- SQLAlchemy's canonical form for that is a
+unique **index**, not a separate constraint, so `check_schema.py`'s
+autogenerate diff saw permanent drift. Fixed (index instead of
+constraint, `downgrade()` updated to match); `check_schema.py` now PASS.
+Router logic (facility-scoped referral ownership check, facility-only
+note read, no-SOAP-fields-means-no-row) read correctly on inspection; its
+2 tests pass. Not fixed (left for that session, since the feature is
+still in progress there): `ClinicalRecordAnnotation`'s `target_type`
+allow-list (`schemas.ANNOTATION_TARGET_TYPES`) doesn't include
+`"consultation_note"` yet, so the module docstring's claim that
+corrections go through that mechanism isn't wired up yet (a client
+request with that `target_type` is cleanly 422'd by Pydantic, not a
+crash — just an unimplemented, currently-aspirational doc claim); the
+frontend has no field for `follow_up_at`/`referral_service_request_id`
+yet, only the five text fields; test coverage is thin (2 tests, no RBAC/
+referral-guard/empty-fields-means-no-row cases).
+
+### 2026-09-13 — P3.2 Dental module
+
+The second P3 tender module, deliberately built THIN: only the
+tooth chart is genuinely new. Everything else the clause asks for reuses an
+existing engine unchanged (see `routers/dental.py`'s module docstring and
+`models.py`'s "Dental engine" section comment for the full clause-by-clause
+mapping):
+
+- **New**: `DentalChartEntry` (FDI notation `11`-`48`, create-with-signature
+  = the sign-off, append-only -- correction is a new
+  `ClinicalRecordAnnotation` with `target_type='dental_chart_entry'`, same
+  discipline as P3.1's `ServiceResult`). `routers/dental.py`: 3 endpoints
+  (`GET /chart-options`, `GET /chart/{patient_id}`, `POST /chart`), gated to
+  `CHART_ROLES` (admin/records_officer/clinician -- no receptionist/
+  pharmacist). Migration `1ea025093037`.
+- **Reused, no code change**: queue/appointments -- Reception's
+  existing department-tagged rooms/tickets; visit-level "sign-off"
+ -- `consultation.py::complete_consultation_ticket`; X-ray
+  references -- `ancillary.py`'s `ServiceRequest(module="xray",
+  source_encounter_id=...)`; medication --
+  `patients.py::add_medication`/`update_medication`; diagnosis reporting
+ -- the existing `Condition` CRUD.
+- **Deferred, documented**: DMC / Referral Letter / Timeslip document
+  generation -- no document-generation engine exists yet,
+  that's P3.5's job.
+
+Went through the same review gauntlet as P3.1's follow-up wave (voltagent
+security audit + 9-agent `/code-review` + antigravity/Gemini cross-check,
+run twice after the first pass hit a session rate limit mid-review).
+**Verdict: clean** -- unlike P3.1, no RBAC/cross-facility bug was found this
+time; the module correctly reused the hardened P3.1 patterns (hidden-
+facility filter applied in SQL before pagination, create-with-signature
+atomicity, 404-not-403 leak avoidance, `extra="forbid"` + enum validation)
+rather than re-deriving them, and it was independently confirmed the
+pagination-before-filter fix generalizes correctly to a second annotation
+target type (`dental_chart_entry` alongside `service_result` in
+`patients.py::_exclude_hidden_facility_scoped_annotations`). Fixed from
+review:
+
+- A test-quality finding: no test exercised pagination + hidden-facility
+  filtering together for the dental chart (only unpaginated hide/show was
+  covered) -- added `test_chart_pagination_boundary_respects_records_shared_publicly`,
+  which would have failed under a naive post-pagination filter. Also added
+  the missing `encounter_id` happy-path test.
+- agy/Gemini: `_exclude_hidden_facility_scoped_annotations`'s `.notin_()`
+  call passed a dict directly (works today via Python's implicit
+  key-iteration, but fragile/non-obvious) -- made explicit with
+  `.keys()`.
+- A simplification-review finding: `DentalChartEntry.encounter_id` (meant to
+  let an X-ray referral share `source_encounter_id` with the chart entry for
+  the same visit) was modeled but never actually wired into
+  `Dental.jsx` -- the UI had no encounter picker at all, so the field was
+  dead. Added an "Encounter ID (Optional)" input to the entry form
+  (matching `Ancillary.jsx`'s existing raw-text-input pattern) and surfaced
+  it on chart history rows.
+- A code-quality finding: `hasSignature` was derived once from a
+  `getCurrentUser()` snapshot and never refreshed, so after a clinician
+  drew their first signature on-the-spot, every SUBSEQUENT tooth entry in
+  the same visit forced another redraw instead of showing the now-saved
+  signature -- a real papercut given dental charting is naturally a
+  multi-entry-per-visit workflow (unlike `PatientDetail.jsx`'s one-shot
+  annotation modal). Fixed: `user` is now `useState`, refreshed via the
+  existing `refreshCurrentUser()` immediately after a save-on-the-spot
+  signature.
+
+**Investigated, declined as out of scope for this pass** (pre-existing
+patterns shared with `ancillary.py`, not P3.2-specific regressions):
+`create_dental_chart_entry`'s `encounter_id` ownership check verifies the
+encounter belongs to the patient but not that its authoring facility isn't
+hidden from the caller (identical, unflagged-in-two-review-rounds property
+of `ancillary.py::create_service_request`'s `source_encounter_id` check);
+and a caller-supplied `signature_b64` is silently ignored when a saved
+signature already exists (copy-pasted verbatim from
+`sign_off_service_request`/`add_record_annotation`, not new here). Both
+would need a cross-cutting fix touching multiple already-reviewed modules,
+not a dental.py-only patch.
+
+**Follow-up work identified, not done this pass** (flagged by the
+simplification and quality reviewers as genuine "rule of three"
+duplication, but out of scope -- touches `consultation.py`/`ancillary.py`/
+`profile.py`/`PatientDetail.jsx`, all already shipped and reviewed):
+1. The ~10-line "check signature, save-on-the-spot, snapshot" sequence is
+   now copy-pasted in THREE routers (`consultation.py::complete_ticket`,
+   `ancillary.py::sign_off_service_request`, `dental.py::create_dental_chart_entry`)
+   -- worth extracting to a shared `profile.py` helper before a fourth P3.x
+   module copies it again.
+2. The frontend signature-capture widget (`savedSigUrl`/`sigUrlRef`/the two
+   `useEffect`s/the saved-vs-draw JSX branch) is duplicated between
+   `PatientDetail.jsx`'s `SignOffModal` and `Dental.jsx`'s `EntryForm` --
+   worth extracting to a shared component/hook.
+3. `DentalChartEntry`'s signature snapshot has no viewer endpoint (unlike
+   annotations' `GET .../annotations/{id}/signature` +
+   `SignatureLink`) -- true of `ServiceResult` too (P3.1), so this is now a
+   two-module gap, not a one-off.
+4. No cross-table "patient visit timeline" -- a dental visit's data is now
+   spread across `Encounter`/`DentalChartEntry`/`ServiceRequest`/
+   `MedicationStatement`/`Condition` with no single view correlating them.
+   Real, but a `patients.py`-level concern spanning P3.1+P3.2 output, not
+   this module's job alone.
+5. `test_dental.py`'s `_facility()`/`_make_patient()`/`_TEST_SIGNATURE_B64`
+   helpers are byte-for-byte copies of `test_ancillary.py`'s -- worth
+   extracting to `conftest.py` before a third P3.x test file repeats them.
+
+13 new tests (`test_dental.py`), full suite 277 -> 290. `check_schema.py`
+PASS (upgrade/downgrade round-trip + zero autogenerate drift, verified on a
+real migration chain run, not just inspection). `ruff` hard gate + `oxlint`
+clean, web `npm run build` succeeds.
+
+**Process note:** the review pass hit the session's rate limit mid-way
+(most of the 9 code-review agents and the security auditor got cut off);
+retried after the limit cleared rather than committing on partial
+verification -- the user explicitly chose to wait rather than proceed on
+what was verified so far, even though direct verification (tests/lint/
+build/schema) was already solid at that point.
+
+### 2026-09-12 — P3.1 second review + fix wave
+
+A second, independent review pass on the P3.1 diff (`35cf91f..HEAD`): a
+voltagent security audit, all 9 `/code-review` agents, and an antigravity/
+Gemini cross-check, run in parallel and reconciled. Confirmed the previous
+wave's two fixes (admin cross-facility override, receptionist clinical-read
+leak) hold correctly. Found and fixed 7 new issues, all in
+`routers/ancillary.py` unless noted:
+
+- **[Med]** `list_service_requests`' cross-facility (`patient_id`) branch
+  applied SQL `LIMIT`/`OFFSET` before filtering out
+  `records_shared_publicly`-opted-out facilities in Python -- a page could
+  come back under-filled, and successive offset-based pages could
+  skip/misalign rows. Moved the exclusion into the SQL `WHERE` (before
+  limit/offset) via `or_(ordering_facility_name.is_(None),
+  ordering_facility_name.notin_(hidden))`. Caught independently by the
+  code-review performance + quality agents and by agy/Gemini (3-way
+  corroboration).
+- **[Low-Med]** `upload_result_document` had no guard against a second
+  upload, which silently replaced the object-store pointer -- overwriting
+  an already-attached document's metadata on an immutable, signed-off
+  result and orphaning the original object in MinIO. Now 409s if
+  `req.result.file_object_key` is already set.
+- **[Low]** `get_result_document` recovered the download filename via
+  `file_object_key.rsplit("_", 1)[-1]`, which corrupted any original
+  filename containing an underscore (`blood_test_results.pdf` →
+  `results.pdf`). Changed the object key's id/filename separator from `_`
+  to `/` (`storage.validate_key` already supports multi-segment keys) and
+  recover via `rsplit("/", 1)[-1]`.
+- **[Low]** `db.refresh(req)` after commit in create/cancel/sign-off/upload
+  expired the joinedloaded `catalog_item`/`result`/`patient` relationships,
+  so `_serialize_request` triggered extra lazy-load queries on every write.
+  New `_load_request_with_relations()` helper (joinedload on all three)
+  used both in `_request_or_404` and after every commit instead of
+  `db.refresh(req)`.
+- **[Low-Med]** `_request_or_404`'s `require_same_facility` guard used a
+  bare `!=`, so a NULL `ordering_facility_name` row compared against a
+  facility-less caller (`None != None`) would silently bypass the guard the
+  docstring claims ("immutable to everyone by design"). Not reachable via
+  the live API today (`create_service_request` always sets a facility), but
+  fixed preemptively to match `patients.py::_record_editable`'s
+  `not owner or owner != caller` idiom, ahead of any future data import.
+- **[Low]** (`routers/patients.py`) `service_result`-targeted
+  `ClinicalRecordAnnotation`s were reachable via `list_record_annotations`
+  regardless of the underlying result's facility opt-out -- a 'correction'
+  annotation could leak a hidden facility's result content that the
+  ancillary endpoints themselves correctly hide. New
+  `_exclude_hidden_service_result_annotations()`, applied to the query
+  BEFORE `offset`/`limit` via a correlated subquery -- deliberately scoped
+  to `target_type == 'service_result'` only (the type this wave touches);
+  the same gap for condition/medication/allergy/encounter annotations is a
+  wider pre-existing issue, tracked but not fixed here. (First draft of
+  this fix filtered in Python after pagination -- caught by voltagent's
+  review, since that's the exact anti-pattern the first finding above was
+  fixing; corrected to filter in SQL before pagination.)
+- **[Info]** `create_catalog_item`/`update_catalog_item` had no audit
+  logging, unlike every other write in the router, despite being
+  billing-relevant (`unit_price_cents` feeds P3.3). Added
+  `ancillary_catalog_item_created`/`_updated` `log_access` calls.
+- **Investigated, not fixed:** a separate "roster forgery" concern --
+  `create_service_request` has no presence check, so any `ORDER_ROLES` user
+  (receptionist included) can establish a permanent facility↔patient
+  relationship (via `_FACILITY_RELATIONSHIP_SOURCES`) with one order.
+  Verified this is consistent with, not a regression against, the existing
+  `_FACILITY_RELATIONSHIP_SOURCES` design ("deliberately broad/inclusive --
+  any one source counts") -- `Appointment`/`QueueTicket`/`Admission`
+  creation have the exact same lack of a presence check. Left as-is;
+  revisit only if the broader design changes.
+- **Documented, not code:** `docs/deployment.md` -- an already-live
+  facility's `RolePagePermission` row is never automatically backfilled
+  with a newly-added `DEFAULT_ROLE_PAGES` entry (e.g. this wave's own
+  `ancillary` page); only a `seed.py`-style backfill call does that, and
+  `seed.py` is first-run-only. Added a "Role permissions on upgrade" note
+  to the upgrade runbook.
+
+6 new tests added (`test_ancillary.py`: 22 → 28), including one
+(`test_cross_facility_pagination_boundary`) that would have failed under
+the pre-fix pagination bug. Full suite 277/277, `ruff` hard gate clean.
+Delegation: voltagent (security audit of the original diff, then a second
+pass reviewing this fix diff -- caught the annotation-pagination
+regression above) + antigravity/Gemini (independent diff review; drafted
+the 6 tests + the deployment.md text, but could not get a write grant in
+this sandbox, so both were hand-verified against the actual model/schema
+field names before being applied).
 
 ### 2026-09-12 — P3.1 code-review follow-up
 
@@ -463,9 +783,9 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | # | Task | Size | Clause | Status |
 |---|---|---|---|---|
 | P3.1 | **Ancillary engine** — `service_catalog_items`/`service_requests`/`service_results`: order → result → sign-off → document, shared across Procedure, Laboratory, X-ray, Physiotherapy | L | –10 | ✅ 2026-09-11 |
-| P3.2 | **Dental module** + tooth-chart UI (FDI notation) | M | | |
-| P3.3 | **Billing module** — charge master, `bills`, `bill_items`, `payments`, `claims`; wire consultation / pharmacy / ancillary fees | L | + per-module billing | |
-| P3.4 | Consultation: structured **SOAP** notes, treatment plan, follow-up scheduling, referral UI | M | –4 | |
+| P3.2 | **Dental module** + tooth-chart UI (FDI notation) | M | | ✅ 2026-09-13 |
+| P3.3 | **Billing module** — charge master, `bills`, `bill_items`, `payments`, `claims`; wire consultation / pharmacy / ancillary fees | L | + per-module billing | ✅ 2026-09-13 |
+| P3.4 | Consultation: structured **SOAP** notes, treatment plan, follow-up scheduling, referral UI | M | –4 | 🔶 in progress (separate session, 2026-09-13) — schema-drift bug fixed on review; annotation-correction wiring + follow_up_at/referral UI + fuller test coverage still open |
 | P3.5 | Document generation — Digital Medical Certificate, Referral Letter, Timeslip (PDF) | M | | |
 | P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | |
 | P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | |
