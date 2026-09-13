@@ -23,6 +23,44 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P4.3b CDS hint (demo priority #1)
+
+New clinician-facing reference aid, built on P4.3's local-LLM plumbing —
+NOT a diagnosis or prescription decision (every open-weight model's
+acceptable-use terms forbid that; framed explicitly as advisory in the UI
+copy and a fixed `disclaimer` field). NEW `backend/app/ai/cds_hint.py`:
+`generate_cds_hint(patient, draft_note, reason)` builds a prompt from the
+patient's active/chronic conditions, allergies, active medications, reason
+for visit, and whatever SOAP text the clinician has typed so far (never
+persisted before sign-off), asks `ai/local_llm.py` for 2-4 short
+"things to consider" bullets. Separately, `_allergy_conflicts` does a
+deterministic (no LLM) case-insensitive substring match between recorded
+allergy substances and active medication names — medication-safety
+screening stays a rule-engine job per the vault's stack table, real
+drug-class awareness is P4.4 (licensed drug DB), this is a cheap floor.
+
+NEW endpoint `POST /consultation/tickets/{id}/cds-hint` (schemas
+`CdsHintRequest`/`CdsHintOut`), gated by the same room-claim ownership
+check as sign-off (`_ticket_in_my_room_or_404`) — reuses
+`routers/patients.py::_serialize_patient` for patient context (same
+already-shared-across-routers helper `ai_router.py` uses for the
+interaction-check endpoint) so the existing `records_shared_publicly`
+opt-out filtering applies here too, no new privacy logic. Callable
+repeatedly while drafting, writes nothing, logged via `log_access`.
+
+Web: `CompleteConsultationModal` (`web/src/pages/PatientList.jsx`) gained a
+"Get CDS hint" button that sends the in-progress SOAP fields and renders
+the hint, any allergy-conflict warnings, and the disclaimer inline —
+`getCdsHint` in `api/client.js`.
+
+Verified: NEW `backend/tests/test_cds_hint.py` (3 tests — LLM hint +
+allergy conflict together, hint absent but conflict check still runs when
+the local model is unavailable, 409 when the caller hasn't claimed the
+ticket's room); `web/` build clean; full backend suite green.
+
+**Not done here (P4.3c):** `faster-whisper` voice→SOAP, NL report
+narrative — separate, larger features, not started.
+
 ### 2026-09-13 — P4.3 On-prem AI engine, core (Security Audit C1 resolved)
 
 Replaced every Claude-API call with a local Ollama client. NEW
@@ -1130,7 +1168,8 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.1 | **FHIR-readiness migrations** — coding triples, `resource_identifiers`, resource tables, terminology seeds, backfill queue | L | **** → [[FHIR Schema Readiness]] | — |
 | P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | — |
 | P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
-| P4.3b | On-prem AI, remaining features — CDS hint (differential dx / contraindication flags), `faster-whisper` voice→SOAP, NL report narrative, all on top of P4.3's local-LLM plumbing | L |, → [[On-Prem Clinical AI]] | — |
+| P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
+| P4.3c | On-prem AI, remaining features — `faster-whisper` voice→SOAP, NL report narrative | M |, → [[On-Prem Clinical AI]] | — |
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | — |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |

@@ -18,9 +18,9 @@ CI4/Linux environment.
 > deterministic/Tesseract fallback automatically if Ollama isn't running. See
 > [[Security Audit#C1]]. `ai/interactions.py`'s NIH RxNav/DailyMed calls are a separate,
 > narrower dependency (drug-identity lookup, not an AI cloud API) — still open, P4.4.
-> **Not yet built:** the CDS hint, medication-safety rule engine wiring, voice→SOAP, and
-> NL report narrative features below — the local-LLM *plumbing* is done, the specific
-> clinical *features* are still to build.
+> **CDS hint landed 2026-09-13 (P4.3b):** `ai/cds_hint.py` +
+> `POST /consultation/tickets/{id}/cds-hint`, wired into the sign-off modal.
+> **Not yet built:** voice→SOAP, NL report narrative (P4.3c).
 
 ## "ALi.ai" — what it actually is
 **MAIA Sdn Bhd** ("Medical Augmented Intelligence Automation"), Cyberjaya — a

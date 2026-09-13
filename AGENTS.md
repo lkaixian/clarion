@@ -157,12 +157,15 @@ replaced every Claude-API call in `ai/summarize.py`/`ai/nric_ocr.py` —
 `healthcare/Implementation Roadmap.md`'s changelog for detail — that file
 is the source of truth, this file is not kept blow-by-blow.
 
-Next: **P4.3b** (the remaining on-prem-AI *features* on top of that
-plumbing — CDS hint, `faster-whisper` voice→SOAP, NL report narrative; see
-the vault's "Demo priorities" section, ranked #1/#2/#4 for the competition
-demo) **or P3.9/P3.10** (calling-system hardware, mobile booking/vitals) —
-surface the choice rather than assuming order, same discipline as every
-prior phase boundary.
+**P4.3b (CDS hint) landed 2026-09-13**: `backend/app/ai/cds_hint.py` +
+`POST /consultation/tickets/{id}/cds-hint`, wired into the sign-off modal
+(`web/src/pages/PatientList.jsx`) — a clinician-facing reference note plus
+a deterministic allergy-vs-active-medication conflict flag.
+
+Next: **P4.3c** (`faster-whisper` voice→SOAP, NL report narrative — vault
+"Demo priorities" #2 and #4) **or P3.9/P3.10** (calling-system hardware,
+mobile booking/vitals) — surface the choice rather than assuming order,
+same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

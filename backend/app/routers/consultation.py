@@ -48,7 +48,9 @@ from .profile import (
     save_signature_from_b64,
     copy_signature_snapshot,
 )
+from .patients import _serialize_patient
 from ..storage import apply_object_meta
+from ..ai.cds_hint import generate_cds_hint
 
 router = APIRouter(prefix="/consultation", tags=["consultation"])
 
@@ -393,6 +395,36 @@ def complete_consultation_ticket(
         "ticket": schemas.QueueTicketOut.model_validate(ticket).model_dump(),
         "encounter_id": encounter.id,
     }
+
+
+@router.post("/tickets/{ticket_id}/cds-hint", response_model=schemas.CdsHintOut)
+def get_cds_hint(
+    ticket_id: str,
+    payload: schemas.CdsHintRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*CONSULTATION_ROLES)),
+):
+    """Reference-only clinical decision support hint (P4.3b) for a ticket
+    currently in the caller's own room -- see ai/cds_hint.py. Nothing here
+    is persisted; it's advisory only, called as many times as the clinician
+    likes while drafting the note, never at sign-off."""
+    ticket = _ticket_in_my_room_or_404(ticket_id, current_user, db)
+    patient = db.query(models.Patient).filter(models.Patient.id == ticket.patient_id).first()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    record = _serialize_patient(patient, db, current_user)
+    draft_note = {
+        "subjective": payload.subjective, "objective": payload.objective,
+        "assessment": payload.assessment, "plan": payload.plan,
+    }
+    result = generate_cds_hint(record, draft_note, reason=ticket.reason)
+
+    log_access(
+        db, ticket.patient_id, current_user.id, current_user.role, "generate_cds_hint",
+        actor_facility=current_user.facility,
+    )
+    return result
 
 
 @router.get("/encounters/{encounter_id}/note", response_model=schemas.ConsultationNoteOut)
