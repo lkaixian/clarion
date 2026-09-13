@@ -5,7 +5,7 @@ import {
   listPatients, createPatient, getCurrentUser,
   getConsultationRooms, getMyConsultationRoom, startConsultationSession,
   endConsultationSession, callConsultationTicket, completeConsultationTicket,
-  cancelConsultationTicket, listAncillaryRequests,
+  cancelConsultationTicket, listAncillaryRequests, getCdsHint,
 } from "../api/client";
 import SignaturePad from "../components/SignaturePad";
 
@@ -41,6 +41,23 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   const [sigDataUrl, setSigDataUrl] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cdsHint, setCdsHint] = useState(null); // { hint, allergy_conflicts, disclaimer } or null
+  const [cdsLoading, setCdsLoading] = useState(false);
+
+  async function fetchCdsHint() {
+    setCdsLoading(true);
+    try {
+      const result = await getCdsHint(ticket.id, {
+        subjective: soap.subjective || undefined, objective: soap.objective || undefined,
+        assessment: soap.assessment || undefined, plan: soap.plan || undefined,
+      });
+      setCdsHint(result);
+    } catch {
+      setCdsHint(null); // advisory only -- a failed call is silent, not blocking
+    } finally {
+      setCdsLoading(false);
+    }
+  }
 
   // Referral candidates: this patient's own-facility, already signed-off
   // ancillary results (same facility check the backend itself enforces on
@@ -116,6 +133,27 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
                 />
               </label>
             ))}
+          </div>
+          <div className="border border-slate-200 rounded-lg p-2">
+            <button
+              type="button" onClick={fetchCdsHint} disabled={cdsLoading}
+              className="text-xs text-blue-800 font-medium disabled:opacity-50"
+            >
+              {cdsLoading ? "Thinking..." : "Get CDS hint (on-prem AI, reference only)"}
+            </button>
+            {cdsHint && (
+              <div className="mt-2 text-xs text-slate-700 space-y-1">
+                {cdsHint.hint ? (
+                  <p className="whitespace-pre-line">{cdsHint.hint}</p>
+                ) : (
+                  <p className="text-slate-400">No AI hint available (local model not running).</p>
+                )}
+                {cdsHint.allergy_conflicts.map((c, i) => (
+                  <p key={i} className="text-red-700 font-medium">⚠ {c}</p>
+                ))}
+                <p className="text-slate-400 italic">{cdsHint.disclaimer}</p>
+              </div>
+            )}
           </div>
           <label className="block text-xs font-medium text-slate-600">
             Follow-up date (optional)

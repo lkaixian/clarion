@@ -666,6 +666,11 @@ export const completeConsultationTicket = (id, body) =>
   client.post(`/consultation/tickets/${id}/complete`, body || {}).then((r) => r.data);
 export const cancelConsultationTicket = (id) =>
   client.post(`/consultation/tickets/${id}/cancel`).then((r) => r.data);
+// P4.3b — advisory only, nothing persisted; safe to call repeatedly while
+// drafting the note. body: {subjective, objective, assessment, plan}, any
+// may be omitted.
+export const getCdsHint = (id, body) =>
+  client.post(`/consultation/tickets/${id}/cds-hint`, body || {}).then((r) => r.data);
 
 // --- Waiting-room displays ---------------------------------------------
 // getWaitingRoomDisplays/create/revoke are admin-only (routers/admin.py).

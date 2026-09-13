@@ -1925,6 +1925,26 @@ class ConsultationNoteOut(BaseModel):
         from_attributes = True
 
 
+class CdsHintRequest(BaseModel):
+    """Whatever the clinician has typed into the SOAP note so far -- never
+    persisted, this is advisory-only input for ai/cds_hint.py. Same field
+    names/caps as ConsultationCompleteRequest for consistency, but every
+    field is optional and unrelated to sign-off."""
+    subjective: Optional[str] = Field(default=None, max_length=8000)
+    objective: Optional[str] = Field(default=None, max_length=8000)
+    assessment: Optional[str] = Field(default=None, max_length=8000)
+    plan: Optional[str] = Field(default=None, max_length=8000)
+
+    class Config:
+        extra = "forbid"
+
+
+class CdsHintOut(BaseModel):
+    hint: Optional[str] = None
+    allergy_conflicts: list[str] = []
+    disclaimer: str
+
+
 class ConsultationTicketOut(QueueTicketOut):
     """A queued consultation ticket routed to the caller's claimed room, with
     the patient's name + DOB joined in so the worklist is readable without a
