@@ -17,6 +17,7 @@ export const PAGE_ROUTE = {
   ancillary: "/ancillary",
   dental: "/dental",
   billing: "/billing",
+  reporting: "/reporting",
   admin: "/admin",
 };
 
@@ -38,6 +39,7 @@ export function landingPathFor(user) {
   if (pages.includes("ancillary")) return "/ancillary";
   if (pages.includes("dental")) return "/dental";
   if (pages.includes("billing")) return "/billing";
+  if (pages.includes("reporting")) return "/reporting";
   if (pages.includes("pharmacy")) return "/pharmacy";
   return "/"; // staff with no pages at all — shouldn't happen, but don't crash
 }

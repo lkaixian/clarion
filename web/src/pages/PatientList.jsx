@@ -5,7 +5,7 @@ import {
   listPatients, createPatient, getCurrentUser,
   getConsultationRooms, getMyConsultationRoom, startConsultationSession,
   endConsultationSession, callConsultationTicket, completeConsultationTicket,
-  cancelConsultationTicket,
+  cancelConsultationTicket, listAncillaryRequests,
 } from "../api/client";
 import SignaturePad from "../components/SignaturePad";
 
@@ -35,9 +35,31 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   const hasSignature = !!user?.has_signature;
   const [note, setNote] = useState("");
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "", treatment_plan: "" });
+  const [followUpAt, setFollowUpAt] = useState("");
+  const [referralId, setReferralId] = useState("");
+  const [referralOptions, setReferralOptions] = useState([]);
   const [sigDataUrl, setSigDataUrl] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Referral candidates: this patient's own-facility, already signed-off
+  // ancillary results (same facility check the backend itself enforces on
+  // referral_service_request_id, so nothing offered here can 404 on submit).
+  useEffect(() => {
+    let cancelled = false;
+    // limit: 20 -- this is a dropdown of recent candidates, not a full
+    // history view (which already exists on the Ancillary page), so cap it
+    // well under the endpoint's own 50-row default rather than silently
+    // truncating a patient's full signed-off history into an unlabeled list.
+    listAncillaryRequests({ patientId: ticket.patient_id, status: "signed_off", limit: 20 })
+      .then((rows) => {
+        if (!cancelled) {
+          setReferralOptions(rows.filter((r) => r.ordering_facility_name === user?.facility));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [ticket.patient_id, user?.facility]);
 
   async function submit(e) {
     e.preventDefault();
@@ -47,6 +69,8 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
       await completeConsultationTicket(ticket.id, {
         note: note.trim() || undefined,
         ...Object.fromEntries(Object.entries(soap).map(([key, value]) => [key, value.trim() || undefined])),
+        follow_up_at: followUpAt ? new Date(followUpAt).toISOString() : undefined,
+        referral_service_request_id: referralId || undefined,
         // JSON field wants RAW base64 — strip the "data:image/png;base64,"
         // prefix the canvas produced.
         signature_b64: sigDataUrl ? sigDataUrl.split(",").pop() : undefined,
@@ -93,6 +117,32 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
               </label>
             ))}
           </div>
+          <label className="block text-xs font-medium text-slate-600">
+            Follow-up date (optional)
+            <input
+              type="datetime-local"
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={followUpAt}
+              onChange={(e) => setFollowUpAt(e.target.value)}
+            />
+          </label>
+          {referralOptions.length > 0 && (
+            <label className="block text-xs font-medium text-slate-600">
+              Referral to ancillary result (optional)
+              <select
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={referralId}
+                onChange={(e) => setReferralId(e.target.value)}
+              >
+                <option value="">— none —</option>
+                {referralOptions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.module} · {r.catalog_item_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <p className="text-xs text-slate-500">Signing as {user?.full_name}</p>
           {!hasSignature && (
             <div>
