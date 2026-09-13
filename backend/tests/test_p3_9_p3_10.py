@@ -17,8 +17,31 @@ the two bugs already caught and fixed during implementation:
     the SOAP fields before vitals were added. Fixed by including the vitals
     fields in that tuple. test_vitals_only_signoff_still_creates_note
     below is the regression guard.
+
+Security-review follow-up (2026-09-14) added 3 more, covered below:
+  * self_book_appointment's slot check was read-then-write with no DB-level
+    guard against a concurrent double-book -- fixed with
+    models.Appointment.uq_appointments_active_clinician_slot (same VIRTUAL-
+    generated-column pattern as P1.3's RoomClaim). A true concurrent-thread
+    race is awkward to assert deterministically in pytest, so
+    test_appointment_unique_constraint_blocks_concurrent_double_book proves
+    the DB constraint itself does the job directly.
+  * compute_available_slots returned NAIVE UTC datetimes, which Pydantic
+    serializes with no 'Z'/offset suffix -- Dart's DateTime.parse silently
+    mis-parses an offset-less string as LOCAL time, which a downstream
+    `.toUtc()` call then double-shifts, breaking every self-book attempt
+    from a real Malaysia-timezone device (voltagent flutter-expert review).
+    Fixed by returning AWARE UTC datetimes instead.
+    test_appointment_slots_are_timezone_aware is the regression guard.
+  * app/printing.py's ESC/POS text encoder passed ASCII control bytes
+    (including this module's own ESC/GS command-introducer bytes) through
+    unfiltered -- a receptionist/admin could inject raw printer commands via
+    QueueTicket.department / HospitalSetting.display_name.
+    test_escpos_ticket_strips_control_characters is the regression guard.
 """
 from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from conftest import _TEST_SIGNATURE_B64, _facility, _make_patient
@@ -135,6 +158,87 @@ def test_self_book_forbidden_for_other_patient(test_client, db_session, make_use
         json={"facility_name": facility, "clinician_id": clinician.id, "scheduled_at": tomorrow},
     )
     assert resp.status_code == 403
+
+
+def test_appointment_slots_are_timezone_aware(test_client, db_session, make_user, auth_headers):
+    """Regression guard: compute_available_slots must return timezone-aware
+    UTC datetimes, not naive ones -- a naive datetime serializes over JSON
+    with no 'Z'/offset suffix, which Dart's DateTime.parse silently
+    mis-parses as local time, which a downstream .toUtc() call then
+    double-shifts (voltagent flutter-expert review -- this broke every
+    self-book attempt from a real Malaysia-timezone device)."""
+    facility = _facility("TZGuard")
+    clinician = make_user(role="clinician", facility=facility)
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+
+    resp = test_client.get(
+        "/patients/appointment-slots",
+        params={"facility_name": facility, "date": tomorrow, "clinician_id": clinician.id},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    slots = resp.json()
+    assert slots, "expected at least one open slot tomorrow"
+    raw = slots[0]["scheduled_at"]
+    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    assert parsed.tzinfo is not None, f"scheduled_at {raw!r} has no timezone info -- Dart would mis-parse this as local time"
+
+
+def test_appointment_unique_constraint_blocks_concurrent_double_book(test_client, db_session, make_user):
+    """Direct DB-level proof of the race guard the security review asked
+    for (uq_appointments_active_clinician_slot) -- a true concurrent-thread
+    race is awkward to assert deterministically in pytest, so this inserts
+    the exact collision the constraint exists to catch and confirms the DB
+    itself refuses it, independent of the router's own (necessarily
+    sequential) read-check."""
+    facility = _facility("RaceGuard")
+    clinician = make_user(role="clinician", facility=facility)
+    patient_a = _make_patient(db_session)
+    patient_b = _make_patient(db_session, full_name="Other Patient")
+    when = datetime.now(timezone.utc) + timedelta(days=1)
+
+    first = models.Appointment(
+        patient_id=patient_a.id, facility_name=facility, clinician_id=clinician.id,
+        scheduled_at=when, status="scheduled", self_booked=True, created_by=clinician.id,
+    )
+    db_session.add(first)
+    db_session.commit()
+
+    second = models.Appointment(
+        patient_id=patient_b.id, facility_name=facility, clinician_id=clinician.id,
+        scheduled_at=when, status="scheduled", self_booked=True, created_by=clinician.id,
+    )
+    db_session.add(second)
+    try:
+        db_session.commit()
+        raise AssertionError("expected IntegrityError from uq_appointments_active_clinician_slot")
+    except IntegrityError:
+        db_session.rollback()
+
+
+def test_appointment_unique_constraint_allows_rebooking_after_cancel(test_client, db_session, make_user):
+    """A cancelled row at the same clinician+time must NOT block a new
+    scheduled booking there -- the constraint is scoped to
+    status == 'scheduled' only (see models.Appointment.
+    active_clinician_slot_key's CASE expression)."""
+    facility = _facility("RaceGuard")
+    clinician = make_user(role="clinician", facility=facility)
+    patient = _make_patient(db_session)
+    when = datetime.now(timezone.utc) + timedelta(days=1)
+
+    cancelled = models.Appointment(
+        patient_id=patient.id, facility_name=facility, clinician_id=clinician.id,
+        scheduled_at=when, status="cancelled", self_booked=True, created_by=clinician.id,
+    )
+    db_session.add(cancelled)
+    db_session.commit()
+
+    rebooked = models.Appointment(
+        patient_id=patient.id, facility_name=facility, clinician_id=clinician.id,
+        scheduled_at=when, status="scheduled", self_booked=True, created_by=clinician.id,
+    )
+    db_session.add(rebooked)
+    db_session.commit()  # must NOT raise
 
 
 def test_booking_options_lists_departments_and_clinicians(test_client, db_session, make_user, auth_headers):
@@ -285,7 +389,6 @@ def test_visit_summary_pdf_404_before_sign_off(test_client, db_session, make_use
     """An Encounter with no signature (shouldn't exist via the normal flow,
     but the endpoint must not 500 against one) -- covered by simply asking
     for a nonexistent encounter_id, the cheap version of the same guard."""
-    facility = _facility("VisitPDF")
     patient = _make_patient(db_session)
     patient_user = make_user(role="patient", patient_id=patient.id)
 
@@ -315,6 +418,33 @@ def test_ticket_print_endpoint_returns_escpos_bytes(test_client, db_session, mak
     assert resp.status_code == 200, resp.text
     assert resp.headers["content-type"] == "application/vnd.escpos"
     assert b"\x1b\x40" in resp.content  # ESC @ init sequence
+
+
+def test_escpos_ticket_strips_control_characters(test_client, db_session, make_user, auth_headers):
+    """Regression guard for the ESC/POS command-injection finding: a
+    QueueTicket.department containing raw ESC (0x1b) / GS (0x1d) bytes --
+    this module's own command-introducer bytes -- must not reach the
+    printer byte stream unfiltered."""
+    facility = _facility("Print")
+    receptionist = make_user(role="receptionist", facility=facility)
+    patient = _make_patient(db_session)
+    malicious_department = "LAB\x1b\x40\x1dVINJECTED"
+    ticket = models.QueueTicket(
+        patient_id=patient.id, facility_name=facility, status="waiting", queue_number=3,
+        department=malicious_department,
+        queue_date=datetime.now().date().isoformat(), source="manual", checked_in_by=receptionist.id,
+    )
+    db_session.add(ticket)
+    db_session.commit()
+    db_session.refresh(ticket)
+
+    resp = test_client.get(f"/reception/queue/{ticket.id}/ticket.escpos", headers=auth_headers(receptionist))
+    assert resp.status_code == 200, resp.text
+    # The text rendered (proving sanitization strips characters rather than
+    # rejecting the whole ticket)...
+    assert b"VINJECTED" in resp.content
+    # ...but the exact injected control-byte sequence must be gone.
+    assert b"\x1b\x40\x1d" not in resp.content
 
 
 def test_ancillary_label_endpoint_returns_png(test_client, db_session, make_user, auth_headers):

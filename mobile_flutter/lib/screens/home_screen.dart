@@ -88,6 +88,15 @@ class _HomeScreenState extends State<HomeScreen> {
       await file.writeAsBytes(bytes);
       if (!mounted) return;
       await Share.shareXFiles([XFile(file.path)]);
+      // ponytail: the temp dir/file is never cleaned up -- repeated shares
+      // within one app session accumulate PDFs under the OS temp dir. Not
+      // urgent (the OS reclaims temp storage eventually) and deliberately
+      // NOT `await dir.delete(recursive: true)` right here: the OS share
+      // sheet / receiving app can still be reading the file asynchronously
+      // after shareXFiles returns on some platforms, so an immediate
+      // delete would be a worse bug than the current leak. Upgrade path if
+      // this becomes a real problem: clear `clarion_pdf*` temp dirs on
+      // next app start instead of right after sharing.
     } catch (e) {
       if (!mounted) return;
       // A 404 (this particular visit was never signed off with structured
