@@ -54,12 +54,12 @@ This vault is the persistent reference for that effort. Start here.
 
 ---
 
-## The one thing to fix first
+## The one thing that used to be wrong here
 
-> [!danger] CLARION can send PHI to a US cloud
-> `ai/summarize.py` posts the full patient record to Anthropic and `ai/nric_ocr.py`
-> posts the MyKad image to Claude vision. **Interim guard (P0.4):** both paths are now
-> disabled unless `ANTHROPIC_API_KEY` **and** `CLARION_ALLOW_CLOUD_AI=1` are set — the
-> app runs offline by default. The **real fix is P4.3** (on-prem AI engine, replace
-> every Claude-API call). Still the #1 tender blocker. See [[Security Audit#C1]] and
-> [[On-Prem Clinical AI]].
+> [!success] Fixed 2026-09-13 (P4.3) — CLARION no longer sends PHI to a US cloud
+> `ai/summarize.py` and `ai/nric_ocr.py` used to post the patient record / MyKad image
+> to Anthropic. Both now call `ai/local_llm.py`, a local Ollama server — nothing leaves
+> the machine — and degrade to their deterministic/Tesseract fallback if Ollama isn't
+> running. `anthropic` is out of `requirements.txt`; `ai/_cloud_guard.py` is deleted.
+> See [[Security Audit#C1]] and [[On-Prem Clinical AI]]. Next AI-clause work: CDS hint,
+> voice→SOAP, NL report narrative (all new features, not yet built — see the roadmap).

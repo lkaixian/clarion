@@ -14,8 +14,8 @@ once for the operator to hand off securely. Demo accounts keep
 must_change_password=False deliberately -- forcing a password change on
 first login would be a bad first-look for a judge/reviewer, and these
 credentials are contained to a non-production environment by construction
-(no CLARION_ALLOW_CLOUD_AI-style path lets APP_ENV=demo happen by
-accident in a real deployment).
+(APP_ENV=demo is an explicit opt-in, never a default, so it can't happen
+by accident in a real deployment).
 """
 import os
 from datetime import datetime, timedelta

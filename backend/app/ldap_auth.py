@@ -7,8 +7,7 @@ app/auth.py + app/routers/auth_router.py -- never a replacement. Local
 accounts keep working unconditionally (break-glass admin, service
 integrations, patient logins per healthcare/Integration Engine and LDAP.md).
 Disabled by default: every function here is a no-op unless LDAP_ENABLED is
-explicitly set, same opt-in-by-default-off discipline as
-app/ai/_cloud_guard.py's CLARION_ALLOW_CLOUD_AI.
+explicitly set -- a network auth dependency should never silently activate.
 
 Flow (see auth_router.login for where this is wired in):
   1. service bind (LDAP_BIND_DN / LDAP_BIND_PASSWORD)
@@ -100,7 +99,7 @@ def ldap_enabled() -> bool:
     """True only when a deployer has deliberately opted in. Checked fresh
     from the environment each call (cheap; not on any hot path) rather than
     cached at import time, so tests can flip LDAP_ENABLED without a process
-    restart -- same reasoning as cloud_ai_enabled()."""
+    restart -- same reasoning as ai/local_llm.py's local_llm_enabled()."""
     return _bool_env("LDAP_ENABLED", False)
 
 

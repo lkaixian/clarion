@@ -30,8 +30,8 @@ MIN_PASSWORD_LENGTH = 12
 # This is NOT a substitute for a real breached-password API (e.g.
 # Have I Been Pwned's k-anonymity range API) -- that would be a network
 # call to a third party, which this codebase deliberately avoids
-# everywhere else (see app/ai/_cloud_guard.py) -- it's a cheap, offline
-# floor that catches the most obviously bad choices.
+# everywhere (all AI inference is on-prem too, see app/ai/local_llm.py) --
+# it's a cheap, offline floor that catches the most obviously bad choices.
 _WEAK_PASSWORD_DENYLIST = frozenset({
     "password", "password1", "password123", "12345678", "123456789",
     "1234567890", "qwerty123", "qwertyuiop", "letmein123", "welcome123",
