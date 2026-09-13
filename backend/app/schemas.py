@@ -2780,6 +2780,31 @@ class NotifiableDiseaseReportOut(BaseModel):
         from_attributes = True
 
 
+# ---------- P3.8 Management Dashboard ----------
+
+class DashboardSummaryOut(BaseModel):
+    facility_name: Optional[str] = None
+    date: str  # Malaysia-local ISO calendar date this snapshot is for
+    patients_in_queue: int
+    patients_attended_today: int
+    physicians_on_duty: int
+    physicians_total: int
+    avg_wait_minutes: Optional[float] = None
+    unresolved_referrals: int
+    health_score: float
+    health_score_breakdown: Dict[str, float]
+
+
+class DashboardFlowForecastOut(BaseModel):
+    today_so_far: int
+    today_forecast_total: float
+    today_forecast_remaining: float
+    today_scheduled_appointments: int
+    tomorrow_forecast_total: float
+    tomorrow_scheduled_appointments: int
+    weeks_of_history_used: int
+
+
 # ---------- AI ----------
 class SummaryRequest(BaseModel):
     patient_id: str

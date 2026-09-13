@@ -46,11 +46,17 @@ PAGE_BILLING = "billing"
 # facing, not a frontdesk task -- unlike billing it does NOT go to
 # receptionist/pharmacist by default (see DEFAULT_ROLE_PAGES below).
 PAGE_REPORTING = "reporting"
+# P3.8: the Management Dashboard (KPI snapshot + patient-flow forecast +
+# operational health score), backed by app/routers/dashboard.py. Same
+# management-tool split as reporting -- not granted to receptionist/
+# pharmacist by default.
+PAGE_DASHBOARD = "dashboard"
 PAGE_ADMIN = "admin"
 
 # Every page key the app knows about. `admin` last -- it's always admin-only.
 ALL_PAGES: List[str] = [
-    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING, PAGE_ADMIN,
+    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING,
+    PAGE_DASHBOARD, PAGE_ADMIN,
 ]
 
 # The pages an admin may assign to a non-admin staff role -- the columns of
@@ -58,6 +64,7 @@ ALL_PAGES: List[str] = [
 # excluded: it is ALWAYS admin-only and NEVER a configurable checkbox.
 CONFIGURABLE_PAGES: List[str] = [
     PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING,
+    PAGE_DASHBOARD,
 ]
 
 # The staff roles whose page access is governed by a RolePagePermission row
@@ -97,8 +104,11 @@ DEFAULT_ROLE_PAGES = {
     # views, TAT, admission summaries) -- deliberately NOT given to
     # receptionist/pharmacist by default, same "not every role gets every
     # page" split as ancillary/dental (an admin can still grant it).
-    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
-    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
+    # P3.8: the dashboard gets the same clinician/records_officer-only
+    # default as reporting -- both are management/overview tools, not
+    # frontdesk tasks.
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING, PAGE_DASHBOARD],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING, PAGE_DASHBOARD],
     "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_BILLING],
     "pharmacist": [PAGE_PHARMACY, PAGE_BILLING],
 }
@@ -150,6 +160,14 @@ _PRE_BILLING_ROLE_PAGES = {
 _PRE_REPORTING_ROLE_PAGES = {
     "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
     "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
+}
+
+# The exact OLD stored defaults (per role), before PAGE_DASHBOARD (P3.8)
+# existed -- see add_dashboard_to_legacy_role_pages. Same reasoning as
+# every _PRE_* table before it.
+_PRE_DASHBOARD_ROLE_PAGES = {
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
 }
 
 # What an admin token resolves to -- every page, including `admin` itself.
@@ -318,6 +336,30 @@ def add_reporting_to_legacy_role_pages(db: Session) -> int:
         legacy = _PRE_REPORTING_ROLE_PAGES.get(row.role)
         if legacy is not None and list(row.allowed_pages or []) == legacy:
             row.allowed_pages = _canonical_order(legacy + [PAGE_REPORTING])
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def add_dashboard_to_legacy_role_pages(db: Session) -> int:
+    """One-time, best-effort migration companion to
+    add_reporting_to_legacy_role_pages: every stored RolePagePermission row
+    for a role in _PRE_DASHBOARD_ROLE_PAGES whose allowed_pages is EXACTLY
+    that role's pre-P3.8 default gets PAGE_DASHBOARD appended. Same
+    only-touch-still-default discipline; idempotent; called from seed.py's
+    idempotent block, not the automatic upgrade path.
+    """
+    changed = 0
+    rows = (
+        db.query(models.RolePagePermission)
+        .filter(models.RolePagePermission.role.in_(list(_PRE_DASHBOARD_ROLE_PAGES)))
+        .all()
+    )
+    for row in rows:
+        legacy = _PRE_DASHBOARD_ROLE_PAGES.get(row.role)
+        if legacy is not None and list(row.allowed_pages or []) == legacy:
+            row.allowed_pages = _canonical_order(legacy + [PAGE_DASHBOARD])
             changed += 1
     if changed:
         db.commit()

@@ -23,6 +23,52 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P3.8 Management Dashboard
+
+: summarised operational data (12.1.1), patient-flow prediction
+(12.1.2), operational health score (12.1.3). Zero new tables -- everything
+computed live off rows that already exist (`QueueTicket`, `StaffClockEvent`,
+`ServiceRequest`, `Appointment`), same "thin, reuse existing engines" call
+P3.2 made. NEW `routers/dashboard.py`:
+
+- `GET /dashboard/summary` -- patients in queue / attended today (from
+  `QueueTicket.status`), physicians on duty vs total (`StaffClockEvent`
+  with an open shift, joined to `User.role == "clinician"`), average
+  time-to-called today (not time-in-system, which would conflate wait
+  time with consultation length), unresolved physician referrals
+  (`ServiceRequest.source == "physician_order"` still `status ==
+  "ordered"`), and a composite **operational health score** (0-100,
+  weighted 40/25/20/15 over wait/availability/queue/referral sub-scores --
+  ponytail-flagged as heuristic thresholds, not a clinically-validated
+  index, tune per deployment if it needs to mean something more precise).
+- `GET /dashboard/flow-forecast` -- **EWMA** (alpha 0.3, most-recent-
+  weighted) over the past 8 same-weekday occurrences of `QueueTicket`
+  counts, forecasting both "today" (net of what's already checked in) and
+  "tomorrow"; deliberately the EWMA half of the roadmap's "EWMA/GBM"
+  sizing note -- a real GBM needs a training pipeline and a new
+  scikit-learn dependency for a clinic-scale forecast a smoothed average
+  already serves. Already-`scheduled` `Appointment` counts are reported
+  alongside as a separate number (not blended into the EWMA) to avoid
+  double-counting walk-in-derived history against booked-ahead load.
+  Malaysia-local calendar days throughout, reusing
+  `routers/reception._common._malaysia_today`/`MALAYSIA_TZ` rather than
+  re-deriving timezone handling.
+
+NEW page `PAGE_DASHBOARD` (`app/permissions.py` +
+`add_dashboard_to_legacy_role_pages` backfill, same pattern as every prior
+P3.x page) -- clinician/records_officer by default, not receptionist/
+pharmacist (a management tool, same split as reporting). Frontend: NEW
+`web/src/pages/Dashboard.jsx` -- plain stat tiles + thin proportion bars
+(no chart library), reusing the app's existing green/amber/red status-
+color convention rather than introducing a new palette; polls every 60s.
+
+5 new tests (`test_dashboard.py`), including an exact EWMA arithmetic
+check (2 historical weeks seeded at counts 2 and 3 -> asserts the forecast
+is exactly 1.32 rounded to 1.3, not just "some positive number"). Full
+suite 354 → 359 passed. `ruff check --config ci/ruff.toml` clean. `oxlint`
++ `npm run build` clean. No schema change, so `check_schema.py` is
+unaffected (not re-run).
+
 ### 2026-09-13 — P3.7 MOH / statutory reporting
 
 : "notifiable disease reports", "quality & safety compliance
@@ -1024,7 +1070,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.5 | Document generation — Digital Medical Certificate, Referral Letter, Timeslip (PDF) | M | | ✅ 2026-09-13 |
 | P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | ✅ 2026-09-13 |
 | P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | ✅ 2026-09-13 |
-| P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | |
+| P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | ✅ 2026-09-13 |
 | P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | |
 | P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | |
 
