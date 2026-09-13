@@ -10,6 +10,7 @@ import Pharmacy from "./pages/Pharmacy";
 import Ancillary from "./pages/Ancillary";
 import Dental from "./pages/Dental";
 import Billing from "./pages/Billing";
+import Reporting from "./pages/Reporting";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="/ancillary" element={<Protected><RequirePage page="ancillary"><Ancillary /></RequirePage></Protected>} />
         <Route path="/dental" element={<Protected><RequirePage page="dental"><Dental /></RequirePage></Protected>} />
         <Route path="/billing" element={<Protected><RequirePage page="billing"><Billing /></RequirePage></Protected>} />
+        <Route path="/reporting" element={<Protected><RequirePage page="reporting"><Reporting /></RequirePage></Protected>} />
       </Routes>
     </BrowserRouter>
   );

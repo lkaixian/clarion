@@ -10,7 +10,7 @@ import {
   updateCondition, updateMedication, updateAllergy, updateEncounter,
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
   issuePatientAccount, updateOwnProfile, refreshCurrentUser,
-  digitiseDocument, getDocumentDetail, getDocumentFileBlob,
+  digitiseDocument, getDocumentDetail, getDocumentFileBlob, generateDocument,
   getAppointments, createAppointment, updateAppointment,
   rescheduleAppointment, acceptRescheduleRequest, rejectRescheduleRequest,
   addPatientAnnotation, getAnnotationSignatureBlob, getStaffSignatureBlob,
@@ -84,6 +84,35 @@ const DOC_TYPE_OPTIONS = ["prescription", "discharge_summary", "lab_report", "im
 const DOC_TYPE_LABELS = {
   prescription: "Prescription", discharge_summary: "Discharge summary",
   lab_report: "Lab report", imaging: "Imaging (X-ray/scan)",
+};
+
+// P3.5: generated document kinds. Fields per kind mirror
+// schemas.GenerateDocumentRequest's per-doc_type required set exactly, so
+// the form never offers something the backend would 422 on submit.
+const GENERATED_DOC_TYPE_OPTIONS = ["medical_certificate", "referral_letter", "timeslip"];
+const GENERATED_DOC_TYPE_LABELS = {
+  medical_certificate: "Digital Medical Certificate",
+  referral_letter: "Referral Letter",
+  timeslip: "Timeslip",
+};
+const GENERATED_DOC_FIELDS = {
+  medical_certificate: [
+    ["diagnosis", "Diagnosis / reason", "text"],
+    ["rest_from", "Rest from", "date"],
+    ["rest_to", "Rest to", "date"],
+    ["remarks", "Remarks (optional)", "text"],
+  ],
+  referral_letter: [
+    ["referred_to", "Referred to", "text"],
+    ["reason_for_referral", "Reason for referral", "text"],
+    ["clinical_summary", "Clinical summary (optional)", "text"],
+  ],
+  timeslip: [
+    ["visit_date", "Visit date", "date"],
+    ["time_in", "Time in", "time"],
+    ["time_out", "Time out", "time"],
+    ["purpose", "Purpose (optional)", "text"],
+  ],
 };
 
 // Staff-side reschedule reason codes (see routers/appointments.py's
@@ -286,10 +315,11 @@ function DocumentModal({ patientId, documentId, onClose }) {
         {detail && (
           <>
             <h3 className="font-semibold text-slate-800 mb-1">
-              {DOC_TYPE_LABELS[detail.doc_type] || detail.doc_type}
+              {DOC_TYPE_LABELS[detail.doc_type] || GENERATED_DOC_TYPE_LABELS[detail.doc_type] || detail.doc_type}
             </h3>
             <p className="text-xs text-slate-400 mb-4">
               {detail.original_filename || "unnamed file"} · {detail.uploaded_by_facility || "unknown facility"} · {detail.uploaded_at}
+              {detail.signed_by_name && <> · Signed by {detail.signed_by_name} at {detail.signed_at}</>}
             </p>
 
             {detail.file_available ? (
@@ -326,7 +356,9 @@ function DocumentModal({ patientId, documentId, onClose }) {
             )}
             {detail.raw_text && (
               <div className="mb-3">
-                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">Extracted Text (OCR)</h4>
+                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">
+                  {detail.signed_by_name ? "Document content" : "Extracted Text (OCR)"}
+                </h4>
                 <pre className="text-xs text-slate-600 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto font-sans">
                   {detail.raw_text}
                 </pre>
@@ -347,6 +379,106 @@ function DocumentModal({ patientId, documentId, onClose }) {
 // viewing their own record only sees that a document exists via the
 // summary embedded in GET /patients/{id} (below), not its content; see
 // DocumentModal's staff-only detail/file fetches.
+// Issue a signed Digital Medical Certificate / Referral Letter / Timeslip
+// (P3.5). Same "saved signature, or draw one on the spot" convention as
+// CompleteConsultationModal/SignOffModal — no preview of a saved signature
+// here either, matching the consultation modal's (simpler) version of that
+// pattern rather than SignOffModal's.
+function GenerateDocumentForm({ patientId, onGenerated }) {
+  const user = getCurrentUser();
+  const hasSignature = !!user?.has_signature;
+  const [open, setOpen] = useState(false);
+  const [docType, setDocType] = useState(GENERATED_DOC_TYPE_OPTIONS[0]);
+  const [fields, setFields] = useState({});
+  const [sigDataUrl, setSigDataUrl] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function changeDocType(next) {
+    setDocType(next);
+    setFields({});
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await generateDocument(patientId, {
+        doc_type: docType,
+        ...fields,
+        signature_b64: sigDataUrl ? sigDataUrl.split(",").pop() : undefined,
+      });
+      setFields({});
+      setSigDataUrl(null);
+      setOpen(false);
+      onGenerated();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to generate the document.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg mb-4"
+      >
+        + Generate MC / Referral / Timeslip
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3 mb-4 pb-4 border-b border-slate-100">
+      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Document type</label>
+        <select
+          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
+          value={docType}
+          onChange={(e) => changeDocType(e.target.value)}
+        >
+          {GENERATED_DOC_TYPE_OPTIONS.map((t) => (
+            <option key={t} value={t}>{GENERATED_DOC_TYPE_LABELS[t]}</option>
+          ))}
+        </select>
+      </div>
+      <div className="grid gap-2">
+        {GENERATED_DOC_FIELDS[docType].map(([key, label, type]) => (
+          <label key={key} className="block text-xs font-medium text-slate-600">
+            {label}
+            <input
+              type={type}
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={fields[key] || ""}
+              onChange={(e) => setFields((current) => ({ ...current, [key]: e.target.value }))}
+            />
+          </label>
+        ))}
+      </div>
+      {!hasSignature && (
+        <div>
+          <SignaturePad onChange={setSigDataUrl} />
+          <p className="text-xs text-slate-400 mt-1">
+            You have no saved signature — draw one (also saved to your profile).
+          </p>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+          {saving ? "Generating..." : "Generate & sign"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
   const [docType, setDocType] = useState(DOC_TYPE_OPTIONS[0]);
   const [file, setFile] = useState(null);
@@ -377,6 +509,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
 
   return (
     <Section title="Documents (scans, prescriptions, lab reports, X-rays)">
+      {isStaff && <GenerateDocumentForm patientId={patientId} onGenerated={onUploaded} />}
       {isStaff && (
         <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
@@ -418,7 +551,9 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
               className={`w-full flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-left ${isStaff ? "hover:bg-slate-100" : "cursor-default"}`}
             >
               <div>
-                <p className="text-sm text-slate-700">{DOC_TYPE_LABELS[d.doc_type] || d.doc_type}</p>
+                <p className="text-sm text-slate-700">
+                  {DOC_TYPE_LABELS[d.doc_type] || GENERATED_DOC_TYPE_LABELS[d.doc_type] || d.doc_type}
+                </p>
                 <p className="text-xs text-slate-400">{d.original_filename || "unnamed"} · {d.uploaded_by_facility || "unknown facility"} · {d.uploaded_at}</p>
               </div>
               {isStaff && <span className="text-xs text-blue-700 whitespace-nowrap">View →</span>}

@@ -246,6 +246,13 @@ export const getDocumentDetail = (id, documentId) => client.get(`/patients/${id}
 export const getDocumentFileBlob = (id, documentId) =>
   client.get(`/patients/${id}/documents/${documentId}/file`, { responseType: "blob" }).then((r) => r.data);
 
+// P3.5: generate a signed Digital Medical Certificate / Referral Letter /
+// Timeslip PDF, filed as a ClinicalDocument (shows up in the same
+// `documents` list/viewer as an uploaded scan — see getDocumentDetail/
+// getDocumentFileBlob above).
+export const generateDocument = (id, body) =>
+  client.post(`/patients/${id}/documents/generate`, body).then((r) => r.data);
+
 export const getSummary = (id) => client.get(`/ai/summary/${id}`).then((r) => r.data);
 export const getInteractionCheck = (id) => client.get(`/ai/interaction-check/${id}`).then((r) => r.data);
 export const digitiseDocument = (id, docType, file) => {
@@ -808,5 +815,24 @@ export const voidClaim = (claimId, reason) =>
   client.post(`/billing/claims/${claimId}/void`, { reason }).then((r) => r.data);
 
 export const getBillingStats = () => client.get("/billing/stats").then((r) => r.data);
+
+// Reporting (P3.6, routers/reporting.py): canned reports + Custom Report
+// Builder. Facility-local only, same as Billing. `getReportDatasets()` is
+// the field-picker catalogue the builder UI renders itself from — never a
+// hardcoded field list on the client (see reporting_engine.py's docstring
+// for why: a client-supplied field name is validated dataset-side, never
+// reaches raw SQL). `exportReport` returns a Blob (responseType) — the
+// caller turns it into an object URL, same convention as
+// getDocumentFileBlob elsewhere in this file.
+export const getReportDatasets = () => client.get("/reports/datasets").then((r) => r.data);
+export const runReport = (body) => client.post("/reports/run", body).then((r) => r.data);
+export const exportReport = (body) =>
+  client.post("/reports/export", body, { responseType: "blob" }).then((r) => r.data);
+
+export const listReportTemplates = (dataset) =>
+  client.get("/reports/templates", { params: { dataset: dataset || undefined } }).then((r) => r.data);
+export const createReportTemplate = (body) => client.post("/reports/templates", body).then((r) => r.data);
+export const deleteReportTemplate = (templateId) =>
+  client.delete(`/reports/templates/${templateId}`).then((r) => r.data);
 
 export default client;

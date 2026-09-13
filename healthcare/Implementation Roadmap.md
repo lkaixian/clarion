@@ -23,6 +23,163 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P3.6 Reporting engine
+
+Canned operational reports + Custom Report Builder
+ -- the two P3.6 clauses; 12.2/12.3/12.6-12.9 are separately
+scoped (dashboard/MOH-reporting/predictive/NL-insight tasks later in the
+plan). NEW `app/reporting_engine.py`: deliberately NOT a generic SQL query
+builder -- a curated registry of 5 facility-local datasets (`encounters`,
+`admissions`, `ancillary_results`, `conditions`, `bills`), each with typed,
+named `Field`s (a label + explicit getter + groupable/filterable flags +
+enum options where relevant). The "field picker across modules" the clause
+asks for is generic OVER this registry (`GET /reports/datasets` hands the
+frontend the catalogue), never over raw column names -- so no client-
+supplied field name ever reaches a query. Filter/group-by/sort all run in
+Python over a capped fetch (`_MAX_ROWS = 5000`, documented ceiling, not
+SQL-side pagination) -- fine at clinic scale. Group-by produces one row per
+group with a `count` plus an `avg_<field>` for every selected numeric field
+(e.g. group `ancillary_results` by `module`, select `tat_minutes`, to get
+per-module average lab/imaging turnaround -- the clause's explicit TAT ask).
+The `bills` dataset also closes a forward reference left in
+`schemas.BillingStatsOut`'s docstring from P3.3 ("the full 'Financial
+performance reports' the tender is P3.6's job").
+
+NEW `app/report_export.py`: PDF via reportlab's `platypus` Table/
+SimpleDocTemplate (arbitrary-length tabular report -- unlike
+`document_generation.py`'s raw Canvas, which suits a fixed one-page form,
+not a table; same reportlab dependency, no new one) and Excel via NEW
+dependency `openpyxl` (pure-Python .xlsx writer, same on-prem/offline-CI
+reasoning as reportlab). `POST /reports/export` streams either back as an
+attachment.
+
+NEW `models.ReportTemplate` (migration `01a1fbea35ef`): a saved report
+selection (dataset/fields/filters/group_by/sort as JSON, never a raw query
+string) for the clause's "save & share templates" -- `is_shared=False`
+(default) is visible only to its creator, `is_shared=True` to everyone at
+the facility; either way only the creator or an admin may edit/delete it
+(404, not 403, for a private template someone else can't even see exists --
+same shape as every other cross-scope lookup in this codebase). NEW page
+`PAGE_REPORTING` (`app/permissions.py` + `add_reporting_to_legacy_role_pages`
+backfill, same pattern as billing/dental/ancillary before it) -- granted to
+clinician/records_officer by default, NOT receptionist/pharmacist (a
+management/clinical tool, not a frontdesk task -- same split dental made).
+`REPORTING_ROLES = (admin, records_officer, clinician)` gates every endpoint
+in `routers/reporting.py`, matching dental's `CHART_ROLES` exactly.
+
+Frontend: NEW `web/src/pages/Reporting.jsx` -- dataset picker, generic
+field-picker/filter/group-by/sort UI rendered entirely off
+`GET /reports/datasets` (no hardcoded field list on the client either),
+results table, PDF/Excel export buttons, saved-template list with
+save/load/delete. Wired into `access.js`/`App.jsx`/`Layout.jsx`/
+`AccessControlTab.jsx` the same way billing was (also fixed in passing:
+`AccessControlTab.jsx`'s `PAGE_LABELS` was missing "billing" since P3.3,
+left the matrix column blank -- one-line fix while already touching that
+line for reporting).
+
+12 new tests (`test_reporting.py`): dataset catalogue shape, page-gate RBAC
+(receptionist 403), facility scoping, unknown-field/unfilterable-field/
+non-groupable-group-by all 422, an enum filter, group-by average-TAT
+correctness (2 lab requests averaging to 20min + 1 xray at 60min, asserted
+exactly), PDF/Excel export (magic-byte checks: `%PDF` / `PK` zip header),
+template private-by-default + cross-user invisibility (404) + owner
+visibility, shared-template visible-but-not-editable-by-non-owner (403 on
+delete) + admin-can-delete, and template save rejects an invalid field
+selection. Full suite 335 → 348 passed, `check_schema.py` PASS (upgrade /
+autogenerate-empty / downgrade round-trip), `ruff check --config
+ci/ruff.toml` clean on every file touched, `oxlint` + `npm run build` clean
+(oxlint caught 2 real issues in the new page -- a ternary used as a
+statement instead of if/else, and a `useMemo` reading a fresh `{}` literal
+every render -- both fixed).
+
+### 2026-09-13 — P3.4/P3.5 review pass
+
+Requested review gauntlet hit a session rate limit mid-flight (7 of the 9
+`/code-review` agents + the voltagent security-auditor pass failed before
+producing output; only the Performance pass completed — no concerns beyond
+a minor note, actioned below). Fell back to a direct manual review rather
+than retry the swarm. Found and fixed 2 real bugs plus 2 hardening items:
+
+- **[Medium, security]** Adding `"consultation_note"` to `_ANNOTATION_MODEL`
+  (this session's earlier P3.4 fix) had no facility check, unlike its
+  siblings. Every other `_ANNOTATION_MODEL` target (condition/medication/
+  allergy/encounter) is already universally cross-facility readable
+  elsewhere in this router, so no write-side check was ever needed for
+  them — but `ConsultationNote` is the one target with genuinely NO
+  cross-facility read anywhere (`consultation.py::get_consultation_note`:
+  "no broader read mode"). Unfixed, any facility could attach a signed
+  "correction" annotation to another facility's private SOAP note despite
+  never being able to read it through its own endpoint. Fixed with a
+  same-facility check in `add_record_annotation` (404, not 403 -- same
+  non-leaking shape as the note's own endpoint) + a regression test
+  (`test_annotation_on_consultation_note_rejects_cross_facility`).
+- **[Low, correctness]** Timeslip times rendered as `09:00:00` instead of
+  `09:00` on the actual certificate -- `datetime.time`'s default `str()`
+  includes seconds, and `fields['time_in']`/`['time_out']` are real `time`
+  objects (schema-typed, not strings). Fixed with explicit `.strftime`;
+  also tightened the test that should have caught it (`"09:00" in text`
+  passed either way -- it's a substring of `"09:00:00"` too).
+- **[Hardening]** A whitespace-only required field (e.g. `diagnosis: "   "`)
+  passed the "is it missing" check as truthy, so a blank line could land on
+  an official document. Added `str_strip_whitespace = True` to
+  `GenerateDocumentRequest`'s Config + a regression test.
+- **[Minor]** The referral dropdown in `PatientList.jsx` fetched with no
+  explicit `limit`, relying on the ancillary endpoint's default of 50 --
+  fine for correctness (bounded, not unbounded) but oversized for a
+  dropdown. Capped to 20.
+
+Also ran the project's actual CI lint gate (`ruff check --config
+ci/ruff.toml`, not ruff's defaults) for the first time on this diff --
+clean on everything touched this session; it surfaced one pre-existing,
+unrelated `F401` in `a7c3f92e0b4d_fk_ondelete_cascade_patient_linked.py`
+(prior session's commit) left alone as out of scope.
+
+2 new regression tests added, full suite re-run clean after every fix
+(335 passed), `check_schema.py` PASS, `oxlint` + `npm run build` clean.
+
+### 2026-09-13 — P3.5 Document generation
+
+Digital Medical Certificate / Referral Letter / Timeslip. New:
+`app/document_generation.py` (reportlab, one fixed-layout A4 page per
+kind -- deliberately not a template engine or HTML-to-PDF stack) +
+`POST /patients/{id}/documents/generate` (`routers/patients.py`). No new
+table: a generated document IS a `ClinicalDocument` row (doc_type
+`medical_certificate`/`referral_letter`/`timeslip`), reusing the existing
+WORM `clarion-documents` bucket and the existing GET .../file /.../
+thumbnail serving + cross-facility visibility rule unchanged -- 3 new
+nullable columns (`signed_by`/`signed_by_name`/`signed_at`, migration
+`b8f527490604`) are the only schema change. The signer's saved signature
+PNG is composited directly onto the PDF page raster rather than kept as a
+separate per-record snapshot object (Encounter/ConsultationNote/
+ClinicalRecordAnnotation's pattern) -- unnecessary here since the whole
+PDF is already the one immutable WORM artifact.
+
+Dependency choice: `reportlab` (pure-Python PDF writer, no host libs to
+provision) over `weasyprint` (present in this dev environment's site-
+packages but NOT a declared dependency -- confirmed non-functional here,
+fails to load its Pango/Cairo/GObject native libs; wrong shape anyway for
+an on-prem/offline-CI deployment target) or a wkhtmltopdf/headless-
+Chromium binary.
+
+`schemas.GenerateDocumentRequest`: one flat, all-Optional field set across
+all 3 doc_types (same style as `ConsultationCompleteRequest`'s SOAP
+fields) with a `model_validator` enforcing which fields are required per
+doc_type, plus a same-facility `rest_to >= rest_from` / `time_out >
+time_in` sanity check. RBAC matches every other clinical-document write
+in this router: admin/records_officer/clinician, receptionist excluded.
+Frontend: `PatientDetail.jsx`'s existing Documents tab gained a
+"Generate MC / Referral / Timeslip" form (same saved-signature-or-draw-one
+convention as the consultation/annotation sign-off modals); generated
+documents show up in the same list a scanned upload would, with a
+"Signed by ... at ..." line the OCR path doesn't have.
+
+7 new tests (`test_document_generation.py`): one happy-path per doc_type
+(asserting the served file is actually a PDF), the 409-no-signature case,
+a missing-required-field 422, the rest_to-before-rest_from 422, and the
+receptionist-403 RBAC case. Full suite 327 → 334, `check_schema.py` PASS
+(upgrade / autogenerate-empty / downgrade round-trip), `oxlint` +
+`npm run build` clean.
+
 ### 2026-09-13 — P3.3 Billing module
 
 The third P3 tender module (+ per-module billing:
@@ -142,6 +299,28 @@ crash — just an unimplemented, currently-aspirational doc claim); the
 frontend has no field for `follow_up_at`/`referral_service_request_id`
 yet, only the five text fields; test coverage is thin (2 tests, no RBAC/
 referral-guard/empty-fields-means-no-row cases).
+
+### 2026-09-13 — P3.4 loose ends closed
+
+Closed the three gaps the review above left open. `"consultation_note"`
+added to both `schemas.ANNOTATION_TARGET_TYPES` and
+`routers/patients.py::_ANNOTATION_MODEL` (one line each) — corrections now
+actually go through `ClinicalRecordAnnotation` the way the model's
+docstring always claimed; deliberately NOT added to
+`_ANNOTATION_FACILITY_SCOPED_TARGETS` (kept consistent with its sibling
+1:1-with-Encounter target — Encounter isn't in that map either, and the
+note's own dedicated read endpoint already has no cross-facility mode at
+all). `PatientList.jsx`'s consultation modal gained a `follow_up_at`
+datetime-local field and a referral `<select>`, populated via the
+existing `listAncillaryRequests({patientId, status: "signed_off"})` call
+filtered client-side to the signing clinician's own facility (mirrors the
+same-facility check `complete_consultation_ticket` enforces server-side,
+so nothing offered in the dropdown can 404 on submit). 3 new tests in
+`test_consultation_notes.py`: follow_up_at/referral persist correctly,
+a cross-facility referral is rejected (the 404 branch had no coverage),
+and the new annotation wiring round-trips through both the write and list
+endpoints. Full suite 324 → 327, `check_schema.py` PASS, `oxlint` +
+`npm run build` clean. P3.4 is now fully done.
 
 ### 2026-09-13 — P3.2 Dental module
 
@@ -785,9 +964,9 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.1 | **Ancillary engine** — `service_catalog_items`/`service_requests`/`service_results`: order → result → sign-off → document, shared across Procedure, Laboratory, X-ray, Physiotherapy | L | –10 | ✅ 2026-09-11 |
 | P3.2 | **Dental module** + tooth-chart UI (FDI notation) | M | | ✅ 2026-09-13 |
 | P3.3 | **Billing module** — charge master, `bills`, `bill_items`, `payments`, `claims`; wire consultation / pharmacy / ancillary fees | L | + per-module billing | ✅ 2026-09-13 |
-| P3.4 | Consultation: structured **SOAP** notes, treatment plan, follow-up scheduling, referral UI | M | –4 | 🔶 in progress (separate session, 2026-09-13) — schema-drift bug fixed on review; annotation-correction wiring + follow_up_at/referral UI + fuller test coverage still open |
-| P3.5 | Document generation — Digital Medical Certificate, Referral Letter, Timeslip (PDF) | M | | |
-| P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | |
+| P3.4 | Consultation: structured **SOAP** notes, treatment plan, follow-up scheduling, referral UI | M | –4 | ✅ 2026-09-13 |
+| P3.5 | Document generation — Digital Medical Certificate, Referral Letter, Timeslip (PDF) | M | | ✅ 2026-09-13 |
+| P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | ✅ 2026-09-13 |
 | P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | |
 | P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | |
 | P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | |

@@ -1,0 +1,274 @@
+"""P3.6 reporting engine (app/reporting_engine.py) + HTTP surface
+(routers/reporting.py): dataset field-picker shape, facility scoping,
+filter/group-by validation, group-by aggregation, PDF/Excel export, saved-
+template visibility/sharing/delete-permission, and the page-gate RBAC layer
+(main.py's require_page_access("reporting")).
+"""
+from datetime import datetime, timedelta, timezone
+
+from app import models
+from conftest import _facility, _make_patient
+
+
+def _service_request(db_session, patient_id, facility, module="laboratory", **overrides):
+    item = models.ServiceCatalogItem(module=module, name=overrides.pop("item_name", "Test Item"), unit_price_cents=1000)
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+    req = models.ServiceRequest(
+        patient_id=patient_id, module=module, catalog_item_id=item.id, source="frontdesk",
+        status=overrides.pop("status", "ordered"), ordering_facility_name=facility,
+        created_at=overrides.pop("created_at", datetime.now(timezone.utc)),
+        **overrides,
+    )
+    db_session.add(req)
+    db_session.commit()
+    db_session.refresh(req)
+    return req
+
+
+def _service_result(db_session, req, performed_at, flag_abnormal=False):
+    res = models.ServiceResult(
+        service_request_id=req.id, patient_id=req.patient_id, performed_at=performed_at,
+        flag_abnormal=flag_abnormal, signed_by_name="Dr Test", facility_name=req.ordering_facility_name,
+    )
+    db_session.add(res)
+    req.status = "signed_off"
+    db_session.commit()
+    return res
+
+
+def _encounter(db_session, patient_id, facility, **overrides):
+    enc = models.Encounter(
+        patient_id=patient_id, facility_name=facility,
+        encounter_type=overrides.pop("encounter_type", "outpatient"),
+        started_at=overrides.pop("started_at", datetime.now(timezone.utc)),
+        **overrides,
+    )
+    db_session.add(enc)
+    db_session.commit()
+    db_session.refresh(enc)
+    return enc
+
+
+# ---------------------------------------------------------------------------
+# Datasets catalogue + page-gate RBAC
+# ---------------------------------------------------------------------------
+
+def test_datasets_catalogue_shape(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.get("/reports/datasets", headers=auth_headers(clinician))
+    assert resp.status_code == 200, resp.text
+    keys = {d["key"] for d in resp.json()}
+    assert keys == {"encounters", "admissions", "ancillary_results", "conditions", "bills"}
+    encounters = next(d for d in resp.json() if d["key"] == "encounters")
+    assert encounters["fields"]["encounter_type"]["type"] == "enum"
+    assert encounters["fields"]["encounter_type"]["groupable"] is True
+    assert "outpatient" in encounters["fields"]["encounter_type"]["options"]
+
+
+def test_reporting_page_not_granted_to_receptionist_by_default(test_client, make_user, auth_headers):
+    facility = _facility()
+    receptionist = make_user(role="receptionist", facility=facility)
+    resp = test_client.get("/reports/datasets", headers=auth_headers(receptionist))
+    assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Facility scoping + filter/field validation
+# ---------------------------------------------------------------------------
+
+def test_run_encounters_is_facility_scoped(test_client, make_user, auth_headers, db_session):
+    facility_a, facility_b = _facility("A"), _facility("B")
+    patient = _make_patient(db_session)
+    _encounter(db_session, patient.id, facility_a, reason="A's visit")
+    _encounter(db_session, patient.id, facility_b, reason="B's visit")
+
+    clinician_a = make_user(role="clinician", facility=facility_a)
+    resp = test_client.post(
+        "/reports/run",
+        json={"dataset": "encounters", "fields": ["reason", "started_at"]},
+        headers=auth_headers(clinician_a),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    reasons = [row[0] for row in body["rows"]]
+    assert reasons == ["A's visit"]
+
+
+def test_run_unknown_field_is_422(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run", json={"dataset": "encounters", "fields": ["not_a_real_field"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 422
+
+
+def test_run_unfilterable_field_in_filters_is_422(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    # `reason` is a selectable field but not marked filterable=True.
+    resp = test_client.post(
+        "/reports/run", json={"dataset": "encounters", "filters": {"reason": "x"}},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 422
+
+
+def test_run_enum_filter(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session)
+    _encounter(db_session, patient.id, facility, encounter_type="outpatient")
+    _encounter(db_session, patient.id, facility, encounter_type="emergency")
+
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run",
+        json={"dataset": "encounters", "fields": ["encounter_type"], "filters": {"encounter_type": ["emergency"]}},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    assert [row[0] for row in resp.json()["rows"]] == ["emergency"]
+
+
+# ---------------------------------------------------------------------------
+# Group-by aggregation (ancillary TAT)
+# ---------------------------------------------------------------------------
+
+def test_group_by_module_computes_avg_tat(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session)
+    now = datetime.now(timezone.utc)
+
+    req1 = _service_request(db_session, patient.id, facility, module="laboratory", created_at=now - timedelta(minutes=30))
+    _service_result(db_session, req1, performed_at=now)
+    req2 = _service_request(db_session, patient.id, facility, module="laboratory", created_at=now - timedelta(minutes=10))
+    _service_result(db_session, req2, performed_at=now)
+    req3 = _service_request(db_session, patient.id, facility, module="xray", created_at=now - timedelta(minutes=60))
+    _service_result(db_session, req3, performed_at=now)
+
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run",
+        json={"dataset": "ancillary_results", "fields": ["module", "tat_minutes"], "group_by": ["module"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    col_keys = [c["key"] for c in body["columns"]]
+    assert col_keys == ["module", "count", "avg_tat_minutes"]
+    by_module = {row[0]: row for row in body["rows"]}
+    assert by_module["laboratory"][1] == 2  # count
+    assert by_module["laboratory"][2] == 20.0  # avg of 30 and 10
+    assert by_module["xray"][1] == 1
+    assert by_module["xray"][2] == 60.0
+
+
+def test_group_by_requires_groupable_field(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    # `reason` is not groupable.
+    resp = test_client.post(
+        "/reports/run", json={"dataset": "encounters", "group_by": ["reason"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+def test_export_pdf_and_excel(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session)
+    _encounter(db_session, patient.id, facility, reason="Export check")
+    clinician = make_user(role="clinician", facility=facility)
+
+    pdf_resp = test_client.post(
+        "/reports/export", json={"dataset": "encounters", "fields": ["reason"], "format": "pdf"},
+        headers=auth_headers(clinician),
+    )
+    assert pdf_resp.status_code == 200, pdf_resp.text
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert pdf_resp.content[:4] == b"%PDF"
+
+    xlsx_resp = test_client.post(
+        "/reports/export", json={"dataset": "encounters", "fields": ["reason"], "format": "excel"},
+        headers=auth_headers(clinician),
+    )
+    assert xlsx_resp.status_code == 200, xlsx_resp.text
+    assert xlsx_resp.content[:2] == b"PK"  # .xlsx is a zip container
+
+    bad_resp = test_client.post(
+        "/reports/export", json={"dataset": "encounters", "format": "csv"},
+        headers=auth_headers(clinician),
+    )
+    assert bad_resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Saved templates: visibility, sharing, delete permission
+# ---------------------------------------------------------------------------
+
+def test_template_private_by_default_then_shared(test_client, make_user, auth_headers):
+    facility = _facility()
+    owner = make_user(role="clinician", facility=facility)
+    other = make_user(role="records_officer", facility=facility)
+
+    create = test_client.post(
+        "/reports/templates",
+        json={"name": "My private view", "dataset": "encounters", "fields": ["reason"]},
+        headers=auth_headers(owner),
+    )
+    assert create.status_code == 201, create.text
+    template_id = create.json()["id"]
+    assert create.json()["editable"] is True
+
+    # Not visible to a different user at the same facility yet.
+    listing = test_client.get("/reports/templates", headers=auth_headers(other)).json()
+    assert template_id not in {t["id"] for t in listing}
+    other_get_delete = test_client.delete(f"/reports/templates/{template_id}", headers=auth_headers(other))
+    assert other_get_delete.status_code == 404  # hidden, not merely forbidden
+
+    # Owner can see it, and it reports non-editable=False correctly for other.
+    own_listing = test_client.get("/reports/templates", headers=auth_headers(owner)).json()
+    assert template_id in {t["id"] for t in own_listing}
+
+
+def test_template_shared_visible_but_only_owner_or_admin_can_delete(test_client, make_user, auth_headers):
+    facility = _facility()
+    owner = make_user(role="clinician", facility=facility)
+    other = make_user(role="records_officer", facility=facility)
+    admin = make_user(role="admin", facility=facility)
+
+    create = test_client.post(
+        "/reports/templates",
+        json={"name": "Shared view", "dataset": "encounters", "fields": ["reason"], "is_shared": True},
+        headers=auth_headers(owner),
+    )
+    template_id = create.json()["id"]
+
+    listing = test_client.get("/reports/templates", headers=auth_headers(other)).json()
+    row = next(t for t in listing if t["id"] == template_id)
+    assert row["editable"] is False
+
+    forbidden = test_client.delete(f"/reports/templates/{template_id}", headers=auth_headers(other))
+    assert forbidden.status_code == 403
+
+    ok = test_client.delete(f"/reports/templates/{template_id}", headers=auth_headers(admin))
+    assert ok.status_code == 204
+
+
+def test_template_invalid_selection_rejected_at_save(test_client, make_user, auth_headers):
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/templates",
+        json={"name": "Bad", "dataset": "encounters", "fields": ["not_a_field"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 422

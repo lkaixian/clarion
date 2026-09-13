@@ -476,6 +476,17 @@ class ClinicalDocument(Base):
     file_bytes = Column(Integer, nullable=True)
     file_mime = Column(String(128), nullable=True)
 
+    # Set only for a GENERATED document (P3.5: Digital Medical Certificate /
+    # Referral Letter / Timeslip -- routers/patients.py::generate_document),
+    # NULL for an uploaded/OCR'd scan. The signer's signature image is baked
+    # directly into the rendered PDF pixels (app/document_generation.py) --
+    # the PDF bytes are themselves the one immutable WORM artifact, so unlike
+    # Encounter/ConsultationNote/ClinicalRecordAnnotation there is no separate
+    # signature_object_key snapshot to keep in sync.
+    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    signed_by_name = Column(String(255), nullable=True)
+    signed_at = Column(TZDateTime, nullable=True)
+
     patient = relationship("Patient", back_populates="documents")
 
 
@@ -2012,3 +2023,32 @@ class RetentionReviewItem(Base):
     __table_args__ = (
         UniqueConstraint("entity_type", "entity_id", name="uq_retention_review_items_entity"),
     )
+
+
+class ReportTemplate(Base):
+    """A saved Custom Report Builder query (: "select fields from
+    all modules; filter/sort/group; save & share templates"). Stores the
+    field/filter/group-by/sort SELECTION only (JSON, validated against
+    app/reporting_engine.py's dataset registry at run time) -- never a raw
+    query string, so a template can never smuggle arbitrary SQL. Facility-
+    local, same as every other reporting/billing row (no cross-facility
+    report sharing).
+
+    `is_shared=False` (default): only visible to `created_by`, e.g. a
+    clinician's personal disease-specific view. `is_shared=True`: visible to
+    every reporting-page user at the facility -- the "share" half of the
+    clause. Either way only the creator (or an admin) may edit/delete it."""
+    __tablename__ = "report_templates"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    dataset = Column(String(64), nullable=False)  # a key in reporting_engine.DATASETS
+    fields = Column(JSON, nullable=False)  # list[str]
+    filters = Column(JSON, nullable=False, default=dict)  # {field: filter_value}
+    group_by = Column(JSON, nullable=True)  # list[str] | None
+    sort = Column(JSON, nullable=True)  # {"field": str, "dir": "asc"|"desc"} | None
+    is_shared = Column(Boolean, nullable=False, default=False)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by_name = Column(String(255), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))

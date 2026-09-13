@@ -36,6 +36,14 @@ python-jose==3.5.0
 python-multipart==0.0.32
 PyYAML==6.0.3
 qrcode==8.2
+# P3.5: generated documents (Digital MC / Referral Letter / Timeslip PDF).
+# Pure-Python PDF writer -- no host libs to provision (unlike weasyprint's
+# Pango/Cairo/GObject or a wkhtmltopdf/headless-Chromium binary), so it
+# needs nothing extra on the on-prem/offline-CI target.
+reportlab==5.0.1
+# P3.6: reporting engine Excel export. Pure-Python.xlsx
+# writer, same on-prem/offline-CI reasoning as reportlab above.
+openpyxl==3.1.5
 requests==2.34.2
 rsa==4.9.1
 six==1.17.0

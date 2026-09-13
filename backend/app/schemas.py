@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Optional, List
+from datetime import datetime, date, time
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from . import permissions
@@ -408,6 +408,83 @@ def _validate_encounter_type(v: Optional[str]) -> Optional[str]:
 # nothing actually validated it server-side until now, so arbitrary strings
 # were silently accepted.
 VALID_DOC_TYPES = {"prescription", "discharge_summary", "lab_report", "imaging"}
+
+# P3.5: the 3 STAFF-GENERATED document kinds (routers/patients.py
+# ::generate_document / app/document_generation.py) -- a deliberately
+# separate set from VALID_DOC_TYPES above rather than folding into it, since
+# these are never uploaded and carry different required fields.
+VALID_GENERATED_DOC_TYPES = {"medical_certificate", "referral_letter", "timeslip"}
+
+
+class GenerateDocumentRequest(BaseModel):
+    """Body for POST /patients/{patient_id}/documents/generate. One flat,
+    all-Optional field set covering all 3 doc_types (same style as
+    ConsultationCompleteRequest's SOAP fields) -- the model_validator below
+    enforces which fields are actually required, keyed on doc_type, so the
+    error names the missing field instead of a generic 422 shape mismatch.
+    Free-text fields are capped short enough that the rendered PDF's fixed
+    single page (app/document_generation.py) never needs to overflow."""
+
+    doc_type: str
+    # Medical certificate
+    diagnosis: Optional[str] = Field(default=None, max_length=500)
+    rest_from: Optional[date] = None
+    rest_to: Optional[date] = None
+    remarks: Optional[str] = Field(default=None, max_length=500)
+    # Referral letter
+    referred_to: Optional[str] = Field(default=None, max_length=255)
+    reason_for_referral: Optional[str] = Field(default=None, max_length=500)
+    clinical_summary: Optional[str] = Field(default=None, max_length=500)
+    urgency: Optional[str] = None  # "routine" | "urgent", defaults to routine
+    # Timeslip
+    visit_date: Optional[date] = None
+    time_in: Optional[time] = None
+    time_out: Optional[time] = None
+    purpose: Optional[str] = Field(default=None, max_length=255)
+    # Save-on-the-spot signature, same convention as every other sign-off
+    # endpoint (ConsultationCompleteRequest / RecordAnnotationCreate).
+    signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)
+
+    class Config:
+        extra = "forbid"
+        # A whitespace-only "diagnosis"/"reason_for_referral"/etc. must not
+        # sneak past the required-field check below as truthy -- strip
+        # first, so "   " normalizes to "" and is correctly caught as missing.
+        str_strip_whitespace = True
+
+    @field_validator("doc_type")
+    @classmethod
+    def _check_doc_type(cls, v: str) -> str:
+        if v not in VALID_GENERATED_DOC_TYPES:
+            raise ValueError(
+                f"doc_type must be one of: {', '.join(sorted(VALID_GENERATED_DOC_TYPES))}"
+            )
+        return v
+
+    @field_validator("urgency")
+    @classmethod
+    def _check_urgency(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("routine", "urgent"):
+            raise ValueError("urgency must be 'routine' or 'urgent'")
+        return v
+
+    @model_validator(mode="after")
+    def _check_required_fields(self) -> "GenerateDocumentRequest":
+        required_by_type = {
+            "medical_certificate": ("diagnosis", "rest_from", "rest_to"),
+            "referral_letter": ("referred_to", "reason_for_referral"),
+            "timeslip": ("visit_date", "time_in", "time_out"),
+        }
+        missing = [f for f in required_by_type[self.doc_type] if not getattr(self, f)]
+        if missing:
+            raise ValueError(
+                f"doc_type '{self.doc_type}' requires: {', '.join(missing)}"
+            )
+        if self.doc_type == "medical_certificate" and self.rest_to < self.rest_from:
+            raise ValueError("rest_to must not be before rest_from")
+        if self.doc_type == "timeslip" and self.time_out <= self.time_in:
+            raise ValueError("time_out must be after time_in")
+        return self
 
 
 class EncounterCreate(BaseModel):
@@ -1903,7 +1980,7 @@ class WaitingRoomDisplayOut(BaseModel):
 # ---------- Clinical-record annotations (append-only sign-off) ----------
 # "service_result" (P3.1) lets a correction be appended to a signed ancillary
 # result (routers/patients.py::_ANNOTATION_MODEL -> models.ServiceResult).
-ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter", "service_result", "dental_chart_entry"}
+ANNOTATION_TARGET_TYPES = {"condition", "medication", "allergy", "encounter", "service_result", "dental_chart_entry", "consultation_note"}
 ANNOTATION_KINDS = {"resolved", "discontinued", "correction", "note"}
 
 
@@ -2600,6 +2677,69 @@ class BillingStatsOut(BaseModel):
     total_outstanding_cents: int
     bills_by_status: dict
     claims_by_status: dict
+
+
+# ---------- P3.6 Reporting (canned reports + Custom Report Builder) ----------
+
+class ReportRunRequest(BaseModel):
+    """Body for POST /reports/run. `dataset` is a key from GET
+    /reports/datasets; `fields`/`filters`/`group_by`/`sort` are all
+    optional and validated against that dataset's own field registry by
+    app/reporting_engine.py (never raw SQL -- see that module's docstring),
+    so there is no enumerable set of valid field names to check here."""
+
+    dataset: str
+    fields: Optional[List[str]] = None
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    group_by: Optional[List[str]] = None
+    sort: Optional[Dict[str, str]] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ReportExportRequest(ReportRunRequest):
+    format: str  # "pdf" | "excel"
+
+    @field_validator("format")
+    @classmethod
+    def _check_format(cls, v: str) -> str:
+        if v not in ("pdf", "excel"):
+            raise ValueError("format must be one of: pdf, excel")
+        return v
+
+
+class ReportTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    dataset: str
+    fields: List[str] = Field(min_length=1)
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    group_by: Optional[List[str]] = None
+    sort: Optional[Dict[str, str]] = None
+    is_shared: bool = False
+
+    class Config:
+        extra = "forbid"
+        str_strip_whitespace = True
+
+
+class ReportTemplateOut(BaseModel):
+    id: str
+    facility_name: str
+    name: str
+    dataset: str
+    fields: List[str]
+    filters: Dict[str, Any]
+    group_by: Optional[List[str]] = None
+    sort: Optional[Dict[str, str]] = None
+    is_shared: bool
+    created_by: str
+    created_by_name: Optional[str] = None
+    created_at: datetime
+    editable: bool  # true if the CALLER (not necessarily the creator) may edit/delete this row
+
+    class Config:
+        from_attributes = True
 
 
 # ---------- AI ----------

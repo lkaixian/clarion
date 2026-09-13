@@ -1,5 +1,6 @@
 import mimetypes
 import re
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -22,6 +23,7 @@ from ..storage import (
     sanitize_filename,
 )
 from ..derived import get_or_make_thumbnail
+from ..document_generation import render_document
 from ..clinical_access import (
     _facility_known_patient_ids_select,
     _hidden_author_facilities,
@@ -939,6 +941,10 @@ def get_document_detail(
         "uploaded_at": str(document.uploaded_at),
         "raw_text": document.raw_text,
         "ai_summary": document.ai_summary,
+        # NULL for an uploaded/OCR'd scan -- only set for a P3.5 GENERATED
+        # document (Digital MC / Referral Letter / Timeslip).
+        "signed_by_name": document.signed_by_name,
+        "signed_at": str(document.signed_at) if document.signed_at else None,
         # Whether the ORIGINAL uploaded file (not just its OCR'd text) can be
         # fetched from GET .../documents/{document_id}/file below. False for
         # any document uploaded before file persistence existed, or if the
@@ -1040,6 +1046,85 @@ def get_document_thumbnail(
     )
 
 
+@router.post("/{patient_id}/documents/generate")
+def generate_document(
+    patient_id: str,
+    payload: schemas.GenerateDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
+):
+    """P3.5: render a signed Digital Medical Certificate /
+    Referral Letter / Timeslip as a PDF and file it as a ClinicalDocument --
+    same WORM bucket, same GET .../file /.../thumbnail serving, same
+    cross-facility visibility rule as an uploaded scan. REQUIRES a saved
+    digital signature, same convention as every other sign-off endpoint
+    here; pass `signature_b64` to save one on the spot.
+
+    Unlike the OCR upload path (POST /ai/digitise), a storage failure here
+    is NOT best-effort -- there is no independently-already-successful OCR
+    result to preserve, so if the PDF can't be persisted the whole issuance
+    is rolled back rather than leaving a document row with no file behind
+    it (same "never store a half-done write" rule imaging.py's medicine-
+    photo path follows)."""
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    if not current_user.signature_object_key and not payload.signature_b64:
+        raise HTTPException(
+            status_code=409,
+            detail="Save your signature in your profile before generating a signed document.",
+        )
+    if payload.signature_b64 and not current_user.signature_object_key:
+        save_signature_from_b64(db, current_user, payload.signature_b64)
+
+    signature_png = None
+    try:
+        signature_png = get_object_store().get_checked(
+            BUCKET_SIGNATURES, current_user.signature_object_key, current_user.signature_sha256
+        )
+    except ObjectStoreError:
+        pass  # rendered without the image rather than blocking issuance over a storage hiccup
+
+    now = datetime.now(timezone.utc)
+    fields = payload.model_dump(exclude={"doc_type", "signature_b64"}, exclude_none=True)
+    pdf_bytes, plain_text = render_document(
+        payload.doc_type, patient, fields,
+        facility_name=current_user.facility,
+        signer_name=current_user.full_name,
+        signer_role=current_user.role,
+        signed_at=now,
+        signature_png=signature_png,
+    )
+
+    safe_name = sanitize_filename(f"{payload.doc_type}_{now.date().isoformat()}.pdf", fallback="document.pdf")
+    doc = models.ClinicalDocument(
+        patient_id=patient_id, doc_type=payload.doc_type, original_filename=safe_name,
+        raw_text=plain_text, uploaded_by_facility=current_user.facility,
+        signed_by=current_user.id, signed_by_name=current_user.full_name, signed_at=now,
+    )
+    db.add(doc)
+    db.flush()  # need doc.id for the object key
+
+    try:
+        meta = get_object_store().put(
+            BUCKET_DOCUMENTS, f"{patient_id}/{doc.id}_{safe_name}", pdf_bytes, mime="application/pdf",
+        )
+    except (OSError, ObjectStoreError):
+        db.rollback()
+        raise HTTPException(status_code=503, detail="Could not store the generated document. Try again.")
+    apply_object_meta(doc, meta, "file")
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    log_access(
+        db, patient_id, current_user.id, current_user.role, "generate_document",
+        detail=payload.doc_type, actor_facility=current_user.facility,
+    )
+    return {"document_id": doc.id, "doc_type": doc.doc_type}
+
+
 # ---------------------------------------------------------------------------
 # Clinical-record annotations (append-only sign-off) -- see
 # models.ClinicalRecordAnnotation + the serializer helpers near the top.
@@ -1051,6 +1136,7 @@ _ANNOTATION_MODEL = {
     "encounter": models.Encounter,
     "service_result": models.ServiceResult,
     "dental_chart_entry": models.DentalChartEntry,
+    "consultation_note": models.ConsultationNote,
 }
 
 # kind -> the one target_type it is valid for (kinds not listed here --
@@ -1146,6 +1232,17 @@ def add_record_annotation(
     model = _ANNOTATION_MODEL[payload.target_type]
     target = db.query(model).filter(model.id == payload.target_id).first()
     if target is None or target.patient_id != patient_id:
+        raise HTTPException(status_code=404, detail="Target record not found for this patient.")
+    # ConsultationNote is the one _ANNOTATION_MODEL target with NO cross-
+    # facility read at all (consultation.py::get_consultation_note: "no
+    # broader read mode"), unlike condition/medication/allergy/encounter,
+    # which are already universally cross-facility readable elsewhere in
+    # this router -- so, unlike those, annotating one must not be open to
+    # every facility either, or a facility with zero read access to the
+    # note could still attach a signed "correction" to it. 404, not 403,
+    # so this never confirms the note's existence to the wrong facility
+    # (same non-leaking shape as get_consultation_note's own 404).
+    if payload.target_type == "consultation_note" and target.facility_name != current_user.facility:
         raise HTTPException(status_code=404, detail="Target record not found for this patient.")
 
     if not current_user.signature_object_key and not payload.signature_b64:

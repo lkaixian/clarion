@@ -41,18 +41,23 @@ PAGE_DENTAL = "dental"
 # ROLES/BILLING_READ_ROLES in routers/billing.py, this page flag is only
 # the coarse first gate (same two-layer pattern ancillary/dental use).
 PAGE_BILLING = "billing"
+# P3.6: the Reporting page (canned reports + Custom Report
+# Builder), backed by app/routers/reporting.py. Management-
+# facing, not a frontdesk task -- unlike billing it does NOT go to
+# receptionist/pharmacist by default (see DEFAULT_ROLE_PAGES below).
+PAGE_REPORTING = "reporting"
 PAGE_ADMIN = "admin"
 
 # Every page key the app knows about. `admin` last -- it's always admin-only.
 ALL_PAGES: List[str] = [
-    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_ADMIN,
+    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING, PAGE_ADMIN,
 ]
 
 # The pages an admin may assign to a non-admin staff role -- the columns of
 # the permissions matrix in the web console. `admin` is intentionally
 # excluded: it is ALWAYS admin-only and NEVER a configurable checkbox.
 CONFIGURABLE_PAGES: List[str] = [
-    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING,
+    PAGE_PATIENTS, PAGE_RECEPTION, PAGE_PHARMACY, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING,
 ]
 
 # The staff roles whose page access is governed by a RolePagePermission row
@@ -88,8 +93,12 @@ DEFAULT_ROLE_PAGES = {
     # reading (clinician "views... fees", pharmacist "pharmacy
     # billing") -- routers/billing.py's BILLING_WRITE_ROLES/
     # BILLING_READ_ROLES do the real per-endpoint split.
-    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
-    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
+    # P3.6: reporting is a clinician/records_officer tool (disease-specific
+    # views, TAT, admission summaries) -- deliberately NOT given to
+    # receptionist/pharmacist by default, same "not every role gets every
+    # page" split as ancillary/dental (an admin can still grant it).
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING, PAGE_REPORTING],
     "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_BILLING],
     "pharmacist": [PAGE_PHARMACY, PAGE_BILLING],
 }
@@ -130,6 +139,17 @@ _PRE_BILLING_ROLE_PAGES = {
     "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL],
     "receptionist": [PAGE_RECEPTION, PAGE_ANCILLARY],
     "pharmacist": [PAGE_PHARMACY],
+}
+
+# The exact OLD stored defaults (per role), before PAGE_REPORTING (P3.6)
+# existed -- see add_reporting_to_legacy_role_pages. Deliberately the
+# pre-reporting (but post-billing) values of DEFAULT_ROLE_PAGES above, same
+# reasoning as every _PRE_* table before it. receptionist/pharmacist aren't
+# listed: PAGE_REPORTING was never added to their default, nothing to
+# backfill there.
+_PRE_REPORTING_ROLE_PAGES = {
+    "clinician": [PAGE_PATIENTS, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
+    "records_officer": [PAGE_PATIENTS, PAGE_RECEPTION, PAGE_ANCILLARY, PAGE_DENTAL, PAGE_BILLING],
 }
 
 # What an admin token resolves to -- every page, including `admin` itself.
@@ -274,6 +294,30 @@ def add_billing_to_legacy_role_pages(db: Session) -> int:
         legacy = _PRE_BILLING_ROLE_PAGES.get(row.role)
         if legacy is not None and list(row.allowed_pages or []) == legacy:
             row.allowed_pages = _canonical_order(legacy + [PAGE_BILLING])
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def add_reporting_to_legacy_role_pages(db: Session) -> int:
+    """One-time, best-effort migration companion to
+    add_billing_to_legacy_role_pages: every stored RolePagePermission row
+    for a role in _PRE_REPORTING_ROLE_PAGES whose allowed_pages is EXACTLY
+    that role's pre-P3.6 default gets PAGE_REPORTING appended. Same
+    only-touch-still-default discipline; idempotent; called from seed.py's
+    idempotent block, not the automatic upgrade path.
+    """
+    changed = 0
+    rows = (
+        db.query(models.RolePagePermission)
+        .filter(models.RolePagePermission.role.in_(list(_PRE_REPORTING_ROLE_PAGES)))
+        .all()
+    )
+    for row in rows:
+        legacy = _PRE_REPORTING_ROLE_PAGES.get(row.role)
+        if legacy is not None and list(row.allowed_pages or []) == legacy:
+            row.allowed_pages = _canonical_order(legacy + [PAGE_REPORTING])
             changed += 1
     if changed:
         db.commit()

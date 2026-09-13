@@ -122,6 +122,7 @@ export default function Layout({ children }) {
           {canSee("ancillary") && <Link to="/ancillary" className="text-blue-200 hover:text-white">Ancillary</Link>}
           {canSee("dental") && <Link to="/dental" className="text-blue-200 hover:text-white">Dental</Link>}
           {canSee("billing") && <Link to="/billing" className="text-blue-200 hover:text-white">Billing</Link>}
+          {canSee("reporting") && <Link to="/reporting" className="text-blue-200 hover:text-white">Reporting</Link>}
           {canSee("pharmacy") && <Link to="/pharmacy" className="text-blue-200 hover:text-white">Pharmacy</Link>}
           {canSee("admin") && <Link to="/admin" className="text-blue-200 hover:text-white">Admin Console</Link>}
           <ClockControl user={user} />

@@ -11,7 +11,10 @@ import { Section } from "./_shared";
 // affect a user the next time they sign in, because the client caches
 // allowed_pages from login / GET /auth/me. Visual weight mirrors
 // BudgetPanel / HospitalSettingsTab rather than the modal-driven CRUD tabs.
-const PAGE_LABELS = { patients: "Patients", reception: "Reception", pharmacy: "Pharmacy", ancillary: "Ancillary", dental: "Dental" };
+// billing/reporting were missing here even after their pages landed (P3.3/
+// P3.6) -- harmless (the column still rendered, just with a blank header),
+// fixed in passing while touching this line for reporting.
+const PAGE_LABELS = { patients: "Patients", reception: "Reception", pharmacy: "Pharmacy", ancillary: "Ancillary", dental: "Dental", billing: "Billing", reporting: "Reporting" };
 
 function roleLabel(role) {
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -56,7 +59,7 @@ export default function AccessControlTab() {
   const columns =
     entries.find((e) => e.editable)?.configurable_pages ||
     entries[0]?.configurable_pages ||
-    ["patients", "reception", "pharmacy", "ancillary", "dental"];
+    ["patients", "reception", "pharmacy", "ancillary", "dental", "billing", "reporting"];
 
   function toggle(role, page) {
     setJustSaved(false);
