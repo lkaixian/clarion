@@ -148,25 +148,21 @@ text + Compliance Matrix, not built as app code).
 
 ## Next up
 
-The **whole P2 security/compliance wave is done** (P2.1–P2.12, landed across
-2026-09-07/08). **P3.1 (Ancillary engine — Procedure/Laboratory/X-ray/
-Physiotherapy, one shared order→result→sign-off→document pipeline) landed
-2026-09-11**: `backend/app/routers/ancillary.py`, models
-`ServiceCatalogItem`/`ServiceRequest`/`ServiceResult`, migration
-`cd1edecdbb37`, the `ancillary` page permission, and
-`web/src/pages/Ancillary.jsx`. The live plan + full narrative is in
-`healthcare/Implementation Roadmap.md` — that changelog is the source of
-truth, this file is not kept blow-by-blow.
+**P2 (security/compliance) and P3.1–P3.8 (every tender module in the P3
+table) are all done**, landed 2026-09-07 through 2026-09-13. **P4.3's core
+landed 2026-09-13**: `backend/app/ai/local_llm.py` (local Ollama client)
+replaced every Claude-API call in `ai/summarize.py`/`ai/nric_ocr.py` —
+**Security Audit C1 is now actually resolved**, not just interim-guarded;
+`ai/_cloud_guard.py` and the `anthropic` dependency are gone. See
+`healthcare/Implementation Roadmap.md`'s changelog for detail — that file
+is the source of truth, this file is not kept blow-by-blow.
 
-Next: the rest of **P3 — tender modules** (`healthcare/Implementation
-Roadmap.md`'s P3 table), roughly in order: P3.2 dental, P3.3 billing (wires
-into P3.1's `unit_price_cents` snapshots), P3.4 SOAP notes, P3.5 document
-generation, P3.6 reporting engine. Per the vault's "Demo priorities" section,
-**P4.3 (on-prem AI, replacing the Claude-API calls — the tender's clause
- differentiator and the thing that actually closes Security Audit
-C1 for real)** is a live alternative track ranked #1 for the competition
-demo — surface the choice rather than assuming P3 order, same as when P2
-finished.
+Next: **P4.3b** (the remaining on-prem-AI *features* on top of that
+plumbing — CDS hint, `faster-whisper` voice→SOAP, NL report narrative; see
+the vault's "Demo priorities" section, ranked #1/#2/#4 for the competition
+demo) **or P3.9/P3.10** (calling-system hardware, mobile booking/vitals) —
+surface the choice rather than assuming order, same discipline as every
+prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

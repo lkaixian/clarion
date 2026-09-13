@@ -573,14 +573,14 @@ async def verify_self_registration_photos(
     front_debug_path = _debug_save_photo("front", front_bytes, front_media_type)
     back_debug_path = _debug_save_photo("back", back_bytes, back_media_type)
 
-    # OCR extraction (see ai/nric_ocr.py) -- LLM mode when ANTHROPIC_API_KEY
-    # is set, Tesseract fallback otherwise. Both paths degrade to
-    # ic_number=None/name=None on any failure rather than raising -- an
-    # extraction failure is ALWAYS treated as a failed verification attempt
-    # below (never as an automatic pass; "unverifiable" must never mean
-    # "verified").
+    # OCR extraction (see ai/nric_ocr.py) -- local-LLM (Ollama vision) mode
+    # by default, Tesseract fallback if Ollama is unreachable. Both paths
+    # degrade to ic_number=None/name=None on any failure rather than
+    # raising -- an extraction failure is ALWAYS treated as a failed
+    # verification attempt below (never as an automatic pass; "unverifiable"
+    # must never mean "verified").
     # extract_nric_fields is fully synchronous and slow -- a Tesseract
-    # subprocess (seconds) or the blocking Anthropic vision client. This is
+    # subprocess (seconds) or the blocking local-LLM HTTP call. This is
     # a public, unauthenticated endpoint, so running the two extractions
     # inline would freeze the event loop (stalling every other in-flight
     # request) for the whole OCR duration. Run both off-thread and in

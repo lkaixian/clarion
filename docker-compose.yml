@@ -106,8 +106,17 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
       MINIO_SECURE: ${MINIO_SECURE:-false}
-      # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_ALLOW_CLOUD_AI come from
+      # On-prem AI (P4.3): Ollama runs on the host (it needs the GPU), not
+      # as a compose service, so "localhost" from inside this container
+      # would be the container itself. host.docker.internal + the
+      # extra_hosts entry below resolve to the host on Linux, Mac and
+      # Windows Docker Desktop alike.
+      CLARION_LOCAL_LLM_URL: ${CLARION_LOCAL_LLM_URL:-http://host.docker.internal:11434}
+      # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_LOCAL_LLM_MODEL,
+      # CLARION_LOCAL_VISION_MODEL, CLARION_DISABLE_LOCAL_AI come from
       # ./.env.docker via env_file -- never inline real secrets here.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - clarion_db:/app/data
       - clarion_uploads:/app/uploads

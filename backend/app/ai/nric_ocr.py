@@ -5,14 +5,16 @@ photographed physical NRIC card against an existing Patient record.
 
 Two modes, same "LLM mode with a deterministic/regex fallback" pattern as
 ai/summarize.py:
-1. LLM mode (when ANTHROPIC_API_KEY is set): sends the image to Claude with
-   a vision content block and a tightly-scoped prompt asking for strict
-   JSON {"ic_number": ..., "name": ...}. Any parse/validation failure is
-   treated as "extraction failed" -- this NEVER raises out to the caller
-   (mirrors summarize.py's `except Exception: return _fallback...` -- a
-   flaky network call or a malformed model response must degrade, not
-   break a public, unauthenticated registration endpoint).
-2. Tesseract fallback (no key configured, or the LLM call/parse failed):
+1. Local-LLM mode (default, on-prem -- P4.3): sends the image to the local
+   Ollama vision model (see ai/local_llm.py) with a tightly-scoped prompt
+   asking for strict JSON {"ic_number": ..., "name": ...}. Nothing leaves
+   the machine. Any parse/validation failure is treated as "extraction
+   failed" -- this NEVER raises out to the caller (mirrors summarize.py's
+   `generate_text(...) or _fallback...` -- an unreachable Ollama server or a
+   malformed model response must degrade, not break a public,
+   unauthenticated registration endpoint).
+2. Tesseract fallback (Ollama/the vision model unavailable, or the LLM
+   call/parse failed):
    adapts ai/ocr.py's `extract_text_from_image` for in-memory bytes (this
    module never writes the uploaded photo to disk -- see
    self_registration.py's verify-photos docstring for why), then applies a
@@ -33,16 +35,14 @@ not confirmed facts about every MyKad print era. See
 self_registration.py's verify-photos docstring for how the back-image
 check is deliberately treated as a SOFT signal because of this.
 """
-import base64
 import io
 import json
 import logging
-import os
 import re
 from datetime import date, datetime
 from typing import Optional
 
-from ._cloud_guard import cloud_ai_enabled
+from .local_llm import generate_vision_text
 
 logger = logging.getLogger("clarion.nric_ocr")
 
@@ -121,54 +121,30 @@ def dob_from_ic_number(ic_number: str) -> Optional[str]:
     return _resolve_dob_from_yymmdd(ic_number[:6])
 
 
-def _extract_via_llm(image_bytes: bytes, media_type: str) -> Optional[dict]:
-    """Returns None on ANY failure (missing key, import error, network
-    error, malformed/unparseable response, ic_number that doesn't reduce to
-    exactly 12 digits) -- never raises. Caller falls back to Tesseract."""
-    # Cloud AI is disabled by default -- sending the photographed MyKad image
-    # to a third-party API breaks the tender and PDPA (this path
-    # is reachable unauthenticated). See _cloud_guard. Caller falls back to
-    # Tesseract.
-    if not cloud_ai_enabled():
-        return None
+_NRIC_PROMPT = (
+    "This image is a photograph of a Malaysian MyKad (national "
+    "identity card), either the front or back side. Extract ONLY "
+    "the following two fields and respond with STRICT JSON and "
+    "nothing else -- no markdown fences, no commentary:\n"
+    '{"ic_number": "<the 12-digit IC number exactly as printed, '
+    'dashes optional>", "name": "<the cardholder full name exactly '
+    'as printed, or an empty string if this side of the card does '
+    'not show a name>"}\n'
+    "If you cannot confidently read a field, use an empty string "
+    "for that field rather than guessing."
+)
 
-    api_key = os.environ["ANTHROPIC_API_KEY"]
+
+def _extract_via_llm(image_bytes: bytes, media_type: str) -> Optional[dict]:
+    """Returns None on ANY failure (Ollama unreachable, model not pulled,
+    malformed/unparseable response, ic_number that doesn't reduce to
+    exactly 12 digits) -- never raises. Caller falls back to Tesseract.
+    `media_type` is accepted for signature stability but unused -- Ollama's
+    vision models take raw base64 image bytes without a MIME hint."""
+    raw_text = generate_vision_text(_NRIC_PROMPT, image_bytes, max_tokens=200)
+    if raw_text is None:
+        return None
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        b64_data = base64.b64encode(image_bytes).decode("ascii")
-        prompt = (
-            "This image is a photograph of a Malaysian MyKad (national "
-            "identity card), either the front or back side. Extract ONLY "
-            "the following two fields and respond with STRICT JSON and "
-            "nothing else -- no markdown fences, no commentary:\n"
-            '{"ic_number": "<the 12-digit IC number exactly as printed, '
-            'dashes optional>", "name": "<the cardholder full name exactly '
-            'as printed, or an empty string if this side of the card does '
-            'not show a name>"}\n'
-            "If you cannot confidently read a field, use an empty string "
-            "for that field rather than guessing."
-        )
-        resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=200,
-            temperature=0,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64_data,
-                        },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-        )
-        raw_text = resp.content[0].text.strip()
         # Defensive: some models wrap JSON in a markdown code fence despite
         # being asked not to -- strip a leading/trailing ``` block if present
         # rather than failing outright on an otherwise-good response.
@@ -190,10 +166,9 @@ def _extract_via_llm(image_bytes: bytes, media_type: str) -> Optional[dict]:
             "name_confidence": "high" if name else "low",
         }
     except Exception:
-        # Never let a network/API hiccup or a malformed response break a
-        # public registration endpoint -- degrade to Tesseract instead
-        # (same discipline as ai/summarize.py::generate_handover_brief).
-        logger.exception("nric_ocr: LLM extraction failed, falling back to Tesseract")
+        # Malformed/unparseable model response -- degrade to Tesseract
+        # instead (same discipline as ai/summarize.py::generate_handover_brief).
+        logger.exception("nric_ocr: local-LLM response unparseable, falling back to Tesseract")
         return None
 
 
@@ -274,9 +249,9 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict:
 
 
 def extract_nric_fields(image_bytes: bytes, media_type: str = "image/jpeg") -> dict:
-    """Public entry point. Tries the LLM path first (only if
-    ANTHROPIC_API_KEY is set); falls back to Tesseract on no-key or any LLM
-    failure. Always returns a dict with at least `ic_number` (Optional[str],
+    """Public entry point. Tries the local-LLM path first; falls back to
+    Tesseract if Ollama is unreachable or the LLM extraction fails. Always
+    returns a dict with at least `ic_number` (Optional[str],
     normalized to bare digits, or None if extraction failed) and `name`
     (Optional[str]) -- never raises. `method` tells the caller which path
     produced the result ("llm" or "tesseract"), and `name_confidence`

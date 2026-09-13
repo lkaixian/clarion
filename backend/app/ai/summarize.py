@@ -2,18 +2,16 @@
 Clinical Summarisation Agent.
 
 Two modes:
-1. LLM mode (recommended once you have an API key): set ANTHROPIC_API_KEY
-   in your environment and this will call Claude to generate a natural
-   handover brief from the structured record.
-2. Deterministic fallback (default, no key required): builds a clean,
-   readable summary directly from the structured FHIR-lite data. This is
-   what will run out-of-the-box for your demo and judging — it is fully
-   reliable and needs no external service, which matters if Wi-Fi at the
-   symposium venue is unreliable.
+1. Local-LLM mode (default, on-prem -- P4.3, the tender): asks
+   the local Ollama server (see ai/local_llm.py) to generate a natural
+   handover brief from the structured record. Nothing leaves the machine.
+2. Deterministic fallback (used automatically if Ollama isn't running/the
+   model isn't pulled): builds a clean, readable summary directly from the
+   structured FHIR-lite data. This is what runs out-of-the-box on a demo
+   laptop with no GPU/Ollama configured yet -- fully reliable, no external
+   service needed.
 """
-import os
-
-from ._cloud_guard import cloud_ai_enabled
+from .local_llm import generate_text
 
 
 def _fallback_summary(patient: dict) -> str:
@@ -51,28 +49,11 @@ def _fallback_summary(patient: dict) -> str:
 
 
 def generate_handover_brief(patient: dict) -> str:
-    # Cloud AI is disabled by default -- posting the full patient record to a
-    # third-party API breaks the tender and PDPA. See _cloud_guard.
-    if not cloud_ai_enabled():
-        return _fallback_summary(patient)
-
-    api_key = os.environ["ANTHROPIC_API_KEY"]
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        prompt = (
-            "You are a clinical handover assistant. Given this structured "
-            "patient record (JSON), write a concise 4-6 sentence handover "
-            "brief for a clinician meeting this patient for the first time. "
-            "Plain clinical language, no speculation beyond the data given.\n\n"
-            f"{patient}"
-        )
-        resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.content[0].text
-    except Exception:
-        # Never let a network/API hiccup break the demo — fall back silently.
-        return _fallback_summary(patient)
+    prompt = (
+        "You are a clinical handover assistant. Given this structured "
+        "patient record (JSON), write a concise 4-6 sentence handover "
+        "brief for a clinician meeting this patient for the first time. "
+        "Plain clinical language, no speculation beyond the data given.\n\n"
+        f"{patient}"
+    )
+    return generate_text(prompt, max_tokens=400) or _fallback_summary(patient)

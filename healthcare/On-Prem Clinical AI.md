@@ -12,9 +12,15 @@ cloud APIs**, data sovereignty + offline continuity, "federated model updating",
 "proprietary or licensed AI inference engine (e.g. **ALi.ai** or equivalent)" in a
 CI4/Linux environment.
 
-> [!danger] Current CLARION violates this
-> `ai/summarize.py`, `ai/nric_ocr.py`, `ai/interactions.py` all call cloud services
-> (Anthropic, US NIH). See [[Security Audit#C1]]. Must be replaced before any demo.
+> [!success] Resolved 2026-09-13 (P4.3)
+> `ai/summarize.py` and `ai/nric_ocr.py` now call `ai/local_llm.py` (local Ollama, see
+> `docs/deployment.md`) instead of Anthropic — both degrade to their existing
+> deterministic/Tesseract fallback automatically if Ollama isn't running. See
+> [[Security Audit#C1]]. `ai/interactions.py`'s NIH RxNav/DailyMed calls are a separate,
+> narrower dependency (drug-identity lookup, not an AI cloud API) — still open, P4.4.
+> **Not yet built:** the CDS hint, medication-safety rule engine wiring, voice→SOAP, and
+> NL report narrative features below — the local-LLM *plumbing* is done, the specific
+> clinical *features* are still to build.
 
 ## "ALi.ai" — what it actually is
 **MAIA Sdn Bhd** ("Medical Augmented Intelligence Automation"), Cyberjaya — a

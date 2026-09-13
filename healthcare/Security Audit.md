@@ -26,11 +26,16 @@ git (search the commit log for the finding id or the `P2.x` slug) and the [[Impl
 Claude vision from an **unauthenticated** caller (`self_registration.py:493`);
 `ai/interactions.py:194-209` sends drug names to NIH. Blocks,
 (PDPA cross-border), (OWASP A10).
-🟡 **INTERIM 2026-08-30 (P0.4).** All Anthropic paths gated on `cloud_ai_enabled()` —
-disabled unless BOTH `ANTHROPIC_API_KEY` and `CLARION_ALLOW_CLOUD_AI=1` are set; the
-app falls back to local/offline handling by default. **Full fix = P4.3** (on-prem AI
-engine, replace every Claude-API call — [[On-Prem Clinical AI]]). NIH RxNav/DailyMed
-calls = P4.4.
+✅ **RESOLVED 2026-09-13 (P4.3).** Every Anthropic call site removed — `anthropic`
+dropped from `requirements.txt`, `ai/_cloud_guard.py` deleted (nothing left to guard).
+`ai/summarize.py` and `ai/nric_ocr.py` now call `ai/local_llm.py`, a local Ollama
+server (`http://localhost:11434` by default, on-prem, opt-**out** not opt-in since
+nothing leaves the machine); both degrade automatically to their existing
+deterministic/Tesseract fallback if Ollama isn't running. See [[On-Prem Clinical AI]]
+and `docs/deployment.md`'s "On-prem AI engine" section for the one-time `ollama pull`
+host setup. NIH RxNav/DailyMed calls (`ai/interactions.py`) are a separate, narrower
+dependency (drug-identity lookup, not an AI cloud API) — offline path still tracked
+as P4.4.
 
 ---
 

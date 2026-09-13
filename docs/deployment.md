@@ -624,6 +624,35 @@ mean "log out everywhere."
 
 ---
 
+## On-prem AI engine (P4.3, the tender)
+
+`backend/app/ai/local_llm.py` replaced every third-party AI call (the old
+Anthropic-backed handover summary and MyKad OCR paths — Security Audit
+finding **C1**, now resolved) with a call to a **local Ollama server**.
+Nothing leaves the machine.
+
+**One-time host setup** (not part of the container image — Ollama needs the
+GPU directly):
+```bash
+# Install: https://ollama.com/download
+ollama pull llama3.2   # text: handover brief
+ollama pull llava      # vision: MyKad OCR
+ollama serve           # or run as a system service; listens on :11434
+```
+
+- If Ollama isn't running or a model isn't pulled, both features degrade
+  automatically to their existing deterministic/Tesseract fallback — a demo
+  laptop with no GPU still works, just without the LLM-quality output.
+- `CLARION_LOCAL_LLM_URL` (compose default `http://host.docker.internal:11434`,
+  since Ollama runs on the host, not as a compose service),
+  `CLARION_LOCAL_LLM_MODEL` / `CLARION_LOCAL_VISION_MODEL` (model names),
+  `CLARION_DISABLE_LOCAL_AI` (force every feature to its fallback, e.g. no
+  GPU available on stage) — see `backend/.env.example`.
+- Swapping models (a smaller quantised one for a CPU-only demo box, a larger
+  one for real deployment) is a config change only, no code change.
+
+---
+
 ## What is wired now vs. TODO
 
 ### Wired now

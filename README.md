@@ -94,7 +94,7 @@ Full setup (SDK paths, API-base overrides, release signing) is in
 
 | Set | Enables | Without it |
 |---|---|---|
-| `ANTHROPIC_API_KEY` + `CLARION_ALLOW_CLOUD_AI=1` | cloud LLM handover summaries / MyKad OCR | deterministic local fallback (the tender forbids cloud AI for real — keep it **off** for the demo) |
+| local Ollama server (`ollama pull llama3.2 llava`) | on-prem LLM handover summaries / MyKad OCR | deterministic/Tesseract local fallback — nothing calls out, so this is safe to leave unset (`CLARION_DISABLE_LOCAL_AI=1` forces the fallback explicitly) |
 | `tesseract-ocr` + `pytesseract` | offline NRIC OCR for self-registration | the photo step fails closed |
 | `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` | real OTP emails (password reset, self-reg) | OTPs generated + logged server-side, not sent |
 | `LDAP_ENABLED=true` (+ `LDAP_*`) | Active Directory as a second auth provider | local password accounts only |

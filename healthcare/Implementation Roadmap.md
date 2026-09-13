@@ -23,6 +23,56 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-13 — P4.3 On-prem AI engine, core (Security Audit C1 resolved)
+
+Replaced every Claude-API call with a local Ollama client. NEW
+`backend/app/ai/local_llm.py`: thin `httpx` wrapper around Ollama's
+`/api/generate` (text + vision via base64 `images`), never raises — any
+failure (server down, model not pulled, timeout, bad JSON) returns `None`
+so callers fall back exactly as before. Opt-**out**, not opt-in
+(`CLARION_DISABLE_LOCAL_AI`) — unlike the old cloud guard, nothing here
+ever leaves the machine, so there's no data-sovereignty reason to default
+it off.
+
+`ai/summarize.py` and `ai/nric_ocr.py` rewired onto it; `ai/_cloud_guard.py`
+**deleted** (nothing left to guard); `anthropic` dropped from
+`requirements.txt`. `docker-compose.yml` backend service points at
+`host.docker.internal:11434` by default (Ollama needs the GPU directly, so
+it runs on the host, not as a compose service) + `extra_hosts` for
+Linux/Mac/Windows parity. `.env.example` / `.env.docker.example` swapped
+the "Cloud AI opt-in" block for local-model config. `docs/deployment.md`
+gained an "On-prem AI engine" section with the one-time `ollama pull`
+host-setup steps. Stale `_cloud_guard.py` cross-references fixed in
+`ldap_auth.py` / `schemas.py` / `self_registration.py` comments.
+
+**voltagent security-auditor review: clean (no Critical/High/Medium).** One
+Low/informational finding actioned: `CLARION_LOCAL_LLM_URL` had no runtime
+check that it actually points at an on-prem host — not attacker-reachable
+today, but a copy-paste deploy mistake (pasting a cloud/tunnel URL into
+`.env`) would have silently reintroduced C1 with no error. Fixed:
+`local_llm.py::_is_on_prem_host` resolves the configured host and refuses
+(logs + treats as unavailable, same never-raise contract) anything that
+isn't loopback/private/link-local. Everything else confirmed clean: no
+SSRF (URL isn't attacker-influenced), size caps + rate limiting + off-thread
+execution already in place on the unauthenticated NRIC-OCR path, no cloud-AI
+env var reintroduced anywhere, `docker-compose.yml`'s `host.docker.internal`
+wiring doesn't widen the backend's network exposure.
+
+Verified: NEW `backend/tests/test_local_llm.py` (11 tests — disabled flag
+and a non-private host both make zero network calls, a real closed loopback
+port degrades to `None` without raising, happy-path text/vision via
+monkeypatched `httpx.post`, vision payload carries base64 with no `data:`
+prefix, `summarize.py`/`nric_ocr.py` both use the local result when present
+and fall back correctly when it's `None` or unparseable); full `pytest`
+suite still green (369→370); `pyflakes` clean on every touched file.
+
+**Not done here (tracked as P4.3b):** CDS hint, medication-safety alert
+wiring, `faster-whisper` voice→SOAP, NL report narrative — the local-LLM
+plumbing is in place, those are separate net-new features on top of it,
+scoped out of this pass per user direction (surfaced as a choice — the
+demo-priority ranking in this file put the core cloud-removal ahead of the
+new-feature work).
+
 ### 2026-09-13 — P3.8 Management Dashboard
 
 : summarised operational data (12.1.1), patient-flow prediction
@@ -1075,16 +1125,17 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | |
 
 ## P4 — Interoperability, AI & imaging
-| # | Task | Size | Clause |
-|---|---|---|---|
-| P4.1 | **FHIR-readiness migrations** — coding triples, `resource_identifiers`, resource tables, terminology seeds, backfill queue | L | **** → [[FHIR Schema Readiness]] |
-| P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | |
-| P4.3 | **On-prem AI engine** — replace ALL Claude-API calls; local LLM (Ollama/vLLM) + `faster-whisper`; CDS hint, medication-safety alert, voice→SOAP, NL reports | L | **–17** → [[On-Prem Clinical AI]] |
-| P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | |
-| P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 |
-| P4.6 | Predictive analytics + population-health stratification in Reporting | M | |
-| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] |
-| P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] |
+| # | Task | Size | Clause | Status |
+|---|---|---|---|---|
+| P4.1 | **FHIR-readiness migrations** — coding triples, `resource_identifiers`, resource tables, terminology seeds, backfill queue | L | **** → [[FHIR Schema Readiness]] | — |
+| P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | — |
+| P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
+| P4.3b | On-prem AI, remaining features — CDS hint (differential dx / contraindication flags), `faster-whisper` voice→SOAP, NL report narrative, all on top of P4.3's local-LLM plumbing | L |, → [[On-Prem Clinical AI]] | — |
+| P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | — |
+| P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
+| P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
+| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | — |
+| P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |
 
 ## P5 — Ops & handover
 | # | Task | Size | Clause |
