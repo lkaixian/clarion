@@ -8,7 +8,7 @@ from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
 from ..appointments import compute_reminder_offsets
-from .patients import _patient_known_to_facility
+from ..clinical_access import _patient_known_to_facility
 
 # Roles allowed to read/write another person's appointments. Matches the
 # create/update/reschedule gate below -- an appointment's reason /

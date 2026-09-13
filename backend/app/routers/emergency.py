@@ -12,7 +12,7 @@ from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
 from ..rate_limit import limiter
-from .patients import _patient_present_at
+from ..clinical_access import _patient_present_at
 
 router = APIRouter(prefix="/emergency", tags=["emergency"])
 

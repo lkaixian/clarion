@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from .. import auth, models, schemas
 from ..audit import log_access
+from ..clinical_access import _facility_known_patient_ids_select, _patient_known_to_facility
 from ..database import get_db
 
 router = APIRouter(prefix="/pdpa", tags=["pdpa"])
@@ -50,7 +51,6 @@ def _staff_may_reach_patient(db: Session, current_user: models.User, patient_id:
     P2.2 single-patient scope check."""
     if not current_user.facility:            # platform admin
         return True
-    from .patients import _patient_known_to_facility
     return _patient_known_to_facility(db, patient_id, current_user.facility)
 
 
@@ -219,7 +219,6 @@ def list_requests(
             # portal-filed request (patient with no facility relationship
             # anywhere) is NOT broadcast -- it surfaces only to a platform
             # admin (or via break_glass). `assign` stamps a facility.
-            from .patients import _facility_known_patient_ids_select
             known = _facility_known_patient_ids_select(current_user.facility)
             q = q.filter(
                 (models.DataSubjectRequest.facility_name == current_user.facility)

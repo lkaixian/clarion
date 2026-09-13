@@ -37,6 +37,7 @@ from .. import models, schemas, auth, permissions
 from ..database import get_db
 from ..audit import log_access
 from ..appointments import compute_reminder_offsets
+from ..clinical_access import _facility_known_patient_ids_select
 from ..inventory import (
     _get_inventory_item_or_404,
     _serialize_inventory_item,
@@ -1985,7 +1986,6 @@ _DQ_CROSS_FACILITY_RULES = ("patient_probable_duplicate",)
 def _dq_facility_filter(current_user: models.User):
     """The WHERE clause that scopes DataQualityAlert to `current_user`'s
     facility, or None if the caller may see everything (platform admin)."""
-    from .patients import _facility_known_patient_ids_select
 
     if not current_user.facility:
         return None

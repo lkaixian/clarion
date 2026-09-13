@@ -197,6 +197,21 @@ default with a warning in the container log.
   one to the console exactly once (never logged to a file). Capture that
   output from the `docker compose exec` run and hand it off through a
   secure channel — it will not be shown again.
+- **Role permissions on upgrade.** `alembic upgrade head` only carries schema
+  DDL — it never touches `RolePagePermission` rows. Whenever a code change
+  adds a new page to `backend/app/permissions.py::DEFAULT_ROLE_PAGES` (e.g.
+  P3.1 added `ancillary`, P3.2 added `dental`, P3.3 added `billing`), an
+  already-live facility's existing `RolePagePermission` row is created
+  lazily on first request and is **not** automatically backfilled with the
+  new page — only a `seed.py`-style backfill call (e.g.
+  `add_ancillary_to_legacy_role_pages()` / `add_dental_to_legacy_role_pages()`
+  / `add_billing_to_legacy_role_pages()`) does that, and `seed.py` itself is
+  first-run-only (see "Demo data" above). On a real upgrade, either re-run
+  the relevant backfill function once against the live DB, or have an admin
+  enable the new page per facility via the Access Control admin tab —
+  otherwise clinician/records_officer/receptionist/pharmacist accounts will
+  see no menu entry for the new page and get 403s calling its API until one
+  of those happens.
 
 ---
 

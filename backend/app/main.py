@@ -60,7 +60,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, dental, billing
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -384,6 +384,18 @@ app.include_router(pdpa.router)
 app.include_router(
     ancillary.router,
     dependencies=[Depends(auth.require_page_access("ancillary"))],
+)
+# Dental module (P3.2): the tooth-chart engine (routers/dental.py) --
+# everything else the clause asks for reuses an existing router unchanged.
+app.include_router(
+    dental.router,
+    dependencies=[Depends(auth.require_page_access("dental"))],
+)
+# Billing (P3.3): charge master / bills / payments / claims
+# (routers/billing.py) -- facility-local only, no cross-facility read mode.
+app.include_router(
+    billing.router,
+    dependencies=[Depends(auth.require_page_access("billing"))],
 )
 
 
