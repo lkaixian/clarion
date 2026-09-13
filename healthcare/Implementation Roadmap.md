@@ -95,10 +95,57 @@ antigravity (agy) per this project's usual split, but agy's `--yolo`
 (needed for file-write permission) was blocked outright by the harness's
 own safety classifier this session — built directly by Claude instead.
 
-Next: voltagent security-auditor + flutter-expert review pass (in
-progress as this entry is written); update this section's verdict once
-that lands. Compliance Matrix / Module Coverage already updated to
-reflect P3.9=Demo-on-hardware / P3.10=Have.
+**voltagent security-auditor + flutter-expert review actioned (2 Medium/
+High-equivalent + 1 Critical, all fixed):**
+- **[Critical, flutter-expert]** `compute_available_slots` returned NAIVE
+  UTC datetimes; Pydantic serializes those with no 'Z'/offset suffix, which
+  Dart's `DateTime.parse` silently mis-parses as LOCAL time -- chased
+  through `ApiClient.selfBookAppointment`'s `.toUtc()` call, this produced
+  a real double-shift that made self-booking 409 on essentially every
+  attempt from an actual Malaysia-timezone device. Fixed by returning
+  AWARE UTC datetimes from `compute_available_slots` instead (confirmed
+  Pydantic then emits a literal `Z` suffix, which Dart parses correctly
+  with zero Dart-side changes needed) -- `_to_aware_utc` (renamed from
+  `_naive_utc`) now converts rather than strips tzinfo, fixing the
+  reviewer's related minor observation about a genuinely-offset client
+  payload too.
+- **[Medium, security-auditor]** `self_book_appointment`'s slot check was
+  read-then-write with no DB-level guard -- the same concurrent-threadpool
+  race `models.QueueTicket`'s own docstring warns about. Fixed with
+  `Appointment.active_clinician_slot_key` + `uq_appointments_active_
+  clinician_slot`, the identical VIRTUAL-generated-column pattern P1.3's
+  RoomClaim already established (migration `aa914ee7cc2f`), plus a
+  catch-`IntegrityError`-and-409 in the router (no retry-with-a-different-
+  slot, unlike ticket numbering -- the patient asked for one specific time).
+- **[Low-Medium, security-auditor]** `printing.py`'s ESC/POS text encoder
+  passed ASCII control bytes -- including its own ESC/GS command-introducer
+  bytes -- through unfiltered from `QueueTicket.department`/`HospitalSetting.
+  display_name`, letting a receptionist/admin inject raw printer commands
+  (cash-drawer-open, paper-waste DoS, lock-ups) into every subsequently
+  printed ticket. Fixed by stripping `\x00-\x1f`/`\x7f` in `_escpos_line`,
+  the one place every text field funnels through.
+- **[High, flutter-expert]** `book_appointment_screen.dart` had a
+  stale-response race (no guard against an older facility/slot fetch
+  landing after a newer one) and the department/clinician dropdowns
+  cleared `_slots` on change without ever re-fetching, leaving the slot
+  list stuck empty. Fixed with a monotonic per-request-type id checked
+  before each `setState`, plus calling `_loadSlots()` from both `onChanged`
+  handlers.
+- Also actioned: `reminders_provider.dart::syncAnnouncements` fetched
+  per-facility sequentially (`Future.wait` now), and a `ponytail:` comment
+  on `home_screen.dart`'s un-cleaned share-temp-file (deliberately not
+  auto-deleted -- the OS share sheet can still be reading it after
+  `shareXFiles` returns).
+
+Both reviews' remaining findings were reviewed and found to already be
+correctly handled (access control on the new endpoints, cross-facility
+visibility, announcement/facility scoping, `_BulletLine`'s additive params,
+`mounted` checks, `DropdownButtonFormField.initialValue` re-sync) -- see
+the review transcripts for detail if revisiting this wave. Regression
+tests added to `test_p3_9_p3_10.py` (21 total now) for every backend fix;
+`flutter analyze` re-run clean after the Dart fixes. Compliance Matrix /
+Module Coverage already updated to reflect P3.9=Demo-on-hardware /
+P3.10=Have.
 
 ### 2026-09-13 — P4.3c Voice→SOAP (demo priority #2)
 
@@ -1323,8 +1370,8 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P3.6 | **Reporting engine** + **Custom Report Builder** (field picker across modules, filter/group, template store) | L | | ✅ 2026-09-13 |
 | P3.7 | **MOH / statutory reporting** — notifiable disease (e-Notifikasi format), HMIS returns, anonymization | M | | ✅ 2026-09-13 |
 | P3.8 | **Management Dashboard** — KPI view + patient-flow prediction (EWMA/GBM) + operational health score | M | | ✅ 2026-09-13 |
-| P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | ✅ 2026-09-14 (review pending) |
-| P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | ✅ 2026-09-14 (review pending) |
+| P3.9 | Calling-system hardware — ticket printer (ESC/POS), TV display **audio** + branding | S | –3 | ✅ 2026-09-14 (reviewed, fixes landed) |
+| P3.10 | Mobile: slot booking by dept/doctor, vitals view, PDF visit summary, server push, announcements | M | –5 | ✅ 2026-09-14 (reviewed, fixes landed) |
 
 ## P4 — Interoperability, AI & imaging
 | # | Task | Size | Clause | Status |

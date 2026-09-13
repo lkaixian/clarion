@@ -334,15 +334,27 @@ class RemindersProvider extends ChangeNotifier {
   /// anything else in this provider" rule as every other sync method here).
   Future<void> syncAnnouncements(List<String> facilityNames, ApiClient api) async {
     if (facilityNames.isEmpty) return;
-    final byId = <String, Announcement>{};
-    for (final facility in facilityNames) {
-      try {
-        for (final a in await api.getAnnouncements(facility)) {
-          byId[a.id] = a;
+    // Code-review follow-up (voltagent flutter-expert, P3.9/P3.10 wave):
+    // fetched sequentially before -- one facility at a time -- so total
+    // load time scaled linearly with how many facilities a patient has
+    // been seen at. Future.wait fires every request concurrently instead;
+    // a per-facility failure still can't abort the others (each Future
+    // below catches its own error and resolves to an empty list rather
+    // than letting Future.wait fail fast on the first rejection).
+    final perFacility = await Future.wait(
+      facilityNames.map((facility) async {
+        try {
+          return await api.getAnnouncements(facility);
+        } catch (e) {
+          debugPrint('RemindersProvider: failed to fetch announcements for $facility ($e)');
+          return const <Announcement>[];
         }
-      } catch (e) {
-        debugPrint('RemindersProvider: failed to fetch announcements for $facility ($e)');
-        // Keep going for the other facilities rather than aborting entirely.
+      }),
+    );
+    final byId = <String, Announcement>{};
+    for (final list in perFacility) {
+      for (final a in list) {
+        byId[a.id] = a;
       }
     }
     _announcements = byId.values.toList()

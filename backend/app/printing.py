@@ -13,6 +13,7 @@ P1.9 made for the TLS certificate pair -- see docs/deployment.md.
 from __future__ import annotations
 
 import io
+import re
 from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFont
@@ -22,12 +23,27 @@ import qrcode
 _ESC = b"\x1b"
 _GS = b"\x1d"
 
+# Security review follow-up (2026-09-14, P3.9/P3.10 wave): every text field
+# that reaches _escpos_line is staff/admin-supplied free text (QueueTicket.
+# department, HospitalSetting.display_name, ...) with no control-character
+# validation at the schema layer. `str.encode("ascii", errors="replace")`
+# only substitutes NON-ascii bytes -- ASCII control bytes, including 0x1b/
+# 0x1d (this module's own ESC/GS command-introducer bytes), passed straight
+# through unfiltered, letting a low-privilege receptionist/admin account
+# inject arbitrary ESC/POS commands (cash-drawer-open opcodes, repeated
+# cut/feed paper-waste, malformed sequences that lock up the printer) into
+# every ticket subsequently printed for that facility. Stripped here, the
+# one place every text field funnels through, rather than re-validating at
+# every call site.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
 
 def _escpos_line(text: str) -> bytes:
     # Plain CP437-ish ASCII -- most thermal printers' default code page.
     # Non-ASCII characters (rare in a facility name/room label here) become
     # "?" rather than raising or mojibake-ing on the receipt.
-    return text.encode("ascii", errors="replace") + b"\n"
+    safe = _CONTROL_CHARS_RE.sub("", text)
+    return safe.encode("ascii", errors="replace") + b"\n"
 
 
 def build_ticket_escpos(

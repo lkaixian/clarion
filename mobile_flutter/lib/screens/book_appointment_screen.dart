@@ -48,6 +48,18 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   bool _booking = false;
   String? _error;
 
+  // Code-review follow-up (voltagent flutter-expert, P3.9/P3.10 wave):
+  // both _onFacilityResolved and _loadSlots fire an async call and then
+  // unconditionally applied whatever came back, with no check that the
+  // request's parameters still matched current state -- two in-flight
+  // requests (e.g. the user picks two dates in quick succession before the
+  // first GET resolves) could race, and an older response landing last
+  // would silently clobber newer, correct state. A monotonic request id
+  // per request TYPE, bumped right before firing and checked right before
+  // applying, makes a stale response a no-op instead.
+  int _optionsRequestId = 0;
+  int _slotsRequestId = 0;
+
   @override
   void dispose() {
     _manualFacilityController.dispose();
@@ -61,6 +73,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   }
 
   Future<void> _onFacilityResolved(String facility) async {
+    final requestId = ++_optionsRequestId;
     setState(() {
       _facility = facility;
       _options = null;
@@ -73,16 +86,16 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     });
     try {
       final options = await context.read<ApiClient>().getBookingOptions(facility);
-      if (!mounted) return;
+      if (!mounted || requestId != _optionsRequestId) return; // superseded by a newer facility pick
       setState(() => _options = options);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _optionsRequestId) return;
       // Booking options are optional polish (department/doctor narrowing) —
       // a facility with none configured, or a lookup failure, still lets
       // the patient book "any doctor" by date alone.
       setState(() => _options = const BookingOptions(departments: [], clinicians: []));
     } finally {
-      if (mounted) setState(() => _loadingOptions = false);
+      if (mounted && requestId == _optionsRequestId) setState(() => _loadingOptions = false);
     }
   }
 
@@ -114,6 +127,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     final facility = _facility;
     final date = _date;
     if (facility == null || date == null) return;
+    final requestId = ++_slotsRequestId;
     setState(() {
       _loadingSlots = true;
       _error = null;
@@ -125,14 +139,14 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         department: _department,
         clinicianId: _clinicianId,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _slotsRequestId) return; // superseded by a newer date/filter change
       setState(() => _slots = slots);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _slotsRequestId) return;
       final l10n = AppLocalizations.of(context);
       setState(() => _error = e is ApiException ? e.message : l10n.bookAppointmentGenericError);
     } finally {
-      if (mounted) setState(() => _loadingSlots = false);
+      if (mounted && requestId == _slotsRequestId) setState(() => _loadingSlots = false);
     }
   }
 
@@ -254,11 +268,17 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                   (d) => DropdownMenuItem(value: d, child: Text(d)),
                 ),
               ],
-              onChanged: (value) => setState(() {
-                _department = value;
-                _clinicianId = null;
-                _slots = null;
-              }),
+              onChanged: (value) {
+                setState(() {
+                  _department = value;
+                  _clinicianId = null;
+                  _slots = null;
+                });
+                // Code-review follow-up: this used to only clear _slots,
+                // leaving the patient staring at a blank slot area with no
+                // way to bring it back short of re-picking the date.
+                if (_date != null) _loadSlots();
+              },
             ),
             const SizedBox(height: 16),
             Text(
@@ -275,14 +295,17 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                   (c) => DropdownMenuItem(value: c.id, child: Text(c.fullName)),
                 ),
               ],
-              onChanged: (value) => setState(() {
-                _clinicianId = value;
-                _slots = null;
-              }),
+              onChanged: (value) {
+                setState(() {
+                  _clinicianId = value;
+                  _slots = null;
+                });
+                if (_date != null) _loadSlots();
+              },
             ),
             const SizedBox(height: 20),
             OutlinedButton.icon(
-              onPressed: _pickDate,
+              onPressed: _loadingSlots ? null : _pickDate,
               icon: const Icon(Icons.calendar_month),
               label: Text(
                 _date == null

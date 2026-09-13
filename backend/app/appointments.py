@@ -42,17 +42,27 @@ CLINIC_CLOSE_HOUR = 17
 def compute_available_slots(local_date: date_cls, booked_at: set[datetime]) -> list[datetime]:
     """Fixed `SLOT_MINUTES`-wide grid within clinic hours on `local_date`
     (Malaysia-local), minus any start time already in `booked_at`. Returns
-    naive-UTC datetimes -- same convention models.Appointment.scheduled_at is
-    read/written in elsewhere in this module (see compute_reminder_offsets's
-    use of datetime.utcnow()) -- so callers must pass `booked_at` as
-    naive-UTC too. Past slots (earlier than "now") are dropped so a patient
-    can never book a time that has already gone by."""
-    now = datetime.utcnow()
+    AWARE UTC datetimes -- deliberately NOT the naive-UTC convention
+    compute_reminder_offsets uses (see its own datetime.utcnow() calls):
+    this module's return value round-trips through Pydantic ->
+    (Flutter's) Dart DateTime.parse, and a naive datetime serializes with
+    no 'Z'/offset suffix, which Dart's DateTime.parse then silently
+    mis-parses as LOCAL time instead of UTC. Chasing that through
+    ApiClient.selfBookAppointment's `.toUtc()` call produced a real,
+    reproducible double-shift that made every self-book 409 on a genuine
+    Malaysia-timezone device (voltagent flutter-expert review, P3.9/P3.10
+    wave) -- an aware datetime here fixes it at the one place both the
+    listing (GET .../appointment-slots) and the booking re-validation
+    (POST .../self-book) read from. `booked_at` must be aware-UTC too (see
+    routers/appointments.py::_to_aware_utc). Past slots (earlier than
+    "now") are dropped so a patient can never book a time that has already
+    gone by."""
+    now = datetime.now(timezone.utc)
     cursor = datetime(local_date.year, local_date.month, local_date.day, CLINIC_OPEN_HOUR, tzinfo=MALAYSIA_TZ)
     close = datetime(local_date.year, local_date.month, local_date.day, CLINIC_CLOSE_HOUR, tzinfo=MALAYSIA_TZ)
     slots = []
     while cursor < close:
-        slot_utc = cursor.astimezone(timezone.utc).replace(tzinfo=None)
+        slot_utc = cursor.astimezone(timezone.utc)
         if slot_utc > now and slot_utc not in booked_at:
             slots.append(slot_utc)
         cursor += timedelta(minutes=SLOT_MINUTES)

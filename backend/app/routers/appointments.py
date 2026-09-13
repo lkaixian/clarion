@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, auth
@@ -413,12 +414,18 @@ def reject_reschedule_request(
 # P3.10: patient self-service booking by department/doctor.
 # ---------------------------------------------------------------------------
 
-def _naive_utc(dt: datetime) -> datetime:
-    """models.Appointment.scheduled_at may come back tz-aware or naive
-    depending on backend (see TZDateTime's docstring in models.py) --
-    normalise to naive-UTC, the convention compute_available_slots and
-    compute_reminder_offsets both already use."""
-    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+def _to_aware_utc(dt: datetime) -> datetime:
+    """Normalise to AWARE UTC -- a genuinely offset-bearing input (e.g. a
+    client that legitimately sends '+08:00' instead of 'Z') is CONVERTED,
+    not just re-labelled, so the wall-clock instant it names is preserved;
+    a naive input (models.Appointment.scheduled_at may come back naive
+    depending on backend -- see TZDateTime's docstring in models.py) is
+    tagged UTC, this codebase's established assumption for a naive stored
+    value. Deliberately NOT the naive-UTC convention compute_reminder_
+    offsets uses -- see compute_available_slots's docstring for why this
+    subsystem needs aware datetimes specifically (the Dart interop bug a
+    naive round-trip produced)."""
+    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _clinicians_for(
@@ -443,7 +450,7 @@ def _booked_times_for_clinician(db: Session, clinician_id: str) -> set[datetime]
         .filter(models.Appointment.clinician_id == clinician_id, models.Appointment.status == "scheduled")
         .all()
     )
-    return {_naive_utc(dt) for (dt,) in rows}
+    return {_to_aware_utc(dt) for (dt,) in rows}
 
 
 @router.post("/{patient_id}/appointments/self-book", response_model=schemas.AppointmentOut)
@@ -462,9 +469,14 @@ def self_book_appointment(
 
     The requested scheduled_at is NEVER trusted as a bare value -- it must
     exactly match a slot compute_available_slots would currently offer for
-    the resolved clinician, recomputed here against live data. That's what
-    actually prevents a double-booking race and an out-of-hours/arbitrary-
-    time booking, not just client-side UI discipline."""
+    the resolved clinician, recomputed here against live data. That check
+    alone is a read-then-write race, though (two concurrent requests can
+    both pass it before either commits -- the exact class of bug
+    models.QueueTicket's docstring warns about for the same reason FastAPI
+    runs sync `def` routes in a threadpool): the real guarantee is
+    models.Appointment's `uq_appointments_active_clinician_slot` DB
+    constraint, caught below as an IntegrityError and turned into a clean
+    409 -- security-review follow-up, P3.9/P3.10 wave."""
     if current_user.role != "patient" or current_user.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Only the patient themself can self-book an appointment.")
 
@@ -476,8 +488,8 @@ def self_book_appointment(
     if not clinicians:
         raise HTTPException(status_code=400, detail="No clinician available for that facility/department")
 
-    requested = _naive_utc(payload.scheduled_at)
-    local_date = (requested.replace(tzinfo=timezone.utc)).astimezone(MALAYSIA_TZ).date()
+    requested = _to_aware_utc(payload.scheduled_at)
+    local_date = requested.astimezone(MALAYSIA_TZ).date()
 
     matched_clinician = None
     for clinician in clinicians:
@@ -499,7 +511,20 @@ def self_book_appointment(
         created_by=current_user.id,
     )
     db.add(appointment)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request for the SAME clinician+slot won the race and
+        # committed first -- the in-Python check above passed for both, but
+        # the DB constraint (uq_appointments_active_clinician_slot) only
+        # lets one through. No retry-with-a-different-slot here (unlike
+        # _create_ticket_with_retry's next-number case): the patient asked
+        # for this exact time, so a clean 409 is the right answer, same as
+        # the "someone else took it" outcome the in-Python check already
+        # produces above -- the Flutter client already refreshes its slot
+        # list on this response either way.
+        db.rollback()
+        raise HTTPException(status_code=409, detail="That slot is no longer available — please pick another.")
     db.refresh(appointment)
 
     log_access(

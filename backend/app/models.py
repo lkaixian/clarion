@@ -562,6 +562,38 @@ class Appointment(Base):
     # the UI can render/manage them differently (see AppointmentOut).
     self_booked = Column(Boolean, nullable=False, default=False)
 
+    # Security review follow-up (2026-09-14, P3.9/P3.10 wave): self_book_
+    # appointment's slot check was read-then-write with NO db-level guard --
+    # exactly the concurrent-threadpool race models.QueueTicket's docstring
+    # warns about ("FastAPI runs sync `def` routes in a threadpool ... two
+    # concurrent calls really can both read the same [state] before either
+    # commits"). This is the SAME fix pattern as RoomClaim's active_room_key/
+    # active_user_key above: a VIRTUAL generated column that's NULL unless
+    # the row is "active" (here: status == 'scheduled'), then a plain
+    # UniqueConstraint pairs it with the real `scheduled_at` column. NULL is
+    # non-colliding in a composite UNIQUE index on both SQLite 3.31+ and
+    # MariaDB 10.5+, so: a cancelled/completed row (status != 'scheduled')
+    # never participates, and neither does a scheduled row with no
+    # clinician_id (today that's every staff-published `create_appointment`
+    # row -- AppointmentCreate has no clinician_id field at all, only
+    # self-book sets one) -- exactly the rows this constraint has no opinion
+    # about. Two concurrent self-books for the same clinician+time now
+    # collide at the DB, and the router retries-or-409s on that
+    # IntegrityError (see self_book_appointment), the same shape
+    # reception/checkin.py::_create_ticket_with_retry already uses for the
+    # identical class of race.
+    active_clinician_slot_key = Column(
+        String(36),
+        Computed("CASE WHEN status = 'scheduled' THEN clinician_id END", persisted=False),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "active_clinician_slot_key", "scheduled_at", name="uq_appointments_active_clinician_slot",
+        ),
+    )
+
     patient = relationship("Patient", back_populates="appointments")
 
 

@@ -166,11 +166,12 @@ Dictate SOAP" button.
 
 **P3.9 + P3.10 landed 2026-09-14** (calling-system ESC/POS ticket +
 sample-label printing + TV audio/branding; mobile self-service booking by
-dept/doctor, vitals view, visit-summary PDF, announcements). Pushed to
-`main` in 2 commits (backend+web, then mobile) — see
-`healthcare/Implementation Roadmap.md`'s changelog for full detail
-including 3 bugs the review pass caught before commit. voltagent
-security-auditor + flutter-expert review pass launched, verdict TBD.
+dept/doctor, vitals view, visit-summary PDF, announcements), then
+voltagent security-auditor + flutter-expert reviewed it and 4 real findings
+(1 Critical timezone bug that broke self-booking on real devices, a
+missing DB-level double-book guard, ESC/POS command injection, a stale-
+response UI race) were all fixed and pushed — see
+`healthcare/Implementation Roadmap.md`'s changelog for full detail.
 
 Next: **NL report narrative** (P4.3c's other half — vault "Demo
 priorities" #4) is the only demo-priority item left unstarted — surface
