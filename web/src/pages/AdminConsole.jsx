@@ -10,6 +10,7 @@ import WaitingRoomDisplaysTab from "./admin/DisplaysTab";
 import StaffRosterTab from "./admin/StaffRosterTab";
 import HospitalSettingsTab from "./admin/HospitalSettingsTab";
 import AccessControlTab from "./admin/AccessControlTab";
+import AnnouncementsTab from "./admin/AnnouncementsTab";
 
 // Facility-scoped admin console — appointments monitoring, medicine
 // inventory, ward/bed capacity, and staff roster, all auto-scoped
@@ -37,6 +38,7 @@ export default function AdminConsole() {
       {activeTab === "staff" && <StaffRosterTab />}
       {activeTab === "hospital" && <HospitalSettingsTab />}
       {activeTab === "access" && <AccessControlTab />}
+      {activeTab === "announcements" && <AnnouncementsTab />}
     </Layout>
   );
 }

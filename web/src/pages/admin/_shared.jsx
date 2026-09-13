@@ -26,6 +26,7 @@ const TABS = [
   { key: "staff", label: "Staff Roster" },
   { key: "hospital", label: "Hospital Settings" },
   { key: "access", label: "Access Control" },
+  { key: "announcements", label: "Announcements" },
 ];
 
 export function TabBar({ active, onChange }) {
