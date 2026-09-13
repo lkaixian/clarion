@@ -92,6 +92,16 @@ def test_summarize_uses_local_llm_when_available(monkeypatch):
     assert summarize.generate_handover_brief(patient) == "a generated brief"
 
 
+def test_nric_ocr_strips_markdown_json_fence(monkeypatch):
+    monkeypatch.setattr(
+        nric_ocr, "generate_vision_text",
+        lambda *a, **kw: '```json\n{"ic_number": "990101011234", "name": "Ali"}\n```',
+    )
+    result = nric_ocr.extract_nric_fields(b"fake-image-bytes")
+    assert result["ic_number"] == "990101011234"
+    assert result["method"] == "llm"
+
+
 def test_nric_ocr_falls_back_to_tesseract_when_local_llm_unavailable(monkeypatch):
     monkeypatch.setattr(nric_ocr, "generate_vision_text", lambda *a, **kw: None)
     result = nric_ocr.extract_nric_fields(b"fake-image-bytes")

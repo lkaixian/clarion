@@ -651,6 +651,17 @@ ollama serve           # or run as a system service; listens on :11434
 - Swapping models (a smaller quantised one for a CPU-only demo box, a larger
   one for real deployment) is a config change only, no code change.
 
+**Voice → SOAP (P4.3c)** adds a second local model, `faster-whisper`
+(installed via `requirements.txt`, no separate binary): first use downloads
+the chosen Whisper model from Hugging Face and caches it under the
+`HF_HOME`/default cache dir — a one-time step needing internet, same as
+`ollama pull` above; transcription itself is fully offline afterwards.
+`CLARION_WHISPER_MODEL` (default `small`), `CLARION_WHISPER_DEVICE`
+(`cpu` default, or `cuda` on a GPU host — switches `compute_type` between
+`int8`/`float16` automatically). If `faster-whisper` isn't installed or the
+model fails to load, dictation degrades to "unavailable" and the clinician
+just types the SOAP fields instead.
+
 ---
 
 ## What is wired now vs. TODO

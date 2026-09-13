@@ -5,7 +5,7 @@ import {
   listPatients, createPatient, getCurrentUser,
   getConsultationRooms, getMyConsultationRoom, startConsultationSession,
   endConsultationSession, callConsultationTicket, completeConsultationTicket,
-  cancelConsultationTicket, listAncillaryRequests, getCdsHint,
+  cancelConsultationTicket, listAncillaryRequests, getCdsHint, getVoiceToSoap,
 } from "../api/client";
 import SignaturePad from "../components/SignaturePad";
 
@@ -43,6 +43,79 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   const [error, setError] = useState("");
   const [cdsHint, setCdsHint] = useState(null); // { hint, allergy_conflicts, disclaimer } or null
   const [cdsLoading, setCdsLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [lastTranscript, setLastTranscript] = useState(null);
+  const [voiceError, setVoiceError] = useState("");
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const isMountedRef = useRef(true);
+
+  // Stop a still-running mic stream if the modal unmounts mid-dictation
+  // (e.g. the clinician clicks Cancel while recording) -- MediaRecorder
+  // doesn't tear itself down just because its React owner disappeared.
+  // isMountedRef additionally covers the gap `mediaRecorderRef` can't: an
+  // unmount while the browser's permission prompt is still pending, before
+  // startDictation has anything to stop -- without it, granting permission
+  // after the modal is gone would start (and never stop) the mic anyway.
+  useEffect(() => () => {
+    isMountedRef.current = false;
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  async function startDictation() {
+    setVoiceError("");
+    setLastTranscript(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isMountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (isMountedRef.current) {
+          transcribeDictation(new Blob(audioChunksRef.current, { type: "audio/webm" }));
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      if (isMountedRef.current) setVoiceError("Microphone unavailable or permission denied.");
+    }
+  }
+
+  function stopDictation() {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  }
+
+  async function transcribeDictation(blob) {
+    setTranscribing(true);
+    try {
+      const result = await getVoiceToSoap(ticket.id, blob);
+      setLastTranscript(result.transcript);
+      // Fill only the fields still empty -- dictation never silently
+      // overwrites text the clinician already typed.
+      setSoap((current) => {
+        const next = { ...current };
+        for (const key of ["subjective", "objective", "assessment", "plan"]) {
+          if (!next[key] && result.soap[key]) next[key] = result.soap[key];
+        }
+        return next;
+      });
+    } catch {
+      setVoiceError("Dictation transcription failed — try typing instead.");
+    } finally {
+      setTranscribing(false);
+    }
+  }
 
   async function fetchCdsHint() {
     setCdsLoading(true);
@@ -117,6 +190,24 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
+          </div>
+          <div className="border border-slate-200 rounded-lg p-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={recording ? stopDictation : startDictation}
+              disabled={transcribing}
+              className={`text-xs font-medium px-2 py-1 rounded disabled:opacity-50 ${
+                recording ? "bg-red-600 text-white" : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {recording ? "● Stop dictation" : transcribing ? "Transcribing..." : "🎙 Dictate SOAP (on-prem AI)"}
+            </button>
+            {lastTranscript && (
+              <span className="text-xs text-slate-400 truncate" title={lastTranscript}>
+                Heard: “{lastTranscript}”
+              </span>
+            )}
+            {voiceError && <span className="text-xs text-red-600">{voiceError}</span>}
           </div>
           <div className="grid gap-2">
             {[
