@@ -309,6 +309,22 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String encounterDepartmentLabel(String department) {
+    return '科室：$department';
+  }
+
+  @override
+  String encounterVitalsLabel(String vitals) {
+    return '生命体征：$vitals';
+  }
+
+  @override
+  String get downloadVisitSummary => '下载/分享就诊摘要（PDF）';
+
+  @override
+  String get visitSummaryUnavailable => '此次就诊的摘要尚不可用。';
+
+  @override
   String get documentsTitle => '文件';
 
   @override
@@ -336,6 +352,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get remindersButton => '用药与预约提醒';
+
+  @override
+  String get bookAppointmentButton => '预约门诊';
 
   @override
   String get whoViewedRecord => '谁查看过我的记录？';
@@ -437,6 +456,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get remindersTitle => '提醒事项';
+
+  @override
+  String get announcementsSectionTitle => '公告';
 
   @override
   String get medicationsSection => '药物';
@@ -886,6 +908,48 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noActiveQueueTicketDesc => '请在接待处办理登记以获取排队号码。';
+
+  @override
+  String get bookAppointmentTitle => '预约门诊';
+
+  @override
+  String get bookAppointmentFacilityLabel => '医疗机构';
+
+  @override
+  String get bookAppointmentOtherFacility => '其他（手动输入）';
+
+  @override
+  String get bookAppointmentFacilityManualHint => '机构名称';
+
+  @override
+  String get bookAppointmentUseFacility => '使用此机构';
+
+  @override
+  String get bookAppointmentDepartmentLabel => '科室';
+
+  @override
+  String get bookAppointmentAnyDepartment => '不限科室';
+
+  @override
+  String get bookAppointmentClinicianLabel => '医生';
+
+  @override
+  String get bookAppointmentAnyClinician => '不限医生';
+
+  @override
+  String get bookAppointmentPickDate => '选择日期';
+
+  @override
+  String get bookAppointmentNoSlots => '该日期暂无空档 — 请尝试其他日期。';
+
+  @override
+  String get bookAppointmentSuccess => '预约成功。';
+
+  @override
+  String get bookAppointmentSlotTaken => '该时段刚被预约 — 请选择其他时段。';
+
+  @override
+  String get bookAppointmentGenericError => '无法完成预约，请重试。';
 
   @override
   String get scanCheckinButton => '扫码登记';

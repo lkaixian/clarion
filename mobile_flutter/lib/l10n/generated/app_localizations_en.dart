@@ -328,6 +328,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String encounterDepartmentLabel(String department) {
+    return 'Department: $department';
+  }
+
+  @override
+  String encounterVitalsLabel(String vitals) {
+    return 'Vitals: $vitals';
+  }
+
+  @override
+  String get downloadVisitSummary => 'Download / share visit summary (PDF)';
+
+  @override
+  String get visitSummaryUnavailable =>
+      'Visit summary isn\'t available for this visit yet.';
+
+  @override
   String get documentsTitle => 'Documents';
 
   @override
@@ -355,6 +372,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get remindersButton => 'Medication & Appointment Reminders';
+
+  @override
+  String get bookAppointmentButton => 'Book Appointment';
 
   @override
   String get whoViewedRecord => 'Who\'s viewed my record?';
@@ -458,6 +478,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get remindersTitle => 'Reminders';
+
+  @override
+  String get announcementsSectionTitle => 'Announcements';
 
   @override
   String get medicationsSection => 'Medications';
@@ -928,6 +951,51 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noActiveQueueTicketDesc =>
       'Check in at reception to get a queue number.';
+
+  @override
+  String get bookAppointmentTitle => 'Book Appointment';
+
+  @override
+  String get bookAppointmentFacilityLabel => 'Facility';
+
+  @override
+  String get bookAppointmentOtherFacility => 'Other (type manually)';
+
+  @override
+  String get bookAppointmentFacilityManualHint => 'Facility name';
+
+  @override
+  String get bookAppointmentUseFacility => 'Use this facility';
+
+  @override
+  String get bookAppointmentDepartmentLabel => 'Department';
+
+  @override
+  String get bookAppointmentAnyDepartment => 'Any department';
+
+  @override
+  String get bookAppointmentClinicianLabel => 'Doctor';
+
+  @override
+  String get bookAppointmentAnyClinician => 'Any doctor';
+
+  @override
+  String get bookAppointmentPickDate => 'Pick a date';
+
+  @override
+  String get bookAppointmentNoSlots =>
+      'No open slots on this date — try another day.';
+
+  @override
+  String get bookAppointmentSuccess => 'Appointment booked.';
+
+  @override
+  String get bookAppointmentSlotTaken =>
+      'That slot was just taken — pick another.';
+
+  @override
+  String get bookAppointmentGenericError =>
+      'Could not complete the booking. Please try again.';
 
   @override
   String get scanCheckinButton => 'Scan to Check In';

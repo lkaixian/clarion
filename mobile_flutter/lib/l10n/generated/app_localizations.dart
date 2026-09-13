@@ -666,6 +666,30 @@ abstract class AppLocalizations {
   /// **'Notes: {notes}'**
   String encounterNotesLabel(String notes);
 
+  /// No description provided for @encounterDepartmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Department: {department}'**
+  String encounterDepartmentLabel(String department);
+
+  /// No description provided for @encounterVitalsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vitals: {vitals}'**
+  String encounterVitalsLabel(String vitals);
+
+  /// No description provided for @downloadVisitSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Download / share visit summary (PDF)'**
+  String get downloadVisitSummary;
+
+  /// No description provided for @visitSummaryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Visit summary isn\'t available for this visit yet.'**
+  String get visitSummaryUnavailable;
+
   /// No description provided for @documentsTitle.
   ///
   /// In en, this message translates to:
@@ -719,6 +743,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Medication & Appointment Reminders'**
   String get remindersButton;
+
+  /// No description provided for @bookAppointmentButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Book Appointment'**
+  String get bookAppointmentButton;
 
   /// No description provided for @whoViewedRecord.
   ///
@@ -899,6 +929,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reminders'**
   String get remindersTitle;
+
+  /// No description provided for @announcementsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcements'**
+  String get announcementsSectionTitle;
 
   /// No description provided for @medicationsSection.
   ///
@@ -1709,6 +1745,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Check in at reception to get a queue number.'**
   String get noActiveQueueTicketDesc;
+
+  /// No description provided for @bookAppointmentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Book Appointment'**
+  String get bookAppointmentTitle;
+
+  /// No description provided for @bookAppointmentFacilityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Facility'**
+  String get bookAppointmentFacilityLabel;
+
+  /// No description provided for @bookAppointmentOtherFacility.
+  ///
+  /// In en, this message translates to:
+  /// **'Other (type manually)'**
+  String get bookAppointmentOtherFacility;
+
+  /// No description provided for @bookAppointmentFacilityManualHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Facility name'**
+  String get bookAppointmentFacilityManualHint;
+
+  /// No description provided for @bookAppointmentUseFacility.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this facility'**
+  String get bookAppointmentUseFacility;
+
+  /// No description provided for @bookAppointmentDepartmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Department'**
+  String get bookAppointmentDepartmentLabel;
+
+  /// No description provided for @bookAppointmentAnyDepartment.
+  ///
+  /// In en, this message translates to:
+  /// **'Any department'**
+  String get bookAppointmentAnyDepartment;
+
+  /// No description provided for @bookAppointmentClinicianLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get bookAppointmentClinicianLabel;
+
+  /// No description provided for @bookAppointmentAnyClinician.
+  ///
+  /// In en, this message translates to:
+  /// **'Any doctor'**
+  String get bookAppointmentAnyClinician;
+
+  /// No description provided for @bookAppointmentPickDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date'**
+  String get bookAppointmentPickDate;
+
+  /// No description provided for @bookAppointmentNoSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'No open slots on this date — try another day.'**
+  String get bookAppointmentNoSlots;
+
+  /// No description provided for @bookAppointmentSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment booked.'**
+  String get bookAppointmentSuccess;
+
+  /// No description provided for @bookAppointmentSlotTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'That slot was just taken — pick another.'**
+  String get bookAppointmentSlotTaken;
+
+  /// No description provided for @bookAppointmentGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not complete the booking. Please try again.'**
+  String get bookAppointmentGenericError;
 
   /// No description provided for @scanCheckinButton.
   ///

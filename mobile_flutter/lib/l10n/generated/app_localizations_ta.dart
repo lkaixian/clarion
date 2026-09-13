@@ -332,6 +332,24 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String encounterDepartmentLabel(String department) {
+    return 'துறை: $department';
+  }
+
+  @override
+  String encounterVitalsLabel(String vitals) {
+    return 'உயிர் அறிகுறிகள்: $vitals';
+  }
+
+  @override
+  String get downloadVisitSummary =>
+      'வருகை சுருக்கத்தைப் பதிவிறக்கு / பகிர் (PDF)';
+
+  @override
+  String get visitSummaryUnavailable =>
+      'இந்த வருகைக்கான சுருக்கம் இன்னும் கிடைக்கவில்லை.';
+
+  @override
   String get documentsTitle => 'ஆவணங்கள்';
 
   @override
@@ -359,6 +377,9 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get remindersButton => 'மருந்து & சந்திப்பு நினைவூட்டல்கள்';
+
+  @override
+  String get bookAppointmentButton => 'சந்திப்பு பதிவு செய்யவும்';
 
   @override
   String get whoViewedRecord => 'எனது பதிவை யார் பார்த்தார்கள்?';
@@ -462,6 +483,9 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get remindersTitle => 'நினைவூட்டல்கள்';
+
+  @override
+  String get announcementsSectionTitle => 'அறிவிப்புகள்';
 
   @override
   String get medicationsSection => 'மருந்துகள்';
@@ -936,6 +960,54 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get noActiveQueueTicketDesc =>
       'வரிசை எண்ணைப் பெற வரவேற்பறையில் பதிவு செய்யவும்.';
+
+  @override
+  String get bookAppointmentTitle => 'சந்திப்பு பதிவு செய்யவும்';
+
+  @override
+  String get bookAppointmentFacilityLabel => 'மருத்துவமனை';
+
+  @override
+  String get bookAppointmentOtherFacility =>
+      'மற்றவை (கைமுறையாக தட்டச்சு செய்யவும்)';
+
+  @override
+  String get bookAppointmentFacilityManualHint => 'மருத்துவமனையின் பெயர்';
+
+  @override
+  String get bookAppointmentUseFacility =>
+      'இந்த மருத்துவமனையைப் பயன்படுத்தவும்';
+
+  @override
+  String get bookAppointmentDepartmentLabel => 'துறை';
+
+  @override
+  String get bookAppointmentAnyDepartment => 'எந்த துறையும்';
+
+  @override
+  String get bookAppointmentClinicianLabel => 'மருத்துவர்';
+
+  @override
+  String get bookAppointmentAnyClinician => 'எந்த மருத்துவரும்';
+
+  @override
+  String get bookAppointmentPickDate => 'தேதியைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get bookAppointmentNoSlots =>
+      'இந்த தேதியில் காலி நேரங்கள் இல்லை — வேறு நாளை முயற்சிக்கவும்.';
+
+  @override
+  String get bookAppointmentSuccess =>
+      'சந்திப்பு வெற்றிகரமாக பதிவு செய்யப்பட்டது.';
+
+  @override
+  String get bookAppointmentSlotTaken =>
+      'அந்த நேரம் இப்போதுதான் எடுக்கப்பட்டது — வேறு நேரத்தைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get bookAppointmentGenericError =>
+      'பதிவை முடிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
 
   @override
   String get scanCheckinButton => 'பதிவு செய்ய ஸ்கேன் செய்';
