@@ -190,6 +190,12 @@ daily seal is the backstop for that.
 - **L4 — `ai/ocr.py:30-31`** persists exception text into `ClinicalDocument.raw_text`.
 - **L5 — `schemas.py` `PatientProfileUpdate`** uses `extra="allow"` (every other Update
   schema uses `extra="forbid"`); safe today only because the handler filters fields.
+- **L6 — `_get_dq_alert_or_404` (`routers/admin.py`, P2.12 data-quality alerts)** looks up
+  by id alone, no facility check — `acknowledge`/`resolve` can mutate another facility's
+  alert if its id ever reached an admin outside normal channels (id is not enumerable,
+  but not secret once shared). Found 2026-09-14 by the voltagent review that fixed the
+  identical pattern in P4.5's `_get_security_alert_or_404` (see that fix's approach: 404,
+  not 403, on a facility mismatch). Not fixed here — pre-existing, unrelated module.
 
 ---
 
