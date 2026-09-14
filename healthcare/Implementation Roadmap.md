@@ -23,6 +23,108 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.7 core: DICOM imaging (upload + embedded viewer)
+
+The last unstarted top-5 demo priority ("DICOM viewer — open a chest X-ray
+inside a record, zoom & measure"). Deliberately a **scoped core slice, not
+the full clause**: real DICOM ingest from a modality via IHE Modality
+Worklist + accession-number auto-link ([[PACS and DICOM]]'s documented
+workflow) needs hardware this environment doesn't have, same class of gap
+as P1.9's TLS cert / P3.9's thermal printer — tracked as a go-live TODO, not
+built. What *is* real: an actual on-prem Orthanc DICOM server storing
+actual DICOM Part10 data, served through this app's own RBAC, viewable
+with real zoom/pan/window-level/measure tools — not a mock.
+
+NEW `backend/app/pacs.py` (thin Orthanc REST client, same on-prem-only
+`_is_on_prem_host` guard class as `ai/local_llm.py`) + `backend/app/routers/
+pacs.py` (the auth boundary in front of Orthanc, which has no per-user auth
+of its own in this demo config — safe only because it's `internal`-network-
+only in docker-compose.yml, never host-exposed). A DICOM study (`.dcm` or a
+`.zip` of one study's instances) is uploaded against an already-placed
+X-ray `ServiceRequest`, gated to the same `SIGNOFF_ROLES` +
+`_request_or_404`/`_hidden_author_facilities` facility-scoping ancillary.py
+already uses for result documents -- reused directly, not reimplemented.
+NEW `models.DicomStudy` (one per ServiceRequest, stores the Orthanc study id
++ its own instance-id list -- the source of truth
+`GET .../study/instances/{id}/file` checks a requested id against, so a
+caller who can see study A can never read study B's pixel data by
+supplying a real-but-foreign instance id). Alembic `4c1cb27217d3`.
+
+Web: `web/src/components/DicomViewer.jsx` embeds `dwv` (MIT -- the library
+[[PACS and DICOM]] names for this), loading each instance straight from the
+authenticated backend proxy via dwv's own `requestHeaders` option (no
+separate blob-fetch step). Wired into `Ancillary.jsx`'s X-ray rows: an
+upload control before a study exists, a "View imaging" button after.
+`dwv`'s exact API (ViewConfig/AppOptions/App, `loadURLs` requestHeaders
+shape, tool names, the Draw+Ruler measure tool) was verified against the
+library's own source on GitHub before writing the component, not
+guessed -- confirmed `App`/`AppOptions`/`ViewConfig` are real exports via
+the installed package's `.d.ts`.
+
+**voltagent security review caught one real bug, fixed:** the zip upload
+path's bomb guard summed `ZipInfo.file_size` -- an attacker-controlled
+central-directory field zipfile never cross-checks against the real
+decompressed size until after fully decompressing -- so a hand-forged
+small declared size could hide a multi-GB real deflate stream past the
+check, and the extraction wasn't offloaded to a threadpool, so it would
+have also stalled the whole event loop. Fixed: bounded streaming reads
+(`zf.open(info)` in 1MB chunks, aborting the instant real bytes exceed a
+shared running budget, never consulting `file_size`) + `run_in_threadpool`.
+New regression test reproduces the exploit shape (tiny compressed zip,
+oversized real payload) and confirms the 413.
+
+**agy note:** delegated the deployment-docs write (`docs/deployment.md`,
+fully-specified single-section insert) -- failed outright, needs an
+interactive Google OAuth sign-in this headless session can't do. No files
+touched by agy; Claude wrote the docs directly instead (small enough that
+waiting on agy auth wasn't worth it).
+
+Verified: `backend/tests/test_pacs.py` (14, incl. the zip-bomb regression),
+full backend suite 423/423, `check_schema.py` PASS (autogen-empty +
+downgrade/upgrade round-trip), `pyflakes` clean, `npm run build` + `oxlint`
+clean. **Not done here:** enabling Orthanc's Postgres index/S3-storage
+plugins (compose already provisions them, commented out) and Orthanc's own
+auth -- both documented as go-live TODOs in `docs/deployment.md`, tracked
+under P4.7 in the phase table below (still 🟡, not ✅, for exactly this
+reason).
+
+### 2026-09-14 — P4.3c finished: NL report narrative
+
+The one remaining piece of P4.3c (voice→SOAP landed earlier the same day —
+see the entry below). NEW `backend/app/ai/report_narrative.py`: takes
+`reporting_engine.run_report()`'s already-structured, already-facility-
+scoped, already-anonymized-if-requested result (columns + rows) and asks
+the local LLM (`ai/local_llm.py`, same engine every other P4.3 feature
+uses) for a 3-5 sentence prose narrative — explicitly told to use only the
+numbers in the table, never invent a figure. Capped at the first 30 rows
+into the prompt (the engine's own `_MAX_ROWS=5000` already bounds the
+query); `None` on any Ollama failure, same never-raise contract as
+`cds_hint.py`/`summarize.py`, so the table itself is never blocked on it.
+
+NEW `POST /reports/narrative` (`routers/reporting.py`) — same
+`ReportRunRequest` body, same `REPORTING_ROLES` gate and facility scoping
+as `/reports/run`/`/reports/export` (reuses the router's existing `_run()`
+helper, so there's no second code path to drift), `report_narrative_generated`
+audit action with dataset+row-count only (no clinical values, matching the
+M8 rule). Web: `Reporting.jsx` gained a "✨ Narrate" button next to the
+export buttons and a narrative block above the table, with the disclaimer
+shown alongside; `client.js` `narrateReport`.
+
+**Incidentally fixed while verifying the web build:** `HospitalSettingsTab.jsx`'s
+logo-upload handler had `await` inside a plain (non-async) `setForm`
+updater callback — a pre-existing bug from the P3.9 commit that failed
+`npm run build` outright (not a runtime-only bug — the whole production
+build was broken). Resolved the data URL before calling `setForm`.
+
+voltagent security-auditor reviewed the new endpoint (RBAC/facility-scope
+reuse, prompt-injection exposure, PII/audit-log hygiene, DoS/row-cap,
+consistency with `/reports/run`/`/export`) — verdict: clean, no findings.
+Verified: full backend suite 409/409 pass, `pyflakes` clean, `npm run
+build` clean.
+
+**P4.3 (on-prem AI engine, all sub-parts) is now fully done** — see P4.3's
+row in the phase table below.
+
 ### 2026-09-14 — P3.9 + P3.10: calling-system hardware + mobile booking/vitals/PDF/announcements
 
 Both remaining P3 rows, done together (share the same review/verify pass).
@@ -1380,11 +1482,11 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | — |
 | P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
-| P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`); NL report narrative still open | M |, → [[On-Prem Clinical AI]] | 🟡 2026-09-13 (voice→SOAP done, NL report narrative not started) |
+| P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`) + **NL report narrative** — local-LLM prose summary over the Reporting engine's structured output (`/reports/narrative`) | M |, → [[On-Prem Clinical AI]] | ✅ 2026-09-14 |
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | — |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
-| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | — |
+| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core: Orthanc + manual upload + embedded dwv viewer done; PG index/S3 plugins + Orthanc auth + real Modality Worklist still open) |
 | P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |
 
 ## P5 — Ops & handover

@@ -58,7 +58,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | **Billing Module** | Gap | New module: `bills`, `bill_items`, `payments`, `claims`, charge master | Yes |
 | | **Procedure Module** | Partial | P3.1 ✅ 2026-09-11: shared order→result→sign-off→document engine + catalog. No procedure-specific UI polish yet | Yes |
 | | **Laboratory Module** (+ direct reg, result-interpretation AI, trend analysis) | Partial | P3.1 ✅ shared engine covers order/result/sign-off/document; analyser HL7 (P4.8), AI interpretation + trend analysis (P4.5/8.4-8.5) still Gap | Yes |
-| | **X-ray Module** (+ direct reg) | Partial | P3.1 ✅ shared engine covers order/result/sign-off/document; PACS/DICOM tie-in (P4.7) still Gap | Yes |
+| | **X-ray Module** (+ direct reg) | Partial | P3.1 ✅ shared engine covers order/result/sign-off/document; PACS/DICOM tie-in (P4.7 🟡) now core-done, see below | Yes |
 | | **Physiotherapy Module** (+ direct reg) | Partial | P3.1 ✅ fully covered by the shared engine — no external integration needed for this module | Yes |
 | | **Dental Module** (sign-off, dental chart, references, medication, reporting) | Gap | New module; dental chart = bespoke UI | Partial |
 | | Reporting: admission/discharge summaries, disease-specific, TAT, PDF+Excel | Partial | AI handover ≈ discharge summary; rest = Gap | Yes |
@@ -78,7 +78,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Ticket **printer** | Demo | P3.9 (2026-09-14): `backend/app/printing.py` builds real ESC/POS ticket bytes, `GET /reception/queue/{id}/ticket.escpos` + a web "Print ticket" button. No physical thermal printer attached in this environment to test against — wiring the bytes to real hardware (a local print-spooler/kiosk config) is a documented deploy-time step, same as the TLS cert pair at P1.9 | Demo |
 | | Central **TV display** of queue + counters/rooms | Have | `display.py` `/display/{token}` full-screen auto-refresh | Yes |
 | | Role-based call next / hold / skip; monitor per type | Have | `reception.py` call/complete/cancel/no-show | Yes |
-| –5 | **PACS / DICOM** | Gap | Orthanc + web viewer → [[PACS and DICOM]] | Yes (impressive) |
+| –5 | **PACS / DICOM** | Partial | P4.7 🟡 2026-09-14: Orthanc + upload + embedded dwv zoom/pan/window-level/measure viewer done; PG index/S3 plugins, Orthanc auth, real Modality Worklist auto-link still Gap → [[PACS and DICOM]] | Yes (impressive) |
 
 ## System Technology
 

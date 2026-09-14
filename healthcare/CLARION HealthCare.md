@@ -61,5 +61,5 @@ This vault is the persistent reference for that effort. Start here.
 > to Anthropic. Both now call `ai/local_llm.py`, a local Ollama server — nothing leaves
 > the machine — and degrade to their deterministic/Tesseract fallback if Ollama isn't
 > running. `anthropic` is out of `requirements.txt`; `ai/_cloud_guard.py` is deleted.
-> See [[Security Audit#C1]] and [[On-Prem Clinical AI]]. Next AI-clause work: CDS hint,
-> voice→SOAP, NL report narrative (all new features, not yet built — see the roadmap).
+> See [[Security Audit#C1]] and [[On-Prem Clinical AI]]. CDS hint, voice→SOAP, and NL
+> report narrative all landed 2026-09-13/14 — P4.3 is fully done (see the roadmap).

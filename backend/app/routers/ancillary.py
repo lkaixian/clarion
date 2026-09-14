@@ -102,6 +102,7 @@ def _load_request_with_relations(db: Session, request_id: str) -> Optional[model
             joinedload(models.ServiceRequest.catalog_item),
             joinedload(models.ServiceRequest.result),
             joinedload(models.ServiceRequest.patient),
+            joinedload(models.ServiceRequest.dicom_study),
         )
         .filter(models.ServiceRequest.id == request_id)
         .first()
@@ -161,6 +162,7 @@ def _serialize_request(req: models.ServiceRequest, current_user: models.User) ->
         # undone here, not just skipped, or the stripped branch above is a
         # no-op and the full result leaks through anyway.
         out.result = None
+    out.has_dicom_study = req.dicom_study is not None
     return out
 
 
@@ -349,6 +351,7 @@ def list_service_requests(
         joinedload(models.ServiceRequest.catalog_item),
         joinedload(models.ServiceRequest.result),
         joinedload(models.ServiceRequest.patient),
+        joinedload(models.ServiceRequest.dicom_study),
     )
     cross_facility = False
     if patient_id:

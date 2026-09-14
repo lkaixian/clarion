@@ -25,6 +25,7 @@ from ..database import get_db
 from ..audit import log_access
 from .. import reporting_engine
 from .. import report_export
+from ..ai.report_narrative import generate_report_narrative
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -99,6 +100,28 @@ def export_report(
         content=body, media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/narrative", response_model=schemas.ReportNarrativeOut)
+def narrate_report(
+    payload: schemas.ReportRunRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    """P4.3c NL report narrative: the same selection /reports/run accepts,
+    turned into a short prose summary by the local LLM -- see
+    ai/report_narrative.py. Advisory only, nothing persisted."""
+    facility = _require_facility(current_user)
+    result = _run(db, facility, payload)
+    datasets = {d["key"]: d["label"] for d in reporting_engine.dataset_specs(db)}
+    label = datasets.get(payload.dataset, payload.dataset)
+    out = generate_report_narrative(label, result)
+    log_access(
+        db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
+        action="report_narrative_generated", detail=f"dataset={payload.dataset} rows={result['row_count']}",
+        actor_facility=facility,
+    )
+    return out
 
 
 # ---------- Saved report templates ("save & share templates") ----------

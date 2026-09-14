@@ -767,6 +767,22 @@ export const getAncillaryResultDocumentBlob = (requestId) =>
 
 export const getAncillaryStats = () => client.get("/ancillary/stats").then((r) => r.data);
 
+// P4.7 PACS/DICOM imaging -- sits on top of an xray ServiceRequest
+// (routers/pacs.py). `dicomInstanceFileUrl` is a plain URL string, not an
+// axios call: DicomViewer.jsx hands it straight to dwv's `loadURLs`, which
+// fetches each instance itself (with an Authorization header dwv attaches
+// via its own `requestHeaders` option) -- there's no blob step here.
+export const uploadDicomStudy = (requestId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post(`/pacs/requests/${requestId}/study`, form, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
+export const getDicomStudy = (requestId) => client.get(`/pacs/requests/${requestId}/study`).then((r) => r.data);
+export const dicomInstanceFileUrl = (requestId, instanceId) =>
+  `${API_BASE}/pacs/requests/${requestId}/study/instances/${instanceId}/file`;
+
 // P3.2 Dental module. Only the tooth chart is a dedicated API here --
 // queue/appointments reuse Reception, X-ray references reuse
 // createAncillaryRequest (module: "xray"), medication reuses
@@ -858,6 +874,7 @@ export const getReportDatasets = () => client.get("/reports/datasets").then((r) 
 export const runReport = (body) => client.post("/reports/run", body).then((r) => r.data);
 export const exportReport = (body) =>
   client.post("/reports/export", body, { responseType: "blob" }).then((r) => r.data);
+export const narrateReport = (body) => client.post("/reports/narrative", body).then((r) => r.data);
 
 export const listReportTemplates = (dataset) =>
   client.get("/reports/templates", { params: { dataset: dataset || undefined } }).then((r) => r.data);

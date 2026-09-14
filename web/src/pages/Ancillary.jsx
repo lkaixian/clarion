@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import DicomViewer from "../components/DicomViewer";
 import {
   getCurrentUser,
   getAncillaryCatalog,
@@ -19,6 +20,7 @@ import {
   getServiceRequestLabelBlob,
   getAncillaryStats,
   listPatients,
+  uploadDicomStudy,
 } from "../api/client";
 import { formatDateTime } from "../lib/format";
 
@@ -428,7 +430,25 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
 
 function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRefresh, showMsg }) {
   const [showSignOff, setShowSignOff] = useState(false);
-  
+  const [showViewer, setShowViewer] = useState(false);
+  const [uploadingDicom, setUploadingDicom] = useState(false);
+
+  async function handleDicomUpload(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the same file be re-picked after an error
+    if (!file) return;
+    setUploadingDicom(true);
+    try {
+      await uploadDicomStudy(req.id, file);
+      showMsg("success", "Imaging study attached.");
+      onRefresh();
+    } catch (err) {
+      showMsg("error", err?.response?.data?.detail || "Failed to upload imaging study.");
+    } finally {
+      setUploadingDicom(false);
+    }
+  }
+
   return (
     <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
       <div className="flex justify-between items-start">
@@ -479,13 +499,36 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
       </div>
 
       {showSignOff && (
-        <SignOffForm 
-          req={req} 
-          hasSignature={hasSignature} 
-          onSuccess={() => { setShowSignOff(false); onRefresh(); showMsg("success", "Result signed off."); }} 
-          onError={(msg) => showMsg("error", msg)} 
+        <SignOffForm
+          req={req}
+          hasSignature={hasSignature}
+          onSuccess={() => { setShowSignOff(false); onRefresh(); showMsg("success", "Result signed off."); }}
+          onError={(msg) => showMsg("error", msg)}
         />
       )}
+
+      {/* P4.7: DICOM imaging, X-ray only -- upload once, viewable any time
+          after (not gated on sign-off, unlike the generic result attachment
+          above: the images usually exist before the report does). */}
+      {req.module === "xray" && req.status !== "cancelled" && (
+        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-700">Imaging</span>
+          {req.has_dicom_study ? (
+            <button onClick={() => setShowViewer(true)} className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1">
+              🩻 View imaging
+            </button>
+          ) : canSignOff ? (
+            <label className="text-xs text-blue-700 hover:underline cursor-pointer">
+              {uploadingDicom ? "Uploading…" : "📤 Attach DICOM study (.dcm/.zip)"}
+              <input type="file" accept=".dcm,.zip,application/dicom,application/zip" className="hidden"
+                disabled={uploadingDicom} onChange={handleDicomUpload} />
+            </label>
+          ) : (
+            <span className="text-xs text-slate-400">Not yet attached.</span>
+          )}
+        </div>
+      )}
+      {showViewer && <DicomViewer requestId={req.id} onClose={() => setShowViewer(false)} />}
 
       {req.result && (
         <div className="mt-3 pt-3 border-t border-slate-200">

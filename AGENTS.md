@@ -173,10 +173,35 @@ missing DB-level double-book guard, ESC/POS command injection, a stale-
 response UI race) were all fixed and pushed — see
 `healthcare/Implementation Roadmap.md`'s changelog for full detail.
 
-Next: **NL report narrative** (P4.3c's other half — vault "Demo
-priorities" #4) is the only demo-priority item left unstarted — surface
-this rather than assuming order, same discipline as every prior phase
-boundary.
+**P4.3c finished 2026-09-14** (NL report narrative — local-LLM prose over
+the Reporting engine's structured output, `POST /reports/narrative`):
+**all of P4.3 is now done**. voltagent security-auditor reviewed it clean;
+incidentally fixed a pre-existing `await`-in-non-async-callback bug in
+`HospitalSettingsTab.jsx` that broke `npm run build` outright (from the
+P3.9 commit). 409/409 backend tests pass.
+
+**P4.7 core landed 2026-09-14** (DICOM viewer, the last unstarted top-5 demo
+priority): `backend/app/pacs.py` + `backend/app/routers/pacs.py` (Orthanc
+REST client + the auth/facility-scoping boundary in front of it, reusing
+ancillary.py's own `_request_or_404`/`_hidden_author_facilities`),
+`models.DicomStudy`, `web/src/components/DicomViewer.jsx` (embeds `dwv`,
+its API verified against the library's real source before writing).
+Deliberately a **scoped core slice, not the full clause**: manual upload
+against an X-ray `ServiceRequest` stands in for real Modality Worklist
+hardware this environment doesn't have (documented go-live TODO, same class
+as P1.9/P3.9's deploy-time gaps) — see the roadmap changelog for why P4.7
+is 🟡 not ✅. voltagent security review caught and fixed one real bug (a
+zip-bomb bypass via a trusted, attacker-controllable declared size — see
+that changelog entry). agy's docs-delegation failed outright on auth in
+this headless session (see `agy-delegation-flakiness` memory) — Claude
+wrote `docs/deployment.md`'s new section directly instead. 423/423 backend
+tests pass, web build/lint clean.
+
+Next: every top-5 demo priority is now done. Remaining backlog is P4.7's
+own go-live TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist),
+P4.4 (medication-safety rule engine), or the P4.x items with no status yet
+(P4.1/4.2/4.5/4.6) — surface the choice rather than assuming order, same
+discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

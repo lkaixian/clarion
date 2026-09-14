@@ -416,3 +416,68 @@ def test_notifiable_disease_is_facility_scoped(test_client, make_user, auth_head
     # Facility B cannot see or act on facility A's notification.
     assert test_client.get(f"/reports/notifiable-diseases/{report_id}/document", headers=auth_headers(clinician_b)).status_code == 404
     assert test_client.post(f"/reports/notifiable-diseases/{report_id}/submitted", headers=auth_headers(clinician_b)).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# NL report narrative (P4.3c)
+# ---------------------------------------------------------------------------
+
+def test_narrative_uses_local_llm_over_the_run_result(test_client, make_user, auth_headers, db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.ai.report_narrative.generate_text",
+        lambda *a, **kw: "Most visits this period were outpatient.",
+    )
+    facility = _facility()
+    patient = _make_patient(db_session)
+    _encounter(db_session, patient.id, facility, encounter_type="outpatient")
+    clinician = make_user(role="clinician", facility=facility)
+
+    resp = test_client.post(
+        "/reports/narrative",
+        json={"dataset": "encounters", "fields": ["encounter_type"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["narrative"] == "Most visits this period were outpatient."
+    assert "not a substitute" in body["disclaimer"].lower()
+
+
+def test_narrative_falls_back_to_none_without_ollama(test_client, make_user, auth_headers, db_session, monkeypatch):
+    monkeypatch.setattr("app.ai.report_narrative.generate_text", lambda *a, **kw: None)
+    facility = _facility()
+    patient = _make_patient(db_session)
+    _encounter(db_session, patient.id, facility)
+    clinician = make_user(role="clinician", facility=facility)
+
+    resp = test_client.post(
+        "/reports/narrative", json={"dataset": "encounters", "fields": ["reason"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["narrative"] is None
+
+
+def test_narrative_skips_the_llm_when_no_rows(test_client, make_user, auth_headers, monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.ai.report_narrative.generate_text", lambda *a, **kw: calls.append(1))
+    facility = _facility()
+    clinician = make_user(role="clinician", facility=facility)
+
+    resp = test_client.post(
+        "/reports/narrative", json={"dataset": "encounters", "fields": ["reason"]},
+        headers=auth_headers(clinician),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["narrative"] is None
+    assert calls == []  # no rows -> never even asked the LLM
+
+
+def test_narrative_requires_reporting_role(test_client, make_user, auth_headers):
+    facility = _facility()
+    receptionist = make_user(role="receptionist", facility=facility)
+    resp = test_client.post(
+        "/reports/narrative", json={"dataset": "encounters", "fields": ["reason"]},
+        headers=auth_headers(receptionist),
+    )
+    assert resp.status_code == 403

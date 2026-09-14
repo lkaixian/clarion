@@ -1646,6 +1646,7 @@ class ServiceRequest(Base):
     patient = relationship("Patient")
     catalog_item = relationship("ServiceCatalogItem", back_populates="requests")
     result = relationship("ServiceResult", back_populates="request", uselist=False)
+    dicom_study = relationship("DicomStudy", back_populates="request", uselist=False)
 
 
 class ServiceResult(Base):
@@ -1701,6 +1702,50 @@ class ServiceResult(Base):
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     request = relationship("ServiceRequest", back_populates="result")
+
+
+class DicomStudy(Base):
+    """P4.7: links one Orthanc DICOM study to the X-ray
+    ServiceRequest it belongs to. The pixel data itself lives in Orthanc
+    (app/pacs.py), not the ObjectStore -- Orthanc is its own purpose-built
+    DICOM archive with real DICOM semantics (series/instances, WADO
+    streaming); this row is just the pointer + the facility-scoping/RBAC
+    boundary, since Orthanc itself has no per-user auth (internal-network-
+    only, see docker-compose.yml's orthanc service). Every read a browser
+    makes goes through routers/pacs.py's own scoped proxy, never straight
+    to Orthanc.
+
+    One study per ServiceRequest (`unique=True`), same append-only shape as
+    ServiceResult -- a repeat X-ray is a NEW ServiceRequest, never a second
+    study bolted onto an old one.
+
+    No real modality/Modality-Worklist hardware in this environment, so
+    linking is by manual upload against an already-placed ServiceRequest,
+    not by DICOM accession-number auto-match -- see healthcare/PACS and
+    DICOM.md's IHE Scheduled Workflow for the real-hardware version of this,
+    same "documented deploy-time gap" call as P1.9's TLS cert / P3.9's
+    thermal printer."""
+    __tablename__ = "dicom_studies"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    service_request_id = Column(
+        String(36), ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=True, index=True)
+    orthanc_study_id = Column(String(64), nullable=False)  # Orthanc's own (non-DICOM) study ID
+    # The set of Orthanc instance IDs this study was uploaded with -- the
+    # source of truth routers/pacs.py checks a requested instance id
+    # against before ever asking Orthanc for its bytes, so a caller who can
+    # see this study can never walk an instance id into a DIFFERENT study
+    # (Orthanc's own REST API has no per-study auth to catch that itself).
+    orthanc_instance_ids = Column(JSON, nullable=False, default=list)
+    description = Column(String(255), nullable=True)  # Orthanc's StudyDescription tag, if present
+    uploaded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    uploaded_by_name = Column(String(255), nullable=True)
+    uploaded_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    request = relationship("ServiceRequest", back_populates="dicom_study")
 
 
 # ==========================================================================

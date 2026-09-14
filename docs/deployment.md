@@ -664,6 +664,43 @@ just types the SOAP fields instead.
 
 ---
 
+## PACS / DICOM imaging (P4.7, the tender)
+
+Orthanc (docker-compose.yml's `orthanc` service, `internal` network only,
+never host-exposed) is the DICOM archive; `backend/app/pacs.py` is a thin
+REST client to it; `backend/app/routers/pacs.py` is the auth/facility-
+scoping boundary in front of it — Orthanc itself has no per-user auth in
+this demo config (`ORTHANC__AUTHENTICATION_ENABLED: "false"`), safe only
+because it's never reachable except from the backend container. A study is
+uploaded against an already-placed X-ray `ServiceRequest` (no real
+Modality Worklist hardware to auto-link from — manual upload is the
+documented stand-in, same class of deploy-time gap as this file's
+thermal-printer/TLS-cert notes elsewhere). The viewer is `dwv` (MIT),
+embedded directly in the web app's Ancillary page — no separate viewer
+deployment needed.
+
+- `CLARION_ORTHANC_URL` (default `http://orthanc:8042`) — refused unless it
+  resolves to loopback/private/link-local, same guard class as
+  `CLARION_LOCAL_LLM_URL` above.
+- `CLARION_ORTHANC_TIMEOUT` (default 30s).
+
+### Enabling Orthanc's PostgreSQL index + S3 storage
+docker-compose.yml already provisions `orthanc-postgres` and has the
+relevant `ORTHANC__POSTGRESQL__*` / `ORTHANC__AWS_S3_STORAGE__*` env lines
+present but commented out in the `orthanc` service — uncomment them to move
+off Orthanc's built-in SQLite index onto Postgres, and push pixel data into
+the same MinIO store the other buckets use (bucket `clarion-dicom`). A
+go-live step, not needed for the demo — SQLite indexing is fine at this
+scale, same as this file's other "fine at demo scale" notes elsewhere.
+
+### Real modality hardware / Modality Worklist
+Wiring an actual X-ray machine via DICOM Modality Worklist +
+accession-number auto-link is P4.7's full IHE Scheduled Workflow (see
+`healthcare/PACS and DICOM.md` in the vault) — out of scope for this
+environment. Manual upload is the working stand-in today.
+
+---
+
 ## What is wired now vs. TODO
 
 ### Wired now
@@ -675,6 +712,9 @@ just types the SOAP fields instead.
 - nginx SPA routing + `/api` proxy.
 
 ### TODO (tracked in `healthcare/Implementation Roadmap.md`)
+- **P4.7 -- PACS go-live.** Enable Orthanc auth + the Postgres/S3 plugins
+  above, and wire real modality hardware (Modality Worklist), before this
+  leaves demo status.
 - **P1.4 -- MariaDB Data Migration.** SQLite to MariaDB data migration is the next follow-up for an existing DB.
   Once migrated, cut over by pointing the backend at MariaDB:
   1. Run schema migrations using the deploy-time account, **before** `backend`
