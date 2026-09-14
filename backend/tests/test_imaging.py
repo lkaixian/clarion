@@ -5,13 +5,16 @@ import io
 
 import pytest
 from PIL import Image
+from reportlab.pdfgen import canvas
 
 from app import imaging
 from app.imaging import (
     ImageProcessingError,
+    is_pdf,
     is_supported_image,
     make_thumbnail,
     normalise_image,
+    render_pdf_first_page,
 )
 
 
@@ -194,3 +197,51 @@ def test_is_supported_image():
 def test_concurrency_gate_is_bounded():
     import app.imaging as m
     assert m._decode_gate._value <= m._CONCURRENCY  # semaphore, not unbounded
+
+
+# --------------------------------------------------------------------------
+# render_pdf_first_page (P1.7b)
+# --------------------------------------------------------------------------
+def _pdf_bytes(w=400, h=300) -> bytes:
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w, h))
+    c.setFillColorRGB(0.8, 0.2, 0.2)
+    c.rect(0, 0, w, h, fill=1)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def test_render_pdf_first_page_matches_aspect_and_caps_long_edge():
+    out = render_pdf_first_page(_pdf_bytes(w=400, h=300), max_edge=200)
+    assert out.mime == "image/jpeg"
+    img = _decode(out.data)
+    assert img.format == "JPEG"
+    assert img.size == (200, 150)  # 4:3 aspect preserved, long edge == max_edge exactly
+
+
+def test_render_pdf_first_page_only_uses_page_one():
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(300, 300))
+    c.setFillColorRGB(1, 0, 0)
+    c.rect(0, 0, 300, 300, fill=1)
+    c.showPage()
+    c.setFillColorRGB(0, 0, 1)
+    c.rect(0, 0, 300, 300, fill=1)
+    c.showPage()
+    c.save()
+
+    img = _decode(render_pdf_first_page(buf.getvalue(), max_edge=50).data)
+    assert img.getpixel((25, 25))[0] > img.getpixel((25, 25))[2]  # red page, not blue
+
+
+@pytest.mark.parametrize("blob", [b"not a pdf at all", b"", b"%PDF-1.4 truncated garbage"])
+def test_corrupt_pdf_rejected(blob):
+    with pytest.raises(ImageProcessingError):
+        render_pdf_first_page(blob)
+
+
+def test_is_pdf():
+    assert is_pdf(_pdf_bytes())
+    assert not is_pdf(b"not a pdf")
+    assert not is_pdf(_bytes(Image.new("RGB", (4, 4)), "PNG"))

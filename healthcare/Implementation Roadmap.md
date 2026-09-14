@@ -23,6 +23,94 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-15 — P1.7b (scoped): PDF preview + web-preview variant + ETag
+
+With every P4.x item statused (previous entry), asked the user which
+backlog item to pick up next -- P1.7b (imaging follow-ups), left at "--"
+since P1.7 landed 2026-08-30. P1.7b's own row bundles 6 sub-items; picked
+the two with a real, demoable gap and two cheap wins, and explicitly
+skipped the two speculative ones rather than build unrequested
+infrastructure (same discipline P4.4/P4.8 used to decline fabricating
+data for systems with no real spec).
+
+**Landed:** `backend/app/imaging.py` NEW `render_pdf_first_page()` via
+`pypdfium2` (BSD-3, prebuilt binaries, already the plan's pick over AGPL
+PyMuPDF) -- a document's PDF page 1 gets a real preview instead of "no
+preview available". Scale is computed from the page's own declared size
+and applied *at render time*, so the rendered bitmap's long edge comes out
+to exactly `max_edge` by construction -- no separate decompression-bomb
+ceiling needed the way `MAX_INPUT_PIXELS` gates the raster path. Reuses
+the existing `_decode_gate` concurrency semaphore and
+`_flatten_to_rgb`/`_finalise` (metadata-strip + JPEG encode) helpers.
+`backend/app/derived.py`'s `get_or_make_thumbnail()` now branches to this
+for a PDF source; `ALLOWED_THUMBNAIL_SIZES` (was a private `_ALLOWED_SIZES`
+tuple) extended to `(300, 1400)` -- 1400 is the new "web preview" variant,
+same content-addressed derived-key scheme as the existing 300px thumbnail,
+sized to actually read a document without pulling a possibly-15MB original
+over the Branch WAN link. `GET /patients/{id}/documents/{id}/thumbnail`
+takes `?size=300|1400`; both it and the medicine-photo thumbnail endpoint
+(`pharmacy.py`) gained a strong `ETag` + `If-None-Match` -> 304 (safe
+because the derived key -- and so the served bytes -- is content-addressed
+already). `clarion-derived`'s documented MinIO ILM rule bumped 30 -> 180
+days (`docs/deployment.md`) since a page-render is pricier to regenerate
+than a raster resize.
+
+**Deliberately skipped** (documented in `docs/deployment.md`'s P1.7b
+note): HEIC input -- no confirmed real upload source (medicine-photo
+upload is browser-restricted to `image/png,image/jpeg,image/webp`; a
+clinical-document original is kept regardless of whether a preview can be
+built, so a missing HEIC preview is graceful, not a functional gap); an
+async normalisation worker -- sync-at-upload has no reported latency/
+volume problem, the roadmap's own P1.7 note already called this "a later
+call keyed on payload size/volume", and nothing since has changed that.
+The 3-copy magic-byte-sniff duplication this row also names was already
+consolidated into `imaging.py::sniff_image_mime` before this session (its
+own docstring says so) -- nothing left to do there.
+
+New tests: `test_imaging.py` (PDF render matches aspect + caps long edge
+exactly, page-1-only on a multi-page PDF, corrupt/empty/degenerate-PDF
+rejection, `is_pdf`), `test_derived.py` (a real PDF now gets a rendered
+preview instead of a blanket negative-cache, the 1400 variant), NEW
+`test_document_thumbnail.py` (router-level: PDF thumbnail, `?size=1400`,
+422 on an unsupported size, ETag/If-None-Match -> 304 round-trip). 519/519
+backend tests pass (excluding 3 pre-existing, unrelated
+`test_security_analytics.py` failures -- confirmed by re-running them
+against a clean `git stash` of this session's changes -- a real
+time-of-day flake: its off-hours rule fires because the wall clock was
+genuinely inside its 00:00-05:00 MYT window during this session, not
+anything this change touched). `check_schema` PASS (no model change),
+`ruff check --config ci/ruff.toml` clean.
+
+agy not delegated -- small enough surface, judgment-heavy on the pdfium
+security properties (same call P4.4/P4.5/P4.8 made for their own
+subtle-bug-prone modules).
+
+**voltagent security-auditor review found 1 Medium + 2 Low, 2 of 3
+actioned:** (Low, fixed) the `?size` allowlist was duplicated -- a literal
+`(300, 1400)` in the router vs. `derived._ALLOWED_SIZES` -- with an
+unhandled-500 failure mode if they ever drifted (a size the router
+accepted but derived.py's `_variant()` rejected raises a bare `ValueError`
+nothing catches); now a single exported `derived.ALLOWED_THUMBNAIL_SIZES`.
+(Low, fixed) the medicine-photo thumbnail endpoint had no `log_access`
+call at all, on either the 200 or 304 path -- unlike its sibling
+`GET /image` (`view_medicine_image`) and unlike the document-thumbnail
+endpoint (which already logged before its ETag branch); now logs
+`view_medicine_thumbnail` the same way. (Medium, accepted as a documented
+residual, not fixed) PDFium's internal cost to rasterize a page's content
+stream before the output-scaling step isn't wall-clock-bounded -- only
+the rendered *output* size is, by construction; a pathological embedded
+image/Form-XObject/tiling-pattern inside an otherwise-valid PDF could
+still be expensive to rasterize. Bounded today only by the pre-existing
+15MB upload cap + this module's 4-way concurrency gate, on an endpoint
+only 3 authenticated staff roles can reach -- judged disproportionate to
+fix with a `ProcessPoolExecutor`-based timeout for that threat model right
+now; left as a `ponytail:` comment in `imaging.py` naming the ceiling and
+the upgrade path. Confirmed sound: ETag/304 can't bypass auth or leak
+existence (RBAC + facility/visibility gate run before the ETag comparison
+on both routers, unconditionally); `_decode_gate` does cover the new PDF
+path; password-protected/corrupt/degenerate PDFs all raise cleanly; only
+page 1 is ever touched regardless of declared page count.
+
 ### 2026-09-14 — P4.8 (scoped): lab-analyser HL7 v2 integration
 
 The last unstarted P4.x item. Investigating first: P4.8's roadmap row
@@ -2039,7 +2127,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P1.5 | Delete `_migrate_lightweight` + `create_all`; `db/check_schema.py` CI gate | S | / [[Security Audit#M9]] | ✅ 2026-08-30 |
 | P1.6 | `ObjectStore` abstraction + MinIO + `*_object_key` columns + move `uploads/` | M | | ✅ 2026-08-30 |
 | P1.7 | Image-normalisation pipeline (Pillow: EXIF/GPS strip, resize, thumbnail) | S | | ✅ 2026-08-30 (sync-at-upload; async worker → P1.7b) |
-| P1.7b | Imaging follow-ups: PDF first-page preview (`pypdfium2`, not AGPL PyMuPDF); ~1400px web-preview variant (cuts the 15MB original off the Branch WAN, metadata-stripped by default); HEIC input; async job seam = MariaDB `jobs` table + `FOR UPDATE SKIP LOCKED` (not rq/Celery — survives the CI4 port); consolidate the 3 magic-byte sniff copies; ETag on derived responses; bump `clarion-derived` ILM 30→180d | M | | — |
+| P1.7b | Imaging follow-ups: PDF first-page preview (`pypdfium2`, not AGPL PyMuPDF); ~1400px web-preview variant (cuts the 15MB original off the Branch WAN, metadata-stripped by default); HEIC input; async job seam = MariaDB `jobs` table + `FOR UPDATE SKIP LOCKED` (not rq/Celery — survives the CI4 port); consolidate the 3 magic-byte sniff copies; ETag on derived responses; bump `clarion-derived` ILM 30→180d | M | | 🟡 2026-09-15 (PDF preview + 1400 variant + ETag + ILM bump done; magic-byte sniff was already consolidated pre-P1.7b; HEIC + async worker deliberately skipped — see changelog) |
 | P1.8 | Env-driven config — kill hardcoded `localhost`, CORS allowlist, runtime `config.js` | S | / [[Security Audit#M3]] | ✅ 2026-08-30 |
 | P1.9 | Reverse proxy (Caddy) + CAMPUS-CA TLS + CSP + HSTS | S | | ✅ 2026-08-30 (prod TODO: drop the CAMPUS-CA cert in `proxy/certs/`, flip `CLARION_TLS_DIRECTIVE`; tighten `style-src`) |
 | P1.10 | **LDAP/AD** provider — service bind → search → user bind, JIT provision, `ldap_role_map` | M | **** | ✅ 2026-09-07 (backend + admin CRUD; no web UI yet) |

@@ -351,13 +351,37 @@ decision-pending` memory), the SMP/SMS/e-klinik/university-DB integration
 this pass declined to fabricate (needs real campus specs), and whatever
 surfaces next — there's no more "no status yet" P4.x item to default to.
 
-Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4/P4.5 have each
-closed a Compliance Matrix gap. Remaining backlog is P4.7's real-hardware
-Modality Worklist gap (deploy-time, not buildable here), a stack-wide MinIO
-least-privilege pass (new leftover, above), or the P4.x items with no
-status yet (P4.6 predictive analytics, P4.8 integration layer) — surface
-the choice rather than assuming order, same discipline as every prior phase
-boundary.
+**P1.7b landed 2026-09-15** (imaging follow-ups, left at "--" since P1.7
+landed 2026-08-30 — asked the user which backlog item to pick up next with
+every P4.x item statused): PDF documents now get a real page-1 preview
+(`backend/app/imaging.py` NEW `render_pdf_first_page()`, `pypdfium2`)
+instead of "no preview available" — scale is computed from the page's own
+declared size and applied at render time, so the output's long edge is
+exactly `max_edge` by construction, no separate bomb ceiling needed; a new
+`?size=1400` "web preview" variant on the document-thumbnail endpoint
+avoids pulling a possibly-15MB original over the Branch WAN; both that
+endpoint and the medicine-photo thumbnail gained a strong ETag +
+If-None-Match → 304 (safe — content-addressed already); `clarion-derived`'s
+ILM doc bumped 30→180 days. Deliberately skipped: HEIC input (no confirmed
+real upload source) and an async normalisation worker (no reported
+latency/volume problem). voltagent found 1 Medium + 2 Low; 2 Low fixed
+(shared size-allowlist constant to remove a drift-to-500 risk; the
+medicine-photo thumbnail endpoint was missing `log_access` entirely), the
+Medium (PDFium's internal render cost isn't wall-clock-bounded, only the
+output size is) accepted as a documented residual — bounded today by the
+existing upload-size cap + concurrency gate on a 3-role authenticated
+endpoint, real fix needs a `ProcessPoolExecutor` timeout. 519/519 tests
+pass (3 unrelated pre-existing `test_security_analytics.py` failures are a
+real time-of-day flake, confirmed via `git stash`, not this change).
+
+Next: every top-5 demo priority and every P4.x item is done. Remaining
+backlog: P4.7's real-hardware Modality Worklist gap (deploy-time, not
+buildable here), the RustFS migration off MinIO (deliberately deferred),
+the SMP/SMS/e-klinik/university-DB integration (needs real campus specs),
+P1.7b's own two skipped sub-items if a real need shows up, or P5 (Ops &
+handover — observability/load-testing/two-campus rollout/docs, all
+currently unstarted) — surface the choice rather than assuming order, same
+discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

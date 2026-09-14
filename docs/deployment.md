@@ -828,9 +828,36 @@ analyser itself to send its results to `hl7-listener:2575` on this stack's
   q82) + `backend/app/derived.py` (thumbnails). Medicine photos are normalised
   in place on upload; clinical-document originals are never modified (only a
   derived preview). Owed at deploy: a MinIO **ILM rule on `clarion-derived`** --
-  `mc ilm rule add --expire-days 30 local/clarion-derived` -- and exclude that
+  `mc ilm rule add --expire-days 180 local/clarion-derived` -- and exclude that
   bucket from the backup job. Thumbnails self-heal (regenerated from the
   original on a cache miss), so aggressive expiry is safe.
+- **P1.7b -- imaging follow-ups: DONE (partial, 2026-09-14).** PDF documents
+  now get a real page-1 preview (`app/imaging.py` `render_pdf_first_page`,
+  `pypdfium2`) instead of "no preview available", and the document thumbnail
+  endpoint takes `?size=1400` for a readable "web preview" that avoids
+  pulling a possibly-15MB original over the Branch WAN link. Both variants
+  carry a strong ETag (content-addressed key, so `If-None-Match` -> 304 is
+  safe) -- likewise for the medicine-photo thumbnail. ILM bumped 30 -> 180
+  days above since page-render is pricier to regenerate than a raster resize.
+  Deliberately not built: HEIC input (no confirmed real upload source --
+  medicine-photo upload is browser `image/png,image/jpeg,image/webp` only,
+  and a clinical-document original is kept regardless of whether a preview
+  can be built) and an async normalisation worker (sync-at-upload has no
+  reported latency/volume problem yet -- add when one shows up, not before).
+  **voltagent security review actioned (2 of 3):** the size allowlist used
+  to be duplicated (`derived._ALLOWED_SIZES` vs. a literal tuple in the
+  router) -- now a single exported `derived.ALLOWED_THUMBNAIL_SIZES`, so a
+  future drift can't surface as an unhandled 500; the medicine-photo
+  thumbnail endpoint was missing `log_access` entirely (its sibling
+  GET /image logs `view_medicine_image` -- the thumbnail route now logs
+  `view_medicine_thumbnail` the same way). Left open, documented in
+  `imaging.py` (`render_pdf_first_page` docstring) as a `ponytail:` comment:
+  PDFium's internal cost to rasterize a page's content stream isn't
+  wall-clock-bounded (only the rendered *output* size is, by construction) --
+  bounded today only by the existing 15MB upload cap + 4-way concurrency
+  gate on an internal, authenticated-only endpoint; a real fix needs a
+  `ProcessPoolExecutor` worker with a timeout (a thread/signal timeout can't
+  interrupt a blocking native call).
 - **P1.8 -- runtime config.** ✅ done -- SPA reads `window.__CLARION_API_BASE__`
   (then `VITE_API_BASE`, then localhost). Backend CORS is env-driven and fails
   **closed** (wildcard needs `APP_ENV=demo`). Mobile (Flutter) already

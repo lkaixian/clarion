@@ -35,6 +35,7 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+import pypdfium2 as pdfium
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 # Decoder allowlist — passed to Image.open(formats=...) so nothing else is even
@@ -123,6 +124,13 @@ def is_supported_image(raw: bytes) -> bool:
     """True if ``raw`` sniffs as a format :func:`normalise_image` /
     :func:`make_thumbnail` can decode."""
     return sniff_image_mime(raw) is not None
+
+
+def is_pdf(raw: bytes) -> bool:
+    """Cheap sniff -- true if ``raw`` looks like a PDF. Used by ``derived.py``
+    to decide whether :func:`render_pdf_first_page` applies to a source
+    :func:`is_supported_image` already said no to."""
+    return raw[:5] == b"%PDF-"
 
 
 # --------------------------------------------------------------------------
@@ -221,6 +229,57 @@ def normalise_image(
                 )
         except _DECODE_ERRORS as exc:
             raise ImageProcessingError(f"could not process image: {exc}") from exc
+        return _finalise(img, quality=quality)
+
+
+# pdfium's own error class, plus whatever a malformed page dict throws it as
+# (IndexError on a bad page, ValueError/RuntimeError from its C binding).
+_PDF_ERRORS = (pdfium.PdfiumError, RuntimeError, ValueError, OSError, IndexError)
+
+
+def render_pdf_first_page(
+    raw: bytes,
+    *,
+    max_edge: int = DEFAULT_MAX_EDGE,
+    quality: int = DEFAULT_QUALITY,
+) -> ProcessedImage:
+    """Render page 1 of a PDF to a JPEG preview (P1.7b), longest edge
+    ``<= max_edge``. Unlike the raster path, scale is computed from the
+    page's own declared size and applied *at render time* -- the rendered
+    bitmap's long edge comes out to exactly ``max_edge`` by construction, so
+    there's no separate decompression-bomb ceiling to enforce the way
+    ``MAX_INPUT_PIXELS`` does for rasters (a huge declared page size just
+    means a smaller scale factor, not a bigger bitmap). Only page 1 is ever
+    touched, regardless of how many pages the document declares. Raises
+    :class:`ImageProcessingError` on a corrupt, empty, password-protected, or
+    degenerate (near-zero page size) PDF.
+
+    # ponytail: the *output* bitmap is bomb-proof by construction (above),
+    # but PDFium's internal cost to rasterize the page's content stream
+    # first (a huge embedded image XObject, deeply nested Form XObjects, a
+    # pathological tiling pattern) is NOT bounded here -- only the existing
+    # 15MB upload cap + this module's 4-way _decode_gate limit the blast
+    # radius (voltagent review, 2026-09-15). Upgrade path if this ever
+    # matters on a real deployment: render in a ProcessPoolExecutor worker
+    # with .result(timeout=...), killing/replacing the worker on timeout --
+    # a plain thread/signal timeout can't interrupt a blocking native call.
+    """
+    with _decode_gate:
+        try:
+            pdf = pdfium.PdfDocument(raw)
+            if len(pdf) < 1:
+                raise ImageProcessingError("PDF has no pages")
+            page = pdf[0]
+            width_pt, height_pt = page.get_size()
+            longest_pt = max(width_pt, height_pt)
+            if longest_pt < 1:  # a point is already tiny (1/72in); below that is degenerate
+                raise ImageProcessingError("PDF page too small to render")
+            img = page.render(scale=max_edge / longest_pt).to_pil()
+        except ImageProcessingError:
+            raise
+        except _PDF_ERRORS as exc:
+            raise ImageProcessingError(f"could not render PDF: {exc}") from exc
+        img = _flatten_to_rgb(img)
         return _finalise(img, quality=quality)
 
 
