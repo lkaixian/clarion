@@ -41,7 +41,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Reporting: lab/X-ray/physio reports, Digital MC, Referral Letter, Timeslip | Gap | PDF document generation | Yes (Digital MC) |
 | | Consultation fees | Gap | Billing module | — |
 | | **Clinical decision support layer** | Partial | `ai/summarize.py` + `ai/interactions.py` exist but cloud + rule table → [[On-Prem Clinical AI]] | Yes (flagship) |
-| | **Medication safety engine** (allergy/med/dx screening) | Partial | `ai/interactions.py` + RxNorm; not wired as pre-prescription real-time alert | Yes (flagship) |
+| | **Medication safety engine** (allergy/med/dx screening) | Partial | `ai/interactions.py` + RxNorm/RxClass (P4.4: ATC drug-class layer, wired as a real-time pre-save alert, `GET /ai/prescription-screen`); no licensed formulary (MIMS has no public API) and no diagnosis-based screening | Yes (flagship) |
 | | **Voice → SOAP** transcription | Gap | `faster-whisper` + SOAP segmentation | Yes (flagship) |
 | | Pharmacy: view queue & appointments | Have | `pharmacy.py` + role-page access | Yes |
 | | Dispensing: dispense, history, update, **print label** | Partial | Dispense + history Have; label printing = Gap | Yes |

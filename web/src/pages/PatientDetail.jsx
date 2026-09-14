@@ -6,7 +6,7 @@ import SignaturePad from "../components/SignaturePad";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
   revokeEmergencyCard, getCurrentCardStatus,
-  addCondition, addMedication, addAllergy, addEncounter, getAuditLog,
+  addCondition, addMedication, addAllergy, addEncounter, getAuditLog, screenPrescription,
   updateCondition, updateMedication, updateAllergy, updateEncounter,
   listNfcCards, registerNfcCard, revokeNfcCard, getCurrentUser,
   issuePatientAccount, updateOwnProfile, refreshCurrentUser,
@@ -162,6 +162,20 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // P4.4: real-time safety alert before a NEW medication is
+  // confirmed. `screenResult` holds the last check's findings; `screening`
+  // is a resubmit-to-confirm gate -- once findings are shown, the clinician
+  // must hit "Add Medication" again to actually save. Reset whenever the
+  // drug name changes so a stale acknowledgement can't cover a new drug.
+  const isNewMedication = kind === "medication" && mode === "add";
+  const [screenResult, setScreenResult] = useState(null);
+  const [screening, setScreening] = useState(false);
+  const [screenAcknowledged, setScreenAcknowledged] = useState(false);
+  useEffect(() => {
+    setScreenResult(null);
+    setScreenAcknowledged(false);
+  }, [values.drug_name]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     const missing = config.fields.find(
@@ -171,6 +185,27 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
       setError(`${missing.label} is required.`);
       return;
     }
+
+    if (isNewMedication && !screenAcknowledged) {
+      setScreening(true);
+      setError("");
+      try {
+        const result = await screenPrescription(initial.patientId, values.drug_name);
+        const hasFindings = (result.drug_interactions?.length || 0) + (result.allergy_conflicts?.length || 0) > 0;
+        if (hasFindings) {
+          setScreenResult(result);
+          setScreenAcknowledged(true); // next submit proceeds to save
+          return;
+        }
+      } catch {
+        // Safety-check service unreachable -- fail open (never block care
+        // over an optional check being down), same discipline as the
+        // Medication Interaction Check panel already has.
+      } finally {
+        setScreening(false);
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -257,9 +292,19 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
               )}
             </div>
           ))}
+          {screenResult && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 space-y-1">
+              <p className="font-semibold">Safety check found possible issues:</p>
+              {screenResult.allergy_conflicts.map((c, idx) => <p key={`a${idx}`}>⚠ {c}</p>)}
+              {screenResult.drug_interactions.map((d, idx) => (
+                <p key={`d${idx}`}>⚠ {d.drug_a} + {d.drug_b}: {d.explanation}</p>
+              ))}
+              <p className="text-xs text-red-600">Review before proceeding — click Add Medication again to confirm and save anyway.</p>
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
+            <button disabled={saving || screening} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+              {screening ? "Checking safety..." : saving ? "Saving..." : screenAcknowledged ? "Add anyway" : "Save"}
             </button>
             <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
               Cancel

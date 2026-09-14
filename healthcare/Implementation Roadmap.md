@@ -23,6 +23,78 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.4: medication-safety engine, ATC class layer + real-time pre-save alert
+
+**Done.** Closes the two concrete gaps the Compliance Matrix flagged for
+: the DDI/allergy checks were name-matching only, and nothing was
+wired as a pre-prescription real-time alert.
+
+**ATC drug-class layer** (`backend/app/ai/interactions.py`) — `RxClass`
+(free NIH/NLM data, same family as the already-used RxNorm/DailyMed) resolves
+a medication to its ATC classIds; `RISK_CLASS_PREFIXES`/`CLASS_INTERACTIONS`
+generalize the existing named-pair `KNOWN_INTERACTIONS` table to therapeutic
+classes (e.g. any NSAID + any anticoagulant/antiplatelet, not just the
+specific pairs listed by name) — `check_interactions` tries the named table
+first, falls back to the class table. Every class code used was checked live
+against RxClass for its example drugs before being hardcoded (not guessed).
+Explicitly did **not** attempt a licensed formulary integration (MIMS) — no
+public API, requires a paid clinical-data license, same call as declining a
+fabricated ICD-10/MyDrug/LOINC seed list at P4.1/P4.2.
+
+**Class-aware allergy check** — `ai/cds_hint.py`'s allergy-conflict flag was
+plain-substring-only (a "Penicillin" allergy did not catch an "Amoxicillin"
+prescription). Moved it to `interactions.py` as `check_allergy_conflicts`
+(now shared with the new endpoint below, so the two panels can't disagree)
+and added a second, class-based check via `ALLERGY_CLASS_PREFIXES` — a
+*synchronous*, separate RxNorm/RxClass path (`resolve_drug_classes_sync`),
+deliberately not reusing the async `MedicationProvider`'s event-loop-bound
+client, since this is called from both a sync route (cds-hint) and, via
+`run_in_threadpool`, an async one (prescription-screen) — sharing a client
+across those would risk a cross-event-loop error.
+
+**Real-time pre-save alert** (`GET /ai/prescription-screen/{patient_id}`,
+`backend/app/routers/ai_router.py`) — screens a candidate drug name that has
+**not been saved yet** against the patient's active medications + allergies.
+Wired into the Add Medication modal (`web/src/pages/PatientDetail.jsx`):
+Save first runs the screen; if it finds anything, the form shows the
+findings and requires a second click ("Add anyway") to actually persist —
+the tender's literal "real-time alerts before confirmation" ask. Fails open
+on a screening-service outage (never blocks a save over an optional check
+being down), same discipline as the existing Interaction Check panel.
+Editing an existing medication's dose/frequency does not re-trigger the
+screen — only adding a new one does.
+
+**Deliberately out of scope:** diagnosis-based screening (the tender's
+clause text also says "existing diagnoses") — a real drug-contraindicated-
+by-condition table needs clinical validation this environment can't provide
+without fabricating data, so it's not attempted; Compliance Matrix stays
+Partial for that reason alone.
+
+**voltagent security-auditor reviewed the diff** (RBAC/facility-scoping
+parity with the existing interaction-check endpoint, injection/SSRF in the
+new sync RxNorm/RxClass calls, fail-open behavior, frontend state) — no RBAC
+leak, no injection, no fail-closed regression, no test regression. One real
+finding: `resolve_drug_classes_sync`'s cache key namespace never overlapped
+the async path's, so `GET /ai/prescription-screen` resolved the same
+candidate drug through RxNorm/RxClass **twice** per request (once via
+`check_interactions`, again via `check_allergy_conflicts`) instead of
+sharing the hit — undermining the exact caching rationale the 2026-09-07
+code-review comment in this file exists to explain. **Fixed**:
+`resolve_drug_classes_sync` now reads/writes the identical
+`("resolve_rxcui", ...)`/`("get_drug_classes", ...)` cache keys the async
+provider methods use, not a separate namespace — a drug already resolved
+earlier in the same request is a cache hit, not a second round trip.
+
+Verified: new `backend/tests/test_interactions.py` (9 tests, including a
+regression test that asserts `resolve_drug_classes_sync` makes zero HTTP
+calls for a drug the async path already cached — the exact scenario
+voltagent's finding described; RxNorm/RxClass calls monkeypatched
+throughout, no live network dependency in CI), existing `test_cds_hint.py`
+(3 tests) still pass unchanged, full suite 441/441, `npm run build` clean.
+agy was not delegated here — this was judgment-heavy (choosing/verifying
+real ATC class codes, layering two rule engines without duplicating logic),
+below the break-even for a mechanical hand-off.
+
 ### 2026-09-14 — P4.1 + P4.2: FHIR coding triples + read-only façade
 
 Both **done**. Per [[FHIR Schema Readiness]]'s "annotate + thin façade, don't
@@ -1562,7 +1634,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`) + **NL report narrative** — local-LLM prose summary over the Reporting engine's structured output (`/reports/narrative`) | M |, → [[On-Prem Clinical AI]] | ✅ 2026-09-14 |
-| P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | — |
+| P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | 🟡 2026-09-14 (ATC drug-class layer + real-time pre-save alert done; MIMS itself out of reach — no public API; diagnosis-based screening not attempted) |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
 | P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core: Orthanc + manual upload + embedded dwv viewer done; PG index/S3 plugins + Orthanc auth + real Modality Worklist still open) |

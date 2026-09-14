@@ -264,6 +264,10 @@ export const getServiceRequestLabelBlob = (requestId) =>
 
 export const getSummary = (id) => client.get(`/ai/summary/${id}`).then((r) => r.data);
 export const getInteractionCheck = (id) => client.get(`/ai/interaction-check/${id}`).then((r) => r.data);
+// P4.4: pre-save safety check for a medication not yet added --
+// see the Add Medication modal in PatientDetail.jsx.
+export const screenPrescription = (id, drugName) =>
+  client.get(`/ai/prescription-screen/${id}?drug_name=${encodeURIComponent(drugName)}`).then((r) => r.data);
 export const digitiseDocument = (id, docType, file) => {
   const form = new FormData();
   form.append("file", file);

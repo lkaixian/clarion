@@ -212,12 +212,28 @@ over P4.7** (re-derived from the code, not from the prior review's
 changelog claim) confirmed the zip-bomb fix and facility-scoping are both
 still sound — no new findings.
 
-Next: every top-5 demo priority is now done, and P4.1/P4.2 close one more
-gap in the Compliance Matrix. Remaining backlog is P4.7's own go-live TODOs
-(Orthanc auth + PG/S3 plugins + real Modality Worklist), P4.4
-(medication-safety rule engine), or the P4.x items with no status yet
-(P4.5/4.6) — surface the choice rather than assuming order, same discipline
-as every prior phase boundary.
+**P4.4 landed 2026-09-14** (medication-safety engine): an ATC
+drug-class layer on `ai/interactions.py`'s DDI/allergy checks (RxClass, same
+free NIH/NLM family as RxNorm/DailyMed — e.g. a "Penicillin" allergy now
+also catches "Amoxicillin" via their shared class, not just an exact name
+match) plus a new real-time pre-save check, `GET /ai/prescription-screen`,
+wired into the Add Medication form so a conflict must be acknowledged with
+a second click before it saves — the tender's literal "alerts before
+confirmation" ask. Deliberately skipped: MIMS itself (no public API, needs
+a paid clinical-data license) and diagnosis-based screening (would need
+fabricated clinical data) — Compliance Matrix stays Partial for those two.
+voltagent security-auditor reviewed it clean on RBAC/injection/fail-open,
+caught one real issue (the new sync RxClass path wasn't sharing the async
+path's cache, doubling NIH calls per screen) — fixed, with a regression
+test. 441/441 backend tests pass, web build clean. agy wasn't delegated —
+judgment-heavy (curating/verifying real ATC codes), below the break-even.
+
+Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4 have each
+closed a Compliance Matrix gap. Remaining backlog is P4.7's own go-live
+TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist), or the P4.x
+items with no status yet (P4.5 AI audit-trail intelligence, P4.6 predictive
+analytics, P4.8 integration layer) — surface the choice rather than
+assuming order, same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

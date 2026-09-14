@@ -23,13 +23,35 @@ CLARION uses this module for two related, but distinct, purposes:
    ``KNOWN_INTERACTIONS``) and for cross-facility duplicate-prescription
    detection. DailyMed supplies official FDA Structured Product Labeling.
 
+3. Drug-class-level screening (P4.4, the tender), layered on
+   top of both of the above using RxClass (also free NIH/NLM data, same
+   family as RxNorm/DailyMed):
+   - ``CLASS_INTERACTIONS`` generalizes ``KNOWN_INTERACTIONS`` from named
+     pairs to therapeutic classes (matched by ATC classId prefix, e.g. any
+     NSAID + any anticoagulant/antiplatelet), so ``check_interactions``
+     catches combinations the named-pair table doesn't happen to list.
+   - ``check_allergy_conflicts`` (used by ``ai/cds_hint.py``) generalizes
+     the plain substring allergy check the same way -- e.g. a "Penicillin"
+     allergy now also flags "Amoxicillin" via their shared ATC class, not
+     just an exact name match.
+   - ``screen_prescription`` (used by the pre-save Add Medication check,
+     ``GET /ai/prescription-screen/{patient_id}``) runs both checks against
+     a single candidate drug name that has not been saved yet -- the
+     tender's "real-time alert before confirmation" requirement.
+
 Important:
 - RxNorm/DailyMed support does NOT constitute a complete drug-drug
   interaction (DDI) engine. Absence of a warning or label match must NOT be
   interpreted as proof that no interaction exists.
 - For production clinical DDI screening, replace/extend
-  ``KNOWN_INTERACTIONS`` with a validated clinical drug-interaction
-  database/service.
+  ``KNOWN_INTERACTIONS``/``CLASS_INTERACTIONS`` with a validated clinical
+  drug-interaction database/service (e.g. First Databank, Micromedex, or
+  Malaysia's MIMS). MIMS itself has no public API and requires a paid
+  clinical-data license -- out of reach for a self-hosted demo, same call as
+  declining to fabricate a seed ICD-10/MyDrug/LOINC list in P4.1/P4.2 (see
+  the roadmap). ``RISK_CLASS_PREFIXES``/``ALLERGY_CLASS_PREFIXES`` below are
+  a small, curated set of real ATC classes -- a genuine improvement over
+  plain name matching, still not a licensed formulary's full coverage.
 
 The public function signatures are intentionally simple so the backend API
 and frontend do not need to change when a production DDI provider is added.
@@ -106,8 +128,62 @@ KNOWN_INTERACTIONS: dict[frozenset[str], tuple[str, str]] = {
 
 RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST"
 DAILYMED_BASE_URL = "https://dailymed.nlm.nih.gov/dailymed/services"
+RXCLASS_BASE_URL = "https://rxnav.nlm.nih.gov/REST/rxclass"
 
 DEFAULT_TIMEOUT = 10.0
+
+# ---------------------------------------------------------------------------
+# Class-level rule tables (P4.4)
+# ---------------------------------------------------------------------------
+# ATC codes are hierarchical (e.g. "B01AA" -- Vitamin K antagonists -- sits
+# under "B01A" -- Antithrombotic agents), so a classId *prefix* groups every
+# drug in a therapeutic class without listing each one by name. Each label
+# below was checked against RxNav's live RxClass API for its example drugs
+# before being added here (see the P4.4 changelog entry) -- these are not
+# guessed class codes.
+RISK_CLASS_PREFIXES: dict[str, tuple[str, ...]] = {
+    "anticoagulant_or_antiplatelet": ("B01A",),  # e.g. warfarin, clopidogrel, DOACs
+    "nsaid": ("M01A",),                          # e.g. ibuprofen, naproxen, diclofenac
+    "ace_inhibitor": ("C09A",),                  # e.g. lisinopril, enalapril
+    "potassium_sparing_diuretic": ("C03D",),     # e.g. spironolactone
+    "statin": ("C10AA",),                        # e.g. simvastatin, atorvastatin
+    "macrolide": ("J01FA",),                     # e.g. clarithromycin, erythromycin
+}
+
+# (class_a, class_b) -> (severity, explanation), matched the same way as
+# KNOWN_INTERACTIONS but keyed on the labels above instead of drug names --
+# demo-scope curated set, not exhaustive.
+CLASS_INTERACTIONS: dict[frozenset[str], tuple[str, str]] = {
+    frozenset({"anticoagulant_or_antiplatelet", "nsaid"}): (
+        "high",
+        "NSAIDs increase bleeding risk when combined with any anticoagulant "
+        "or antiplatelet agent (drug-class match).",
+    ),
+    frozenset({"ace_inhibitor", "potassium_sparing_diuretic"}): (
+        "moderate",
+        "ACE inhibitors combined with potassium-sparing diuretics raise the "
+        "risk of hyperkalaemia (drug-class match).",
+    ),
+    frozenset({"statin", "macrolide"}): (
+        "high",
+        "Macrolide antibiotics can raise statin plasma levels via CYP3A4 "
+        "inhibition, increasing risk of myopathy/rhabdomyolysis (drug-class "
+        "match).",
+    ),
+}
+
+# Allergy-substance keyword (matched as a substring of the clinician-entered
+# allergy substance, same convention as the plain-name check below) -> ATC
+# classId prefixes it cross-reacts with. Also verified live against RxClass
+# for the example drugs before being added.
+ALLERGY_CLASS_PREFIXES: dict[str, tuple[str, ...]] = {
+    "penicillin": ("J01C",),      # e.g. amoxicillin, ampicillin
+    "cephalosporin": ("J01D",),   # e.g. cephalexin
+    "sulfa": ("J01E",),           # e.g. sulfamethoxazole
+    "sulfonamide": ("J01E",),
+    "nsaid": ("M01A",),           # e.g. ibuprofen, naproxen
+    "aspirin": ("M01A", "N02BA"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +434,49 @@ class MedicationProvider:
         _cache_put(cache_key, result)
         return result
 
+    async def get_drug_classes(
+        self,
+        rxcui: str,
+    ) -> frozenset[str]:
+        """
+        Resolve an RxCUI to its ATC classIds via RxClass (P4.4).
+
+        Returns an empty frozenset when RxClass reports no classes for this
+        RxCUI. Raises `MedicationServiceError` on a provider failure -- same
+        as `resolve_rxcui`/`get_rxcui_properties` -- callers isolate this via
+        `asyncio.gather(return_exceptions=True)`, same pattern as the rest of
+        this module.
+        """
+
+        if not rxcui.strip():
+            return frozenset()
+
+        cache_key = ("get_drug_classes", rxcui.strip())
+        cached = _cache_get(cache_key)
+        if cached is not _MISS:
+            return cached
+
+        url = f"{RXCLASS_BASE_URL}/class/byRxcui.json"
+
+        data = await self._get(
+            url,
+            params={
+                "rxcui": rxcui,
+                "relaSource": "ATC",
+            },
+        )
+
+        items = data.get("rxclassDrugInfoList", {}).get("rxclassDrugInfo") or []
+
+        class_ids = frozenset(
+            item.get("rxclassMinConceptItem", {}).get("classId")
+            for item in items
+            if item.get("rxclassMinConceptItem", {}).get("classId")
+        )
+
+        _cache_put(cache_key, class_ids)
+        return class_ids
+
     async def normalize_medication(
         self,
         medication_name: str,
@@ -526,6 +645,52 @@ async def _normalize_many(
     return normalized
 
 
+async def _resolve_classes_many(
+    normalized: dict[str, NormalizedMedication],
+    provider: MedicationProvider,
+) -> dict[str, frozenset[str]]:
+    """
+    Resolve ATC drug classes (P4.4) for every already-RxNorm-resolved
+    medication in `normalized`, concurrently. Skips medications RxNorm could
+    not identify -- there is no RxCUI to look up classes for. A single
+    medication's class lookup failure is isolated to that medication and
+    degrades to an empty class set, same discipline as `_normalize_many`.
+
+    Returns a mapping keyed the same way as `normalized` (casefolded name).
+    """
+
+    resolvable = [(key, med.rxcui) for key, med in normalized.items() if med.rxcui]
+
+    if not resolvable:
+        return {}
+
+    raw_results = await asyncio.gather(
+        *(provider.get_drug_classes(rxcui) for _, rxcui in resolvable),
+        return_exceptions=True,
+    )
+
+    classes: dict[str, frozenset[str]] = {}
+
+    for (key, _), result in zip(resolvable, raw_results):
+        classes[key] = frozenset() if isinstance(result, BaseException) else result
+
+    return classes
+
+
+def _labels_for_classes(
+    class_ids: frozenset[str],
+    table: dict[str, tuple[str, ...]],
+) -> set[str]:
+    """Map a drug's ATC classIds to the risk-category labels (keys of
+    `table`) whose prefixes it matches -- see RISK_CLASS_PREFIXES /
+    ALLERGY_CLASS_PREFIXES."""
+    return {
+        label
+        for label, prefixes in table.items()
+        if any(class_id.startswith(prefix) for class_id in class_ids for prefix in prefixes)
+    }
+
+
 def _canonical_key(
     name: str,
     normalized: NormalizedMedication | None,
@@ -638,12 +803,32 @@ async def check_interactions(
         for name in cleaned
     ]
 
+    # P4.4: ATC-class labels per drug, so a pair with no exact entry in
+    # KNOWN_INTERACTIONS can still be caught at the class level (e.g. any
+    # NSAID + any anticoagulant, not just the specific pairs listed there).
+    class_map = await _resolve_classes_many(normalized_map, provider)
+    class_labels = [
+        _labels_for_classes(class_map.get(name.casefold(), frozenset()), RISK_CLASS_PREFIXES)
+        for name in cleaned
+    ]
+
     findings: list[dict[str, Any]] = []
 
     for i, j in combinations(range(len(cleaned)), 2):
         key = frozenset({canonical_keys[i], canonical_keys[j]})
 
         match = KNOWN_INTERACTIONS.get(key)
+
+        if match is None:
+            match = next(
+                (
+                    CLASS_INTERACTIONS[frozenset({label_a, label_b})]
+                    for label_a in class_labels[i]
+                    for label_b in class_labels[j]
+                    if label_a != label_b and frozenset({label_a, label_b}) in CLASS_INTERACTIONS
+                ),
+                None,
+            )
 
         if match is None:
             continue
@@ -1008,3 +1193,149 @@ async def reconcile_medications(
             ),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Allergy-conflict check (P4.4) -- used by ai/cds_hint.py's mid-consult
+# reference note AND by GET /ai/prescription-screen's pre-save alert
+# (routers/ai_router.py).
+# ---------------------------------------------------------------------------
+# Deliberately synchronous, with its own plain httpx calls (not
+# MedicationProvider's async client): cds-hint's `def` route runs Ollama's
+# own blocking HTTP call already, so calling this directly is free; the
+# prescription-screen `async def` route calls this via
+# `starlette.concurrency.run_in_threadpool` instead (same convention as
+# every other blocking ai/* call from an async route in this codebase --
+# see e.g. routers/consultation.py's voice_to_soap call). Reusing the async
+# client's event-loop-bound connection pool from a worker thread would risk
+# a cross-event-loop error, so this stays a small, separate, sync-only path.
+
+def _sync_get(url: str, params: dict[str, Any]) -> dict[str, Any] | None:
+    """Synchronous GET for the allergy-conflict check's RxNorm/RxClass
+    lookups. Never raises -- any failure (network, timeout, bad JSON)
+    returns None so the caller degrades to the plain substring check alone,
+    same discipline as local_llm.py's `_call_ollama`."""
+    try:
+        resp = httpx.get(
+            url,
+            params=params,
+            timeout=DEFAULT_TIMEOUT,
+            headers={"Accept": "application/json", "User-Agent": "CLARION/1.0"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
+def resolve_drug_classes_sync(medication_name: str) -> frozenset[str]:
+    """
+    Synchronous counterpart to `MedicationProvider.get_drug_classes` --
+    resolves a medication name straight to its ATC classIds. Reads/writes
+    the exact same cache keys the async path (`resolve_rxcui`/
+    `get_drug_classes`) uses -- not just the same dict -- so a drug already
+    resolved by `check_interactions` earlier in the same request (see
+    `GET /ai/prescription-screen`, which calls both) is a cache hit here
+    instead of a second round trip to RxNorm/RxClass for the same name.
+    Returns an empty frozenset on any failure or unresolved name; never
+    raises.
+    """
+
+    name = medication_name.strip()
+
+    if not name:
+        return frozenset()
+
+    rxcui_key = ("resolve_rxcui", name.casefold())
+    rxcui = _cache_get(rxcui_key)
+
+    if rxcui is _MISS:
+        rxcui_data = _sync_get(f"{RXNORM_BASE_URL}/rxcui.json", {"name": name, "search": 1})
+        rxnorm_ids = ((rxcui_data or {}).get("idGroup") or {}).get("rxnormId") or []
+        rxcui = str(rxnorm_ids[0]) if rxnorm_ids else None
+        _cache_put(rxcui_key, rxcui)
+
+    if not rxcui:
+        return frozenset()
+
+    classes_key = ("get_drug_classes", rxcui)
+    class_ids = _cache_get(classes_key)
+    if class_ids is not _MISS:
+        return class_ids
+
+    class_data = _sync_get(
+        f"{RXCLASS_BASE_URL}/class/byRxcui.json",
+        {"rxcui": rxcui, "relaSource": "ATC"},
+    )
+    items = ((class_data or {}).get("rxclassDrugInfoList") or {}).get("rxclassDrugInfo") or []
+
+    class_ids = frozenset(
+        item.get("rxclassMinConceptItem", {}).get("classId")
+        for item in items
+        if item.get("rxclassMinConceptItem", {}).get("classId")
+    )
+
+    _cache_put(classes_key, class_ids)
+    return class_ids
+
+
+def check_allergy_conflicts(allergies: list[dict], active_medications: list[dict]) -> list[str]:
+    """
+    Flag active medications that may conflict with a recorded allergy.
+
+    Two checks per allergy/medication pair:
+    1. Plain, case-insensitive substring match (e.g. a "Penicillin" allergy
+       against a "Penicillin"-containing prescription).
+    2. ATC drug-class match via RxNorm/RxClass (e.g. a "Penicillin" allergy
+       against an "Amoxicillin" prescription -- P4.4's class-aware floor,
+       see ALLERGY_CLASS_PREFIXES). Only attempted when check 1 didn't
+       already flag the pair, and skipped entirely for an allergy substance
+       that matches no known class keyword. Degrades silently to check 1
+       alone if RxNorm/RxClass is unreachable (never raises).
+
+    Neither is a full allergist-grade cross-reactivity engine -- see the
+    module docstring.
+    """
+
+    conflicts: list[str] = []
+    resolved_classes: dict[str, frozenset[str]] = {}
+
+    for allergy in allergies:
+        substance = (allergy.get("substance") or "").strip().lower()
+        if not substance:
+            continue
+
+        severity = allergy.get("severity", "unknown")
+        class_keys = [key for key in ALLERGY_CLASS_PREFIXES if key in substance]
+
+        for med in active_medications:
+            drug_name = (med.get("drug_name") or "").strip()
+            if not drug_name:
+                continue
+
+            drug_lower = drug_name.lower()
+
+            if substance in drug_lower or drug_lower in substance:
+                conflicts.append(
+                    f"Active medication '{drug_name}' may relate to recorded "
+                    f"allergy '{allergy['substance']}' ({severity} severity)."
+                )
+                continue
+
+            if not class_keys:
+                continue
+
+            if drug_lower not in resolved_classes:
+                resolved_classes[drug_lower] = resolve_drug_classes_sync(drug_name)
+            drug_classes = resolved_classes[drug_lower]
+
+            prefixes = [prefix for key in class_keys for prefix in ALLERGY_CLASS_PREFIXES[key]]
+            if any(class_id.startswith(prefix) for class_id in drug_classes for prefix in prefixes):
+                conflicts.append(
+                    f"Active medication '{drug_name}' is in the same drug "
+                    f"class as recorded allergy '{allergy['substance']}' "
+                    f"({severity} severity) -- cross-reactivity risk via "
+                    f"RxNorm/RxClass, not a name match."
+                )
+
+    return conflicts

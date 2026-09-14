@@ -14,6 +14,7 @@ from ..ai.interactions import (
     MedicationProvider,
     check_interactions,
     check_duplicate_prescriptions,
+    check_allergy_conflicts,
     get_medication_support,
 )
 from ..ai.ocr import extract_text_from_image, extract_structured_fields
@@ -101,6 +102,57 @@ async def get_interaction_check(
         "cross_facility_duplicates": duplicates,
         "medication_support": medication_support,
     }
+
+
+@router.get("/prescription-screen/{patient_id}")
+async def screen_prescription(
+    patient_id: str, drug_name: str, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin", "clinician", "records_officer")),
+):
+    """Real-time pre-confirmation safety check (P4.4, tender clause
+) for a medication that has NOT been saved yet -- called from
+    the Add Medication form before its Save actually persists anything; this
+    endpoint itself writes nothing. Screens `drug_name` against the
+    patient's current active medications (same pairwise DDI engine as
+    GET /ai/interaction-check, incl. the ATC class-level layer) and recorded
+    allergies (same check ai/cds_hint.py uses mid-consult), so this and the
+    two existing advisory panels never disagree about what counts as a
+    conflict.
+
+    Same records_shared_publicly filtering as interaction-check: goes
+    through _serialize_patient so an opted-out facility's medications/
+    allergies don't leak into the screen.
+    """
+    drug_name = drug_name.strip()
+    if not drug_name:
+        raise HTTPException(status_code=422, detail="drug_name is required")
+
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    record = _serialize_patient(patient, db, current_user)
+    active_meds = [m for m in record["medications"] if m.get("active")]
+    active_names = [m["drug_name"] for m in active_meds]
+
+    provider = MedicationProvider()
+    all_interactions = await check_interactions([drug_name, *active_names], provider=provider)
+    candidate_key = drug_name.lower()
+    drug_interactions = [
+        finding for finding in all_interactions
+        if finding["drug_a"] == candidate_key or finding["drug_b"] == candidate_key
+    ]
+
+    # check_allergy_conflicts makes its own plain (non-shared-client) HTTP
+    # calls -- run off the event loop like every other blocking ai/* call in
+    # this router (see e.g. extract_text_from_image above).
+    allergy_conflicts = await run_in_threadpool(
+        check_allergy_conflicts, record["allergies"], [{"drug_name": drug_name}],
+    )
+
+    log_access(db, patient_id, current_user.id, current_user.role, "screen_prescription",
+               actor_facility=current_user.facility)
+    return {"drug_interactions": drug_interactions, "allergy_conflicts": allergy_conflicts}
 
 
 @router.post("/digitise/{patient_id}")
