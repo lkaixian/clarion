@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from . import models, permissions
+from . import log_context, models, permissions
 from .database import get_db
 
 # Defensive/idempotent: app/main.py already calls load_dotenv() as early as
@@ -463,6 +463,12 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
         if user.password_changed_at.timestamp() > float(token_pwd_changed_at):
             raise credentials_exception
 
+    # P5.1: bind once here (the single choke point every authenticated
+    # request passes through) so every log line for the rest of this
+    # request carries who made it via app.log_context.ContextFilter,
+    # without threading current_user through every router's own
+    # logger.info(...) call site.
+    log_context.bind_user(user.id, user.role, user.facility)
     return user
 
 

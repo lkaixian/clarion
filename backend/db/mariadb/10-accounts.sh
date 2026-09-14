@@ -5,12 +5,23 @@
 # first container init (empty datadir). Idempotent anyway (CREATE USER IF NOT
 # EXISTS + ALTER USER ... IDENTIFIED BY), so re-running by hand is safe.
 #
-# Three accounts, mapped to the three things that touch the DB:
+# Four accounts, mapped to the four things that touch the DB:
 #   clarion_app     -- the running FastAPI app. DML only, NO DDL. This is the
 #                      account DATABASE_URL points at in production.
 #   clarion_migrate -- deploy-time only: runs `alembic upgrade head`. Full
 #                      rights on the clarion schema (needs DDL).
 #   clarion_report  -- read-only. Reporting queries + future integrations.
+#   clarion_metrics -- P5.1: mysqld-exporter (Prometheus). PROCESS +
+#                      REPLICATION CLIENT are inherently server-global
+#                      privileges in MySQL/MariaDB (there is no
+#                      schema-scoped equivalent -- they read SHOW
+#                      PROCESSLIST / SHOW MASTER STATUS server state, not
+#                      table data), so this is the one account here that
+#                      isn't scoped to \`${db}\` -- SELECT on
+#                      performance_schema/information_schema is what the
+#                      exporter's own default collector set actually reads
+#                      row data from. No access to the clarion schema
+#                      itself.
 #
 # NOTE (P2.9): audit_logs is meant to be append-only for clarion_app
 # (INSERT/SELECT, no UPDATE/DELETE). MariaDB has no partial_revokes, so a
@@ -23,7 +34,7 @@
 # docs/deployment.md "Audit hash chain".
 set -euo pipefail
 
-for v in MARIADB_ROOT_PASSWORD MARIADB_APP_PASSWORD MARIADB_MIGRATE_PASSWORD MARIADB_REPORT_PASSWORD; do
+for v in MARIADB_ROOT_PASSWORD MARIADB_APP_PASSWORD MARIADB_MIGRATE_PASSWORD MARIADB_REPORT_PASSWORD MARIADB_METRICS_PASSWORD; do
     if [ -z "${!v:-}" ]; then
         echo "10-accounts.sh: $v must be set" >&2
         exit 1
@@ -47,6 +58,11 @@ GRANT ALL PRIVILEGES ON \`${db}\`.* TO 'clarion_migrate'@'%';
 CREATE USER IF NOT EXISTS 'clarion_report'@'%'  IDENTIFIED BY '${MARIADB_REPORT_PASSWORD}';
 ALTER  USER              'clarion_report'@'%'  IDENTIFIED BY '${MARIADB_REPORT_PASSWORD}';
 GRANT SELECT ON \`${db}\`.* TO 'clarion_report'@'%' WITH MAX_USER_CONNECTIONS 20;
+
+CREATE USER IF NOT EXISTS 'clarion_metrics'@'%' IDENTIFIED BY '${MARIADB_METRICS_PASSWORD}';
+ALTER  USER              'clarion_metrics'@'%' IDENTIFIED BY '${MARIADB_METRICS_PASSWORD}';
+GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'clarion_metrics'@'%' WITH MAX_USER_CONNECTIONS 3;
+GRANT SELECT ON \`performance_schema\`.* TO 'clarion_metrics'@'%';
 SQL
 
-echo "10-accounts.sh: clarion_app / clarion_migrate / clarion_report created on \`${db}\`"
+echo "10-accounts.sh: clarion_app / clarion_migrate / clarion_report / clarion_metrics created on \`${db}\`"

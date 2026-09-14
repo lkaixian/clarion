@@ -96,6 +96,8 @@ services:
       # so the app works out-of-the-box in demo mode.
       DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clarion.db}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # P5.1: JSON logs (app/log_context.py) -- stdout -> Promtail -> Loki.
+      LOG_FORMAT: ${LOG_FORMAT:-json}
       # gunicorn trusts X-Forwarded-* only from the edge proxy's fixed
       # address (see the proxy service). The rate limiter keys on the
       # resulting client IP, so this must never widen to "*".
@@ -137,8 +139,11 @@ services:
     networks:
       # edge: reachable by the proxy (and web's fallback /api proxy).
       # internal: reaches mariadb / minio / redis. NOT the other way round.
+      # observability (P5.1): scraped by prometheus (GET /metrics) -- read
+      # access only, this network carries no inbound write path to anything.
       - edge
       - internal
+      - observability
     depends_on:
       redis:
         condition: service_healthy
@@ -147,8 +152,10 @@ services:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      # See Dockerfile note: probes "/" until /healthz exists (P5.1).
-      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=4).status==200 else 1)"]
+      # P5.1: liveness only (see app/main.py's /healthz docstring) -- /readyz
+      # (DB + object store) exists too but isn't what a container restart
+      # policy should key on.
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 40s
@@ -523,13 +530,228 @@ services:
         touch /backup/cron.log
         cron && tail -F /backup/cron.log
 
+  # -------------------------------------------------------------------------
+  # Observability tier (roadmap P5.1, the tender) -- behind its own
+  # profile, same reasoning as `mariadb`/`backup`/`migrate` above: this is
+  # ops infrastructure, not something the base demo boot needs, and keeping
+  # it opt-in means it can never be the reason the core stack fails to come
+  # up (e.g. Alertmanager refusing to start without a real SMTP secret --
+  # see observability/alertmanager.yml). Bring it up with:
+  #   docker compose --profile observability up -d
+  #   docker compose --profile mariadb --profile observability up -d   # + mysqld-exporter
+  # `backend` itself is NOT behind this profile -- it always joins the
+  # `observability` network (see its own `networks:` above) so Prometheus
+  # can scrape it whenever this profile IS active, without backend needing
+  # to know or care whether it is.
+  # -------------------------------------------------------------------------
+
+  prometheus:
+    <<: *restart
+    profiles: ["observability"]
+    image: prom/prometheus:v3.0.1
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=90d
+    expose:
+      - "9090"
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  alertmanager:
+    <<: *restart
+    profiles: ["observability"]
+    image: prom/alertmanager:v0.28.0
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # smtp_auth_password_file (see alertmanager.yml) -- empty by default
+      # (only .gitkeep is committed, see .gitignore); provision a real
+      # observability/secrets/smtp_password before relying on this for a
+      # real deployment.
+      - ./observability/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager_data:/alertmanager
+    expose:
+      - "9093"
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  grafana:
+    # No env_file (unlike most services above) -- it needs only the two
+    # GRAFANA_ADMIN_* vars, already resolved via ${...} interpolation below,
+    # and this way it never sees MARIADB_ROOT_PASSWORD/MINIO_ROOT_PASSWORD/
+    # SECRET_KEY/MAILGUN_* the way env_file's blanket dump would hand it.
+    <<: *restart
+    profiles: ["observability"]
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      # No "change-me" fallback here on purpose -- Grafana refuses an empty
+      # admin password outright at startup, so an unset value fails loudly
+      # rather than shipping a guessable default (unlike most other
+      # `change-me-*` fallbacks in this file).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env.docker}
+      # Anonymous access stays off (Grafana's own default) -- this dashboard
+      # can show PHI-adjacent operational data (e.g. per-facility request
+      # volume), so it gets a real login like everything else in this stack.
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards/json:ro
+      - grafana_data:/var/lib/grafana
+    # Published directly (unlike MinIO's admin console, which stays
+    # commented out) -- Grafana's whole point is visibility for the team,
+    # and it still sits behind its own real login.
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - observability
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  loki:
+    <<: *restart
+    profiles: ["observability"]
+    image: grafana/loki:3.3.2
+    volumes:
+      - ./observability/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # Tails every container's stdout/stderr (structured JSON from `backend`
+  # thanks to LOG_FORMAT=json above; plain text from everything else) and
+  # ships it to Loki. Needs the Docker socket read-only to discover
+  # containers and find their json-file log paths -- this is the standard
+  # Promtail idiom, but is worth being explicit about: read access to the
+  # Docker socket is broad (any container's logs, not just this stack's),
+  # so this trades that for not having to configure a static list of log
+  # paths that drifts every time a service is added/renamed. `:ro` limits
+  # promtail's OWN mount to read-only; it doesn't change what the socket
+  # itself permits a process that talks to it, so this is still the socket
+  # access Grafana's own docs assume promtail gets in this deployment shape.
+  promtail:
+    <<: *restart
+    profiles: ["observability"]
+    image: grafana/promtail:3.3.2
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: ["-config.file=/etc/promtail/config.yml"]
+    networks:
+      - observability
+    depends_on:
+      loki:
+        condition: service_started
+
+  # Host metrics (CPU/mem/disk/network). Deliberately on the bridge network
+  # rather than network_mode: host, unlike most node-exporter examples --
+  # every other service in this stack is network-isolated the same way, and
+  # container-scoped CPU/mem/filesystem metrics (what DiskSpaceWarning/
+  # Critical in alert.rules.yml actually need) don't require host networking.
+  # Real host network-interface stats are the accepted tradeoff.
+  node-exporter:
+    <<: *restart
+    profiles: ["observability"]
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    expose:
+      - "9100"
+    networks:
+      - observability
+
+  # MariaDB metrics -- only meaningful with BOTH profiles active:
+  #   docker compose --profile mariadb --profile observability up -d
+  # (needs the mariadb service to actually exist). See
+  # backend/db/mariadb/10-accounts.sh for the clarion_metrics account this
+  # authenticates as (PROCESS + REPLICATION CLIENT + performance_schema
+  # SELECT only -- no access to the clarion schema itself).
+  #
+  # Review finding (2026-09-15): PROCESS is what SHOW FULL PROCESSLIST needs,
+  # which can show OTHER connections' live SQL text -- and clarion_app's
+  # driver (PyMySQL) does client-side %s interpolation, not server-side
+  # prepared statements, so a query's literal parameter values (NRIC, names,
+  # clinical text) sit in that SQL text while it's executing. The default
+  # collector set does NOT actually run SHOW PROCESSLIST, but the
+  # CREDENTIAL carries that capability regardless -- --collect.info_schema.
+  # processlist=false pins that off explicitly (belt-and-suspenders against
+  # a future default flip or someone adding flags later).
+  # MARIADB_METRICS_PASSWORD is therefore NOT a throwaway monitoring
+  # credential -- same rotation/secrecy tier as MARIADB_APP_PASSWORD.
+  mysqld-exporter:
+    # No env_file -- only MARIADB_METRICS_PASSWORD, already resolved via
+    # ${...} below; same reasoning as grafana's own comment above.
+    <<: *restart
+    profiles: ["observability"]
+    image: prom/mysqld-exporter:v0.15.1
+    command:
+      - --collect.info_schema.processlist=false
+    environment:
+      DATA_SOURCE_NAME: "clarion_metrics:${MARIADB_METRICS_PASSWORD:-change-me-metrics-password}@(mariadb:3306)/"
+    expose:
+      - "9104"
+    networks:
+      - internal
+      - observability
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
 # ===========================================================================
-# Networks -- two segments, nothing on the default network.
-#   edge     : proxy <-> web, proxy <-> backend. Fixed subnet so the proxy
-#              holds a stable address (172.28.0.2) that the backend trusts
-#              for X-Forwarded-* (FORWARDED_ALLOW_IPS). web has no route to
-#              the data tier; the data/PACS tier has no route to the API.
-#   internal : backend <-> mariadb / minio / redis / orthanc(+pg).
+# Networks -- three segments, nothing on the default network.
+#   edge          : proxy <-> web, proxy <-> backend. Fixed subnet so the
+#                   proxy holds a stable address (172.28.0.2) that the
+#                   backend trusts for X-Forwarded-* (FORWARDED_ALLOW_IPS).
+#                   web has no route to the data tier; the data/PACS tier
+#                   has no route to the API.
+#   internal      : backend <-> mariadb / minio / redis / orthanc(+pg).
+#   observability : prometheus/grafana/loki/promtail/alertmanager/
+#                   exporters <-> backend (scraped) / mariadb (via
+#                   mysqld-exporter, also on `internal`). backend always
+#                   joins this network; the rest of the tier is behind the
+#                   `observability` profile (P5.1) -- see that profile's
+#                   own comment above the first service using it.
 # ===========================================================================
 networks:
   edge:
@@ -542,6 +764,8 @@ networks:
           ip_range: 172.28.10.0/24
           gateway: 172.28.0.1
   internal:
+    driver: bridge
+  observability:
     driver: bridge
 
 # ===========================================================================
@@ -558,3 +782,7 @@ volumes:
   orthanc_pg_data:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+  loki_data:

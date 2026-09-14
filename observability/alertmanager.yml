@@ -1,0 +1,51 @@
+# CLARION -- Alertmanager config (roadmap P5.1, the tender "contactable
+# about issues via mobile phone (call/WhatsApp) or email").
+#
+# Every value below is a DEMO PLACEHOLDER an operator edits directly before a
+# real deployment -- unlike proxy/Caddyfile (which uses Caddy's own native
+# {$VAR} templating) or the app's own env-driven config, Alertmanager's
+# official image ships no shell/envsubst to render a templated config file at
+# startup, so there is no equivalent "just set an env var" path here. This
+# matches how proxy/certs/'s TLS cert pair or
+# backend/db/mariadb/10-accounts.sh's SQL are handled: a real file/value an
+# operator provides, not something templated from docker-compose.yml.
+#
+# The actual password is NOT in this file -- smtp_auth_password_file points
+# at observability/secrets/smtp_password (git-ignored, same pattern as
+# proxy/certs/). The demo ships with neither the addresses below nor that
+# secrets file customized: Alertmanager starts fine regardless and simply
+# fails (logged, not fatal to the container) to actually deliver a real email
+# until both are provisioned.
+global:
+  smtp_smarthost: "smtp.example.edu.my:587"
+  smtp_from: "clarion-alerts@example.edu.my"
+  smtp_auth_username: "clarion-alerts@example.edu.my"
+  smtp_auth_password_file: /etc/alertmanager/secrets/smtp_password
+  smtp_require_tls: true
+
+route:
+  receiver: email
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: email
+    email_configs:
+      - to: "ict-oncall@example.edu.my"
+        send_resolved: true
+
+  # WhatsApp is the clause's other channel -- deliberately NOT
+  # wired up. It needs a real Meta WhatsApp Business Cloud API app (or a
+  # paid third-party gateway like Twilio) -- neither exists in this
+  # environment, same "no real spec/credentials to fabricate" call as
+  # P4.8's SMP/SMS/e-klinik integration and P4.4's MIMS. Once a real
+  # deployment has one, point a webhook receiver at its send-message API
+  # (most WhatsApp gateways speak a simple POST-JSON webhook) and add its
+  # name to route.receiver or a route sub-tree:
+  #
+  # - name: whatsapp
+  #   webhook_configs:
+  #     - url: "http://whatsapp-gateway:8080/send"
+  #       send_resolved: true

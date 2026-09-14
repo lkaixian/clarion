@@ -1,0 +1,52 @@
+# CLARION -- Prometheus alerting rules (roadmap P5.1).
+#
+# Deliberately a small, named set of rules tied to a real, already-identified
+# risk or an already-exposed metric -- not a speculative rules library. See
+# healthcare/On-Prem Architecture.md's Observability section: "disk-full on
+# the object volume is the #1 risk -- alert 75/90%" is the one risk this
+# stack's own plan calls out by name.
+groups:
+  - name: clarion-core
+    rules:
+      - alert: BackendDown
+        expr: up{job="clarion-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CLARION backend is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for 2 minutes."
+
+      # node_filesystem_avail_bytes/size_bytes come from node-exporter.
+      # Excludes tmpfs/overlay -- those are ephemeral container layers, not
+      # the persistent volumes (clarion_db, minio_data, mariadb_data, ...)
+      # this is actually meant to watch.
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 75% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 90% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      # http_requests_total comes from prometheus-fastapi-instrumentator
+      # (app/main.py). should_group_status_codes defaults to True, so the
+      # `status` label is "2xx"/"4xx"/"5xx" -- =~"5.." matches that grouped
+      # label (and would still match an exact "503" if grouping were ever
+      # turned off; "." matches any single character, including a literal
+      # "x").
+      - alert: HighHttp5xxRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5% of CLARION backend requests are failing with 5xx"

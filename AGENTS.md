@@ -374,14 +374,41 @@ endpoint, real fix needs a `ProcessPoolExecutor` timeout. 519/519 tests
 pass (3 unrelated pre-existing `test_security_analytics.py` failures are a
 real time-of-day flake, confirmed via `git stash`, not this change).
 
-Next: every top-5 demo priority and every P4.x item is done. Remaining
-backlog: P4.7's real-hardware Modality Worklist gap (deploy-time, not
-buildable here), the RustFS migration off MinIO (deliberately deferred),
-the SMP/SMS/e-klinik/university-DB integration (needs real campus specs),
-P1.7b's own two skipped sub-items if a real need shows up, or P5 (Ops &
-handover — observability/load-testing/two-campus rollout/docs, all
-currently unstarted) — surface the choice rather than assuming order, same
-discipline as every prior phase boundary.
+**P5.1 landed 2026-09-15** (Observability, the first P5 item — asked the
+user which to pick up next with P1.7b done): structured JSON logging bound
+to request-id/user/role/facility via `backend/app/log_context.py`
+(contextvars, stdlib only, zero call-site changes anywhere else in the
+codebase); `GET /healthz` + `GET /readyz` (real DB + object-store checks)
+replace the placeholder `GET /` the container healthcheck used to probe;
+`GET /metrics` (`prometheus-fastapi-instrumentator`). A NEW `observability`
+Compose profile (opt-in, like `mariadb`/`backup`) adds Prometheus (3 alert
+rules incl. the architecture plan's own named #1 risk, disk-full at
+75%/90%), Alertmanager (email only — every value is a demo placeholder to
+edit for real, same pattern as `proxy/certs/`), Grafana (two dashboards,
+written by agy from a tight spec then Claude-verified and one real
+datasource-uid integration bug fixed), Loki+Promtail, node-exporter, and a
+new least-privilege `clarion_metrics` MariaDB account for mysqld-exporter.
+WhatsApp (the clause's other alert channel) deliberately not built — same
+"no real credentials to fabricate" call as P4.4/P4.8. voltagent found 1
+Medium + 2 Low + caught a real bug in my own code comment: `/metrics` and
+`/readyz` were claimed to be unreachable through the public site because
+they're "not under `/api`" — wrong, `proxy/Caddyfile`'s `/api/*` handler
+strips the prefix and forwards anything, so they actually were reachable
+at `/api/metrics`/`/api/readyz`; fixed with an explicit Caddy-level block
+(not yet verified live, no Docker daemon in this session — flagged for a
+live check). Medium (the new MariaDB account's `PROCESS` grant + PyMySQL's
+client-side query interpolation) fixed with an explicit exporter flag +
+upgraded secret-tier docs. 528/528 tests pass. See the roadmap changelog
+for full detail.
+
+Next: every top-5 demo priority, every P4.x item, and P1.7b are done; P5.1
+is done except WhatsApp. Remaining backlog: P4.7's real-hardware Modality
+Worklist gap (deploy-time, not buildable here), the RustFS migration off
+MinIO (deliberately deferred), the SMP/SMS/e-klinik/university-DB
+integration (needs real campus specs), P1.7b's own two skipped sub-items if a
+real need shows up, or the rest of P5 (P5.2 load testing, P5.3 two-campus
+rollout, P5.4 docs & handover, all still unstarted) — surface the choice
+rather than assuming order, same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

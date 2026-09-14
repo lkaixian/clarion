@@ -1,0 +1,14 @@
+# CLARION -- Grafana dashboard provisioning (roadmap P5.1). Auto-loads any
+# dashboard JSON dropped in observability/grafana/dashboards/ on container
+# start -- no manual import needed. Mounted read-only into the grafana
+# service alongside that directory.
+apiVersion: 1
+
+providers:
+  - name: CLARION
+    type: file
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: false

@@ -886,9 +886,148 @@ analyser itself to send its results to `hl7-listener:2575` on this stack's
 - **P4.7 -- Orthanc.** PostgreSQL index, S3 storage (`clarion-dicom` bucket)
   and HTTP basic auth are all wired; Modality Worklist (+ the OHIF viewer, if
   wanted alongside `dwv`) needs real hardware this environment doesn't have.
-- **Observability (P5.1).** `/healthz` + `/readyz` endpoints (the healthchecks
-  currently probe `/`), JSON logging, Promtail/Loki, Prometheus, Grafana.
+- ~~**Observability (P5.1).**~~ Done 2026-09-15 -- see the "Observability
+  (P5.1)" section below. (This bullet predates that work; left struck
+  through rather than deleted since the rest of this TODO list has its own
+  staleness independent of this change -- not audited here.)
 - **Backup/DR (P2.8).** Nothing in this file backs anything up.
+
+---
+
+## Observability (P5.1)
+
+Structured logging + `/healthz`/`/readyz` are always on (backend code, no
+profile needed). Loki/Promtail/Prometheus/Grafana/Alertmanager/node-exporter/
+mysqld-exporter are behind a NEW `observability` Compose profile -- deliberately
+opt-in, same reasoning as `mariadb`/`backup`/`migrate`: this is ops
+infrastructure, not something the base demo boot needs, so it can never be
+the reason the core stack fails to come up.
+
+```
+docker compose --profile observability up -d                    # SQLite demo
+docker compose --profile mariadb --profile observability up -d  # + mysqld-exporter
+```
+
+- **Structured logging.** `LOG_FORMAT=json` (docker-compose.yml's default for
+  `backend`; unset/`text` for a readable local dev console) switches every
+  log line to one JSON object with `request_id`/`user_id`/`role`/`facility`
+  bound via `backend/app/log_context.py` -- a contextvar set once per
+  request (the request-id middleware) and once auth resolves
+  (`auth.py::_resolve_current_user`), so every existing `logger.info(...)`
+  call site in the codebase gets this for free with zero changes elsewhere.
+  Never carries PHI -- these are identifiers, not clinical content.
+  `X-Request-Id` is also returned on every response, and is the SAME id an
+  unhandled-exception 500 quotes back to the caller (previously a second,
+  unrelated uuid) -- one id finds the whole request's log trail via a Loki
+  query on `request_id`.
+- **`/healthz`** (liveness, no auth, no dependency checks) and **`/readyz`**
+  (readiness: real `SELECT 1` + object-store `exists()` checks, 503 if
+  either fails) replace the previous placeholder container healthcheck that
+  probed `GET /` -- see `app/main.py`. Deliberately NOT checked by
+  `/readyz`: Redis (provisioned in compose but no app code uses it yet --
+  gating readiness on it would be readiness theater) and Orthanc/PACS (a
+  DICOM-viewer outage already degrades gracefully per-request without
+  needing the whole app pulled from rotation over it). `/healthz` stays
+  reachable through the public site (`/api/healthz`) -- a liveness probe is
+  harmless; `/readyz` does not (see the `/metrics` bullet's correction just
+  below -- the same edge-level block covers both).
+- **`GET /metrics`** (Prometheus exposition format, `prometheus-fastapi-
+  instrumentator`) and `/readyz` above are blocked at the edge:
+  `proxy/Caddyfile` has an explicit `@backend_diag path /api/metrics
+  /api/readyz` -> 404, checked BEFORE its `handle_path /api/*` catch-all.
+  **Review finding, fixed 2026-09-15:** the original reasoning here ("not
+  under `/api` internally, so unreachable") was wrong -- `handle_path
+  /api/*` strips the `/api` prefix and forwards whatever remains verbatim,
+  with no per-route allowlist, so `GET /api/metrics` would otherwise have
+  reached this route exactly like any real API route. Not yet verified
+  against a live Caddy instance in this session (no Docker daemon running
+  here) -- the fix mirrors this same file's own already-working `@healthz`/
+  `handle` pattern on the `:80` block, and Caddy's documented behavior is
+  that sibling `handle`/`handle_path` blocks (unlike bare directives) try in
+  the order written, but confirm with `docker compose --profile
+  observability up proxy` + a manual `curl -k https://localhost/api/metrics`
+  (expect 404) before relying on this in production.
+- **Network note.** `backend` joins a new `observability` bridge network
+  alongside its existing `edge`/`internal` ones. Docker bridge networking
+  has no per-port ACL: any container sharing a network with `backend` can
+  reach ALL of its exposed ports, not just `/metrics` -- so every
+  observability-tier container (prometheus, grafana, loki, promtail,
+  alertmanager, node-exporter, mysqld-exporter) can reach the full
+  authenticated API surface at `backend:8000`, the same way every
+  `internal`-tier container (mariadb, minio, redis, orthanc) already could
+  before this change. Not a new auth bypass (every route still needs a
+  valid bearer token except the three covered above) and not implemented
+  differently here -- worth recording so a future reviewer doesn't have to
+  re-derive it (voltagent review, 2026-09-15). `web` stays `edge`-only, so
+  the pre-existing web/edge <-> data-tier isolation is untouched.
+- **Prometheus** (`observability/prometheus.yml` + `alert.rules.yml`)
+  scrapes `backend:8000/metrics`, `node-exporter:9100`, and
+  `mysqld-exporter:9104` (only up with both `mariadb` + `observability`
+  profiles). 90-day retention. Three alert rules, deliberately a short,
+  named list tied to a real identified risk rather than a speculative
+  library: `BackendDown` (scrape failing 2m), `DiskSpaceWarning`/
+  `DiskSpaceCritical` (the architecture plan's own "disk-full on the object
+  volume is the #1 risk" at 75%/90% used), `HighHttp5xxRate` (>5% of
+  requests failing for 5m).
+- **Alertmanager** (`observability/alertmanager.yml`) routes alerts to a
+  single `email` receiver (the tender's "contactable... via
+  email"). Every value in that file -- smarthost, from/to addresses -- is a
+  **demo placeholder an operator edits directly** before a real deployment:
+  unlike `proxy/Caddyfile` (Caddy's own native `{$VAR}` templating) or the
+  app's env-driven config, Alertmanager's official image has no shell/
+  envsubst to render a templated config at startup, so this follows the
+  same "operator provides a real file" pattern as `proxy/certs/`'s TLS pair.
+  The SMTP password is separate again: `smtp_auth_password_file` points at
+  `observability/secrets/smtp_password` (git-ignored, only `.gitkeep` is
+  committed -- see `.gitignore`). Demo ships with neither customized;
+  Alertmanager still starts and simply fails (logged, not fatal to the
+  container, and Grafana/Prometheus/Loki are unaffected) to actually send
+  until both are provisioned. **WhatsApp** (the tender's other
+  channel) is a documented go-live gap, same class as P4.7's Modality
+  Worklist / P4.8's SMP-SMS-e-klinik -- no real Meta WhatsApp Business Cloud
+  API app or paid gateway (Twilio etc.) exists in this environment to wire
+  up; `alertmanager.yml` has a commented-out `webhook_configs` stub for a
+  real deployment to point at one.
+- **Grafana** (`:3000`, published directly like the app itself rather than
+  kept behind the edge proxy -- it still sits behind its own real login;
+  `GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD` in `.env.docker`, no
+  "change-me" fallback -- an unset password fails the container outright
+  rather than shipping a guessable default) auto-provisions two
+  datasources (Prometheus, Loki) and two dashboards
+  (`observability/grafana/dashboards/clarion-backend.json` -- request
+  rate/error-rate/p50-p95-p99 latency/up-down; `clarion-infra.json` -- CPU/
+  memory/disk-free-per-mountpoint/MariaDB connections+QPS). Deliberately
+  skipped: hand-authoring further custom dashboards beyond those two --
+  add one when a specific KPI is named; Grafana's Explore view already
+  covers ad-hoc queries against both datasources in the meantime.
+- **Loki + Promtail**: single-binary, filesystem-backed Loki (no S3/
+  object-store chunk backend -- matches this compose file's own "single-VM
+  fallback for the pilot" framing; revisit only if log volume/retention
+  ever outgrows one VM's disk), 90-day retention (`observability/
+  loki-config.yml`). Promtail discovers every container via the Docker
+  socket (mounted read-only) and ships stdout/stderr to Loki, labelled by
+  compose service name (`observability/promtail-config.yml`). The socket
+  mount is broad (any container's logs, not just this stack's) -- the
+  standard Promtail idiom, traded for not hand-maintaining a static log-path
+  list that drifts every time a service is added/renamed. **Review finding
+  (2026-09-15), left as-is, not implemented:** `:ro` on the bind mount only
+  stops Promtail from replacing/unlinking the socket file -- it does not
+  restrict what the Docker Engine API reachable *through* that socket
+  permits (container create/start with an arbitrary volume mount is
+  reachable the same as log-reading is); a compromised Promtail container
+  is host-root, full stop, same as any container with ANY access to the
+  Docker socket. A lower-privilege alternative that avoids the socket
+  entirely: a static file-based scrape of `/var/lib/docker/containers/*/*-
+  json.log` (already bind-mounted read-only) with a path-based relabel
+  instead of `docker_sd_configs`' dynamic discovery -- worth doing if the
+  compose-service-name label mapping doesn't need to be dynamic, not
+  attempted in this pass.
+- **`clarion_metrics`** (`backend/db/mariadb/10-accounts.sh`) is a 4th
+  least-privilege MariaDB account for `mysqld-exporter` --
+  `PROCESS`+`REPLICATION CLIENT` (inherently server-global privileges,
+  there is no schema-scoped equivalent) + `SELECT` on
+  `performance_schema` only. No access to the `clarion` schema itself.
+  `MARIADB_METRICS_PASSWORD` in `.env.docker`.
 
 ---
 

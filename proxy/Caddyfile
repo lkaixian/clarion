@@ -112,6 +112,22 @@
 	}
 
 	# --- Routing --------------------------------------------------------
+	# P5.1 review finding: handle_path /api/* below strips "/api" and
+	# forwards WHATEVER remains verbatim -- it has no per-route allowlist,
+	# so "the backend route isn't internally under /api" does NOT mean it's
+	# unreachable publicly; GET /api/metrics or /api/readyz would proxy
+	# straight through to backend:8000/metrics|/readyz exactly like any
+	# real API route. Block the two diagnostic-only ones here, BEFORE the
+	# catch-all -- same named-matcher-then-handle idiom already used for
+	# :80's own @healthz above, which Caddy guarantees tries sibling
+	# handle/handle_path blocks in the order written (unlike bare
+	# directives, which it's free to reorder). /healthz stays reachable --
+	# a public liveness probe is harmless and often useful.
+	@backend_diag path /api/metrics /api/readyz
+	handle @backend_diag {
+		respond 404
+	}
+
 	# API: strip the /api prefix (FastAPI routes are mounted at root), same
 	# contract as web/nginx.conf's option-1 proxy. Body cap slightly above
 	# the backend's 15 MB MAX_UPLOAD_BYTES so an oversized upload gets a

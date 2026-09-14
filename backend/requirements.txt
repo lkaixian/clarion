@@ -31,6 +31,9 @@ limits==5.8.0
 packaging==26.3
 passlib==1.7.4
 pillow==12.3.0
+# P5.1: Prometheus /metrics (app/main.py). Both pure Python, no host libs needed.
+prometheus-fastapi-instrumentator==8.1.0
+prometheus_client==0.26.0
 # P1.7b: PDF first-page thumbnail/preview (app/imaging.py render_pdf_first_page).
 # BSD-3, ships prebuilt PDFium binaries -- no host libs needed (unlike
 # PyMuPDF, which is AGPL and was ruled out for that reason -- see

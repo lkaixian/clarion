@@ -23,6 +23,121 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-15 — P5.1 (scoped): Observability — logging, health, metrics, Loki/Prometheus/Grafana/Alertmanager
+
+P1.7b was the last open item with a real backlog description; asked the
+user which to pick up next now that every P1-P4 item has a status — picked
+P5.1 (Ops & handover was entirely unstarted). P5.1's own row bundles 5
+things (structured logging, Loki, Prometheus, Grafana, Alertmanager email +
+WhatsApp); built all of it except WhatsApp, same "no real spec/credentials
+to fabricate" discipline as P4.4's MIMS and P4.8's SMP/SMS/e-klinik.
+
+**Backend (always on, no profile needed):** NEW `backend/app/log_context.py`
+— contextvars-based request/user logging context (stdlib only,
+`contextvars`+`logging.Filter`/`Formatter`, no dependency). A request-id
+middleware binds an id before anything else runs (even a CORS rejection or
+401 gets one); `auth.py::_resolve_current_user` binds user/role/facility
+once resolved — every existing `logger.info(...)` call site in the codebase
+picks this up for free with zero changes elsewhere. `LOG_FORMAT=json`
+switches every log line to one JSON object (never PHI — identifiers only);
+default stays plain text for a readable dev console. `X-Request-Id` on
+every response is now the SAME id an unhandled-exception 500 quotes back
+(previously a second, unrelated uuid). NEW `GET /healthz` (liveness, no
+deps) and `GET /readyz` (readiness: real DB `SELECT 1` + object-store
+`exists()`, 503 on failure, booleans only — never exception text) replace
+the placeholder `GET /` the container healthcheck used to probe (`backend/
+Dockerfile` + `docker-compose.yml` updated). Deliberately not checked by
+`/readyz`: Redis (provisioned but no app code uses it yet — would be
+readiness theater) and Orthanc/PACS (already degrades gracefully
+per-request without needing the whole app pulled from rotation).
+`prometheus-fastapi-instrumentator` exposes `GET /metrics`.
+
+**Infra (NEW `observability` Compose profile — deliberately opt-in, same
+reasoning as `mariadb`/`backup`/`migrate`: ops infrastructure that must
+never be the reason the base demo boot fails):** `prometheus` (90d
+retention, 3 alert rules tied to a real named risk — `BackendDown`,
+`DiskSpaceWarning`/`Critical` at the architecture plan's own "disk-full is
+the #1 risk" 75%/90% thresholds, `HighHttp5xxRate`), `alertmanager` (email
+receiver only — every value in `observability/alertmanager.yml` is a demo
+placeholder an operator edits directly, same "operator provides a real
+file" pattern as `proxy/certs/`'s TLS pair, since Alertmanager's image has
+no Caddy-style env templating; SMTP password via a separate git-ignored
+`observability/secrets/smtp_password`), `grafana` (two datasources
+auto-provisioned; two dashboards — `clarion-backend.json` request-rate/
+error-rate/latency/up-down, `clarion-infra.json` CPU/memory/disk-free/
+MariaDB connections+QPS — written by agy from a tight PromQL+panel spec,
+Claude-verified panel-by-panel against the spec, no BOM/CRLF, then a real
+integration bug found and fixed: the dashboards reference their datasource
+by a fixed `uid`, which the auto-provisioned datasource never had until
+`datasources.yml` was updated to pin one explicitly — every panel would
+have shown "datasource not found" otherwise), `loki`+`promtail`
+(filesystem-backed, no S3 backend — matches this compose file's own
+single-VM-pilot framing), `node-exporter`, `mysqld-exporter` (needs BOTH
+`--profile mariadb --profile observability`). NEW 4th least-privilege
+MariaDB account `clarion_metrics` (`backend/db/mariadb/10-accounts.sh`) —
+`PROCESS`+`REPLICATION CLIENT` (inherently server-global, no schema-scoped
+equivalent) + `SELECT` on `performance_schema` only, no access to the
+`clarion` schema.
+
+**agy delegated:** the two Grafana dashboard JSON files (bulk, mechanical,
+well-specified — a good fit per this project's own delegation discipline);
+everything else (health checks, logging, network/profile topology, the
+MariaDB grant, Alertmanager's secrets-file approach) written directly —
+judgment/security-heavy, same call as every other P4.x/P1.7b module.
+
+**voltagent security-auditor review found 1 Medium + 2 Low + 1 real bug in
+my own code comment, all actioned:** (real bug, fixed) `app/main.py`'s
+`/metrics` comment claimed "not under `/api`, so unreachable publicly" —
+wrong: `proxy/Caddyfile`'s `handle_path /api/*` strips the `/api` prefix
+and forwards whatever remains verbatim, no per-route allowlist, so
+`GET /api/metrics` and `GET /api/readyz` actually did reach those routes
+publicly, contradicting the stated design intent. Fixed with an explicit
+`@backend_diag path /api/metrics /api/readyz` → 404 block in
+`proxy/Caddyfile`, checked before the `/api/*` catch-all (same
+named-matcher-then-`handle` idiom the file already uses for `:80`'s own
+`@healthz`) — not verified against a live Caddy instance this session (no
+Docker daemon running here), flagged in the doc for a live check before
+relying on it in production. (Medium, fixed) the `clarion_metrics` grant's
+`PROCESS` privilege is what `SHOW FULL PROCESSLIST` needs, which can show
+other connections' live SQL text — and `clarion_app`'s driver (PyMySQL)
+does client-side query interpolation, so a query's literal parameter
+values (NRIC, clinical text) sit in that SQL text while it executes; the
+exporter's default collectors don't actually call `SHOW PROCESSLIST` today,
+but the *credential* carries that capability regardless — pinned
+`--collect.info_schema.processlist=false` explicitly and documented
+`MARIADB_METRICS_PASSWORD` as the same secrecy tier as `MARIADB_APP_PASSWORD`,
+not a throwaway monitoring credential. (Low, documented not fixed)
+Promtail's Docker-socket mount: `:ro` only stops the container from
+replacing the socket file, not what the Docker Engine API reachable
+through it permits — any access is host-root-equivalent; a lower-privilege
+file-based-scrape alternative (avoiding the socket, using the already
+read-only-mounted `/var/lib/docker/containers` log files directly) is
+named in `docs/deployment.md` as an upgrade path, not implemented. (Low,
+documented) `backend` joining the new `observability` network means every
+observability-tier container can reach the full authenticated API on
+`backend:8000`, not just `/metrics` — Docker bridge networking has no
+per-port ACL; same as the pre-existing `internal` tier already could, not
+a new auth bypass, but worth recording. Confirmed sound (no fix needed):
+the Starlette middleware-ordering claim (request-id genuinely ends up
+outermost, traced against `add_middleware`'s actual prepend + reversed-wrap
+mechanics); `/healthz`/`/readyz` unauthenticated exposure (no exception
+text ever leaks, both inherit the global rate limit); Grafana's fail-loud
+missing-password behavior and Alertmanager's graceful-degrade-without-SMTP
+behavior (confirmed via the YAML, not an executed container). Also added,
+prompted by the review's own "cheap smoke test" suggestion: a regression
+test proving request-id genuinely propagates from the outer middleware
+into `auth.py`'s dependency-resolution code path (the exact contextvars
+propagation a pre-0.36 Starlette bug would have broken), via a real
+authenticated request rather than trusting the `starlette==1.6.0` pin.
+
+528/528 backend tests pass (16 new, incl. the two new voltagent-driven
+fixes' own coverage), `check_schema` PASS (no model change), `ruff check
+--config ci/ruff.toml` clean, `shellcheck` clean on the modified mariadb
+script, `docker compose config` validates with every profile active. 3
+unrelated `test_security_analytics.py` failures are the same pre-existing
+time-of-day flake noted in P1.7b's own entry — reproduces identically with
+this session's changes stashed.
+
 ### 2026-09-15 — P1.7b (scoped): PDF preview + web-preview variant + ETag
 
 With every P4.x item statused (previous entry), asked the user which
@@ -2180,12 +2295,12 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | 🟡 2026-09-14 (HL7 v2 analyser service done; label printers already done via P3.9; SMP/SMS/e-klinik/Registrar deliberately not built — real specs/credentials needed, see changelog) |
 
 ## P5 — Ops & handover
-| # | Task | Size | Clause |
-|---|---|---|---|
-| P5.1 | Observability — structured logging, Loki, Prometheus, Grafana, Alertmanager (email + WhatsApp) | M | |
-| P5.2 | Load testing to 23k users; tune pools + workers | M | |
-| P5.3 | Two-campus rollout — WAN validation + Branch edge + offline emergency-export appliance | M | — |
-| P5.4 | Docs & handover — auto-generated ERD / data dictionary, Operations / Programming / Maintenance manuals, DR runbook, Transfer-of-Technology package | M | 7.1 / 3.2.5 / |
+| # | Task | Size | Clause | Status |
+|---|---|---|---|---|
+| P5.1 | Observability — structured logging, Loki, Prometheus, Grafana, Alertmanager (email + WhatsApp) | M | | 🟡 2026-09-15 (everything except WhatsApp — no real Meta/Twilio account exists — see changelog) |
+| P5.2 | Load testing to 23k users; tune pools + workers | M | | — |
+| P5.3 | Two-campus rollout — WAN validation + Branch edge + offline emergency-export appliance | M | — | — |
+| P5.4 | Docs & handover — auto-generated ERD / data dictionary, Operations / Programming / Maintenance manuals, DR runbook, Transfer-of-Technology package | M | 7.1 / 3.2.5 / | — |
 
 ---
 
