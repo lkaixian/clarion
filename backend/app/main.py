@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import os
-import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,9 +18,7 @@ load_dotenv()
 # with no handler attached, and uvicorn only configures ITS OWN
 # uvicorn.*/uvicorn.access loggers, not the app's. This makes every
 # "clarion.*"-named (and any other) logger's INFO+ output actually reach
-# the console uvicorn is already running in. Deliberately basicConfig, not
-# a dictConfig/handler-per-module setup -- this is a single-process local
-# dev/demo backend, not a service with log aggregation to wire up.
+# the console uvicorn is already running in.
 #
 # Level is read from LOG_LEVEL (env var or backend/.env, defaulting to
 # INFO) rather than hardcoded, so switching to DEBUG for a one-off
@@ -34,22 +31,46 @@ load_dotenv()
 # Unlike SECRET_KEY/OTP_HMAC_KEY elsewhere in this file (deliberately
 # fail-closed with no fallback -- those are security-critical), an invalid
 # LOG_LEVEL is just a typo in a cosmetic dev-convenience setting -- crashing
-# the whole app over e.g. "DEBGU" would be a bad trade. logging.basicConfig
-# raises ValueError for anything not a known level name, so validate first
-# and fall back to INFO with a warning printed straight to stderr (the
-# logging config itself isn't up yet at this point, so a real logger call
-# here would be silently lost).
+# the whole app over e.g. "DEBGU" would be a bad trade. Validate first and
+# fall back to INFO with a warning printed straight to stderr (the logging
+# config itself isn't up yet at this point, so a real logger call here
+# would be silently lost).
 _VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 if _LOG_LEVEL not in _VALID_LOG_LEVELS:
     print(f"[main] Ignoring invalid LOG_LEVEL={_LOG_LEVEL!r} -- falling back to INFO.")
     _LOG_LEVEL = "INFO"
-logging.basicConfig(level=_LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-from fastapi import FastAPI
+# P5.1: LOG_FORMAT=json switches every log line to one JSON object (request
+# id / user id / role / facility bound via app.log_context, never PHI) --
+# what Promtail/Loki actually want. Was previously plain
+# `logging.basicConfig(format=...)` with a "single-process local dev/demo
+# backend, not a service with log aggregation to wire up" comment -- P5.1
+# is exactly that wiring, so this revisits that call. Default stays plain
+# text: a JSON stream is unpleasant to read directly in a dev terminal, and
+# nothing before this needed structured logs. docker-compose.yml sets
+# LOG_FORMAT=json for the real stack.
+from . import log_context  # noqa: E402
+
+_LOG_FORMAT = os.environ.get("LOG_FORMAT", "text").strip().lower()
+_log_handler = logging.StreamHandler()
+_log_handler.addFilter(log_context.ContextFilter())
+if _LOG_FORMAT == "json":
+    _log_handler.setFormatter(log_context.JsonFormatter())
+else:
+    if _LOG_FORMAT not in ("text", ""):
+        print(f"[main] Ignoring invalid LOG_FORMAT={_LOG_FORMAT!r} -- falling back to text.")
+    _log_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s"
+    ))
+logging.basicConfig(level=_LOG_LEVEL, handlers=[_log_handler])
+
+import sqlalchemy
+from fastapi import FastAPI, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -60,6 +81,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
+from .storage import BUCKET_DOCUMENTS, get_object_store
 from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
@@ -251,6 +273,24 @@ async def _security_headers_middleware(request, call_next):
     return response
 
 
+@app.middleware("http")
+async def _request_id_middleware(request, call_next):
+    """P5.1: bind a request id BEFORE anything else runs (auth, CORS,
+    rate-limit, the route itself), so every log line for this request --
+    including one from a CORS rejection or a 401 that never reaches a
+    route -- carries the same id via app.log_context.ContextFilter, and the
+    caller gets it back in X-Request-Id to quote when reporting an issue.
+    Registered via @app.middleware AFTER _security_headers_middleware
+    above, which in Starlette's stack makes it the LAST added and so the
+    OUTERMOST layer -- it runs first on the way in and last on the way out,
+    ahead of CORS/SlowAPI (both added earlier via add_middleware)."""
+    request_id = log_context.new_request_id()
+    log_context.bind_request(request_id)
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = request_id
+    return response
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc: RequestValidationError):
     """FastAPI's default handler for a pydantic validation failure returns
@@ -296,8 +336,14 @@ async def unhandled_exception_handler(request, exc: Exception):
     grep the logs for the id a user reports.
 
     HTTPException / RequestValidationError / RateLimitExceeded are handled by
-    their own registered handlers and never reach here."""
-    request_id = uuid.uuid4().hex[:12]
+    their own registered handlers and never reach here.
+
+    P5.1: the id returned here is now the SAME one _request_id_middleware
+    bound for this request (previously a second, unrelated uuid minted
+    here) -- every other log line for this request already carries it via
+    log_context.ContextFilter, so a user-reported id now finds the whole
+    request's log trail, not just this one ERROR line."""
+    request_id = log_context.current_request_id()
     _unhandled_log.error(
         "unhandled exception [%s] on %s %s",
         request_id, request.method, request.url.path,
@@ -427,3 +473,81 @@ app.include_router(
 @app.get("/")
 def root():
     return {"status": "CLARION API running", "docs": "/docs"}
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """P5.1 liveness: this process is up and can handle a request at all --
+    no dependency checks (that's /readyz below). No auth: this is what the
+    container healthcheck (Dockerfile, docker-compose.yml) and an
+    orchestrator's liveness probe hit, and both need an unauthenticated,
+    instant, always-cheap answer. Replaces the previous placeholder probe
+    of GET / (see the Dockerfile/docker-compose.yml comments this closes)."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+def readyz(response: Response):
+    """P5.1 readiness: can this instance actually serve real traffic right
+    now? Checks the two dependencies almost every endpoint needs:
+
+      - database: a real `SELECT 1` round-trip (SQLite or MariaDB alike).
+      - object_store: MinIO/local-disk reachability (documents, medicine
+        photos, derived thumbnails all need it).
+
+    Deliberately NOT checked: Redis -- docker-compose.yml provisions it
+    ("Wiring hints for the ObjectStore / cache work") but no app code
+    actually uses it yet, so gating readiness on it would be readiness
+    theater. Also not checked: Orthanc/PACS -- a DICOM-viewer outage
+    already degrades gracefully per-request (pacs.py's own 503s) without
+    needing the whole app pulled from load-balancer rotation over it. Add
+    either back here if that ever changes.
+
+    No auth (same reasoning as /healthz -- a probe-friendly endpoint can't
+    require a bearer token) and no exception text in the body -- an
+    unauthenticated caller only ever sees ok/fail per check, never a
+    connection string or stack trace. Also blocked at the edge
+    (proxy/Caddyfile's `@backend_diag` -> 404 on `/api/readyz`) since it
+    still reveals infra shape (DB/storage up or down) an anonymous internet
+    caller has no reason to see -- see /metrics' own comment below for why
+    "not under /api" alone doesn't achieve that.
+    """
+    checks = {"database": _check_database(), "object_store": _check_object_store()}
+    ok = all(checks.values())
+    response.status_code = 200 if ok else 503
+    return {"status": "ok" if ok else "unavailable", "checks": checks}
+
+
+def _check_database() -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(sqlalchemy.text("SELECT 1"))
+        return True
+    except Exception:  # noqa: BLE001 -- any failure means "not ready", never crash the probe
+        return False
+
+
+def _check_object_store() -> bool:
+    try:
+        # exists() on a key that (almost certainly) doesn't exist returns
+        # False without raising -- only a real backend/connection failure
+        # raises ObjectStoreError, which is exactly what this wants to
+        # detect. Never creates or reads real data.
+        get_object_store().exists(BUCKET_DOCUMENTS, "__readyz_probe__")
+        return True
+    except Exception:  # noqa: BLE001 -- any failure means "not ready", never crash the probe
+        return False
+
+
+# P5.1: Prometheus metrics at /metrics -- meant for the internal/
+# observability Docker network only (where Prometheus itself scrapes it).
+# NOTE (review finding, 2026-09-15): "/metrics isn't under /api" does NOT by
+# itself keep this off the public site -- proxy/Caddyfile's
+# `handle_path /api/*` strips the /api prefix and forwards WHATEVER remains
+# verbatim, so a bare GET /api/metrics would reach this route exactly like
+# any real API route, same as GET /api/readyz would reach /readyz below.
+# The actual block is at the edge: proxy/Caddyfile has an explicit
+# `@backend_diag path /api/metrics /api/readyz` -> 404 BEFORE its
+# `handle_path /api/*` catch-all. include_in_schema=False keeps this out of
+# /docs (it's not part of the API contract) -- unrelated to the edge block.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)

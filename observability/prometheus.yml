@@ -1,0 +1,42 @@
+# CLARION -- Prometheus scrape + alerting config (roadmap P5.1).
+# Mounted read-only into the `prometheus` service (docker-compose.yml).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
+scrape_configs:
+  # The FastAPI app itself -- app/main.py wires
+  # prometheus-fastapi-instrumentator at GET /metrics. Not reachable through
+  # the public edge (proxy/Caddyfile only forwards /api/*) -- only this
+  # container, on the observability network, ever calls it.
+  - job_name: clarion-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]
+
+  # Host-level metrics (CPU/mem/disk/network). See docker-compose.yml's
+  # node-exporter service comment for why this stays on the bridge network
+  # rather than network_mode: host.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # MariaDB metrics -- only scrapeable when the mariadb profile is up
+  # (`docker compose --profile mariadb up`); Prometheus just gets a target
+  # marked `up == 0` otherwise, which is expected and not itself alarmed on
+  # (BackendDown below is scoped to clarion-backend, not this job).
+  - job_name: mysqld
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

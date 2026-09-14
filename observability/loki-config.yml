@@ -1,0 +1,42 @@
+# CLARION -- Loki config (roadmap P5.1): single-binary, filesystem-backed.
+# healthcare/On-Prem Architecture.md's own plan calls for on-prem log
+# storage with a 30-90 day retention -- no S3/object-store backend needed
+# for that, matching this compose file's own "single-VM fallback for the
+# pilot" framing. Revisit (a real object-store chunk backend, a distributed
+# deployment mode) only if log volume/retention ever outgrows one VM's disk.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # 90 days, the upper end of the plan's "30-90 day retention" range.
+  retention_period: 2160h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem

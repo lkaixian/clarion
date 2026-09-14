@@ -58,6 +58,10 @@ proxy/certs/*
 !proxy/certs/.gitkeep
 proxy/caddy_data/
 
+# Alertmanager SMTP secret (P5.1) -- never commit a real password
+observability/secrets/*
+!observability/secrets/.gitkeep
+
 # MariaDB data-at-rest encryption key material (P2.7) -- generated per
 # deployment by backend/db/mariadb/generate-encryption-key.sh. Losing these
 # = unrecoverable data; back them up SEPARATELY from the DB.

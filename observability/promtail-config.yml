@@ -1,0 +1,27 @@
+# CLARION -- Promtail config (roadmap P5.1): tails every container's own
+# stdout/stderr via Docker service discovery, labels each stream by compose
+# service name, and pushes to Loki. This is why the promtail service in
+# docker-compose.yml mounts the Docker socket read-only -- see that
+# service's own comment for the trust implication of that mount.
+server:
+  http_listen_port: 9080
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # container name -> compose_service label (strip the leading "/" Docker
+      # puts on every container name, and the "clarion-" project prefix).
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/?clarion-(.*)-[0-9]+"
+        target_label: compose_service
+      - source_labels: ["__meta_docker_container_name"]
+        target_label: container_name

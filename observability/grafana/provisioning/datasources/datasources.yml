@@ -1,0 +1,26 @@
+# CLARION -- Grafana datasource provisioning (roadmap P5.1). Auto-wires
+# Prometheus + Loki on container start -- no manual "Add data source" click
+# needed. Mounted read-only into the grafana service.
+apiVersion: 1
+
+datasources:
+  # uid is pinned explicitly -- the provisioned dashboards
+  # (observability/grafana/dashboards/*.json) reference their datasource by
+  # this exact uid string in each panel. Without a pinned uid here, Grafana
+  # auto-generates one at provisioning time that would NOT match what the
+  # dashboard JSON expects, and every panel would show "datasource not
+  # found".
+  - name: Prometheus
+    uid: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  - name: Loki
+    uid: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false

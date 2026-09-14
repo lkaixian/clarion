@@ -74,11 +74,12 @@ WORKDIR /app/data
 
 EXPOSE 8000
 
-# NOTE: /healthz does not exist yet (added in roadmap task P5.1 -- observability).
-# Until then we probe "/" which returns {"status": "CLARION API running"}.
-# Switch the path to /healthz once the liveness endpoint lands.
+# P5.1: /healthz is a pure liveness probe (no dependency checks) -- see
+# app/main.py. /readyz (DB + object store) exists too but a container
+# healthcheck should answer "is the process alive" not "is it ready for
+# traffic", the same distinction Kubernetes draws between the two probes.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=4).status == 200 else 1)"
+    CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)"
 
 # 4 uvicorn workers matches the On-Prem Architecture pooling math
 # (pool_size=10 + max_overflow=10 per worker => <= 80 DB connections).
