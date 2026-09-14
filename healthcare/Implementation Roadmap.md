@@ -23,6 +23,76 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.6: predictive analytics + population-health stratification
+
+ (predictive analytics) + (population-health
+stratification), both in the Reporting module (P3.6's sibling), both from
+the P4.x backlog that had no status yet -- user picked P4.6 over P4.8 when
+asked which to take next.
+
+NEW `backend/app/predictive_analytics.py`: `_ewma_forecast` is a small,
+dependency-free time-series smoother (simple exponential smoothing on the
+level, a second EWMA on its successive differences for trend) -- not a
+gradient-boosted model, the heavier of the two options the Compliance
+Matrix's own note for the shared " engine family" names; a demo
+has weeks of history and no held-out data to validate a fitted model
+against, so that would be decoration, not substance. Three forecasts sit
+on top of it: `forecast_visit_volume` (per encounter_type + a total, over
+`Encounter`), `forecast_disease_burden` (top-8 diagnoses by recent volume,
+over `Condition`), `forecast_stock_depletion` (per-item average daily
+consumption from `MedicineStockEvent`, projecting days until
+`reorder_threshold`, `None` rather than a divide-by-zero when there's no
+consumption signal). `population_risk_stratification` is a
+deterministic, documented rule-based score (chronic-condition count +
+an emergency-critical flag + age ≥65 + recent ED-visit frequency) banded
+into low/medium/high -- not a fitted clustering model, same "no real
+outcome-labelled dataset to validate one against" reasoning P4.4 already
+used to skip diagnosis-based screening. Everything computes on read; no
+new table, no migration.
+
+4 new endpoints under the existing `/reports` router (`GET
+/reports/predictive/{visit-volume,disease-burden,stock-depletion,
+risk-stratification}`), same RBAC/facility-scoping/log_access conventions
+as every other endpoint in `routers/reporting.py`. `risk-stratification`
+deliberately does NOT run through `reporting_engine`'s PII-anonymize
+option -- it's a clinical worklist meant to be acted on, not an exportable
+statistical report, reviewed and confirmed sound (same RBAC that already
+shows real patient names elsewhere in this router).
+
+**Caught + fixed one real bug myself before it shipped, not by review this
+time:** `population_risk_stratification`'s original draft compared a
+`TZDateTime` value read back from the DB (naive, per this codebase's
+established `DateTime(timezone=True)`-round-trips-naive-on-both-SQLite-
+and-MariaDB hazard -- see [[p4-5-security-alerts-landed]]) against an
+aware Python cutoff in a raw `>=`, which would have raised `TypeError` at
+runtime the first time the endpoint was actually called. Fixed with a new
+`_naive_utc_cutoff` helper, applied at all three cutoff-construction call
+sites in the module.
+
+voltagent security-auditor reviewed clean: EWMA arithmetic sound (flagged
+only that the docstring's phrasing could read as implying real Holt's
+method, when it's a simpler two-pass EWMA -- docstring corrected, not the
+arithmetic), facility-scoping airtight in all four functions (checked the
+NULL-`authored_by_facility` case specifically -- SQL `NULL == 'x'` is
+never true, so it can't leak), the naive/aware fix confirmed complete (no
+remaining mixed comparison), age/score/band arithmetic correct at the
+boundaries, RBAC confirmed at both the role and page-access layers with no
+client-suppliable facility parameter anywhere in the surface. One non-bug
+observation actioned with a comment, not a code change: cohort membership
+in `population_risk_stratification` is intentionally not time-windowed
+(any encounter/condition ever, at this facility) while only the ED-visit
+sub-metric is -- documented as the deliberate "patients this facility has
+a relationship with" definition, not a bug.
+
+New `backend/tests/test_predictive_analytics.py` (10 tests): EWMA edge
+cases, facility-scoping/recency-window exclusion for both forecast
+functions, stock-depletion's divide-by-zero avoidance and at-risk flag,
+risk-stratification's scoring/banding plus the empty-cohort case, one RBAC
+smoke test. Full backend suite 467/467 pass, pyflakes clean. agy not
+delegated -- judgment-heavy (choosing the forecast method, the risk-score
+weights, and what to explicitly NOT build), below the break-even, same
+call as every other P4.x module this session.
+
 ### 2026-09-14 — MinIO is dead upstream: quay.io repoint + per-service least-privilege
 
 Found while doing a MinIO least-privilege pass (the follow-up the previous
@@ -1906,7 +1976,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`) + **NL report narrative** — local-LLM prose summary over the Reporting engine's structured output (`/reports/narrative`) | M |, → [[On-Prem Clinical AI]] | ✅ 2026-09-14 |
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | 🟡 2026-09-14 (ATC drug-class layer + real-time pre-save alert done; MIMS itself out of reach — no public API; diagnosis-based screening not attempted) |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | ✅ 2026-09-14 |
-| P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
+| P4.6 | Predictive analytics + population-health stratification in Reporting | M | | ✅ 2026-09-14 |
 | P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core + PG index/S3/auth all done; real Modality Worklist — needs hardware — still open) |
 | P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |
 

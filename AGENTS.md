@@ -293,6 +293,21 @@ past the first `docker compose up`. `attach_policy()` in `10-accounts.sh`
 now tolerates only that specific error, verified against mocked `mc`
 output (no live server this session).
 
+**P4.6 done 2026-09-14** (predictive analytics + population-health
+stratification, — picked over P4.8 when asked which was
+next): NEW `backend/app/predictive_analytics.py` — a dependency-free EWMA
+level+trend forecaster over `Encounter`/`Condition`/`MedicineStockEvent`
+(visit volume, disease burden, stock depletion) plus a deterministic
+rule-based risk score/band (not a fitted cluster model — no real
+outcome-labelled data to validate one against, same call P4.4 made) for
+population stratification. 4 new `/reports/predictive/*` endpoints, same
+RBAC/facility-scoping conventions as the rest of `routers/reporting.py`.
+Caught + fixed my own bug pre-review (a naive/aware datetime comparison
+that would have raised `TypeError` at runtime — this codebase's recurring
+`TZDateTime`-round-trips-naive hazard). voltagent reviewed clean
+afterward (one docstring-precision nit fixed, one deliberate-scope choice
+documented with a comment, no real bugs). 467/467 backend tests pass.
+
 Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4/P4.5 have each
 closed a Compliance Matrix gap. Remaining backlog is P4.7's real-hardware
 Modality Worklist gap (deploy-time, not buildable here), a stack-wide MinIO

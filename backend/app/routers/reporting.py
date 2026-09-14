@@ -25,6 +25,7 @@ from ..database import get_db
 from ..audit import log_access
 from .. import reporting_engine
 from .. import report_export
+from .. import predictive_analytics
 from ..ai.report_narrative import generate_report_narrative
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -122,6 +123,66 @@ def narrate_report(
         actor_facility=facility,
     )
     return out
+
+
+# ---------- Predictive analytics (P4.6, +) ----------
+# See app/predictive_analytics.py's docstring for the EWMA-forecast /
+# rule-based-stratification approach and why. Same facility-local rule,
+# read-only/compute-on-demand (no persisted rows -- these are dashboard
+# views, not an alert workflow like data_quality.py/security_analytics.py).
+
+@router.get("/predictive/visit-volume")
+def predictive_visit_volume(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    facility = _require_facility(current_user)
+    result = predictive_analytics.forecast_visit_volume(db, facility)
+    log_access(db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
+               action="predictive_visit_volume", actor_facility=facility)
+    return result
+
+
+@router.get("/predictive/disease-burden")
+def predictive_disease_burden(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    facility = _require_facility(current_user)
+    result = predictive_analytics.forecast_disease_burden(db, facility)
+    log_access(db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
+               action="predictive_disease_burden", actor_facility=facility)
+    return result
+
+
+@router.get("/predictive/stock-depletion")
+def predictive_stock_depletion(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    facility = _require_facility(current_user)
+    result = predictive_analytics.forecast_stock_depletion(db, facility)
+    log_access(db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
+               action="predictive_stock_depletion", actor_facility=facility)
+    return result
+
+
+@router.get("/predictive/risk-stratification")
+def predictive_risk_stratification(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*REPORTING_ROLES)),
+):
+    """Surfaces real patient names/ids for the high-risk cohort --
+    deliberately not run through reporting_engine's anonymize option
+: this is a clinical worklist meant to be acted on, not an
+    exportable statistical report."""
+    facility = _require_facility(current_user)
+    result = predictive_analytics.population_risk_stratification(db, facility)
+    log_access(db, patient_id=None, actor=current_user.id, actor_role=current_user.role,
+               action="predictive_risk_stratification",
+               detail=f"cohort_size={result['cohort_size']} high={result['by_band']['high']}",
+               actor_facility=facility)
+    return result
 
 
 # ---------- Saved report templates ("save & share templates") ----------
