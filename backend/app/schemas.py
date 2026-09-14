@@ -2172,6 +2172,31 @@ class DataQualityAlertOut(BaseModel):
         from_attributes = True
 
 
+# ---------- Security alerts / access-anomaly detection (P4.5) ----------
+
+class SecurityAlertOut(BaseModel):
+    id: str
+    rule: str
+    category: str
+    severity: str
+    actor: str
+    actor_role: Optional[str] = None
+    actor_facility: Optional[str] = None
+    window_start: datetime
+    window_end: datetime
+    detail: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    times_seen: int
+    acknowledged: bool
+    resolved: bool
+    resolved_by: Optional[str] = None
+    ai_explanation: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ---------- PDPA (P2.10) ----------
 class ConsentRecordIn(BaseModel):
     purpose: str

@@ -23,6 +23,159 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.5: access-anomaly detection + AI audit-trail intelligence
+
+**Done.** New `backend/app/security_analytics.py`, same registry-of-rules /
+UPSERT-by-key shape as `data_quality.py` (P2.12) but reading `audit_logs`
+instead of clinical rows, keyed on `(rule, actor, window_start)` instead of
+`(entity_type, entity_id)`. NEW `security_alerts` table (Alembic
+`17f8b8eec362`), `GET/POST /admin/security-alerts*` (list/summary/scan/
+acknowledge/resolve/explain, mirroring the data-quality admin endpoints),
+`db/security_analytics_scan.py` cron CLI.
+
+Two rules ship this pass, both read-only heuristics over existing
+`audit_logs` data with hardcoded thresholds (explicitly asks for
+"no manual rule config" -- the opposite of the tender's wording that
+justified data_quality.py's env-var rule-disable knob, so this module
+deliberately has none):
+- `distinct_patient_fanout` -- an actor touching >=20 distinct patients
+  within one calendar hour (exfiltration-shaped: routine care is
+  one-patient-at-a-time).
+- `off_hours_access` -- an actor touching patient records 00:00-05:00 MYT
+  (UTC+8, no DST). Not auto-flagged as malicious (CLARION is
+  emergency-first; genuine after-hours care is expected) -- stays `info`
+  unless the same actor also fanned out across >=5 patients that night.
+
+**the tender's AI half**: `ai/audit_intelligence.py` + `POST
+/admin/security-alerts/{id}/explain` -- local-LLM prose (same
+`ai/local_llm.py` Ollama path as every other AI feature here) explaining
+why one already-flagged alert is worth a look and a next step, from the
+alert's own fields only (role/facility/rule/window/counts, never a patient
+name). Same "reference aid, never an autonomous verdict" framing as
+cds_hint.py/report_narrative.py -- the LLM never decides what's an anomaly,
+the deterministic rules already did.
+
+**Deliberately cut**: a third rule (flag the first time an actor's audit
+rows are attributed to a facility they've never used before) was drafted
+and dropped -- keying "new" off "no SecurityAlert row exists yet for this
+(actor, facility) pair" floods a freshly-seeded/migrated DB with a false
+positive for every pre-existing combination on the very first scan. A
+correct version needs an explicit backfill/baseline step this pass didn't
+have room for; the `RULES` registry is designed so adding it later is a
+one-line addition. No web admin tab either -- same precedent as
+data-quality alerts (P2.12), which also shipped backend/API-only.
+
+**Real bug found + fixed while writing tests**: `SecurityAlert.window_start`
+(a `TZDateTime` column) round-trips through SQLite/MariaDB as a *naive*
+datetime (same documented quirk noted in this file's "small follow-ups"
+section), but `off_hours_access`'s dedup key was built from a freshly
+constructed *aware* `datetime` (`tzinfo=timezone.utc`). An aware and a
+naive value representing the identical instant hash differently as dict
+keys, so `run_scan`'s "does this alert already exist" lookup missed every
+time for that rule -- every re-scan of the same night re-attempted an
+INSERT and hit the `(rule, actor, window_start)` unique constraint.
+`distinct_patient_fanout` accidentally avoided the same bug because its
+bucket key is derived from an already-DB-read (already-naive) timestamp,
+not a freshly constructed one. Fixed by making the constructed value naive
+too, matching every other timestamp read back from `audit_logs`. Caught
+because a two-actor same-night off-hours test failed with a real
+`IntegrityError`, not a wrong-answer assertion -- worth calling out since it
+would have shipped invisibly (the retry-on-IntegrityError in `run_scan`
+means a single-actor scan never surfaces it; it only breaks once TWO
+distinct actors are flagged for the same historical night, which single-
+actor manual testing would never exercise).
+
+**voltagent security-auditor reviewed the diff** and found four real
+issues, all fixed before this landed:
+1. **Facility misattribution** -- both rules bucketed by `(actor, window)`
+   only and resolved a single `actor_facility` via "last non-null wins"
+   over an unordered row set; `AuditLog.actor_facility` is a per-row
+   snapshot (a transferred/multi-site actor can legitimately carry
+   different facilities across rows), so the picked facility -- the exact
+   field `_security_alert_facility_filter` uses to decide which
+   facility-scoped admin even sees the alert -- was arbitrary. **Fixed**:
+   `actor_facility` joined the bucket key (and the DB's own unique
+   constraint, `uq_security_alerts_rule_actor_facility_window`), so an
+   actor touching two facilities in one window now produces two alerts,
+   one per facility -- covered by a new test.
+2. **Unbounded auto-resolve vs. wall-clock time** -- `latest = max(audit_logs.timestamp)`
+   drove both the lookback window and the auto-resolve cutoff with no
+   sanity check against real time; one clock-skewed or bad-seed row with a
+   future timestamp would push `latest` forward and silently auto-resolve
+   every open alert in the next scan. **Fixed**: `latest` is now clamped to
+   `min(latest, now)`.
+3. **Redundant queries** -- each rule independently re-queried `latest` and
+   the full lookback row set, doubling the "load N hours of audit_logs"
+   cost the module's own docstring said it was written to avoid. **Fixed**:
+   `run_scan` computes both once and passes them into every rule (`Rule.fn`
+   signature changed from `Callable[[Session], ...]` to
+   `Callable[[list, datetime], ...]`).
+4. **Cross-facility mutation via `acknowledge`/`resolve`/`explain`** -- these
+   three endpoints looked up an alert by id alone, no facility filter (list/
+   summary were already correctly scoped). If an alert id ever reached a
+   facility-scoped admin outside normal channels (a shared triage note, a
+   screenshot), they could acknowledge/resolve/overwrite the AI explanation
+   on another facility's security incident -- for `explain` specifically a
+   *write*, not just a read. **Fixed**: `_get_security_alert_or_404` now
+   404s (not 403, to avoid confirming existence) on a facility mismatch,
+   covered by a new test. **Noted, not fixed here**: the reviewer found the
+   identical unscoped pattern already shipped in `_get_dq_alert_or_404`
+   (data-quality's own acknowledge/resolve, P2.12) -- pre-existing, not a
+   P4.5 regression, but a real gap worth a follow-up pass; tracked in
+   AGENTS.md's leftovers.
+
+Also confirmed clean: no naive/aware datetime collision (the fix from
+writing tests -- see below -- is complete, verified line-by-line), no
+information exposure in the LLM prompt (only role/facility/rule/window/
+counts, never the actor id or a patient value), no SQL correctness issue
+beyond the redundancy in #3. Left as a documented (`ponytail:`-tagged)
+limitation, not fixed: `distinct_patient_fanout`'s hourly buckets are
+tumbling, not sliding, so a burst straddling an hour boundary (e.g. 19
+patients at 10:50, 19 more at 11:00) can under-count against the 20/hour
+bar -- a real detection gap at the margin, not a correctness bug, and a
+sliding window is a meaningfully bigger change than this pass's scope.
+
+**Real bug found + fixed while writing the first draft of these tests**
+(independent of the voltagent pass above): `SecurityAlert.window_start` (a
+`TZDateTime` column) round-trips through SQLite/MariaDB as a *naive*
+datetime (same documented quirk noted in this file's "small follow-ups"
+section), but `off_hours_access`'s dedup key was originally built from a
+freshly constructed *aware* `datetime` (`tzinfo=timezone.utc`). An aware
+and a naive value representing the identical instant hash differently as
+dict keys, so `run_scan`'s "does this alert already exist" lookup missed
+every time for that rule -- every re-scan of the same night re-attempted an
+INSERT and hit the unique constraint. `distinct_patient_fanout` accidentally
+avoided the same bug because its bucket key is derived from an
+already-DB-read (already-naive) timestamp, not a freshly constructed one.
+Fixed by making the constructed value naive too. Caught because a two-actor
+same-night off-hours test failed with a real `IntegrityError`, not a
+wrong-answer assertion -- it would have shipped invisibly otherwise (the
+retry-on-IntegrityError in `run_scan` means a single-actor scan never
+surfaces it; it only breaks once TWO distinct actors are flagged for the
+same historical night).
+
+**Test-architecture correction, also found while iterating**: the rule/scan
+tests originally ran against the shared conftest session DB (like the
+admin-endpoint tests). Because `run_scan` deliberately queries `audit_logs`
+GLOBALLY with no scoping, that made assertions hostage to whatever
+timestamp every other test's audit rows happened to carry -- exactly the
+failure mode `test_data_quality.py` already solved for its own rule/scan
+tests via an isolated throwaway migrated SQLite DB per test
+(`_throwaway_db`/`fresh_db`). `test_security_analytics.py` now follows the
+same split: rule/scan logic against an isolated DB, admin-endpoint tests
+(hand-built alert rows, no scan involved) against the shared conftest DB.
+
+Verified: `backend/tests/test_security_analytics.py` (10 tests -- rule
+logic, hardcoded thresholds, multi-facility bucketing, UPSERT/times_seen,
+auto-resolve-on-window-rotation, pseudo-actor exclusion, a throwing rule
+not aborting the scan) + `backend/tests/test_admin_security_alerts.py` (5
+tests -- RBAC, facility-scoping by `actor_facility`, cross-facility
+acknowledge/resolve/explain all 404, explain caching, explain
+graceful-degrade), `db/check_schema.py` PASS (autogen zero-ops, downgrade
+round-trip clean) after widening the unique constraint, full suite
+456/456. agy not delegated (judgment-heavy: choosing real, defensible
+heuristics and thresholds, not mechanical).
+
 ### 2026-09-14 — P4.4: medication-safety engine, ATC class layer + real-time pre-save alert
 
 **Done.** Closes the two concrete gaps the Compliance Matrix flagged for
@@ -1635,7 +1788,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`) + **NL report narrative** — local-LLM prose summary over the Reporting engine's structured output (`/reports/narrative`) | M |, → [[On-Prem Clinical AI]] | ✅ 2026-09-14 |
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | 🟡 2026-09-14 (ATC drug-class layer + real-time pre-save alert done; MIMS itself out of reach — no public API; diagnosis-based screening not attempted) |
-| P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | — |
+| P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | ✅ 2026-09-14 |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
 | P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core: Orthanc + manual upload + embedded dwv viewer done; PG index/S3 plugins + Orthanc auth + real Modality Worklist still open) |
 | P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |

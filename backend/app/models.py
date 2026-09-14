@@ -1406,6 +1406,81 @@ class DataQualityAlert(Base):
     )
 
 
+class SecurityAlert(Base):
+    """One row per (rule, actor, actor_facility, window_start) the
+    access-anomaly scan (``app/security_analytics.py``, P4.5, tender
+) has flagged over the ``audit_logs`` hash chain.
+    ``actor_facility`` is part of the key (not just informational) because
+    it is a per-row *snapshot* on ``AuditLog`` -- the same actor can
+    legitimately carry different facilities across rows (a transfer,
+    multi-site staff), so an actor touching two facilities within one
+    window produces two alerts, one per facility, rather than one alert
+    with an arbitrarily-chosen facility (which would put it in front of the
+    wrong facility-scoped admin, or hide it from the right one).
+
+    Same UPSERT-by-key / acknowledge-or-resolve shape as DataQualityAlert
+    (P2.12) -- deliberately a SEPARATE table rather than folding into it:
+    the domain (actor behaviour over a rolling time window) and key shape
+    (actor + window, not entity_type/entity_id) are different enough that
+    sharing one table would strain both, and DataQualityAlert's
+    ``entity_type`` enum (patient/condition/medication/allergy/encounter)
+    has no natural slot for "an actor" or "a time window".
+
+    Unlike DataQualityAlert, there is deliberately NO env-var rule-disable
+    knob here: ``data_quality.py``'s ``DATA_QUALITY_DISABLED_RULES`` answers
+    the tender's own "configurable admin alerts" wording, while
+    explicitly asks for the opposite -- "no manual rule config". The rules
+    themselves are read-only heuristics over existing ``audit_logs`` data
+    with hardcoded thresholds (see ``security_analytics.py``), same idiom as
+    the existing M7c NFC-scan-anomaly check (">= 8 scans/hour"), not a
+    per-deployment setting.
+
+    ``detail`` describes counts/shapes only -- never a patient name or
+    clinical value, same M8 discipline ``audit_logs``/``DataQualityAlert``
+    already follow.
+
+    ``ai_explanation`` (P4.5's half) is generated on demand by
+    ``POST /admin/security-alerts/{id}/explain`` (local LLM,
+    ``ai/audit_intelligence.py``) and cached here so repeat views of the
+    same alert don't re-prompt the model.
+    """
+    __tablename__ = "security_alerts"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    rule = Column(String(64), nullable=False, index=True)
+    category = Column(String(32), nullable=False)   # patient_fanout | unusual_hour
+    severity = Column(String(16), nullable=False)    # info | warning | error
+    actor = Column(String(255), nullable=False, index=True)  # same shape as AuditLog.actor
+    actor_role = Column(String(64), nullable=True)
+    actor_facility = Column(String(255), nullable=True)
+    window_start = Column(TZDateTime, nullable=False)
+    window_end = Column(TZDateTime, nullable=False)
+    detail = Column(Text, nullable=False)
+
+    first_seen_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_seen_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    times_seen = Column(Integer, nullable=False, default=1)
+
+    acknowledged = Column(Boolean, nullable=False, default=False)
+    acknowledged_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    acknowledged_at = Column(TZDateTime, nullable=True)
+
+    resolved = Column(Boolean, nullable=False, default=False, index=True)
+    resolved_by = Column(String(36), nullable=True)
+    resolved_at = Column(TZDateTime, nullable=True)
+
+    ai_explanation = Column(Text, nullable=True)
+
+    __table_args__ = (
+        # actor_facility is part of the key, not just informational -- see
+        # this class's own docstring: an actor touching two facilities in
+        # one window must produce two alerts (one per facility), not one
+        # alert with an arbitrarily-chosen facility.
+        UniqueConstraint("rule", "actor", "actor_facility", "window_start",
+                          name="uq_security_alerts_rule_actor_facility_window"),
+    )
+
+
 class HospitalSetting(Base):
     """One row per facility (`facility_name` unique) holding that hospital's
     own admin-editable configuration. Lazily created on first read of

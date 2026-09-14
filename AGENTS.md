@@ -228,12 +228,42 @@ path's cache, doubling NIH calls per screen) — fixed, with a regression
 test. 441/441 backend tests pass, web build clean. agy wasn't delegated —
 judgment-heavy (curating/verifying real ATC codes), below the break-even.
 
-Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4 have each
+**P4.5 landed 2026-09-14** (access-anomaly detection + AI audit-trail
+intelligence, –7): NEW `backend/app/security_analytics.py`, same
+registry-of-rules/UPSERT-by-key shape as `data_quality.py` (P2.12) but over
+`audit_logs`, keyed on `(rule, actor, actor_facility, window_start)`. Two
+hardcoded-threshold rules (no manual rule config, per the clause's own
+wording) — `distinct_patient_fanout` (≥20 distinct patients/hour) and
+`off_hours_access` (00:00–05:00 MYT) — plus `ai/audit_intelligence.py`'s
+local-LLM narrative on demand (`POST /admin/security-alerts/{id}/explain`).
+No web admin tab, same precedent as data-quality alerts (API only).
+voltagent security-auditor found and fixed 4 real issues before this
+landed: facility misattribution in the bucket key (an actor touching two
+facilities in one window now correctly gets two alerts, not one with an
+arbitrary facility), an unbounded auto-resolve vs. wall-clock time (one
+bad-clock row could've silently closed every open alert), redundant
+per-rule re-querying, and a cross-facility RBAC gap on
+acknowledge/resolve/explain (now 404s on a facility mismatch — the
+identical unscoped pattern was found already shipped in data-quality's own
+ack/resolve, P2.12, noted below as a separate leftover, not fixed here).
+Also found and fixed independently while writing tests: a naive-vs-aware
+datetime bug that broke the off-hours rule's own dedup key. 456/456 backend
+tests pass, `check_schema` PASS. agy not delegated — judgment-heavy
+(choosing/defending real thresholds), below the break-even.
+
+**New leftover:** `_get_dq_alert_or_404` (data-quality alerts,
+`routers/admin.py`, P2.12) has the same unscoped-by-facility gap P4.5's
+review just fixed for security-alerts — its acknowledge/resolve endpoints
+don't check `current_user.facility` against the alert's patient-facility
+scope either. Pre-existing, not a P4.5 regression; worth the same fix in a
+follow-up pass.
+
+Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4/P4.5 have each
 closed a Compliance Matrix gap. Remaining backlog is P4.7's own go-live
-TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist), or the P4.x
-items with no status yet (P4.5 AI audit-trail intelligence, P4.6 predictive
-analytics, P4.8 integration layer) — surface the choice rather than
-assuming order, same discipline as every prior phase boundary.
+TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist), the
+data-quality RBAC leftover just above, or the P4.x items with no status yet
+(P4.6 predictive analytics, P4.8 integration layer) — surface the choice
+rather than assuming order, same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

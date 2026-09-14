@@ -2046,6 +2046,218 @@ def get_audit_chain_status(
 
 
 # --------------------------------------------------------------------------
+# Security alerts / access-anomaly detection (P4.5, the tender)
+# --------------------------------------------------------------------------
+# Platform-global by default, like chain-status just above -- actor behaviour
+# is a system-wide security signal, not a per-facility clinical concern, so
+# a facility-scoped admin sees only alerts about THEIR OWN staff
+# (actor_facility == current_user.facility); a platform admin (facility is
+# None) sees everything. No break-glass escape hatch here (unlike
+# data-quality's patient-scoped alerts) -- there is no patient data to widen
+# access to, only an actor id/role/facility and counts.
+
+_SEC_STATUS = {"open", "acknowledged", "resolved", "all"}
+
+
+def _security_alert_facility_filter(current_user: models.User):
+    if not current_user.facility:
+        return None
+    return models.SecurityAlert.actor_facility == current_user.facility
+
+
+@router.get("/security-alerts", response_model=List[schemas.SecurityAlertOut])
+def list_security_alerts(
+    db: Session = Depends(get_db),
+    status: str = Query("open", description="open | acknowledged | resolved | all"),
+    category: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    if status not in _SEC_STATUS:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(_SEC_STATUS)}")
+
+    q = db.query(models.SecurityAlert)
+    if status == "open":
+        q = q.filter(models.SecurityAlert.resolved.is_(False),
+                     models.SecurityAlert.acknowledged.is_(False))
+    elif status == "acknowledged":
+        q = q.filter(models.SecurityAlert.acknowledged.is_(True),
+                     models.SecurityAlert.resolved.is_(False))
+    elif status == "resolved":
+        q = q.filter(models.SecurityAlert.resolved.is_(True))
+    if category:
+        q = q.filter(models.SecurityAlert.category == category)
+    if severity:
+        q = q.filter(models.SecurityAlert.severity == severity)
+
+    scope = _security_alert_facility_filter(current_user)
+    if scope is not None:
+        q = q.filter(scope)
+    log_access(db, None, current_user.id, current_user.role, "list_security_alerts",
+               actor_facility=current_user.facility)
+
+    order_col = (models.SecurityAlert.resolved_at if status == "resolved"
+                 else models.SecurityAlert.last_seen_at)
+    return (
+        q.order_by(order_col.desc(), models.SecurityAlert.id.desc())
+        .offset(skip).limit(limit).all()
+    )
+
+
+@router.get("/security-alerts/summary")
+def security_alerts_summary(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    open_unack = and_(
+        models.SecurityAlert.resolved.is_(False),
+        models.SecurityAlert.acknowledged.is_(False),
+    )
+    base = db.query(models.SecurityAlert)
+    scope = _security_alert_facility_filter(current_user)
+    if scope is not None:
+        base = base.filter(scope)
+
+    rows = (
+        base.with_entities(
+            models.SecurityAlert.category, models.SecurityAlert.severity,
+            func.count(models.SecurityAlert.id),
+        )
+        .filter(open_unack)
+        .group_by(models.SecurityAlert.category, models.SecurityAlert.severity)
+        .all()
+    )
+    by_category: dict = {}
+    by_severity: dict = {}
+    open_total = 0
+    for category, severity, n in rows:
+        by_category[category] = by_category.get(category, 0) + n
+        by_severity[severity] = by_severity.get(severity, 0) + n
+        open_total += n
+    acknowledged = (
+        base.with_entities(func.count(models.SecurityAlert.id))
+        .filter(models.SecurityAlert.resolved.is_(False),
+                models.SecurityAlert.acknowledged.is_(True))
+        .scalar()
+    )
+    log_access(db, None, current_user.id, current_user.role, "security_alerts_summary",
+               actor_facility=current_user.facility)
+    return {
+        "open_total": open_total,
+        "acknowledged": acknowledged or 0,
+        "by_category": by_category,
+        "by_severity": by_severity,
+    }
+
+
+@router.post("/security-alerts/scan")
+def run_security_alerts_scan(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Trigger a scan on demand (the cron job `db/security_analytics_scan.py`
+    is the routine path). Platform-wide regardless of the acting admin's
+    facility -- it re-derives every alert from audit_logs. `run_scan` catches
+    the concurrent-run IntegrityError, so this racing the cron is safe."""
+    from ..security_analytics import run_scan
+
+    result = run_scan(db)
+    log_access(
+        db, None, current_user.id, current_user.role, "run_security_alerts_scan",
+        detail=f"findings={result.findings} new={result.new_alerts} "
+               f"resolved={result.auto_resolved} open={result.still_open} "
+               f"failed={len(result.rules_failed)}",
+        actor_facility=current_user.facility,
+    )
+    return result.as_dict()
+
+
+def _get_security_alert_or_404(db: Session, alert_id: str, current_user: models.User) -> models.SecurityAlert:
+    """Same facility scope as list/summary (`_security_alert_facility_filter`)
+    -- a facility-scoped admin gets 404, not 403, for another facility's
+    alert (or one with no actor_facility recorded) so this never confirms
+    the row's existence. Without this, an admin who somehow learned another
+    facility's alert id (a shared triage note, a screenshot, a log line --
+    ids are random, never enumerable, but not secret once shared) could
+    acknowledge/resolve/overwrite the AI explanation on a security incident
+    that belongs to a facility they have no relationship to."""
+    row = db.query(models.SecurityAlert).filter(models.SecurityAlert.id == alert_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Security alert not found")
+    if current_user.facility and row.actor_facility != current_user.facility:
+        raise HTTPException(status_code=404, detail="Security alert not found")
+    return row
+
+
+@router.post("/security-alerts/{alert_id}/acknowledge", response_model=schemas.SecurityAlertOut)
+def acknowledge_security_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    row = _get_security_alert_or_404(db, alert_id, current_user)
+    row.acknowledged = True
+    row.acknowledged_by = current_user.id
+    row.acknowledged_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, None, current_user.id, current_user.role,
+               "acknowledge_security_alert", detail=f"id={alert_id} rule={row.rule}",
+               actor_facility=current_user.facility)
+    return row
+
+
+@router.post("/security-alerts/{alert_id}/resolve", response_model=schemas.SecurityAlertOut)
+def resolve_security_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Manually resolve an alert (reviewed, a false positive, or expected
+    behaviour for this actor). Not reopened by a later scan the way a
+    system auto-resolve is -- `resolved_by` is the acting admin, not
+    'system'."""
+    row = _get_security_alert_or_404(db, alert_id, current_user)
+    row.resolved = True
+    row.resolved_by = current_user.id
+    row.resolved_at = datetime.now(timezone.utc)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, None, current_user.id, current_user.role,
+               "resolve_security_alert", detail=f"id={alert_id} rule={row.rule}",
+               actor_facility=current_user.facility)
+    return row
+
+
+@router.post("/security-alerts/{alert_id}/explain", response_model=schemas.SecurityAlertOut)
+def explain_security_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """AI-driven audit-trail intelligence: a local-LLM prose
+    explanation of one already-flagged alert -- see ai/audit_intelligence.py.
+    Generated once and cached on the row (`ai_explanation`); call again after
+    a rescan bumps `times_seen`/`detail` to refresh it."""
+    from ..ai.audit_intelligence import generate_alert_explanation
+
+    row = _get_security_alert_or_404(db, alert_id, current_user)
+    result = generate_alert_explanation(schemas.SecurityAlertOut.model_validate(row).model_dump())
+    row.ai_explanation = result["explanation"]
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(db, None, current_user.id, current_user.role,
+               "explain_security_alert", detail=f"id={alert_id} rule={row.rule}",
+               actor_facility=current_user.facility)
+    return row
+
+
+# --------------------------------------------------------------------------
 # Data-quality alerts (P2.12, the tender)
 # --------------------------------------------------------------------------
 # Facility-scoped like the rest of this router: an admin sees alerts for
