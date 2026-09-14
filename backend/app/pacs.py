@@ -10,14 +10,16 @@ the machine. `_is_on_prem_host` is duplicated from local_llm.py rather than
 imported -- the two guards are conceptually unrelated (this module has no
 other reason to depend on the `ai` package) and happen to share five lines.
 
-Orthanc itself has no per-user auth in this demo config -- it's reachable
-ONLY from the backend container on the internal docker network, never from
-a browser directly. Every read a browser makes goes through
-routers/pacs.py's own RBAC + facility-scoped proxy, never straight to
-Orthanc; that router also checks a requested instance id against the
+Orthanc is reachable ONLY from the backend container on the internal docker
+network, never from a browser directly -- every read a browser makes goes
+through routers/pacs.py's own RBAC + facility-scoped proxy, never straight
+to Orthanc; that router also checks a requested instance id against the
 DicomStudy row's own stored instance-id list before ever calling
 `get_instance_file` here, so a guessed/adjacent Orthanc id can't be used to
-walk out of the study the caller was actually granted.
+walk out of the study the caller was actually granted. Orthanc's own HTTP
+basic auth (CLARION_ORTHANC_USER/PASSWORD, matching docker-compose.yml's
+ORTHANC__REGISTERED_USERS) is defense-in-depth on top of that network
+boundary, not a substitute for it.
 
 DICOMweb (WADO-RS) is deliberately NOT used here even though Orthanc has the
 plugin enabled -- the viewer loads plain DICOM Part10 files instead (GET
@@ -68,6 +70,14 @@ def _timeout() -> float:
         return 30.0
 
 
+def _auth() -> tuple[str, str] | None:
+    user = os.environ.get("CLARION_ORTHANC_USER")
+    password = os.environ.get("CLARION_ORTHANC_PASSWORD")
+    if not user or not password:
+        return None
+    return (user, password)
+
+
 def _client() -> httpx.Client:
     base_url = _base_url()
     if not _is_on_prem_host(base_url):
@@ -77,7 +87,7 @@ def _client() -> httpx.Client:
             ".env for a mistaken cloud/tunnel URL.", base_url,
         )
         raise PacsError("Orthanc host is not on-prem")
-    return httpx.Client(base_url=base_url, timeout=_timeout())
+    return httpx.Client(base_url=base_url, timeout=_timeout(), auth=_auth())
 
 
 def upload_instance(raw: bytes) -> dict:

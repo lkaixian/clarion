@@ -190,12 +190,15 @@ daily seal is the backstop for that.
 - **L4 — `ai/ocr.py:30-31`** persists exception text into `ClinicalDocument.raw_text`.
 - **L5 — `schemas.py` `PatientProfileUpdate`** uses `extra="allow"` (every other Update
   schema uses `extra="forbid"`); safe today only because the handler filters fields.
-- **L6 — `_get_dq_alert_or_404` (`routers/admin.py`, P2.12 data-quality alerts)** looks up
-  by id alone, no facility check — `acknowledge`/`resolve` can mutate another facility's
-  alert if its id ever reached an admin outside normal channels (id is not enumerable,
-  but not secret once shared). Found 2026-09-14 by the voltagent review that fixed the
-  identical pattern in P4.5's `_get_security_alert_or_404` (see that fix's approach: 404,
-  not 403, on a facility mismatch). Not fixed here — pre-existing, unrelated module.
+- **L6 — `_get_dq_alert_or_404` (`routers/admin.py`, P2.12 data-quality alerts)**.
+  ✅ **RESOLVED 2026-09-14.** Now reuses `_dq_facility_filter` (the same scope
+  `list_data_quality_alerts` already applies) so `acknowledge`/`resolve` 404 —
+  not 403 — on a facility mismatch, same shape as P4.5's
+  `_get_security_alert_or_404` fix that first found this sibling gap.
+  `test_admin_acknowledge_resolve_is_facility_scoped` (`test_data_quality.py`)
+  covers it, verified to fail pre-fix. voltagent security-auditor re-reviewed
+  the fix + its edge cases (platform-admin, `patient_id IS NULL`, the
+  cross-facility `patient_probable_duplicate` rule) clean.
 
 ---
 

@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": [
+        "arn:aws:s3:::clarion-documents", "arn:aws:s3:::clarion-documents/*",
+        "arn:aws:s3:::clarion-signatures", "arn:aws:s3:::clarion-signatures/*",
+        "arn:aws:s3:::clarion-medicine", "arn:aws:s3:::clarion-medicine/*",
+        "arn:aws:s3:::clarion-dicom", "arn:aws:s3:::clarion-dicom/*",
+        "arn:aws:s3:::clarion-reports-archive", "arn:aws:s3:::clarion-reports-archive/*",
+        "arn:aws:s3:::clarion-scratch", "arn:aws:s3:::clarion-scratch/*"
+      ]
+    }
+  ]
+}

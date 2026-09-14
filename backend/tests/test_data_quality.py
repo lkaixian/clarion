@@ -451,3 +451,41 @@ def test_admin_list_is_facility_scoped_with_break_glass(test_client, make_user, 
                 if row is not None:
                     db_session.delete(row)
         db_session.commit()
+
+
+def test_admin_acknowledge_resolve_is_facility_scoped(test_client, make_user, auth_headers, db_session):
+    """Security Audit L6: acknowledge/resolve used to look up by id alone,
+    letting a facility-scoped admin mutate another facility's alert. Same
+    fix (and same 404-not-403 shape) as P4.5's security-alerts review."""
+    admin_a = make_user(role="admin", facility="Facility A")
+    H = auth_headers(admin_a)
+
+    pb = models.Patient(full_name="Zainal B", date_of_birth="1975-01-01")
+    db_session.add(pb)
+    db_session.flush()
+    enc = models.Encounter(patient_id=pb.id, facility_name="Facility B", encounter_type="outpatient")
+    db_session.add(enc)
+    other_facility_alert = _mk_alert(db_session, entity_id=pb.id, patient_id=pb.id,
+                                     rule="patient_missing_blood_type", category="missing")
+    dup_alert = _mk_alert(db_session, entity_id=pb.id, patient_id=pb.id,
+                          rule="patient_probable_duplicate", category="duplicate")
+    cleanup = [other_facility_alert.id, dup_alert.id, enc.id, pb.id]
+    try:
+        # Facility A's admin can't touch Facility B's alert -- 404, not 403,
+        # so the response doesn't confirm the id even exists.
+        r = test_client.post(f"/admin/data-quality/{other_facility_alert.id}/acknowledge", headers=H)
+        assert r.status_code == 404
+        r = test_client.post(f"/admin/data-quality/{other_facility_alert.id}/resolve", headers=H)
+        assert r.status_code == 404
+        assert db_session.get(models.DataQualityAlert, other_facility_alert.id).acknowledged is False
+
+        # ...but a cross-facility rule (probable-duplicate) is reviewable by design.
+        r = test_client.post(f"/admin/data-quality/{dup_alert.id}/acknowledge", headers=H)
+        assert r.status_code == 200 and r.json()["acknowledged"] is True
+    finally:
+        for aid in cleanup:
+            for m in (models.DataQualityAlert, models.Encounter, models.Patient):
+                row = db_session.query(m).filter_by(id=aid).first()
+                if row is not None:
+                    db_session.delete(row)
+        db_session.commit()

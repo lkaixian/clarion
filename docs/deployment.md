@@ -4,7 +4,7 @@ Roadmap tasks **P1.11 + P1.9**. This is the **demo-capable, single-host**
 version of the on-prem stack described in `healthcare/On-Prem Architecture.md`
 -- the "Single-VM fallback for the pilot via the same Compose file" line. It is
 **not** the final hardened production deployment (no Docker secrets, MinIO
-console reachable on the internal network, Orthanc auth disabled). As of P1.9
+console reachable on the internal network). As of P1.9
 there **is** a TLS edge proxy (Caddy) -- it is the only service that publishes
 host ports; `web` and `backend` sit behind it. The three least-privilege
 MariaDB accounts (P1.3) *are* created on init, but `REQUIRE SSL` / host-scoping
@@ -91,10 +91,11 @@ docker compose down -v         # also delete all named volumes
 | `backend` | built from `./backend` | internal (8000) | FastAPI API. `gunicorn -k uvicorn_worker.UvicornWorker -w 4 app.main:app`. Non-root. Trusts `X-Forwarded-*` only from `172.28.0.2`. |
 | `web` | built from `./web` | internal (8080) | React 19 / Vite console, static build served by nginx. |
 | `mariadb` | `mariadb:11.4` | internal | **Provisioned, not yet used.** Target DB for the SQLite cutover (P1.3 / P1.4). |
-| `minio` | `minio/minio:RELEASE.2025-04-22T22-12-26Z` | internal (9000 API / 9001 console) | S3-compatible object store for documents, signatures, medicine photos, thumbnails, DICOM. `ObjectStore` code landed (P1.6); set `CLARION_STORAGE_BACKEND=minio` + provision WORM buckets (see TODO below) to switch the backend off the local-filesystem default. |
+| `minio` | `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` | internal (9000 API / 9001 console) | S3-compatible object store for documents, signatures, medicine photos, thumbnails, DICOM. `ObjectStore` code landed (P1.6); set `CLARION_STORAGE_BACKEND=minio` + provision WORM buckets (see TODO below) to switch the backend off the local-filesystem default. Pulled from quay.io, not Docker Hub -- see the comment on this service in `docker-compose.yml` for why (MinIO archived upstream, Docker Hub org removed 2026-09-11) and the one accepted residual CVE. |
+| `minio-init` | `quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z` | internal, one-shot | Provisions `clarion-backend`/`clarion-orthanc`/`clarion-backup` MinIO users, each scoped to its own bucket(s) via `backend/db/minio/policies/` -- `backend`/`orthanc`/`backup` no longer hold the MinIO root key. |
 | `redis` | `redis:7.4-alpine` | internal | Cache; later rate-limit / session / worker broker. AOF persistence on a volume. |
-| `orthanc` | `orthancteam/orthanc:24.10.1` | internal (8042 HTTP+DICOMweb / 4242 DIMSE) | PACS. DICOMweb plugin on; **auth disabled (demo only)**; SQLite index for now. |
-| `orthanc-postgres` | `postgres:16-alpine` | internal | PostgreSQL index for Orthanc. Wired to a volume; the Orthanc PG plugin itself is still a TODO. |
+| `orthanc` | `orthancteam/orthanc:24.10.1` | internal (8042 HTTP+DICOMweb / 4242 DIMSE) | PACS. DICOMweb plugin on; HTTP basic auth on (`ORTHANC_HTTP_USER`/`PASSWORD`); PostgreSQL index + S3 storage (`clarion-dicom` bucket on `minio`), not the built-in SQLite index. |
+| `orthanc-postgres` | `postgres:16-alpine` | internal | PostgreSQL index for Orthanc. |
 
 Only `proxy` publishes host ports (80/443). Two internal networks:
 **`edge`** (`proxy` <-> `web`/`backend`; fixed subnet `172.28.0.0/16`, proxy
@@ -669,29 +670,41 @@ just types the SOAP fields instead.
 Orthanc (docker-compose.yml's `orthanc` service, `internal` network only,
 never host-exposed) is the DICOM archive; `backend/app/pacs.py` is a thin
 REST client to it; `backend/app/routers/pacs.py` is the auth/facility-
-scoping boundary in front of it — Orthanc itself has no per-user auth in
-this demo config (`ORTHANC__AUTHENTICATION_ENABLED: "false"`), safe only
-because it's never reachable except from the backend container. A study is
-uploaded against an already-placed X-ray `ServiceRequest` (no real
-Modality Worklist hardware to auto-link from — manual upload is the
-documented stand-in, same class of deploy-time gap as this file's
-thermal-printer/TLS-cert notes elsewhere). The viewer is `dwv` (MIT),
-embedded directly in the web app's Ancillary page — no separate viewer
-deployment needed.
+scoping boundary in front of it. Orthanc's own HTTP basic auth
+(`ORTHANC__AUTHENTICATION_ENABLED` + `ORTHANC__REGISTERED_USERS`, creds from
+`ORTHANC_HTTP_USER`/`ORTHANC_HTTP_PASSWORD`, matched on the backend side by
+`CLARION_ORTHANC_USER`/`CLARION_ORTHANC_PASSWORD`) is defense-in-depth on
+top of that network boundary, not a substitute for it — the network
+boundary is still what actually stops a browser from reaching Orthanc
+directly. A study is uploaded against an already-placed X-ray
+`ServiceRequest` (no real Modality Worklist hardware to auto-link from —
+manual upload is the documented stand-in, same class of deploy-time gap as
+this file's thermal-printer/TLS-cert notes elsewhere). The viewer is `dwv`
+(MIT), embedded directly in the web app's Ancillary page — no separate
+viewer deployment needed.
 
 - `CLARION_ORTHANC_URL` (default `http://orthanc:8042`) — refused unless it
   resolves to loopback/private/link-local, same guard class as
   `CLARION_LOCAL_LLM_URL` above.
 - `CLARION_ORTHANC_TIMEOUT` (default 30s).
+- `CLARION_ORTHANC_USER` / `CLARION_ORTHANC_PASSWORD` — unset means the
+  client sends no auth header, which is only safe against an Orthanc that
+  also has auth off (e.g. a bare local `orthanc` binary in dev, not the
+  compose stack).
 
-### Enabling Orthanc's PostgreSQL index + S3 storage
-docker-compose.yml already provisions `orthanc-postgres` and has the
-relevant `ORTHANC__POSTGRESQL__*` / `ORTHANC__AWS_S3_STORAGE__*` env lines
-present but commented out in the `orthanc` service — uncomment them to move
-off Orthanc's built-in SQLite index onto Postgres, and push pixel data into
-the same MinIO store the other buckets use (bucket `clarion-dicom`). A
-go-live step, not needed for the demo — SQLite indexing is fine at this
-scale, same as this file's other "fine at demo scale" notes elsewhere.
+### Orthanc's PostgreSQL index + S3 storage
+Landed: `orthanc-postgres` (index) and the existing `minio` service's
+`clarion-dicom` bucket (S3 storage) are wired into the `orthanc` service's
+`ORTHANC__POSTGRESQL__*` / `ORTHANC__AWS_S3_STORAGE__*` env — Orthanc no
+longer uses its built-in SQLite index. `clarion-dicom` itself is created by
+the **backend's** `ObjectStore` bootstrap at its own startup (same
+`_ensure_buckets()` as every other bucket, `app/storage.py`), not by
+Orthanc or this compose file — on a cold `docker compose up` where
+`orthanc`'s S3 plugin wins the race and starts before the backend has run
+once, Orthanc's first PUT to a not-yet-existing bucket fails; a restart
+(`docker compose restart orthanc`) after `backend` reports healthy clears
+it. Same class of one-time-ordering caveat as this file's other cold-start
+notes, not built out as compose-level wait machinery for a single restart.
 
 ### Real modality hardware / Modality Worklist
 Wiring an actual X-ray machine via DICOM Modality Worklist +
@@ -712,9 +725,9 @@ environment. Manual upload is the working stand-in today.
 - nginx SPA routing + `/api` proxy.
 
 ### TODO (tracked in `healthcare/Implementation Roadmap.md`)
-- **P4.7 -- PACS go-live.** Enable Orthanc auth + the Postgres/S3 plugins
-  above, and wire real modality hardware (Modality Worklist), before this
-  leaves demo status.
+- **P4.7 -- PACS go-live.** Orthanc auth + the Postgres/S3 plugins are wired
+  (above); real modality hardware (Modality Worklist) is still the
+  documented gap before this leaves demo status.
 - **P1.4 -- MariaDB Data Migration.** SQLite to MariaDB data migration is the next follow-up for an existing DB.
   Once migrated, cut over by pointing the backend at MariaDB:
   1. Run schema migrations using the deploy-time account, **before** `backend`
@@ -749,10 +762,19 @@ environment. Manual upload is the working stand-in today.
      stamps a per-object COMPLIANCE date; **until this is done, and always on
      the local-filesystem backend, blobs are rewritable/deletable** — a hard
      go-live gate for the tender's 7-year record retention.
-  3. Give the runtime MinIO credential only `s3:GetObject`/`PutObject`/
-     `DeleteObject`/`ListBucket` (+ `PutObjectRetention` on the WORM buckets) —
-     NOT `CreateBucket`. Set `ensure_buckets=False` semantics by provisioning
-     out-of-band (the auto-create path is a dev fallback only).
+  3. **Landed 2026-09-14 (partial):** the compose stack no longer hands the
+     runtime a MinIO root key — `minio-init` (`backend/db/minio/`) provisions
+     `clarion-backend`/`clarion-orthanc`/`clarion-backup`, each scoped to
+     only its own bucket(s) via IAM policy (`backend/db/minio/policies/`),
+     no MinIO admin/user-management rights. **Still open:** `clarion-backend`
+     itself still holds `s3:*` (incl. `CreateBucket`) on every `clarion-*`
+     bucket, because `ObjectStore._ensure_buckets()` still runs at app
+     startup in this topology (the demo-fallback auto-create path item 2
+     above says to move off). Tightening it to
+     `GetObject`/`PutObject`/`DeleteObject`/`ListBucket`/`PutObjectRetention`
+     only is a follow-up **once** buckets are provisioned out-of-band per
+     item 2 and `_ensure_buckets()` is disabled/bypassed for that
+     deployment — doing it before that would just break app boot.
   4. Enable server-side encryption at rest on the MinIO server (KES/Vault) — the
      app does not request per-object SSE.
   5. Data migration for an existing DB: `alembic upgrade 84f653e6c999` →
@@ -791,10 +813,9 @@ environment. Manual upload is the working stand-in today.
   private `registry:2` / Harbor on VM-BACKUP), and move
   `SECRET_KEY` / `OTP_HMAC_KEY` / DB / MinIO creds from `env_file` to
   `docker secret` / `secrets:`. Nothing pulled from the internet at deploy time.
-- **P4.7 -- Orthanc.** Enable the PostgreSQL index plugin (env block is stubbed
-  in the compose file) and the S3 storage plugin against the `clarion-dicom`
-  bucket; turn authentication back on with per-user credentials; add Modality
-  Worklist + the OHIF viewer.
+- **P4.7 -- Orthanc.** PostgreSQL index, S3 storage (`clarion-dicom` bucket)
+  and HTTP basic auth are all wired; Modality Worklist (+ the OHIF viewer, if
+  wanted alongside `dwv`) needs real hardware this environment doesn't have.
 - **Observability (P5.1).** `/healthz` + `/readyz` endpoints (the healthchecks
   currently probe `/`), JSON logging, Promtail/Loki, Prometheus, Grafana.
 - **Backup/DR (P2.8).** Nothing in this file backs anything up.
@@ -807,7 +828,7 @@ Images are pinned by **tag**, not digest. Before building the offline bundle,
 confirm these tags resolve (they were chosen from memory) and replace them with
 `name@sha256:...` digests:
 
-- `minio/minio:RELEASE.2025-04-22T22-12-26Z`
+- `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`
 - `orthancteam/orthanc:24.10.1`
 - `mariadb:11.4`, `redis:7.4-alpine`, `postgres:16-alpine`,
   `python:3.12-slim`, `node:20-alpine`, `nginx:1.27-alpine`
