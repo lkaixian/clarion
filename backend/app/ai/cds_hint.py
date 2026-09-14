@@ -8,20 +8,25 @@ healthcare/On-Prem Clinical AI.md). Given the patient's known
 conditions/allergies/active medications plus whatever the clinician has
 typed into the SOAP note so far, this asks the local LLM (ai/local_llm.py)
 for a short "things to consider" note, and separately flags any active
-medication whose name plainly overlaps a recorded allergy substance --
-deterministic, not the LLM. Medication-safety/allergy screening is a
-rule-engine job, not a generative one (see the vault's On-Prem Clinical AI
-stack table); a real drug-class-aware check needs the licensed drug DB
-integration tracked at P4.4 -- this is a cheap, honest floor, not that.
+medication that conflicts with a recorded allergy -- deterministic, not the
+LLM (see ai/interactions.py's `check_allergy_conflicts`, P4.4). Still not a
+licensed formulary's full allergist-grade cross-reactivity coverage -- see
+that module's docstring for what P4.4 does and doesn't cover.
 
 Same "never raise, degrade gracefully" discipline as ai/summarize.py: if
 Ollama is unavailable, `hint` comes back None and the caller shows the
 allergy-conflict check alone (that part needs no LLM).
+
+The allergy-conflict check itself (plain name match + P4.4's ATC drug-class
+match) now lives in ai/interactions.py's `check_allergy_conflicts`, shared
+with the pre-save Add Medication check (`GET /ai/prescription-screen`) so
+the two panels never disagree about what counts as a conflict.
 """
 from __future__ import annotations
 
 from typing import Optional
 
+from .interactions import check_allergy_conflicts
 from .local_llm import generate_text
 
 DISCLAIMER = (
@@ -29,26 +34,6 @@ DISCLAIMER = (
     "not a diagnosis, not a prescription decision. Always apply independent "
     "clinical judgement."
 )
-
-
-def _allergy_conflicts(allergies: list[dict], active_medications: list[dict]) -> list[str]:
-    """Plain, case-insensitive substring match between a recorded allergy
-    substance and an active medication's drug name -- catches the obvious
-    case (a 'Penicillin' allergy against a 'Penicillin'-containing
-    prescription). NOT a drug-class/cross-reactivity engine."""
-    conflicts = []
-    for allergy in allergies:
-        substance = (allergy.get("substance") or "").strip().lower()
-        if not substance:
-            continue
-        for med in active_medications:
-            drug_name = (med.get("drug_name") or "").strip().lower()
-            if drug_name and (substance in drug_name or drug_name in substance):
-                conflicts.append(
-                    f"Active medication '{med['drug_name']}' may relate to recorded "
-                    f"allergy '{allergy['substance']}' ({allergy.get('severity', 'unknown')} severity)."
-                )
-    return conflicts
 
 
 def generate_cds_hint(patient: dict, draft_note: dict, reason: Optional[str]) -> dict:
@@ -79,6 +64,6 @@ def generate_cds_hint(patient: dict, draft_note: dict, reason: Optional[str]) ->
 
     return {
         "hint": generate_text(prompt, max_tokens=300),
-        "allergy_conflicts": _allergy_conflicts(allergies, active_meds),
+        "allergy_conflicts": check_allergy_conflicts(allergies, active_meds),
         "disclaimer": DISCLAIMER,
     }
