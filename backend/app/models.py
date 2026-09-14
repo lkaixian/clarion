@@ -1875,6 +1875,55 @@ class DicomStudy(Base):
     request = relationship("ServiceRequest", back_populates="dicom_study")
 
 
+class AnalyserResultInbox(Base):
+    """P4.8: one raw HL7 v2 ORU^R01 result received over MLLP
+    from a lab analyser (app/hl7_listener.py), staged for a clinician to
+    review before it becomes an official, signed ServiceResult.
+
+    Deliberately NOT auto-created as a signed ServiceResult -- this app
+    never lets an automated source finalize a clinical result without a
+    human clinician's deliberate action (same "advisory, never authoritative
+    on its own" rule as every AI feature in this codebase). A clinician
+    reviews `result_text` (already formatted from the parsed observations,
+    see hl7v2.format_observations), edits it if needed, and submits it
+    through the EXISTING `POST /ancillary/requests/{id}/result` sign-off
+    endpoint completely unchanged -- this table has no write path into
+    ServiceResult of its own, only a read/discard surface
+    (routers/ancillary.py's analyser-inbox endpoints).
+
+    `service_request_id` is nullable: the analyser echoes back
+    `placer_order_number` (this app's own ServiceRequest.id, see
+    hl7v2.build_orm_o01), but a manually-run test, an operator typo, or an
+    order this app never actually placed can still arrive with no matching
+    row -- staged unmatched rather than rejected outright (a real result
+    silently discarded is a worse failure mode than one sitting unmatched),
+    but deliberately NOT exposed through the analyser-inbox API at all:
+    an unmatched row has no `ordering_facility_name` to scope it to, and
+    `raw_message`/`result_text` can still carry a real patient's name from
+    the HL7 PID segment even though the match failed -- broadcasting that
+    platform-wide (or bolting on a break-glass exception) would re-open
+    the exact cross-facility PHI leak this codebase's other facility-scoped
+    endpoints (and a real fixed bug in this file's own sign-off path,
+    2026-09-12) were built specifically to close. An unmatched row is
+    findable via direct DB/ops access for reconciliation, not a dead end."""
+    __tablename__ = "analyser_result_inbox"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    service_request_id = Column(String(36), ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=True, index=True)
+    facility_name = Column(String(255), nullable=True, index=True)  # snapshot of the matched request's ordering facility, if matched
+    hl7_control_id = Column(String(64), nullable=True)
+    sending_facility = Column(String(255), nullable=True)  # MSH-4 on the incoming message, as reported -- not this app's own facility list
+    raw_message = Column(Text, nullable=False)  # the full HL7 message, for audit/debug/re-parse
+    result_text = Column(Text, nullable=False)  # hl7v2.format_observations output -- what a clinician reviews
+    flag_abnormal = Column(Boolean, nullable=False, default=False)
+    received_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    discarded_at = Column(TZDateTime, nullable=True)
+    discarded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    discarded_reason = Column(Text, nullable=True)
+
+    request = relationship("ServiceRequest")
+
+
 # ==========================================================================
 # Dental engine (P3.2, the tender). ONLY the genuinely bespoke piece --
 # the tooth chart -- gets new tables. Everything else the clause asks for is

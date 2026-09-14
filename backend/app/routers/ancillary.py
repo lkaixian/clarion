@@ -28,6 +28,7 @@ immutable; a correction is a new ClinicalRecordAnnotation with
 target_type='service_result' (routers/patients.py::_ANNOTATION_MODEL),
 never an edit here.
 """
+import logging
 import mimetypes
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -39,7 +40,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, hl7v2, hl7_client
 from ..database import get_db
 from ..audit import log_access
 from ..storage import (
@@ -55,6 +56,8 @@ from ..clinical_access import _hidden_author_facilities
 from ..printing import build_sample_label_png
 from .patients import SAFE_DOCUMENT_MEDIA_TYPES
 from .profile import save_signature_from_b64, copy_signature_snapshot
+
+logger = logging.getLogger("clarion.ancillary")
 
 router = APIRouter(prefix="/ancillary", tags=["ancillary"])
 
@@ -314,6 +317,24 @@ def create_service_request(
     db.add(req)
     db.commit()
     req = _load_request_with_relations(db, req.id)
+
+    # P4.8: best-effort push to the configured lab analyser.
+    # Deliberately never fails the request -- the order already exists in
+    # CLARION regardless of analyser reachability, same "advisory, never
+    # blocks the primary workflow" rule as thumbnail generation elsewhere.
+    if req.module == "laboratory" and hl7_client.enabled():
+        try:
+            message = hl7v2.build_orm_o01(
+                control_id=req.id, placer_order_number=req.id,
+                patient_id=patient.id, patient_name=patient.full_name,
+                date_of_birth=patient.date_of_birth, sex=patient.gender,
+                test_code=item.code, test_name=item.name, code_system=item.code_system,
+                ordering_provider=current_user.full_name,
+                sending_facility=current_user.facility, receiving_facility="Lab",
+            )
+            hl7_client.push_order(message)
+        except Exception:
+            logger.warning("HL7 order push failed for request %s", req.id, exc_info=True)
 
     log_access(
         db, patient.id, current_user.id, current_user.role, "ancillary_request_created",
@@ -707,3 +728,82 @@ def ancillary_stats(
     return schemas.AncillaryStatsOut(
         facility_name=facility, open_by_module=open_by_module, signed_off_last_30d_by_module=signed_off_by_module,
     )
+
+
+# ---------------------------------------------------------------------------
+# Lab-analyser inbox (P4.8) -- staged HL7 results awaiting a
+# clinician's review before they become a signed ServiceResult through the
+# EXISTING sign-off endpoint above, unchanged. See
+# models.AnalyserResultInbox's docstring for why an unmatched row (no
+# ordering facility to scope it to) is never exposed here at all.
+# ---------------------------------------------------------------------------
+
+def _serialize_inbox_row(row: models.AnalyserResultInbox) -> schemas.AnalyserResultInboxOut:
+    out = schemas.AnalyserResultInboxOut.model_validate(row)
+    if row.request is not None:
+        out.module = row.request.module
+        if row.request.patient is not None:
+            out.patient_name = row.request.patient.full_name
+    return out
+
+
+def _matched_inbox_row_or_404(db: Session, inbox_id: str, current_user: models.User) -> models.AnalyserResultInbox:
+    row = db.query(models.AnalyserResultInbox).filter(models.AnalyserResultInbox.id == inbox_id).first()
+    # Same "no admin override, NULL facility denies everyone" shape as
+    # _request_or_404(require_same_facility=True) above -- an unmatched row
+    # has no ordering_facility_name to ever satisfy this check, by design.
+    if (
+        row is None or row.request is None
+        or not row.request.ordering_facility_name
+        or row.request.ordering_facility_name != current_user.facility
+    ):
+        raise HTTPException(status_code=404, detail="Analyser result not found")
+    return row
+
+
+@router.get("/analyser-inbox", response_model=List[schemas.AnalyserResultInboxOut])
+def list_analyser_inbox(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    if not current_user.facility:
+        return []
+    rows = (
+        db.query(models.AnalyserResultInbox)
+        .join(models.ServiceRequest, models.AnalyserResultInbox.service_request_id == models.ServiceRequest.id)
+        .filter(
+            models.ServiceRequest.ordering_facility_name == current_user.facility,
+            models.AnalyserResultInbox.discarded_at.is_(None),
+        )
+        .order_by(models.AnalyserResultInbox.received_at.desc())
+        .all()
+    )
+    return [_serialize_inbox_row(row) for row in rows]
+
+
+@router.post("/analyser-inbox/{inbox_id}/discard", response_model=schemas.AnalyserResultInboxOut)
+def discard_analyser_inbox(
+    inbox_id: str,
+    payload: schemas.AnalyserInboxDiscardRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    """For a message that arrived but doesn't warrant a result (a
+    duplicate resend, a QC/control run, a mismatched patient) -- does NOT
+    touch the linked ServiceRequest's status; a clinician who still wants
+    to record a result manually can do so through the normal sign-off
+    endpoint regardless."""
+    row = _matched_inbox_row_or_404(db, inbox_id, current_user)
+    if row.discarded_at is not None:
+        raise HTTPException(status_code=400, detail="Already discarded")
+    row.discarded_at = datetime.now(timezone.utc)
+    row.discarded_by = current_user.id
+    row.discarded_reason = payload.reason
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    log_access(
+        db, row.request.patient_id if row.request else None, current_user.id, current_user.role,
+        "analyser_result_discarded", detail=f"inbox_id={inbox_id}", actor_facility=current_user.facility,
+    )
+    return _serialize_inbox_row(row)

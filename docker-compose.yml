@@ -116,6 +116,14 @@ services:
       # PACS (P4.7) -- must match the orthanc service's ORTHANC__REGISTERED_USERS.
       CLARION_ORTHANC_USER: ${ORTHANC_HTTP_USER:-clarion}
       CLARION_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:-change-me-orthanc-http}
+      # Lab-analyser order push (P4.8) -- the REAL analyser device's own
+      # MLLP port, not this stack's own hl7-listener service (that's the
+      # opposite direction: results coming IN, not orders going out).
+      # Unset by default -- no real analyser exists in this environment, so
+      # the push is disabled (best-effort, never blocks order creation
+      # either way) until a deployment points this at real hardware.
+      CLARION_HL7_ANALYSER_HOST: ${CLARION_HL7_ANALYSER_HOST:-}
+      CLARION_HL7_ANALYSER_PORT: ${CLARION_HL7_ANALYSER_PORT:-2575}
       # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_LOCAL_LLM_MODEL,
       # CLARION_LOCAL_VISION_MODEL, CLARION_DISABLE_LOCAL_AI come from
       # ./.env.docker via env_file -- never inline real secrets here.
@@ -144,6 +152,34 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 40s
+      retries: 3
+
+  # Lab-analyser HL7 v2 / MLLP listener (P4.8) -- own process, not
+  # one of the gunicorn web workers (see app/hl7_listener.py's module
+  # docstring for why: a long-lived listener socket bound once per worker
+  # either conflicts or leaves workers silently without one). Internal-
+  # network-only, same as mariadb/minio/orthanc -- a real analyser reaches
+  # it over the site network, never through the public edge.
+  hl7-listener:
+    <<: [*restart, *env-file]
+    image: clarion/backend:local
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/clarion.db}
+    command: ["python", "-m", "app.hl7_listener", "--port", "2575"]
+    volumes:
+      - clarion_db:/app/data
+    expose:
+      - "2575"
+    networks:
+      - internal
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 2575), timeout=3).close()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
       retries: 3
 
   # One-shot schema migration for the MariaDB path (code-review follow-up 2026-09-07).

@@ -2450,6 +2450,29 @@ class ServiceRequestOut(BaseModel):
         from_attributes = True
 
 
+class AnalyserResultInboxOut(BaseModel):
+    """P4.8. `result_text` is hl7v2.format_observations' plain-text
+    rendering of the parsed OBX segments -- a pre-fill for a clinician's
+    review, never itself the signed result (see models.AnalyserResultInbox's
+    docstring for why this table has no write path into ServiceResult)."""
+    id: str
+    service_request_id: Optional[str] = None
+    hl7_control_id: Optional[str] = None
+    sending_facility: Optional[str] = None
+    result_text: str
+    flag_abnormal: bool
+    received_at: datetime
+    patient_name: Optional[str] = None  # set only when service_request_id resolved to a known patient
+    module: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AnalyserInboxDiscardRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
+
+
 class DicomStudyOut(BaseModel):
     """P4.7. `instances` is the list of opaque Orthanc instance ids the
     viewer fetches one at a time from

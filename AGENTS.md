@@ -308,6 +308,49 @@ that would have raised `TypeError` at runtime — this codebase's recurring
 afterward (one docstring-precision nit fixed, one deliberate-scope choice
 documented with a comment, no real bugs). 467/467 backend tests pass.
 
+**P4.8 done 2026-09-14, scoped down** (the last unstarted P4.x item):
+turned out to bundle 4 things, 2 already done elsewhere (label printer +
+calling-system TV, P3.9) and 2 needing real campus specs/credentials this
+environment doesn't have (SMP/SMS/e-klinik/university-DB — asked the user
+rather than fabricating mock schemas for systems this codebase knows
+nothing concrete about, same discipline P4.4 used to skip MIMS). Scoped to
+the one genuinely buildable, testable piece: lab-analyser HL7 v2
+integration. NEW `backend/app/hl7v2.py` (hand-rolled HL7 v2.5.1
+encode/decode — no third-party HL7 lib, this app is producer+consumer of
+exactly 2 message types) + `hl7_client.py` (outbound ORM^O01 push,
+best-effort, never blocks order creation) + `hl7_listener.py` (inbound
+ORU^R01 MLLP server, its OWN process — NOT a gunicorn worker — NEW
+`hl7-listener` compose service). NEW `models.AnalyserResultInbox` stages
+incoming results; **never auto-signs a ServiceResult** — a clinician
+reviews and submits through the existing sign-off endpoint unchanged, same
+"advisory, never authoritative on its own" rule as every AI feature here.
+An unmatched result is deliberately never exposed via any endpoint (no
+facility to scope it to, and its raw HL7 text can still carry a real
+patient name) — same "no admin override" PHI-leak discipline as this
+router's own `_request_or_404`. No real analyser to test against —
+verified via hand-crafted HL7 messages + a real MLLP socket round-trip.
+No new dependency (pure stdlib).
+
+**voltagent caught + fixed 4 real issues:** a genuine escape/unescape
+round-trip bug (sequential `str.replace` calls could corrupt a value
+shaped like `\F\` — switched to single-pass `re.sub`, the correct
+technique for reversible escaping); `build_ack`'s attacker-controlled
+`control_id` wasn't escaped before being echoed back; the MLLP listener
+had no per-connection timeout or concurrency cap, so an idle/hostile
+connection on the `internal` network (anything there can reach port
+2575, not just a trusted analyser) could exhaust threads/file
+descriptors and crash the whole process's `accept()` loop with no
+handler — fixed with a 30s timeout, a 16-connection semaphore, and a
+guarded accept loop; `AnalyserResultInbox.facility_name` was declared and
+indexed but never populated — fixed. All 4 have regression tests.
+504/504 backend tests pass, `check_schema` PASS, pyflakes clean.
+
+**Every P4.x item now has a status.** Remaining backlog: the RustFS
+migration off MinIO (deliberately deferred, see the `minio-dead-storage-
+decision-pending` memory), the SMP/SMS/e-klinik/university-DB integration
+this pass declined to fabricate (needs real campus specs), and whatever
+surfaces next — there's no more "no status yet" P4.x item to default to.
+
 Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4/P4.5 have each
 closed a Compliance Matrix gap. Remaining backlog is P4.7's real-hardware
 Modality Worklist gap (deploy-time, not buildable here), a stack-wide MinIO

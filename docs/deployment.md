@@ -96,6 +96,7 @@ docker compose down -v         # also delete all named volumes
 | `redis` | `redis:7.4-alpine` | internal | Cache; later rate-limit / session / worker broker. AOF persistence on a volume. |
 | `orthanc` | `orthancteam/orthanc:24.10.1` | internal (8042 HTTP+DICOMweb / 4242 DIMSE) | PACS. DICOMweb plugin on; HTTP basic auth on (`ORTHANC_HTTP_USER`/`PASSWORD`); PostgreSQL index + S3 storage (`clarion-dicom` bucket on `minio`), not the built-in SQLite index. |
 | `orthanc-postgres` | `postgres:16-alpine` | internal | PostgreSQL index for Orthanc. |
+| `hl7-listener` | built from `./backend` (same image as `backend`) | internal (2575, MLLP) | Lab-analyser HL7 v2 result listener (P4.8). Own process, not a gunicorn worker. |
 
 Only `proxy` publishes host ports (80/443). Two internal networks:
 **`edge`** (`proxy` <-> `web`/`backend`; fixed subnet `172.28.0.0/16`, proxy
@@ -711,6 +712,48 @@ Wiring an actual X-ray machine via DICOM Modality Worklist +
 accession-number auto-link is P4.7's full IHE Scheduled Workflow (see
 `healthcare/PACS and DICOM.md` in the vault) — out of scope for this
 environment. Manual upload is the working stand-in today.
+
+---
+
+## Lab-analyser HL7 v2 integration (P4.8, the tender)
+
+The real-world protocol for "1-2 modern analysers" (`healthcare/Integration
+Engine and LDAP.md`'s own scoping call) is HL7 v2 over MLLP, not the
+tender's generic "REST/JSON" line — that describes this app's
+own API, not what lab instruments actually speak on the wire.
+
+- **Outbound (order push):** `app/hl7_client.py` sends an
+  ORM^O01 message to `CLARION_HL7_ANALYSER_HOST:CLARION_HL7_ANALYSER_PORT`
+  whenever a `module="laboratory"` `ServiceRequest` is created
+  (`routers/ancillary.py::create_service_request`). Best-effort — an
+  unreachable/unset analyser never fails order creation, same "advisory"
+  rule as every optional integration in this codebase.
+- **Inbound (result ingest):** `app/hl7_listener.py` is an MLLP
+  TCP server, its OWN process (docker-compose.yml's `hl7-listener`
+  service, port 2575, `internal` network only) — NOT one of the gunicorn
+  web workers, which would either conflict on the listener socket or leave
+  most workers silently without one. It parses an incoming ORU^R01,
+  matches `OBR-2` against the `ServiceRequest.id` that was the placer
+  order number on the original push, and stages the result as an
+  `AnalyserResultInbox` row — **never** auto-creates a signed
+  `ServiceResult`; a clinician reviews it (`GET
+  /ancillary/analyser-inbox`, facility-scoped) and submits it through the
+  existing, unchanged sign-off endpoint, or discards it (`POST
+  /ancillary/analyser-inbox/{id}/discard`) if it doesn't warrant a result.
+- **No real analyser exists in this environment** (/.6 — vendor
+  compatibility + a test environment — need one). Verified instead against
+  hand-crafted HL7 v2 messages and a real MLLP socket round-trip in
+  `backend/tests/{test_hl7v2,test_hl7_client,test_hl7_listener,
+  test_ancillary_analyser_inbox}.py`. Same class of "protocol built and
+  tested, real hardware is a deploy-time step" gap as P4.7's Modality
+  Worklist.
+- API only, no admin web tab — same precedent as data-quality/security
+  alerts (P2.12/P4.5).
+
+To point this at a real analyser: set `CLARION_HL7_ANALYSER_HOST`/`PORT`
+to the device's own MLLP listener address (outbound), and configure the
+analyser itself to send its results to `hl7-listener:2575` on this stack's
+`internal` network (inbound) — see `backend/.env.example`.
 
 ---
 

@@ -23,6 +23,117 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.8 (scoped): lab-analyser HL7 v2 integration
+
+The last unstarted P4.x item. Investigating first: P4.8's roadmap row
+bundles 4 distinct pieces (SMP/SMS/e-klinik/university-DB read-only
+integration, lab-analyser API, label printers), but two of those turned
+out already done -- label printers + calling-system TV both landed via
+P3.9 (already ✅ in the Compliance Matrix) -- and
+SMP/SMS/e-klinik/the university DB are specific campus-internal systems this
+environment has zero real spec, schema, or credentials for; the vault's
+own plan calls for "mock adapters", but fabricating a schema for a system
+this codebase knows nothing concrete about would mean inventing external
+data shapes, the same thing P4.4 explicitly declined to do for MIMS.
+**Asked the user how to scope it rather than guessing** — build the one
+genuinely well-specified, testable piece (HL7 v2 for lab analysers) and
+leave SMP/SMS/e-klinik/university-DB a documented go-live gap, same class
+as P4.7's Modality Worklist.
+
+**Landed:** HL7 v2.5.1 over MLLP -- the real-world lab-analyser protocol
+(`healthcare/Integration Engine and LDAP.md`'s own scoping call), not the
+tender's generic "REST/JSON" line, which describes this app's own API, not
+what instruments speak on the wire. Hand-rolled rather than a third-party
+HL7 library: this app is both message producer (ORM^O01 order push, fields
+it fully controls) and consumer (ORU^R01 result parse) of exactly two
+message types, a few dozen fields total -- the standard escape/separator
+rules are the whole spec surface needed, verified against hand-crafted
+messages + a real MLLP socket round-trip in tests, not against a real
+analyser (none exists in this environment -- same "protocol built, real
+hardware is a deploy-time step" gap as P4.7's Modality Worklist).
+
+NEW `backend/app/hl7v2.py` (pure protocol: escape/unescape, ORM^O01
+builder, ORU^R01 parser, MLLP framing, ACK builder), `backend/app/
+hl7_client.py` (outbound push, best-effort -- an unreachable/unset
+analyser never fails order creation, same "advisory" rule as every
+optional integration here), `backend/app/hl7_listener.py` (the inbound
+MLLP server -- its OWN process, docker-compose.yml's NEW `hl7-listener`
+service, deliberately NOT one of the 4 gunicorn web workers, which would
+either conflict on the listener socket or leave most of them silently
+without one; same reasoning `db/security_analytics_scan.py`/`data_quality_
+scan.py` already run as their own processes for). NEW
+`models.AnalyserResultInbox` (Alembic `15e85cc1320c`) stages an incoming
+result for a clinician to review -- **never auto-creates a signed
+ServiceResult**, same "advisory, never authoritative on its own" rule as
+every AI feature in this codebase; a clinician reviews it and submits it
+through the EXISTING sign-off endpoint completely unchanged, or discards
+it. An unmatched result (unknown/wrong-module order id) is staged but
+deliberately NOT exposed through any endpoint -- it has no
+`ordering_facility_name` to scope it to, and its raw HL7 text can still
+carry a real patient's name even though the match failed, so exposing it
+platform-wide (or bolting on an admin break-glass exception) would reopen
+the exact cross-facility PHI leak `_request_or_404`'s "no admin override"
+rule (a real fixed bug, 2026-09-12) exists to close.
+
+4 new endpoints in `routers/ancillary.py`
+(`GET/POST /ancillary/analyser-inbox*`), same RBAC (SIGNOFF_ROLES) and
+facility-scoping conventions as the rest of that router; API only, no
+admin web tab, same precedent as data-quality/security alerts.
+
+New tests: `test_hl7v2.py` (11, pure protocol), `test_hl7_client.py` (4,
+outbound push incl. a real fake-analyser socket), `test_hl7_listener.py`
+(5, matching/staging logic + a real MLLP socket round-trip), `test_
+ancillary_analyser_inbox.py` (8, RBAC/facility-scoping + the push wired
+into order creation, incl. that a non-laboratory order never attempts a
+push and that an unreachable analyser never fails order creation). Full
+backend suite 504/504 after voltagent's fixes below, `check_schema` PASS (autogen-empty + downgrade/
+upgrade round-trip), pyflakes clean across `app/`. No new dependency --
+pure stdlib (`socket`/`threading`), matching this codebase's default
+toward hand-rolling a small, fully-owned protocol surface over adding a
+library for it.
+
+agy not delegated -- judgment-heavy (the HL7 escape/parsing correctness
+is exactly the kind of subtle-bug-prone code that needed writing with
+full context of how it'd be tested), below the break-even, same call as
+every other P4.x module this session.
+
+**voltagent security-auditor review found + fixed 4 real issues:**
+(1) `_escape`/`_unescape`'s sequential whole-string `str.replace` calls
+had a genuine round-trip bug -- a value that itself contained a sequence
+shaped like `\F\` (or `\S\`/`\R\`/`\T\`/`\E\`) escaped and then unescaped
+to the WRONG text, because escaping a lone backslash first could produce
+an accidental `\E\` spanning a boundary that a later sequential replace
+then misinterpreted. Not a structural-injection risk (MSH-2 encoding
+chars are a hardcoded constant, and `_escape`'s own output never contains
+a raw separator, so the pipe-delimited message structure can't break) but
+a real data-integrity bug in the decoded VALUE. Fixed by switching both
+functions to a single-pass `re.sub` (which scans the original string once
+and never re-examines its own substituted output -- the standard correct
+technique for a reversible escaping scheme), hand-verified against the
+exact failing case plus 6 more escape-sequence-shaped inputs as a new
+parametrized test. (2) `build_ack`'s `control_id` -- echoed straight from
+an inbound message's own attacker-controlled MSH-10 -- was never escaped
+before being embedded in the ACK CLARION sends back, unlike every other
+field builder in this module; fixed. (3) `hl7_listener.serve()`'s accept
+loop had no connection cap and `_handle_connection` had no read timeout,
+so a connection that opened and sent nothing could tie up a thread
+forever, and enough of them could exhaust file descriptors and crash
+`accept()` itself with no handler -- taking the WHOLE listener down, not
+just the offending connection, for a `internal`-network-reachable service
+(anything on that docker network can reach port 2575, not just a trusted
+analyser). Fixed: a `_CONN_TIMEOUT` (30s) on every accepted socket, a
+`_MAX_CONNECTIONS` (16) semaphore acquired in the accept loop before
+spawning a handler thread (so excess connections queue in the OS backlog
+instead of spawning unbounded threads), and `accept()` itself wrapped so
+a transient failure logs and retries instead of killing the process. (4)
+`AnalyserResultInbox.facility_name` was declared, indexed, and documented
+as "snapshot of the matched request's ordering facility" but never
+actually populated by `handle_message` -- dead/misleading column (the
+real RBAC scoping was always correctly done through the `ServiceRequest`
+join, so this wasn't a security gap, just wrong data); fixed to set it
+from the matched request. All 4 fixes have their own regression test;
+full HL7 test set 37/37, full backend suite still green after.
+
 ### 2026-09-14 — P4.6: predictive analytics + population-health stratification
 
  (predictive analytics) + (population-health
@@ -1978,7 +2089,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | ✅ 2026-09-14 |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | ✅ 2026-09-14 |
 | P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core + PG index/S3/auth all done; real Modality Worklist — needs hardware — still open) |
-| P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |
+| P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | 🟡 2026-09-14 (HL7 v2 analyser service done; label printers already done via P3.9; SMP/SMS/e-klinik/Registrar deliberately not built — real specs/credentials needed, see changelog) |
 
 ## P5 — Ops & handover
 | # | Task | Size | Clause |
