@@ -60,7 +60,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, dental, billing, reporting, dashboard
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -383,6 +383,12 @@ app.include_router(pdpa.router)
 # one shared order -> result -> sign-off pipeline (routers/ancillary.py).
 app.include_router(
     ancillary.router,
+    dependencies=[Depends(auth.require_page_access("ancillary"))],
+)
+# PACS / DICOM imaging (P4.7): sits on the X-ray ancillary module's own
+# ServiceRequest scoping (routers/pacs.py) -- same page gate, no new page.
+app.include_router(
+    pacs.router,
     dependencies=[Depends(auth.require_page_access("ancillary"))],
 )
 # Dental module (P3.2): the tooth-chart engine (routers/dental.py) --

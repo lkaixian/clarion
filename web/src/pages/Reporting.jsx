@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "../components/Layout";
 import {
-  getReportDatasets, runReport, exportReport,
+  getReportDatasets, runReport, exportReport, narrateReport,
   listReportTemplates, createReportTemplate, deleteReportTemplate,
   listNotifiableDiseaseCandidates, listNotifiableDiseaseReports,
   createNotifiableDiseaseReport, markNotifiableDiseaseSubmitted, getNotifiableDiseaseDocumentBlob,
@@ -247,6 +247,8 @@ export default function Reporting() {
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [narrative, setNarrative] = useState(null); // { narrative, disclaimer } | null
+  const [narrating, setNarrating] = useState(false);
 
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState("");
@@ -315,10 +317,20 @@ export default function Reporting() {
   function run() {
     setRunning(true);
     setError("");
+    setNarrative(null); // stale narrative belongs to the previous result, not this one
     runReport(buildPayload())
       .then(setResult)
       .catch((e) => setError(e?.response?.data?.detail || "Failed to run report."))
       .finally(() => setRunning(false));
+  }
+
+  function doNarrate() {
+    setNarrating(true);
+    setError("");
+    narrateReport(buildPayload())
+      .then(setNarrative)
+      .catch((e) => setError(e?.response?.data?.detail || "Failed to generate narrative."))
+      .finally(() => setNarrating(false));
   }
 
   function doExport(format) {
@@ -502,10 +514,24 @@ export default function Reporting() {
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm text-slate-500">{result.row_count} row(s){result.truncated && " (capped -- narrow your filters for a complete export)"}</p>
                   <div className="flex gap-2">
+                    <button onClick={doNarrate} disabled={narrating || !result.rows.length}
+                      className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 px-3 py-1.5 rounded">
+                      {narrating ? "Narrating..." : "✨ Narrate"}
+                    </button>
                     <button onClick={() => doExport("pdf")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Export PDF</button>
                     <button onClick={() => doExport("excel")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Export Excel</button>
                   </div>
                 </div>
+                {narrative && (
+                  <div className="mb-3 text-sm rounded-lg px-3 py-2 bg-blue-50 border border-blue-100 text-slate-700">
+                    {narrative.narrative || (
+                      <span className="text-slate-400 italic">
+                        No narrative available -- the local AI engine isn't running (the table above is unaffected).
+                      </span>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1">{narrative.disclaimer}</p>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>

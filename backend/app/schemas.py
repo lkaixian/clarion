@@ -2415,6 +2415,29 @@ class ServiceRequestOut(BaseModel):
     cancelled_at: Optional[datetime] = None
     cancelled_reason: Optional[str] = None
     result: Optional[ServiceResultOut] = None
+    # P4.7: true when an xray request has a linked DicomStudy -- the
+    # worklist UI uses this alone to decide whether to show "View imaging"
+    # vs. an upload control, never fetching the (possibly large) instance
+    # list just to know whether one exists.
+    has_dicom_study: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class DicomStudyOut(BaseModel):
+    """P4.7. `instances` is the list of opaque Orthanc instance ids the
+    viewer fetches one at a time from
+    GET /pacs/requests/{request_id}/study/instances/{instance_id}/file --
+    safe to expose to an already-authorized viewer since that endpoint's own
+    membership check (against this same list, server-side) is the real
+    access boundary, not id secrecy."""
+    id: str
+    service_request_id: str
+    description: Optional[str] = None
+    instances: List[str]
+    uploaded_by_name: Optional[str] = None
+    uploaded_at: datetime
 
     class Config:
         from_attributes = True
@@ -2848,6 +2871,13 @@ class ReportExportRequest(ReportRunRequest):
         if v not in ("pdf", "excel"):
             raise ValueError("format must be one of: pdf, excel")
         return v
+
+
+class ReportNarrativeOut(BaseModel):
+    """P4.3c NL report narrative -- see ai/report_narrative.py. None only
+    when the local LLM is unavailable/disabled or the report had no rows."""
+    narrative: Optional[str] = None
+    disclaimer: str
 
 
 class ReportTemplateCreate(BaseModel):

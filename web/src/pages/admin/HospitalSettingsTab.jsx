@@ -211,7 +211,8 @@ export default function HospitalSettingsTab() {
                       return;
                     }
                     setError("");
-                    setForm((f) => ({ ...f, logo_data_url: await readFileAsDataUrl(file) }));
+                    const dataUrl = await readFileAsDataUrl(file);
+                    setForm((f) => ({ ...f, logo_data_url: dataUrl }));
                   }}
                 />
                 {form.logo_data_url && (
