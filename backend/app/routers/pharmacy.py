@@ -21,11 +21,12 @@ MedicinePurchaseProposal and returns 202. An admin approves it in
 routers/admin.py, which runs the exact same `_apply_restock` primitive the
 auto-approved path runs here, so the two can never drift.
 """
+import hashlib
 import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
@@ -306,13 +307,17 @@ def get_inventory_image(
 
 @router.get("/inventory/{item_id}/image/thumbnail")
 def get_inventory_image_thumbnail(
+    request: Request,
     item_id: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles(*_PHARMACY_ROLES)),
 ):
     """A 300px JPEG preview of the medicine photo (P1.7). Same auth + facility
     scoping as GET /image; the derived object is regenerated from the original
-    on a cache miss. 404 if the item has no photo."""
+    on a cache miss. 404 if the item has no photo. Content-addressed (P1.7b),
+    so a strong ETag + If-None-Match 304 is safe. Audit-logged the same as
+    GET /image (voltagent review, 2026-09-15 -- this endpoint used to skip
+    log_access entirely)."""
     facility = _require_facility(current_user)
     item = _get_inventory_item_or_404(db, item_id, facility)
     if not item.image_object_key:
@@ -330,10 +335,20 @@ def get_inventory_image_thumbnail(
         raise HTTPException(status_code=503, detail="Image storage is temporarily unavailable.")
     if thumb is None:
         raise HTTPException(status_code=404, detail="No preview available for this item")
-    return Response(
-        content=thumb, media_type="image/jpeg",
-        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
+
+    log_access(
+        db, None, current_user.id, current_user.role, "view_medicine_thumbnail",
+        detail=item.drug_name, actor_facility=facility,
     )
+    etag = f'"{hashlib.sha1(thumb).hexdigest()}"'
+    headers = {
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=300",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content=thumb, media_type="image/jpeg", headers=headers)
 
 
 @router.post("/inventory/{item_id}/delete-request", response_model=schemas.InventoryDeleteRequestOut)

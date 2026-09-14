@@ -1,9 +1,10 @@
+import hashlib
 import mimetypes
 import re
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -22,7 +23,7 @@ from ..storage import (
     get_object_store,
     sanitize_filename,
 )
-from ..derived import get_or_make_thumbnail
+from ..derived import ALLOWED_THUMBNAIL_SIZES, get_or_make_thumbnail
 from ..document_generation import render_document
 from ..clinical_access import (
     _facility_known_patient_ids_select,
@@ -1151,14 +1152,25 @@ def get_document_file(
 
 @router.get("/{patient_id}/documents/{document_id}/thumbnail")
 def get_document_thumbnail(
-    patient_id: str, document_id: str, db: Session = Depends(get_db),
+    request: Request, patient_id: str, document_id: str,
+    size: int = Query(300, description="300 = list thumbnail, 1400 = web preview"),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
-    """A 300px JPEG preview of an image document (P1.7). Same roles +
-    cross-facility visibility gate as GET .../file. 404 when the document has
-    no stored original, or the original is a PDF / not a decodable raster
-    image. The preview is regenerated from the original on a cache miss, so it
-    is never authoritative and the WORM original is never touched."""
+    """A JPEG preview of a document (P1.7/P1.7b) -- ``size=300`` (default) for
+    a list thumbnail, ``size=1400`` for a readable "web preview" that avoids
+    pulling a possibly-15MB original over a slow link. Same roles +
+    cross-facility visibility gate as GET .../file. An image document is
+    downscaled; a PDF gets page 1 rendered. 404 when the document has no
+    stored original or neither applies. The preview is regenerated from the
+    original on a cache miss, so it is never authoritative and the WORM
+    original is never touched. Content-addressed (the derived key folds in
+    the source sha256), so a strong ETag + If-None-Match 304 is safe."""
+    if size not in ALLOWED_THUMBNAIL_SIZES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"size must be one of: {', '.join(str(s) for s in ALLOWED_THUMBNAIL_SIZES)}",
+        )
     document = _get_document_or_404(db, patient_id, document_id)
     _assert_document_visible_or_404(db, document, current_user)
 
@@ -1166,7 +1178,7 @@ def get_document_thumbnail(
         raise HTTPException(status_code=404, detail="No preview available for this document")
     try:
         thumb = get_or_make_thumbnail(
-            BUCKET_DOCUMENTS, document.file_object_key, sha256=document.file_sha256
+            BUCKET_DOCUMENTS, document.file_object_key, size=size, sha256=document.file_sha256
         )
     except ObjectStoreError:
         raise HTTPException(status_code=503, detail="Document storage is temporarily unavailable.")
@@ -1175,10 +1187,16 @@ def get_document_thumbnail(
 
     log_access(db, patient_id, current_user.id, current_user.role, "view_document_thumbnail",
                detail=document_id, actor_facility=current_user.facility)
-    return Response(
-        content=thumb, media_type="image/jpeg",
-        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"},
-    )
+
+    etag = f'"{hashlib.sha1(thumb).hexdigest()}"'
+    headers = {
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=300",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content=thumb, media_type="image/jpeg", headers=headers)
 
 
 @router.get("/{patient_id}/encounters/{encounter_id}/visit-summary.pdf")

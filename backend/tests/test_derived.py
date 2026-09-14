@@ -5,6 +5,7 @@ import io
 
 import pytest
 from PIL import Image
+from reportlab.pdfgen import canvas
 
 from app import derived, storage
 from app.storage import BUCKET_DERIVED, BUCKET_DOCUMENTS, BUCKET_MEDICINE, LocalObjectStore
@@ -23,6 +24,16 @@ def local_store(tmp_path):
 def _png(w=800, h=600, color=(10, 120, 200)):
     buf = io.BytesIO()
     Image.new("RGB", (w, h), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _pdf(w=400, h=300):
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w, h))
+    c.setFillColorRGB(0.8, 0.2, 0.2)
+    c.rect(0, 0, w, h, fill=1)
+    c.showPage()
+    c.save()
     return buf.getvalue()
 
 
@@ -120,3 +131,22 @@ def test_prime_thumbnail_never_raises(local_store):
 def test_unsupported_size_rejected(local_store):
     with pytest.raises(ValueError):
         derived.get_or_make_thumbnail(BUCKET_MEDICINE, "k.jpg", size=999, sha256="x")
+
+
+def test_real_pdf_gets_a_rendered_preview(local_store):
+    """P1.7b: a genuine PDF now gets page-1 rendered instead of a blanket
+    negative cache, same self-healing/sha-scoping guarantees as a raster."""
+    sha = _put(local_store, BUCKET_DOCUMENTS, "p1/report.pdf", _pdf())
+    thumb = derived.get_or_make_thumbnail(BUCKET_DOCUMENTS, "p1/report.pdf", sha256=sha)
+    assert thumb is not None
+    img = Image.open(io.BytesIO(thumb))
+    assert img.format == "JPEG" and max(img.size) <= 300
+    dkey = derived.derived_key(BUCKET_DOCUMENTS, "p1/report.pdf", variant="thumb300", sha256=sha)
+    assert local_store.exists(BUCKET_DERIVED, dkey)
+
+
+def test_1400_preview_variant(local_store):
+    sha = _put(local_store, BUCKET_DOCUMENTS, "p1/report.pdf", _pdf())
+    preview = derived.get_or_make_thumbnail(BUCKET_DOCUMENTS, "p1/report.pdf", size=1400, sha256=sha)
+    assert preview is not None
+    assert max(Image.open(io.BytesIO(preview)).size) == 1400

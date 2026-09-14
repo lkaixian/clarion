@@ -8,7 +8,7 @@ cheap display. Derived assets:
     ``clarion-medicine`` are,
   - are regenerated on demand when missing.
 
-So ``clarion-derived`` can carry an aggressive lifecycle policy (30-day
+So ``clarion-derived`` can carry an aggressive lifecycle policy (180-day
 expiry, excluded from backup — provisioned as a MinIO ILM rule, see
 ``docs/deployment.md``) without data loss: a request for an expired thumbnail
 just rebuilds it from the original.
@@ -25,13 +25,19 @@ verbatim; its ``/`` separators become real path segments, each already
 validated when the original was stored and re-checked by
 :func:`app.storage.validate_key` on every put/get.
 
-A definitive negative result (source is a PDF / undecodable) is itself cached
-as a zero-byte marker so a loop on the thumbnail endpoint can't force repeated
-full-original reads.
+A definitive negative result (source is neither a decodable raster image nor
+a renderable PDF) is itself cached as a zero-byte marker so a loop on the
+thumbnail endpoint can't force repeated full-original reads.
 """
 import logging
 
-from .imaging import ImageProcessingError, is_supported_image, make_thumbnail
+from .imaging import (
+    ImageProcessingError,
+    is_pdf,
+    is_supported_image,
+    make_thumbnail,
+    render_pdf_first_page,
+)
 from .storage import (
     BUCKET_DERIVED,
     ObjectNotFound,
@@ -41,12 +47,19 @@ from .storage import (
 
 logger = logging.getLogger("clarion.derived")
 
-_ALLOWED_SIZES = (300,)
+# 300 = list/table thumbnails; 1400 = the "web preview" (P1.7b) -- big enough
+# to actually read a document without pulling the full, possibly 15MB, original.
+# Public (no underscore): routers validate a requested ?size against this
+# directly rather than keeping their own copy, so the two can't drift --
+# a size dropped here without a matching router update would otherwise
+# surface as an unhandled 500 (_variant's ValueError, uncaught below) instead
+# of a clean 422 (voltagent review, 2026-09-15).
+ALLOWED_THUMBNAIL_SIZES = (300, 1400)
 _NEG_MARKER = b""  # zero-byte sentinel for "no preview possible"
 
 
 def _variant(size: int) -> str:
-    if size not in _ALLOWED_SIZES:
+    if size not in ALLOWED_THUMBNAIL_SIZES:
         raise ValueError(f"unsupported thumbnail size {size}")
     return f"thumb{size}"
 
@@ -97,12 +110,20 @@ def get_or_make_thumbnail(
         return None
     # ObjectStoreError (incl. an integrity mismatch) propagates.
 
-    if not is_supported_image(original):
-        _cache_negative(store, nkey)
-        return None
-    try:
-        thumb = make_thumbnail(original, size=size)
-    except ImageProcessingError:
+    if is_supported_image(original):
+        try:
+            thumb = make_thumbnail(original, size=size)
+        except ImageProcessingError:
+            _cache_negative(store, nkey)
+            return None
+    elif is_pdf(original):
+        # P1.7b: a PDF gets a rendered-page-1 preview instead of "no preview".
+        try:
+            thumb = render_pdf_first_page(original, max_edge=size)
+        except ImageProcessingError:
+            _cache_negative(store, nkey)
+            return None
+    else:
         _cache_negative(store, nkey)
         return None
 
