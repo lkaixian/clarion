@@ -88,7 +88,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.2.2 | Linux OS | Have | uvicorn on Linux |
 | 10.2.2.3 | Web responsive | Partial | React + Tailwind; audit responsiveness |
 | 10.2.2.4–6, .9–10 | UTHM provides hosting/network/AV; security via PTM | N/A | Contractual |
-| 10.2.2.7 | Integrate label printer, blood-test machine, X-ray viewer | Partial | Label printer = Demo (P3.9, see 10.2.8.2); blood-test machine / X-ray viewer integration itself still Gap → 10.2.8.1 |
+| 10.2.2.7 | Integrate label printer, blood-test machine, X-ray viewer | Partial | Label printer = Demo (P3.9, see 10.2.8.2); X-ray viewer = P4.7 (Orthanc/DICOM); blood-test machine = P4.8 2026-09-14, see 10.2.8.1.x below |
 | 10.2.2.8 | Integrate SMP / SMS / e-klinik | Gap | Mock adapters + integration layer |
 | 10.2.2.11–13 | DB/hosting compatibility, secure/scalable config | Partial | [[On-Prem Architecture]] |
 | 10.2.2.14 | Resize uploaded images | Gap | Pillow resize on upload (easy) |
@@ -115,7 +115,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.4.3–5 | External hardware/device via REST/JSON; middleware service layer | Gap | Integration engine → [[Integration Engine and LDAP]] |
 | 10.2.4.6 | Import from existing clinical system | Gap | ETL; depends on legacy format |
 | 10.2.4.7–9 | Secure, read-only, real-time/scheduled sync | Gap | Design in architecture |
-| 10.2.4.10 | Integrate lab machines, X-ray viewers, label printers | Gap | 10.2.8 |
+| 10.2.4.10 | Integrate lab machines, X-ray viewers, label printers | Partial | X-ray viewer = P4.7; label printers = P3.9; lab machines = P4.8, see 10.2.8.1.x below |
 
 ## 10.2.5 Security
 
@@ -137,7 +137,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.7.2.x | Automated encrypted backups, 30-day, image snapshot, quarterly restore, RPO/RTO | Have | `backend/backup/` (backup.sh + restore-test.sh + pre-update-snapshot.sh) + compose `backup` service + DR runbook (P2.8, 2026-09-08); offsite target = deploy config |
 | 10.2.7.3.x | Integrate with UTHM hosting, collaborate with infra team | N/A | Contractual |
 | 10.2.7.4.1 | ≥2 onsite support staff, 2 years | N/A | Contractual / bid |
-| 10.2.8.1.x | Lab machine API integration (bidirectional, standards, test env) | Gap | HL7 v2 / ASTM → [[Integration Engine and LDAP]] |
+| 10.2.8.1.x | Lab machine API integration (bidirectional, standards, test env) | Partial | P4.8 2026-09-14: `app/hl7v2.py`/`app/hl7_client.py`/`app/hl7_listener.py` -- HL7 v2.5.1 over MLLP (the real standard, not the tender's generic "REST/JSON" line, see [[Integration Engine and LDAP]]'s own scoping call). ORM^O01 order push on request creation + a standalone MLLP listener ingesting ORU^R01 results into a review-inbox (never auto-signs a result, same "AI-advisory-only" discipline). No real analyser to test against in this environment (10.2.8.1.5/.6 need one) -- verified against hand-crafted HL7 messages + a real MLLP socket round-trip in tests, API-only (no admin web tab, same precedent as data-quality/security alerts) |
 | 10.2.8.2.x | Label printer + calling-system printer (templates: name, IC, barcode) | Demo | P3.9: `printing.py::build_sample_label_png` (patient name/IC/item + QR, `GET /ancillary/requests/{id}/label`) + `build_ticket_escpos` (`GET /reception/queue/{id}/ticket.escpos`). QR used in place of Code128 (this codebase already depends on `qrcode`, not a barcode symbology lib, and has no Code128 reader anywhere to justify adding one). No physical printer attached to test against — real hardware wiring is a deploy-time step |
 | 10.2.8.3.x | Calling-system TV: queue, counters, names/initials, visual + **audio** | Have | P3.9: `display.py` visual (pre-existing) + Web Audio chime/SpeechSynthesis call-out + branding (logo/accent color from `HospitalSetting`) in `WaitingRoomDisplay.jsx` |
 
