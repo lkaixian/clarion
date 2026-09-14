@@ -60,7 +60,7 @@ from fastapi import Depends
 from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -415,6 +415,12 @@ app.include_router(
 app.include_router(
     dashboard.router,
     dependencies=[Depends(auth.require_page_access("dashboard"))],
+)
+# Read-only FHIR façade (P4.2): re-projects the same clinical
+# tables the `patients` page reads -- same gate, no new page.
+app.include_router(
+    fhir.router,
+    dependencies=[Depends(auth.require_page_access("patients"))],
 )
 
 

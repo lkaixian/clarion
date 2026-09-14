@@ -104,7 +104,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | –6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Partial | 30 tables; no stored procs/views (fine); schema docs = Gap |
 | –8 | The University hosts DB; vendor supplies no DB server | N/A | App connects to University MariaDB |
 | | AI-assisted code quality / OWASP review in pipeline | Partial | `ci/run.sh` = ruff + bandit + semgrep(local rules) + osv-scanner + check_schema + pytest (P2.11, 2026-09-08); LLM-review step still to add |
-| | **FHIR-compatible schema**, MySejahtera/PADU interop | Gap | [[FHIR Schema Readiness]] — do early |
+| | **FHIR-compatible schema**, MySejahtera/PADU interop | Have | [[FHIR Schema Readiness]] — coding triples + `resource_identifiers` + read-only façade landed 2026-09-14 (P4.1/P4.2) |
 | | Automated data-quality monitoring | Have | `app/data_quality.py` (13 batch rules: missing / duplicate / coding / anomaly) → `data_quality_alerts` (UPSERT + auto-resolve); `db/data_quality_scan.py` cron; admin list/summary/acknowledge/resolve; `DATA_QUALITY_DISABLED_RULES` config (P2.12, 2026-09-08) |
 
 ## Integration, Migration, Auth

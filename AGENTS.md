@@ -197,11 +197,27 @@ this headless session (see `agy-delegation-flakiness` memory) — Claude
 wrote `docs/deployment.md`'s new section directly instead. 423/423 backend
 tests pass, web build/lint clean.
 
-Next: every top-5 demo priority is now done. Remaining backlog is P4.7's
-own go-live TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist),
-P4.4 (medication-safety rule engine), or the P4.x items with no status yet
-(P4.1/4.2/4.5/4.6) — surface the choice rather than assuming order, same
-discipline as every prior phase boundary.
+**P4.1 + P4.2 landed 2026-09-14** (FHIR coding-triple columns on
+Condition/MedicationStatement/AllergyIntolerance/ServiceCatalogItem + NEW
+`resource_identifiers` table + a read-only FHIR façade router,
+`backend/app/routers/fhir.py`, over 8 resource types reusing the
+already-audited `patients.py` cross-facility read policy). Deliberately no
+fabricated ICD-10/MyDrug/LOINC seed list and no new tables for resources
+CLARION's existing tables already cover — see the roadmap changelog. agy
+wrote the test file from a tight spec (verified line-by-line, then re-run
+independently, not trusted on its own report); Claude wrote every
+resource-mapper/route directly. 432/432 backend tests pass, `check_schema`
+PASS. Same session, a **fresh, independent voltagent security-auditor pass
+over P4.7** (re-derived from the code, not from the prior review's
+changelog claim) confirmed the zip-bomb fix and facility-scoping are both
+still sound — no new findings.
+
+Next: every top-5 demo priority is now done, and P4.1/P4.2 close one more
+gap in the Compliance Matrix. Remaining backlog is P4.7's own go-live TODOs
+(Orthanc auth + PG/S3 plugins + real Modality Worklist), P4.4
+(medication-safety rule engine), or the P4.x items with no status yet
+(P4.5/4.6) — surface the choice rather than assuming order, same discipline
+as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

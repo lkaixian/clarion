@@ -314,6 +314,30 @@ class Patient(Base):
     encounters = relationship("Encounter", back_populates="patient", cascade="all, delete-orphan")
     documents = relationship("ClinicalDocument", back_populates="patient", cascade="all, delete-orphan")
     appointments = relationship("Appointment", back_populates="patient", cascade="all, delete-orphan")
+    resource_identifiers = relationship("ResourceIdentifier", back_populates="patient", cascade="all, delete-orphan")
+
+
+class ResourceIdentifier(Base):
+    """P4.1 (FHIR readiness): repeatable identifiers for a patient
+    beyond the single `national_id` column -- an MRN issued by another
+    facility, a future MHNexus id, etc. This is the mechanism the roadmap
+    calls out for "MySejahtera / PADU later = a façade profile + a row here,
+    zero table changes": adding a new identifier system needs no migration.
+    Append-only in practice (no update endpoint), same discipline as the
+    other clinical side-tables.
+    """
+    __tablename__ = "resource_identifiers"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    system = Column(String(255), nullable=False)  # a URI, checked against fhir_terminology.CODE_SYSTEMS
+    value = Column(String(255), nullable=False)
+    label = Column(String(64), nullable=True)  # e.g. "MRN", "MHNexus ID" -- display only
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (UniqueConstraint("patient_id", "system", "value", name="uq_resource_identifiers_patient_system_value"),)
+
+    patient = relationship("Patient", back_populates="resource_identifiers")
 
 
 class Encounter(Base):
@@ -422,6 +446,15 @@ class Condition(Base):
     # never be satisfied against NULL), which is the intended safe default.
     authored_by_facility = Column(String(255), nullable=True, index=True)
 
+    # P4.1 (FHIR readiness): optional coding triple alongside the
+    # free-text `name` -- see healthcare/FHIR Schema Readiness.md. Nullable:
+    # FHIR's Condition.code is [0..1], so an uncoded legacy/demo row is valid,
+    # not broken. No terminology table -- `code_system` is checked against
+    # fhir_terminology.CODE_SYSTEMS at the API boundary, not the DB.
+    code_system = Column(String(255), nullable=True)
+    code_code = Column(String(64), nullable=True)
+    code_display = Column(String(255), nullable=True)
+
     patient = relationship("Patient", back_populates="conditions")
 
 
@@ -450,6 +483,12 @@ class MedicationStatement(Base):
     active = Column(Boolean, default=True)
     critical_for_emergency = Column(Boolean, default=True)
 
+    # P4.1: coding triple for `drug_name` -- Malaysian Drug Code /
+    # MyDrug, ATC or SNOMED fallback. See Condition.code_system above.
+    code_system = Column(String(255), nullable=True)
+    code_code = Column(String(64), nullable=True)
+    code_display = Column(String(255), nullable=True)
+
     patient = relationship("Patient", back_populates="medications")
 
 
@@ -466,6 +505,12 @@ class AllergyIntolerance(Base):
     # above (cross-facility PATCH immutability; NULL legacy rows are
     # PATCH-immutable to everyone by design).
     authored_by_facility = Column(String(255), nullable=True, index=True)
+
+    # P4.1: coding triple for `substance` -- SNOMED CT or MDC.
+    # See Condition.code_system above.
+    code_system = Column(String(255), nullable=True)
+    code_code = Column(String(64), nullable=True)
+    code_display = Column(String(255), nullable=True)
 
     patient = relationship("Patient", back_populates="allergies")
 
@@ -1591,7 +1636,14 @@ class ServiceCatalogItem(Base):
     id = Column(String(36), primary_key=True, default=gen_id)
     module = Column(String(32), nullable=False, index=True)  # one of ANCILLARY_MODULES
     name = Column(String(255), nullable=False)
-    code = Column(String(64), nullable=True)  # local code, free text (no LOINC/CPT mapping yet)
+    code = Column(String(64), nullable=True)  # local code, free text
+    # P4.1: `code` doubles as the FHIR coding.code once a
+    # `code_system` is set (LOINC for labs, SNOMED/ICD-9-CM procedure codes,
+    # CPT-analogue for others) -- `code_display` is the human label if it
+    # should differ from `name`. Both nullable/additive, same triple pattern
+    # as Condition.code_system.
+    code_system = Column(String(255), nullable=True)
+    code_display = Column(String(255), nullable=True)
     unit_price_cents = Column(Integer, nullable=False, default=0)
     facility_name = Column(String(255), nullable=True, index=True)
     active = Column(Boolean, default=True, nullable=False)

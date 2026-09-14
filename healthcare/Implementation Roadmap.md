@@ -23,6 +23,85 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — P4.1 + P4.2: FHIR coding triples + read-only façade
+
+Both **done**. Per [[FHIR Schema Readiness]]'s "annotate + thin façade, don't
+restructure" recommendation — no new resource tables, no terminology
+server; CLARION's existing Condition/MedicationStatement/AllergyIntolerance/
+Encounter/ServiceRequest/ServiceResult/ClinicalDocument tables already are
+FHIR-shaped, they just needed codes.
+
+**P4.1**: nullable `code_system`/`code_code`/`code_display` triples added to
+`conditions`, `medication_statements`, `allergy_intolerances` (`code_display`
+only on `service_catalog_items`, whose existing free-text `code` doubles as
+`code_code`). NEW `resource_identifiers` table (repeatable patient
+identifiers — MRN, future MHNexus id — beyond the single `national_id`
+column): this is the concrete mechanism behind the tender's "MySejahtera/
+PADU later = zero table changes" claim. NEW `app/fhir_terminology.py` —
+an allowlist of code-system URIs, deliberately **no seed ICD-10/MyDrug/
+LOINC code list**: those are licensed/MOH-provided reference data, not
+something to fabricate for a demo (a wrong hand-rolled medical code is worse
+than an honest gap). Alembic `a3f7c92e6b1d`. Skipped the roadmap's other
+"new tables the modules need anyway" (`observations`, `diagnostic_reports`,
+`procedures`, `immunizations`, `document_references`) — every one either
+already has a real CLARION table backing it (ServiceResult ↔
+Observation/DiagnosticReport, ClinicalDocument ↔ DocumentReference) or, for
+`immunizations`, backs a module that doesn't exist in CLARION at all
+(checked [[Module Coverage]]/[[Compliance Matrix]] — not a mandated module,
+so no consumer would ever populate it).
+
+**P4.2**: NEW `backend/app/routers/fhir.py` — GET-only R4 façade
+(`/fhir/metadata` CapabilityStatement + `/fhir/{Type}/{id}` +
+`/fhir/{Type}?patient={id}` search Bundles) over Patient, Condition,
+MedicationStatement, AllergyIntolerance, Encounter, ServiceRequest,
+DiagnosticReport (from ServiceResult), DocumentReference (from
+ClinicalDocument). Reuses the exact access policy already audited for GET
+/patients/{id} (`clinical_access._patient_known_to_facility` +
+`audit.log_access`, `routers/patients.py::get_patient_full_record`): any
+authenticated staff member with the `patients` page can read any patient
+(cross-hospital continuity), a cross-facility read gets a distinctly-logged
+audit action instead of being blocked, and the `patient` role is denied
+outright (404) rather than wired to a narrower self-service scope — nothing
+consumes that yet. Registered in `main.py` behind the same
+`require_page_access("patients")` gate as `patients.router`/`ai_router`, no
+new page. Skipped an ImagingStudy resource for `DicomStudy` — that's P4.7's
+own domain (`routers/pacs.py` already has a purpose-built API), adding a
+second one here would be scope creep, not readiness.
+
+**agy used** for the mechanical part: wrote `backend/tests/test_fhir_facade.py`
+(9 tests: read + patient-scoped search Bundle for all 8 resources, 404 on a
+nonexistent patient, 404 on the `patient`-role self-service attempt, the
+metadata route's page-gate) from a spec naming the exact fixtures to reuse
+(`conftest.py`'s `test_client`/`db_session`/`make_user`/`auth_headers`,
+`_facility`/`_make_patient`) and the exact assertions — Claude wrote every
+resource mapper/route (the security-relevant half: the facility-scoping
+call, the 404 postures) directly rather than delegating it. Verified,
+per the project's own agy-flakiness lesson: read every line before trusting
+it (all 9 assertions matched real fixtures, nothing hallucinated), then
+re-ran the file myself rather than trusting agy's self-reported pass — real
+result **9/9 passed**.
+
+Verified: `backend/db/check_schema.py` PASS (autogen-empty + downgrade/
+upgrade round-trip) with `a3f7c92e6b1d` at head; full backend suite
+**432/432** (423 prior + 9 new); `npm run build` clean (unaffected, no web
+change this task).
+
+**Also this session:** re-ran an independent, from-scratch voltagent
+security-auditor pass over all of P4.7 (PACS/DICOM) as a sanity check —
+this session had no access to whatever review session originally produced
+the "voltagent security review caught one real bug" note below, so rather
+than take that changelog entry's word for it, a fresh reviewer re-derived
+the zip-bomb fix and the facility-scoping reuse from the actual code paths
+independently. **Confirmed sound, no new findings**: the bounded-streaming
+zip guard genuinely never trusts `ZipInfo.file_size`, `_study_or_404`/
+`_request_or_404` facility-scoping matches the already-hardened
+`ancillary.py` pattern byte-for-byte, Orthanc stays internal-network-only
+with no attacker-reachable SSRF path, and the DICOM viewer has no unsafe
+frontend sink. Two informational nits noted (a zip edge-case exception type
+not caught, falls through to the generic 500 handler; a missing app-level
+lock lets a concurrent double-upload race `IntegrityError` into a 500
+instead of 409) — both cosmetic, not fixed, not security bugs.
+
 ### 2026-09-14 — P4.7 core: DICOM imaging (upload + embedded viewer)
 
 The last unstarted top-5 demo priority ("DICOM viewer — open a chest X-ray
@@ -1478,8 +1557,8 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 ## P4 — Interoperability, AI & imaging
 | # | Task | Size | Clause | Status |
 |---|---|---|---|---|
-| P4.1 | **FHIR-readiness migrations** — coding triples, `resource_identifiers`, resource tables, terminology seeds, backfill queue | L | **** → [[FHIR Schema Readiness]] | — |
-| P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | — |
+| P4.1 | **FHIR-readiness migrations** — coding triples, `resource_identifiers`, resource tables, terminology seeds, backfill queue | L | **** → [[FHIR Schema Readiness]] | ✅ 2026-09-14 (coding triples + `resource_identifiers`; no seed terminology/backfill queue — see changelog) |
+| P4.2 | Thin **read-only FHIR façade** + CapabilityStatement | L | | ✅ 2026-09-14 |
 | P4.3 | **On-prem AI engine, core** — replace ALL Claude-API calls with a local Ollama client (`ai/local_llm.py`); handover summary + MyKad OCR rewired, deterministic/Tesseract fallback preserved | L | **–17** → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3b | **CDS hint** — differential-dx/contraindication reference note mid-consult (`/consultation/tickets/{id}/cds-hint`) + deterministic allergy-vs-active-medication conflict flag, on top of P4.3's local-LLM plumbing | M | → [[On-Prem Clinical AI]] | ✅ 2026-09-13 |
 | P4.3c | **Voice→SOAP** — `faster-whisper` dictation transcribed + segmented into SOAP fields (`/consultation/tickets/{id}/voice-to-soap`) + **NL report narrative** — local-LLM prose summary over the Reporting engine's structured output (`/reports/narrative`) | M |, → [[On-Prem Clinical AI]] | ✅ 2026-09-14 |
