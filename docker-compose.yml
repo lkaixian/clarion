@@ -103,8 +103,9 @@ services:
       # Wiring hints for the ObjectStore / cache work (P1.6). Harmless today.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+      # Scoped clarion-backend user (minio-init), not the MinIO root key.
+      MINIO_ACCESS_KEY: clarion-backend
+      MINIO_SECRET_KEY: ${MINIO_BACKEND_PASSWORD:-change-me-minio-backend}
       MINIO_SECURE: ${MINIO_SECURE:-false}
       # On-prem AI (P4.3): Ollama runs on the host (it needs the GPU), not
       # as a compose service, so "localhost" from inside this container
@@ -112,6 +113,9 @@ services:
       # extra_hosts entry below resolve to the host on Linux, Mac and
       # Windows Docker Desktop alike.
       CLARION_LOCAL_LLM_URL: ${CLARION_LOCAL_LLM_URL:-http://host.docker.internal:11434}
+      # PACS (P4.7) -- must match the orthanc service's ORTHANC__REGISTERED_USERS.
+      CLARION_ORTHANC_USER: ${ORTHANC_HTTP_USER:-clarion}
+      CLARION_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:-change-me-orthanc-http}
       # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_LOCAL_LLM_MODEL,
       # CLARION_LOCAL_VISION_MODEL, CLARION_DISABLE_LOCAL_AI come from
       # ./.env.docker via env_file -- never inline real secrets here.
@@ -132,6 +136,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       # See Dockerfile note: probes "/" until /healthz exists (P5.1).
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=4).status==200 else 1)"]
@@ -259,9 +265,26 @@ services:
 
   # MinIO -- S3-compatible object store for documents / signatures / medicine
   # photos / derived thumbnails / DICOM. ObjectStore abstraction is P1.6.
+  #
+  # Pulled from quay.io, not Docker Hub -- MinIO stopped publishing free
+  # Docker images in Oct 2025, went to "maintenance mode" then archived its
+  # repo Feb 2026, and pulled the `minio` org off Docker Hub entirely on
+  # 2026-09-11 (minio/minio and minio/mc both 404 there now). quay.io/minio/
+  # minio is still where the last free community builds live.
+  # RELEASE.2025-09-07T16-13-09Z is the newest one available there (`latest`
+  # points at it too) -- everything after that on quay.io is a
+  # `.hotfix.<hash>`-suffixed enterprise/paid-subscriber build, not the free
+  # stream. Accepted residual risk: this tag predates CVE-2025-62506
+  # (privilege-escalation via session-policy bypass in service accounts/STS,
+  # fixed in the Oct-15 GitHub release that quay.io never got as a free
+  # tag) -- exploiting it needs credentials for an already-restricted
+  # service account, and MinIO here is `internal`-network-only, never
+  # host-exposed. Revisit if MinIO ever ships a free fix, or when
+  # `_minio-dead-storage-decision-pending_` memory's alternatives
+  # (RustFS etc.) mature past alpha.
   minio:
     <<: [*restart, *env-file]
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-clarion}
@@ -284,6 +307,33 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+
+  # One-shot: provisions clarion-backend / clarion-orthanc / clarion-backup
+  # (backend/db/minio/10-accounts.sh + policies/) so `backend`, `orthanc` and
+  # `backup` each hold a scoped MinIO user instead of the root key -- MinIO
+  # has no first-boot-only init hook like mariadb's /docker-entrypoint-
+  # initdb.d/, so this runs every `docker compose up` and stays idempotent
+  # instead. Also from quay.io -- see the `minio` service's comment.
+  minio-init:
+    <<: [*restart, *env-file]
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init/10-accounts.sh"]
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-clarion}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+      MINIO_BACKEND_PASSWORD: ${MINIO_BACKEND_PASSWORD:-change-me-minio-backend}
+      MINIO_ORTHANC_PASSWORD: ${MINIO_ORTHANC_PASSWORD:-change-me-minio-orthanc}
+      MINIO_BACKUP_PASSWORD: ${MINIO_BACKUP_PASSWORD:-change-me-minio-backup}
+    volumes:
+      - ./backend/db/minio/10-accounts.sh:/init/10-accounts.sh:ro
+      - ./backend/db/minio/policies:/policies:ro
+    networks:
+      - internal
+    depends_on:
+      minio:
+        condition: service_healthy
 
   # Redis -- cache + (later) rate-limit / session / worker broker.
   redis:
@@ -333,22 +383,42 @@ services:
     <<: [*restart, *env-file]
     image: orthancteam/orthanc:24.10.1
     environment:
-      # Demo-only: open access on the internal network. Lock this down (auth +
-      # per-user creds) before anything real -- part of P4.7.
       ORTHANC__NAME: "CLARION PACS"
-      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      # Basic auth -- backend/app/pacs.py sends these same creds
+      # (CLARION_ORTHANC_USER/PASSWORD). Orthanc is still internal-network-
+      # only (never host-exposed, see the comment on this file's `internal`
+      # network below); this is defense-in-depth if that boundary is ever
+      # breached, not the only guard.
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_HTTP_USER:-clarion}":"${ORTHANC_HTTP_PASSWORD:-change-me-orthanc-http}"}'
       ORTHANC__REMOTE_ACCESS_ALLOWED: "true"
       # DICOMweb plugin (WADO-RS / QIDO-RS / STOW-RS) for the OHIF viewer.
       ORTHANC__DICOM_WEB__ENABLE: "true"
       ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
-      # TODO (P4.7): enable the PostgreSQL index + MinIO S3 storage plugins:
-      #   ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
-      #   ORTHANC__POSTGRESQL__HOST: "orthanc-postgres"
-      #   ORTHANC__POSTGRESQL__DATABASE: "${ORTHANC_PG_DB:-orthanc}"
-      #   ORTHANC__POSTGRESQL__USERNAME: "${ORTHANC_PG_USER:-orthanc}"
-      #   ORTHANC__POSTGRESQL__PASSWORD: "${ORTHANC_PG_PASSWORD}"
-      #   ORTHANC__AWS_S3_STORAGE__* -> bucket clarion-dicom on the minio service
-      # Until then Orthanc uses its built-in SQLite index on the named volume.
+      # PostgreSQL index (orthanc-postgres, below) instead of Orthanc's
+      # built-in SQLite index -- real concurrency, same reason the app
+      # itself moved off SQLite (P1.3).
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"  # storage is S3 (below), not PG
+      ORTHANC__POSTGRESQL__HOST: "orthanc-postgres"
+      ORTHANC__POSTGRESQL__DATABASE: "${ORTHANC_PG_DB:-orthanc}"
+      ORTHANC__POSTGRESQL__USERNAME: "${ORTHANC_PG_USER:-orthanc}"
+      ORTHANC__POSTGRESQL__PASSWORD: "${ORTHANC_PG_PASSWORD:-change-me-orthanc}"
+      # S3 storage on the existing minio service -- `clarion-dicom` bucket
+      # (app/storage.py's BUCKET_DICOM) is provisioned by the backend's own
+      # ObjectStore bootstrap at app startup, same bucket the S3 plugin
+      # writes DICOM instances into. VirtualAddressing must be false for
+      # MinIO (path-style, not bucket-subdomain). Region is unused by MinIO
+      # but the AWS SDK requires a syntactically valid value.
+      # Scoped clarion-orthanc user (minio-init) -- s3:* on clarion-dicom
+      # only, not the MinIO root key.
+      ORTHANC__AWS_S3_STORAGE__BUCKET_NAME: "clarion-dicom"
+      ORTHANC__AWS_S3_STORAGE__ENDPOINT: "http://minio:9000"
+      ORTHANC__AWS_S3_STORAGE__REGION: "us-east-1"
+      ORTHANC__AWS_S3_STORAGE__ACCESS_KEY: "clarion-orthanc"
+      ORTHANC__AWS_S3_STORAGE__SECRET_KEY: "${MINIO_ORTHANC_PASSWORD:-change-me-minio-orthanc}"
+      ORTHANC__AWS_S3_STORAGE__VIRTUAL_ADDRESSING: "false"
+      AWS_EC2_METADATA_DISABLED: "true"  # skip the pointless IMDS probe -- creds are explicit above
     volumes:
       - orthanc_data:/var/lib/orthanc/db
     expose:
@@ -359,8 +429,12 @@ services:
     depends_on:
       orthanc-postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8042/system || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS -u ${ORTHANC_HTTP_USER:-clarion}:${ORTHANC_HTTP_PASSWORD:-change-me-orthanc-http} http://127.0.0.1:8042/system || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -382,8 +456,9 @@ services:
       MARIADB_BACKUP_USER: clarion_migrate
       MARIADB_BACKUP_PASSWORD: ${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-clarion}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      # Scoped clarion-backup user (minio-init) -- read-only, not the root key.
+      MINIO_ACCESS_KEY: clarion-backup
+      MINIO_SECRET_KEY: ${MINIO_BACKUP_PASSWORD:-change-me-minio-backup}
       # required for the backup service -- lib.sh fails loudly at run time if
       # unset (kept as :- here so a plain `docker compose config` of the
       # non-backup stack doesn't error on them).
@@ -396,6 +471,9 @@ services:
       - mariadb_data:/backup/binlog-src:ro   # binlogs live in the datadir
     networks:
       - internal
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
     # Install the cron from README.md and run it in the foreground.
     command:
       - |

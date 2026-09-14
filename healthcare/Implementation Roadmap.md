@@ -23,6 +23,123 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-14 — MinIO is dead upstream: quay.io repoint + per-service least-privilege
+
+Found while doing a MinIO least-privilege pass (the follow-up the previous
+entry's voltagent review flagged): **MinIO's Docker Hub org was pulled
+entirely on 2026-09-11** (`minio/minio` + `minio/mc` both 404 there now),
+the tail end of a wind-down that started Oct 2025 (stopped publishing free
+images) and finished Feb 2026 (repo archived, "no longer maintained").
+`docker-compose.yml`'s pinned `minio/minio:RELEASE.2025-04-22T22-12-26Z` was
+**no longer pullable** — a real, current break, not hypothetical.
+
+Evaluated actively-maintained alternatives against the one hard bar
+(real S3 Object Lock COMPLIANCE enforcement — the WORM guarantee
+P1.6/P2.9's audit-chain and sealed-reports immutability already ship):
+SeaweedFS disqualified (COMPLIANCE-mode delete still succeeds, open bug
+seaweedfs/seaweedfs#8350), Garage disqualified (Object Lock isn't
+implemented at all yet), RustFS the only non-disqualified option but
+alpha/RC maturity with `mc`/admin-API compatibility undocumented — the user
+(rightly) wasn't comfortable landing alpha software under a compliance
+path. **Decision: repoint to quay.io (MinIO's own last free-tier mirror),
+revisit a real migration later** once an alternative clears alpha and
+confirms tooling compat.
+
+`docker-compose.yml`'s `minio` service now pulls
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` — the newest tag still
+on the free stream there (`latest` points at it too; everything newer is a
+`.hotfix.*`-suffixed enterprise/paid build). Documented, accepted residual:
+this tag predates **CVE-2025-62506** (privilege-escalation via
+session-policy bypass in service accounts/STS, CVSS 8.1, fixed
+2026-10-15 but never back-pushed to quay.io's free tier) — exploiting it
+needs credentials for an already-restricted service account, and MinIO
+stays `internal`-network-only here.
+
+**Same session, the least-privilege pass itself:** NEW
+`backend/db/minio/10-accounts.sh` + `backend/db/minio/policies/*.json`
+(same shape as `backend/db/mariadb/10-accounts.sh`, P1.3's three-role
+split), run by a NEW one-shot `minio-init` compose service (`quay.io/minio/
+mc:RELEASE.2025-08-13T08-35-41Z` — MinIO has no `/docker-entrypoint-
+initdb.d/`-equivalent first-boot-only hook, so this runs, idempotently,
+every `docker compose up`). Three scoped users replace the shared root key
+`backend`/`orthanc`/`backup` all used to hold: `clarion-backend` (`s3:*` on
+`clarion-*` only — still broad within its own domain, since
+`ObjectStore._ensure_buckets()` runs at app startup in this topology;
+tightening further is gated on moving to out-of-band bucket provisioning,
+already a separate tracked TODO in `docs/deployment.md`'s P1.6 section),
+`clarion-orthanc` (`s3:*` on `clarion-dicom` only), `clarion-backup`
+(read-only on the 6 buckets `backup.sh`'s own mirror loop already names).
+
+Verified via `docker compose config` only (rendered env/creds/dependency
+graph for `minio-init` + all three consumers, including under `--profile
+backup`) — no Docker daemon running this session to boot the stack live,
+same ceiling as this session's other infra changes. `backend/tests/
+test_storage.py` (unaffected — mocked/local backend, not live MinIO) still
+33/33.
+
+**voltagent security-auditor reviewed this same-day and caught one real
+bug:** `mc admin policy attach` (unlike `policy create`/`user add`) is not
+idempotent — it errors on a policy already attached, which under `set -e`
+would kill `minio-init` on every `docker compose up` after the first, and
+since `backend`/`orthanc`/`backup` all gate on it completing, wedge the
+whole stack from ever restarting past the first successful provisioning
+run. Fixed: `attach_policy()` tolerates only that specific "already"
+error class, still aborts on anything else (typo, permission problem).
+Confirmed correct against mocked `mc` output covering all three cases
+(fresh attach / already-attached / a real unrelated error) — no live
+MinIO to test against this session. Everything else in the pass reviewed
+clean: the `s3:*`-on-`clarion-*` grant covers every `ObjectStore` call
+`_ensure_buckets()`/`set_retention()` make (all plain `s3:` actions, never
+`admin:*`), the `depends_on` graph resolves correctly in every profile
+combination, and the CVE-2025-62506 acceptance reasoning holds for an
+even stronger reason than originally stated — none of the three new
+accounts are service/STS accounts (the vulnerable credential type), so
+the bug's precondition doesn't arise in this topology at all, not just
+"is hard to reach."
+
+### 2026-09-14 — Security Audit L6 fix + P4.7 go-live: Orthanc auth/PG/S3
+
+**L6 fixed.** `_get_dq_alert_or_404` (data-quality alerts, P2.12) was the
+one leftover unscoped-by-facility lookup P4.5's review flagged but didn't
+fix (it belonged to a different, unrelated module). Now reuses
+`_dq_facility_filter` — the same scope `list_data_quality_alerts` already
+applies — so `acknowledge`/`resolve` 404 on a facility mismatch, same shape
+as the `_get_security_alert_or_404` fix it mirrors. New test
+`test_admin_acknowledge_resolve_is_facility_scoped`.
+
+**P4.7 go-live TODOs, two of three done.** `docker-compose.yml`'s `orthanc`
+service: turned on HTTP basic auth (`ORTHANC__REGISTERED_USERS`, creds from
+new `ORTHANC_HTTP_USER`/`PASSWORD`) and wired the PostgreSQL index +
+AWS-S3-storage plugins that were already scaffolded-but-commented — index
+against the pre-existing `orthanc-postgres` service, storage against the
+existing `minio` service's `clarion-dicom` bucket (the one
+`app/storage.py`'s `ObjectStore` already provisions at its own boot).
+`backend/app/pacs.py`'s client now sends the matching
+`CLARION_ORTHANC_USER`/`PASSWORD` creds (`None` if unset — degrades to no
+auth only for bare local dev against a non-compose Orthanc, never against
+the real compose stack, which has auth on). Auth is explicitly documented
+as defense-in-depth on top of the existing internal-network-only boundary,
+not a replacement for it. Verified with `docker compose config` (no
+daemon available in this session to boot the stack live — same
+verification ceiling as P1.11's "not yet run" `docker compose build`).
+
+**voltagent security-auditor reviewed both changes clean** (correctness of
+the `_dq_facility_filter` reuse across every edge case, the new test
+actually catching the pre-fix bug, no credential leakage in the Orthanc
+wiring); two non-blocking hardening notes actioned: unescaped
+`ORTHANC_HTTP_USER`/`PASSWORD` interpolated into a JSON env literal (no `"`
+or `\` — documented in `.env.docker.example`, not code-fixed, deploy-trust
+boundary already), and Orthanc's S3 plugin using MinIO root creds like
+every other service in this stack does today (no per-service MinIO
+policy/user scoping exists yet anywhere — flagged as a stack-wide follow-up
+in `docker-compose.yml`, not built here).
+
+**Real Modality Worklist remains the one open P4.7 item** — needs hardware
+this environment doesn't have, same documented-gap class as the TLS
+cert/thermal printer. 457/457 backend tests pass, `check_schema.py` PASS.
+agy not delegated (small, judgment-heavy config + a targeted RBAC fix,
+below the break-even).
+
 ### 2026-09-14 — P4.5: access-anomaly detection + AI audit-trail intelligence
 
 **Done.** New `backend/app/security_analytics.py`, same registry-of-rules /
@@ -1790,7 +1907,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P4.4 | Medication-safety = rule engine + licensed drug DB (MIMS) integration | M | | 🟡 2026-09-14 (ATC drug-class layer + real-time pre-save alert done; MIMS itself out of reach — no public API; diagnosis-based screening not attempted) |
 | P4.5 | AI audit-trail intelligence + access anomaly detection over the hash-chain | M | –7 | ✅ 2026-09-14 |
 | P4.6 | Predictive analytics + population-health stratification in Reporting | M | | — |
-| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core: Orthanc + manual upload + embedded dwv viewer done; PG index/S3 plugins + Orthanc auth + real Modality Worklist still open) |
+| P4.7 | **PACS** — Orthanc + PG index + S3 plugin + Modality Worklist + OHIF viewer + auto-link | L | **** → [[PACS and DICOM]] | 🟡 2026-09-14 (core + PG index/S3/auth all done; real Modality Worklist — needs hardware — still open) |
 | P4.8 | Integration layer — SMP / SMS / e-klinik / Registrar (read-only) + lab-analyser HL7 v2 service + label printers | L | → [[Integration Engine and LDAP]] | — |
 
 ## P5 — Ops & handover

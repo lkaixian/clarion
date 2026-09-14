@@ -251,19 +251,55 @@ datetime bug that broke the off-hours rule's own dedup key. 456/456 backend
 tests pass, `check_schema` PASS. agy not delegated — judgment-heavy
 (choosing/defending real thresholds), below the break-even.
 
-**New leftover:** `_get_dq_alert_or_404` (data-quality alerts,
-`routers/admin.py`, P2.12) has the same unscoped-by-facility gap P4.5's
-review just fixed for security-alerts — its acknowledge/resolve endpoints
-don't check `current_user.facility` against the alert's patient-facility
-scope either. Pre-existing, not a P4.5 regression; worth the same fix in a
-follow-up pass.
+**Security Audit L6 fixed 2026-09-14:** `_get_dq_alert_or_404` (data-quality
+alerts, `routers/admin.py`, P2.12) now reuses `_dq_facility_filter` —
+acknowledge/resolve 404 on a facility mismatch, same shape as P4.5's
+`_get_security_alert_or_404`. `test_admin_acknowledge_resolve_is_facility_scoped`.
+
+**P4.7 go-live, 2 of 3 done 2026-09-14:** Orthanc HTTP basic auth +
+PostgreSQL index + S3 storage (against the existing `orthanc-postgres` /
+`minio` services) are all wired in `docker-compose.yml`, `pacs.py` sends the
+matching creds. voltagent reviewed clean (2 non-blocking hardening notes
+actioned: JSON-interpolation escaping caveat documented, MinIO
+root-creds-everywhere flagged as a stack-wide follow-up — see next).
+Verified via `docker compose config` only — no daemon running this session
+to boot the stack live. 457/457 backend tests pass, `check_schema` PASS.
+Real Modality Worklist is the one still-open P4.7 item (needs hardware).
+
+**MinIO is dead upstream — repointed + least-privilege pass done, same
+2026-09-14 session:** Docker Hub pulled the `minio` org 2026-09-11 (the
+`minio/minio:RELEASE.2025-04-22T22-12-26Z` this repo had pinned stopped
+being pullable). SeaweedFS and Garage are both disqualified as
+alternatives (broken/absent Object Lock WORM enforcement); RustFS is the
+only non-disqualified one but alpha/RC with unconfirmed `mc`/admin-API
+compat — the user declined to land alpha software under a compliance
+path. **Repointed to `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`**
+(MinIO's own last free-tier mirror; documented residual: predates
+CVE-2025-62506, a service-account privilege-escalation fix never
+back-pushed to the free quay.io stream — accepted given internal-network-
+only). Then did the least-privilege pass on top: NEW `backend/db/minio/
+10-accounts.sh` + `policies/*.json` (mirrors `backend/db/mariadb/
+10-accounts.sh`'s 3-role shape) run by a NEW one-shot `minio-init` service
+— `backend`/`orthanc`/`backup` each now hold their own scoped user instead
+of the shared root key. See the roadmap changelog for full detail,
+including why `clarion-backend` still needs broad `s3:*` on `clarion-*` for
+now (bucket auto-create at app startup, a separate already-tracked TODO).
+`minio-dead-storage-decision-pending` memory can be considered resolved for
+the "repoint now" half; revisiting a real migration off MinIO stays open.
+**voltagent caught + fixed one real bug same-day:** `mc admin policy
+attach` isn't idempotent like `create`/`user add` — it errors on a policy
+already attached, which would have wedged the whole stack from restarting
+past the first `docker compose up`. `attach_policy()` in `10-accounts.sh`
+now tolerates only that specific error, verified against mocked `mc`
+output (no live server this session).
 
 Next: every top-5 demo priority is done, and P4.1/P4.2/P4.4/P4.5 have each
-closed a Compliance Matrix gap. Remaining backlog is P4.7's own go-live
-TODOs (Orthanc auth + PG/S3 plugins + real Modality Worklist), the
-data-quality RBAC leftover just above, or the P4.x items with no status yet
-(P4.6 predictive analytics, P4.8 integration layer) — surface the choice
-rather than assuming order, same discipline as every prior phase boundary.
+closed a Compliance Matrix gap. Remaining backlog is P4.7's real-hardware
+Modality Worklist gap (deploy-time, not buildable here), a stack-wide MinIO
+least-privilege pass (new leftover, above), or the P4.x items with no
+status yet (P4.6 predictive analytics, P4.8 integration layer) — surface
+the choice rather than assuming order, same discipline as every prior phase
+boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

@@ -2413,8 +2413,18 @@ def run_data_quality_scan(
     return result.as_dict()
 
 
-def _get_dq_alert_or_404(db: Session, alert_id: str) -> models.DataQualityAlert:
-    row = db.query(models.DataQualityAlert).filter(models.DataQualityAlert.id == alert_id).first()
+def _get_dq_alert_or_404(db: Session, alert_id: str, current_user: models.User) -> models.DataQualityAlert:
+    """Same facility scope as list/summary (`_dq_facility_filter`) -- a
+    facility-scoped admin gets 404, not 403, for another facility's alert,
+    so this never confirms the row's existence. Security Audit L6: this was
+    an unscoped id-only lookup (acknowledge/resolve could mutate another
+    facility's alert), the same pre-existing pattern the P4.5 review found
+    and fixed for `_get_security_alert_or_404` -- same fix applied here."""
+    q = db.query(models.DataQualityAlert).filter(models.DataQualityAlert.id == alert_id)
+    scope = _dq_facility_filter(current_user)
+    if scope is not None:
+        q = q.filter(scope)
+    row = q.first()
     if row is None:
         raise HTTPException(status_code=404, detail="Data-quality alert not found")
     return row
@@ -2429,7 +2439,7 @@ def acknowledge_data_quality_alert(
     """Mark a known/accepted issue as acknowledged -- it stays listed but
     drops out of the 'open' count. A future scan that still sees the finding
     leaves the acknowledgement in place."""
-    row = _get_dq_alert_or_404(db, alert_id)
+    row = _get_dq_alert_or_404(db, alert_id, current_user)
     row.acknowledged = True
     row.acknowledged_by = current_user.id
     row.acknowledged_at = datetime.now(timezone.utc)
@@ -2452,7 +2462,7 @@ def resolve_data_quality_alert(
     false positive). A manual resolve is NOT reopened by a later scan the way
     a system auto-resolve is -- `resolved_by` is the acting admin, not
     'system'."""
-    row = _get_dq_alert_or_404(db, alert_id)
+    row = _get_dq_alert_or_404(db, alert_id, current_user)
     row.resolved = True
     row.resolved_by = current_user.id
     row.resolved_at = datetime.now(timezone.utc)
