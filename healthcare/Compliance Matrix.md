@@ -26,7 +26,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.1.1.1    | Dashboard: queue/attended/availability/wait KPIs                               | Partial | Build a management dashboard over `queue_tickets`, `staff_clock_events`, `room_claims`                   | Yes                    |
 | 10.2.1.1.2    | Patient-flow **prediction** engine                                             | Gap     | EWMA / gradient-boosted over historical queue + appointments                                             | Yes (flagship)         |
 | 10.2.1.1.3    | Real-time **operational health score**                                         | Gap     | Composite index; cheap once referrals exist                                                              | Yes                    |
-| 10.2.1.2.1    | Frontdesk ↔ SMP/SMS/e-klinik; Registrar eligibility                            | Gap     | Mock adapter + documented integration layer                                                              | Mock                   |
+| 10.2.1.2.1    | Frontdesk ↔ SMP/SMS/e-klinik; Registrar eligibility                            | Demo    | Done 2026-09-15: `app/uthm_registry.py` adapter + `/mock-uthm` mock + `GET /patients/uthm-eligibility/{nric}`, wired into the web "New Patient" form. Real UTHM specs/credentials still needed for a non-mock integration | Mock (working)         |
 | 10.2.1.2.2    | Pre-registration (self-register before visit)                                  | Have    | `self_registration.py` + Flutter self_register                                                           | Yes                    |
 | 10.2.1.2.3    | Patient mgmt: CRUD, assign physician, payment method                           | Partial | CRUD + room/queue assign present; payment-method setting = Gap                                           | Yes                    |
 | 10.2.1.2.4    | Appointments: manage, reminders, history, reschedule                           | Have    | `appointments.py` + reschedule requests; reminder *delivery* job = Gap                                   | Yes                    |
@@ -51,7 +51,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.1.5.1    | Admin: user/role mgmt, password reset, access monitoring, change notify        | Have    | `admin.py` roster + `permissions.py` matrix + Access Control tab; change-notification = Gap              | Yes                    |
 | 10.2.1.5.2    | Admin: patient mgmt, history/appointments                                      | Have    | `admin.py` + `patients.py`                                                                               | —                      |
 | 10.2.1.5.3    | Admin: appointment slots, reminders                                            | Partial | Dashboard exists; reminder-delivery job = Gap                                                            | —                      |
-| 10.2.1.5.4    | Admin billing + SMP/SMS/e-klinik                                               | Gap     | Billing + integrations                                                                                   | —                      |
+| 10.2.1.5.4    | Admin billing + SMP/SMS/e-klinik                                               | Partial | Billing = Have (P3.3); the SMP/SMS/e-klinik half is Gap here specifically — the 2026-09-15 mock covers the frontdesk eligibility touchpoint (10.2.1.2.1), not a billing-time integration | —                      |
 | 10.2.1.5.5    | Patient medical-info reports, data export                                      | Partial | Some export; comprehensive reporting = Gap                                                               | —                      |
 | 10.2.1.5.6    | System Configuration: notifications, content/text/appearance                   | Partial | `hospital_settings` + admin config; content/appearance CMS = Gap                                         | —                      |
 | 10.2.1.5.7    | Security Management: data recovery/backup, security protocol                   | Have    | `backend/backup/` + DR runbook (P2.8); security protocol via [[Security Audit]]                          | —                      |
@@ -89,7 +89,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | 10.2.2.3 | Web responsive | Partial | React + Tailwind; audit responsiveness |
 | 10.2.2.4–6, .9–10 | UTHM provides hosting/network/AV; security via PTM | N/A | Contractual |
 | 10.2.2.7 | Integrate label printer, blood-test machine, X-ray viewer | Partial | Label printer = Demo (P3.9, see 10.2.8.2); X-ray viewer = P4.7 (Orthanc/DICOM); blood-test machine = P4.8 2026-09-14, see 10.2.8.1.x below |
-| 10.2.2.8 | Integrate SMP / SMS / e-klinik | Gap | Mock adapters + integration layer |
+| 10.2.2.8 | Integrate SMP / SMS / e-klinik | Demo | Working mock adapter + integration layer landed 2026-09-15 → see 10.2.1.2.1. Real integration still needs UTHM specs/credentials |
 | 10.2.2.11–13 | DB/hosting compatibility, secure/scalable config | Partial | [[On-Prem Architecture]] |
 | 10.2.2.14 | Resize uploaded images | Gap | Pillow resize on upload (easy) |
 | 10.2.2.15 | **Embedded AI, NO cloud APIs**, offline | Gap (conflict) | [[On-Prem Clinical AI]] — biggest bet |
@@ -101,7 +101,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | Clause | Requirement | Status | Note |
 |---|---|---|---|
 | 10.2.3.1 | OWASP | Partial | [[Security Audit]] drives this; CI enforces (ruff/bandit/semgrep, P2.11) |
-| 10.2.3.2–6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Partial | 30 tables; no stored procs/views (fine); schema docs = Gap |
+| 10.2.3.2–6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Have | 57 tables; no stored procs/views (fine); schema docs (10.2.3.6) done 2026-09-15 (P5.4) — auto-generated data dictionary + Mermaid ERD, `backend/db/gen_data_dictionary.py` → [[../docs/data-dictionary.md]] |
 | 10.2.3.7–8 | UTHM hosts DB; vendor supplies no DB server | N/A | App connects to UTHM MariaDB |
 | 10.2.3.9 | AI-assisted code quality / OWASP review in pipeline | Partial | `ci/run.sh` = ruff + bandit + semgrep(local rules) + osv-scanner + check_schema + pytest (P2.11, 2026-09-08); LLM-review step still to add |
 | 10.2.3.10 | **FHIR-compatible schema**, MySejahtera/PADU interop | Have | [[FHIR Schema Readiness]] — coding triples + `resource_identifiers` + read-only façade landed 2026-09-14 (P4.1/P4.2) |

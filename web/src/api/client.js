@@ -219,6 +219,12 @@ export const listPatients = ({ skip, limit = 200, breakGlassReason } = {}) =>
     })
     .then((r) => r.data);
 export const createPatient = (payload) => client.post("/patients", payload).then((r) => r.data);
+// UTHM SMP/SMS/e-klinik-panel/Registrar eligibility check (tender 10.2.1.2.1)
+// -- MOCK stand-in, see backend/app/uthm_registry.py's module docstring.
+// Never throws-to-caller on a down registry (backend returns available:false
+// with 200, not an error status), so callers don't need a catch just for this.
+export const checkUthmEligibility = (nric) =>
+  client.get(`/patients/uthm-eligibility/${encodeURIComponent(nric)}`).then((r) => r.data);
 export const getPatient = (id) => client.get(`/patients/${id}`).then((r) => r.data);
 export const addCondition = (id, payload) => client.post(`/patients/${id}/conditions`, payload).then((r) => r.data);
 export const addMedication = (id, payload) => client.post(`/patients/${id}/medications`, payload).then((r) => r.data);
