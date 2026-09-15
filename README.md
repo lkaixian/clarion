@@ -199,6 +199,11 @@ install separately; air-gap setup is in `ci/README.md`.
   `Security Audit.md`, `On-Prem Architecture.md`, and the research notes.
 - **`docs/deployment.md`** — the operations guide (this README is the map).
 - **`docs/tender-clauses.md`** — the full Section 10 clause list.
+- **`docs/{operations,programming,maintenance,transfer-of-technology}-manual.md`**
+  — the handover manual set (tender 7.1/3.2.5); `docs/data-dictionary.md`
+  is the auto-generated schema/ERD (10.2.3.6).
+- **`docs/exhibition-demo-script.md`** — the live demo run sheet: setup,
+  scene-by-scene script, fallbacks, anticipated Q&A.
 
 ---
 
