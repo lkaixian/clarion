@@ -766,6 +766,101 @@ services:
       mariadb:
         condition: service_healthy
 
+  # -------------------------------------------------------------------------
+  # Branch campus edge (P5.3, tender: two-campus rollout). Deliberately its
+  # OWN compose profile and its OWN network (`branch-edge`, not `edge`/
+  # `internal`) -- it is NOT another hop inside the central stack, it
+  # models a genuinely separate site whose only path to patient data is a
+  # WAN call to the central proxy's public HTTPS endpoint
+  # (CLARION_CENTRAL_BACKEND_ORIGIN), same trust boundary as any other
+  # client. See proxy/branch-edge/README.md for what this is and is not
+  # (real WAN validation needs the real link -- this is the config +
+  # local-serving half, always buildable without one; see that README for
+  # why "+ Redis" from the original architecture sketch was dropped).
+  branch-proxy:
+    # Deliberately NOT *env-file: unlike the central `proxy` (co-located
+    # with the trusted stack), this container runs at a physically separate
+    # site modelled as an untrusted network boundary -- it must not carry
+    # MariaDB/MinIO/SECRET_KEY/OTP_HMAC_KEY etc. from .env.docker into its
+    # environment when it needs none of them. Every var it actually uses is
+    # named explicitly below.
+    <<: *restart
+    image: caddy:2.8-alpine
+    profiles: ["branch-edge"]
+    environment:
+      CLARION_SITE_ADDRESS: ${CLARION_BRANCH_SITE_ADDRESS:-localhost}
+      CLARION_TLS_DIRECTIVE: ${CLARION_TLS_DIRECTIVE:-tls internal}
+      CLARION_HSTS: ${CLARION_HSTS:-max-age=300}
+      # Full origin of the CENTRAL site's public edge, e.g.
+      # https://clarion.example.edu.my -- every /api/* request makes this one
+      # WAN hop. Deliberately `:-` not `:?` -- a `:?` required var here
+      # would fail `docker compose config`/`up` for EVERY invocation of this
+      # file, even with `branch-edge` not in --profile (Compose validates all
+      # services' required vars eagerly regardless of active profile; see
+      # docs/operations-manual.md's note, found via this exact var). Caddy
+      # fails loudly enough on an empty/invalid reverse_proxy target at
+      # container start if this profile IS enabled without setting it.
+      CLARION_CENTRAL_BACKEND_ORIGIN: ${CLARION_CENTRAL_BACKEND_ORIGIN:-}
+    # Security review 2026-09-15: a bare host:port or http:// origin would
+    # make Caddy reverse-proxy every /api/* call over PLAINTEXT across the
+    # real Main Campus<->Branch WAN with no error and none of this stack's
+    # usual TLS-failure signals -- fail loud at startup instead, same
+    # "validate before use" discipline as web/entrypoint.sh's API_BASE guard.
+    command: >
+      sh -c 'case "$$CLARION_CENTRAL_BACKEND_ORIGIN" in
+        https://*) ;;
+        *) echo "FATAL: CLARION_CENTRAL_BACKEND_ORIGIN must start with https:// (got: $$CLARION_CENTRAL_BACKEND_ORIGIN)" >&2; exit 1 ;;
+      esac
+      exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile'
+    cap_add:
+      # simulate-wan.sh ONLY (tc netem against this container's own
+      # interface, for WAN-degradation testing) -- no other use, and no
+      # other service in this stack gets this capability.
+      - NET_ADMIN
+    ports:
+      - "${BRANCH_HTTP_PORT:-8080}:80"
+      - "${BRANCH_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./proxy/branch-edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Security review 2026-09-15: Branch's OWN cert directory, NOT
+      # ./proxy/certs (the central site's -- would ship its TLS private key
+      # to this less-trusted site in a real deployment).
+      - ./proxy/branch-edge/certs:/etc/caddy/certs:ro
+      - branch_caddy_data:/data
+      - branch_caddy_config:/config
+    networks:
+      - branch-edge
+    depends_on:
+      branch-web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  branch-web:
+    <<: *restart
+    # Same image the central `web` service builds -- no separate build, no
+    # separate sync mechanism. It's already the built static SPA (nginx);
+    # running a second copy of it AT Branch is the entire "static/SPA off
+    # the WAN" win the architecture note was after.
+    image: clarion/web:local
+    profiles: ["branch-edge"]
+    environment:
+      API_BASE: /api
+    expose:
+      - "8080"
+    networks:
+      - branch-edge
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
 # ===========================================================================
 # Networks -- three segments, nothing on the default network.
 #   edge          : proxy <-> web, proxy <-> backend. Fixed subnet so the
@@ -795,6 +890,11 @@ networks:
     driver: bridge
   observability:
     driver: bridge
+  # `branch-edge` profile only (P5.3) -- deliberately isolated from edge/
+  # internal/observability: this network's only route to patient data is
+  # branch-proxy's own outbound WAN call, same as any internet client.
+  branch-edge:
+    driver: bridge
 
 # ===========================================================================
 # Volumes -- named, so `docker compose down` keeps the data.
@@ -814,3 +914,5 @@ volumes:
   alertmanager_data:
   grafana_data:
   loki_data:
+  branch_caddy_data:
+  branch_caddy_config:

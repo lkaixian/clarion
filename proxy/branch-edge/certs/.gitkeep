@@ -1,0 +1,11 @@
+# Place the Branch site's OWN TLS pair here for production (git-ignored):
+#   clarion-branch.crt   (leaf + intermediate chain, PEM)
+#   clarion-branch.key   (private key, PEM, no passphrase)
+# The demo uses Caddy's internal CA and needs nothing here.
+#
+# Security review 2026-09-15 (P5.3): this directory is DELIBERATELY separate
+# from ../../certs/ (the central site's cert directory). branch-proxy used to
+# mount that same directory, which -- since it holds the CENTRAL site's TLS
+# private key in a real deployment -- would have shipped that key to a
+# container modelled as running at a physically separate, less-trusted site.
+# Never point branch-proxy's compose volume at ../../certs/.

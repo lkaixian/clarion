@@ -1,0 +1,93 @@
+# CLARION Branch campus edge proxy (P5.3, tender: two-campus rollout).
+#
+# Runs AT Branch. Deliberately NOT on the central stack's `edge`/`internal`
+# networks (see docker-compose.yml's branch-edge network comment) -- its only
+# path to patient data is a WAN call to the central site's public HTTPS
+# endpoint, same trust boundary as any other internet client. This buys
+# exactly one thing over a Branch client hitting the central site directly:
+# the static SPA is served from Branch's own LAN (the `branch-web` container,
+# same image the central `web` service builds) instead of over the WAN on
+# every page load -- API calls still cross the WAN either way, there's no
+# way around that for a system whose data lives centrally.
+#
+# Mirrors proxy/Caddyfile's security-header set (single source of truth
+# would need a shared Caddy `import` snippet across two files that live in
+# different directories; duplicated here instead since it's a handful of
+# lines and Caddy config isn't imported across compose services at build
+# time) -- keep the two in sync if either changes.
+{
+	admin off
+	persist_config off
+	servers {
+		protocols h1 h2
+		trusted_proxies static
+		strict_sni_host on
+		timeouts {
+			read_body 30s
+			read_header 5s
+			write 120s
+			idle 2m
+		}
+		max_header_size 16KB
+	}
+}
+
+:80 {
+	@healthz path /healthz
+	handle @healthz {
+		respond "ok" 200
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+{$CLARION_SITE_ADDRESS:localhost} {
+	{$CLARION_TLS_DIRECTIVE:tls internal} {
+		protocols tls1.2 tls1.3
+	}
+
+	header {
+		Strict-Transport-Security "{$CLARION_HSTS:max-age=300}"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Permissions-Policy "accelerometer=(), autoplay=(), camera=(self), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+
+	@backend_diag path /api/metrics /api/readyz
+	handle @backend_diag {
+		respond 404
+	}
+
+	# The one WAN hop -- every API call goes straight to the central site.
+	# header_up sets Host to the chosen upstream's own host:port so the
+	# central proxy's own `strict_sni_host on` sees a matching SNI/Host
+	# pair (it would otherwise see Branch's CLARION_SITE_ADDRESS in the Host
+	# header against the central FQDN's SNI and reject the hop as a
+	# mismatch) -- NOT verified against a live central instance this
+	# session (no second real site to test against); verify at commissioning.
+	handle_path /api/* {
+		request_body {
+			max_size 16MB
+		}
+		reverse_proxy {$CLARION_CENTRAL_BACKEND_ORIGIN} {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	# Static SPA served from THIS campus's LAN.
+	handle {
+		encode zstd gzip
+		reverse_proxy branch-web:8080
+	}
+}
