@@ -989,8 +989,10 @@ class RoomClaim(Base):
     the first; see routers/reception.py::claim_room and
     routers/staff.py::clock_out). A SQLite-only partial unique index used to
     backstop this against a concurrent-claim race; it was removed for
-    MariaDB portability (P1.2) and is scheduled to return as a MariaDB
-    still creates the old partial index on the existing SQLite demo DB, so
+    MariaDB portability (P1.2) and replaced with the MariaDB-portable
+    `active_room_key`/`active_user_key` VIRTUAL generated columns +
+    `UniqueConstraint` below (P1.3) -- that's the DB-level backstop now, on
+    both engines.
 
     This is what powers the additive "My Room" worklist
     (GET /reception/my-room): today's QueueTickets whose room_id matches the
