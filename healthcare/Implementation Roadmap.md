@@ -23,6 +23,132 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-15 — P5.2 (scoped): Load testing — Locust suite, gunicorn tuning, 5 real bugs found & fixed
+
+Asked the user which backlog item to pick up next with P5.1 landed; picked
+P5.2. NEW `backend/loadtest/locustfile.py` (agy wrote it from a tight,
+fully-specified task after Claude read the real route signatures; Claude
+verified line-by-line and caught two spec gaps agy's own verification note
+flagged as unchecked — `/patients/announcements` and `/booking-options`
+needed a `facility_name` query param, `/appointment-slots` also needed
+`date` — fixed directly) simulating realistic weighted clinic traffic
+(receptionist/clinician/pharmacist/admin/patient) against the 5 seeded
+demo accounts. `backend/requirements-dev.txt` gained `locust==2.46.5`.
+
+Standing up the MariaDB-backed stack to run this properly (not the SQLite
+demo path -- pool/worker tuning is meaningless against SQLite) surfaced
+**four real, previously-undiscovered infra/migration bugs**, none of them
+load bugs per se, but exactly what a genuine from-scratch `docker compose
+up` + `alembic upgrade head` exercises:
+
+1. `docker-compose.yml`'s `mariadb` service never passed
+   `MARIADB_METRICS_PASSWORD` through -- a P5.1 regression. `10-accounts.sh`
+   aborts on any missing required var *before* creating anything, so on a
+   fresh volume `clarion_app`/`clarion_migrate`/`clarion_report` silently
+   never existed either, not just `clarion_metrics`. Fixed.
+2. The `migrate` one-shot service ran `alembic upgrade head` from
+   `/app/data` (backend/Dockerfile's runtime `WORKDIR`), where
+   `alembic.ini` doesn't exist -- alembic silently no-oped
+   ("No 'script_location' key found") instead of erroring loudly. Fixed
+   with `working_dir: /app` on that service.
+3. P1.2b's `a1b2c3d4e5f6` migration (MariaDB `DATETIME(6)` precision,
+   2026-08-30) failed on a genuinely fresh `alembic upgrade head` --
+   `Table 'audit_chain_state' doesn't exist`. It imported the *live*
+   `app.models` to decide what to ALTER instead of reflecting the database
+   at its actual position in the chain, so every table added since
+   (audit_chain_state, security_alerts, ...) got swept in even though
+   this revision runs long before those tables exist. This is the exact
+   "P2.9 leftover" the roadmap had flagged as an owed MariaDB run --
+   turned out a different, earlier migration broke first. Fixed by
+   reflecting `sa.inspect(bind)` instead of importing `app.models`;
+   confirmed no other migration file has the same anti-pattern.
+4. P2.9's `audit_logs` append-only trigger then failed with MariaDB error
+   1419 (`CREATE TRIGGER` needs SUPER while binlogging is on, unless
+   `log_bin_trust_function_creators` is set) -- irrelevant here since
+   binlog-format is already ROW, not STATEMENT. Fixed with
+   `--log-bin-trust-function-creators=1` on the `mariadb` service, rather
+   than granting `clarion_migrate` SUPER.
+
+A fifth finding came from the load test itself and is the significant one:
+**slowapi's rate limiting had two independent, compounding, security-
+relevant bugs**, not merely performance ones. (a) Its default in-memory
+storage gives each of gunicorn's 4 worker processes its own independent
+counter for the same key -- a 100-request burst of wrong-password
+`POST /auth/login` (limit 20/minute) didn't start 429-ing until ~50+
+attempts, the opposite of fail-safe for the exact brute-force/spray case
+[[Security Audit#M1]] named. (b) Direct tracing (monkeypatching
+`slowapi.middleware._find_route_handler` and `_should_exempt`, confirmed
+both in-process via TestClient and over the real network) showed
+`SlowAPIMiddleware` returns `handler=None` for literally every route on
+this app's installed fastapi/starlette versions, so `default_limits=
+["60/minute"]` had **never** actually been enforced on any route without
+its own explicit `@limiter.limit(...)` decorator -- most of the API
+(dashboard, patients, pharmacy, reception, ...) had no rate limiting at
+all beyond auth, since day one. Fixed: `app/rate_limit.py`'s `Limiter` now
+uses `storage_uri` pointed at the `redis` container this stack already
+provisions (previously completely unused) so every worker shares one
+counter; a new `enforce_rate_limits` FastAPI dependency, wired globally
+via `FastAPI(dependencies=[...])`, replaces the dead `SlowAPIMiddleware`
+by reusing the one code path already confirmed working (the same internal
+method the `@limiter.limit()` decorator itself calls), reading the
+matched route off `request.scope["route"]` instead of the broken
+`_find_route_handler`. Verified with repeatable bursts (20-request login
+burst -> exactly 10 succeed then 10 429; 75-request GET burst against an
+undecorated route -> exactly 60 succeed then 15 429) and the full
+531-test backend suite (no regressions -- `tests/conftest.py`'s
+`_reset_rate_limiter` autouse fixture already resets the shared `Limiter`
+between tests).
+
+Gunicorn tuning (`backend/Dockerfile`): `--timeout 60` (the CPU-bound
+local-LLM/whisper paths -- CDS hint, voice-to-soap, narrative -- risked
+SIGKILL mid-inference at the 30s default with no GPU guarantee),
+`--graceful-timeout 30`, `--max-requests 2000 --max-requests-jitter 200`
+(periodic worker recycling against slow memory growth, jittered against a
+synchronized restart storm). Corrected a stale comment claiming
+`max_overflow=10` (database.py has used 30 since P1.3).
+
+Load test itself (`backend/loadtest/README.md` has full detail): 18 users,
+1/s ramp, 3 minutes, real MariaDB -- 1238 requests, zero DB errors, zero
+timeouts, median latency 9-28ms across every route. Every failure was the
+now-correctly-firing per-route 60/min limit on the heaviest-weighted
+patient-facing routes -- expected, not a bug. **Honest scope limit:**
+this is a single-test-machine run, so it shares one apparent client IP and
+could never push the DB pool/worker ceiling regardless of user count (a
+handful of real connections open at once, nowhere near the 160-connection
+pool math). A real capacity-ceiling number needs a distributed load
+generator or an operator-authorized rate-limit bypass in staging -- this
+session's own attempt to widen `FORWARDED_ALLOW_IPS` for that purpose was
+correctly declined by Claude Code's own safety controls as a security-
+weakening action, which is the right call for a repo, not a session, to
+make. Marked 🟡 not ✅ for that reason.
+
+**voltagent security-auditor reviewed the rate-limiter/migration/compose
+changes independently and caught one real CRITICAL issue before it
+shipped**: `Limiter(...)` had no `in_memory_fallback_enabled=True`, so a
+Redis outage wouldn't just degrade rate limiting -- with
+`enforce_rate_limits` wired as a GLOBAL dependency, slowapi's default
+behavior on a storage error is to re-raise, turning a Redis blip into a
+500 on **every single request site-wide**, including `GET /healthz`
+(whose own docstring promises a dependency-free liveness answer) and the
+unauthenticated `emergency.py` scan endpoints -- the one part of this
+"Emergency-first" system explicitly designed to stay reachable no matter
+what else is down. Fixed with `in_memory_fallback_enabled=True` (degrades
+to the pre-Redis per-worker-undercounting behavior for the outage's
+duration instead, then recovers automatically); verified live by actually
+stopping the `redis` container and confirming `/healthz` and
+`POST /auth/login` both still return 200, then restarting it and
+confirming `_storage_dead` clears. voltagent also confirmed: the private
+`limiter._check_request_limit()` reliance is correct as implemented (fully
+traced against the installed slowapi/limits source -- decorated routes,
+`@limiter.exempt`, and the `_rate_limiting_complete` double-check guard all
+behave correctly) but is real, if unavoidable, forward-compat debt given
+`SlowAPIMiddleware`/`SlowAPIASGIMiddleware` are *both* broken the same way
+on this stack; a stale docstring claim about `@limiter.exempt` routes
+(that design was superseded before this session) was also caught and
+corrected; every other fix (compose, migration, Dockerfile) checked out
+with no changes needed. 21 targeted rate-limit/auth/emergency tests
+re-verified green after the fix.
+
 ### 2026-09-15 — P5.1 (scoped): Observability — logging, health, metrics, Loki/Prometheus/Grafana/Alertmanager
 
 P1.7b was the last open item with a real backlog description; asked the
@@ -2298,7 +2424,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | # | Task | Size | Clause | Status |
 |---|---|---|---|---|
 | P5.1 | Observability — structured logging, Loki, Prometheus, Grafana, Alertmanager (email + WhatsApp) | M | | 🟡 2026-09-15 (everything except WhatsApp — no real Meta/Twilio account exists — see changelog) |
-| P5.2 | Load testing to 23k users; tune pools + workers | M | | — |
+| P5.2 | Load testing to 23k users; tune pools + workers | M | | 🟡 2026-09-15 (Locust suite + gunicorn tuning + 5 real bugs found & fixed; single-machine run only, see changelog) |
 | P5.3 | Two-campus rollout — WAN validation + Branch edge + offline emergency-export appliance | M | — | — |
 | P5.4 | Docs & handover — auto-generated ERD / data dictionary, Operations / Programming / Maintenance manuals, DR runbook, Transfer-of-Technology package | M | 7.1 / 3.2.5 / | — |
 

@@ -61,6 +61,11 @@ requests==2.34.2
 rsa==4.9.1
 six==1.17.0
 slowapi==0.1.10
+# P5.2: shared storage backend for slowapi/limits (app/rate_limit.py) -- gunicorn's
+# 4 worker processes each kept their own in-memory rate-limit counter without
+# this, inflating every limit by up to ~4x. Talks to the `redis` service already
+# provisioned in docker-compose.yml (previously unused).
+redis==8.1.0
 SQLAlchemy==2.0.52
 starlette==1.6.0
 typing-inspection==0.4.4

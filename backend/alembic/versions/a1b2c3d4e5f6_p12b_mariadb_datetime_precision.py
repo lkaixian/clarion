@@ -27,16 +27,31 @@ branch_labels = None
 depends_on = None
 
 
-def _datetime_columns():
-    """(table, column, nullable) for every DateTime column on the ORM metadata."""
-    import app.models  # noqa: F401  -- registers every table on Base.metadata
-    from app.database import Base
+def _datetime_columns(bind):
+    """(table, column, nullable) for every DATETIME-family column that
+    actually exists in the database right now -- reflected from the live
+    bind, not from app.models.
 
+    Reflecting app.models (the original approach) was a bug: it always
+    walks TODAY's full model set, so any table added to models.py *after*
+    this revision was written (audit_chain_state, security_alerts, every
+    P2.9-P4.8 table) got included here too -- even though this revision
+    sits early in the chain (right after 9f2c8a1b7e4d, 2026-08-30), before
+    those tables' own CREATE TABLE migrations run. `alembic upgrade head`
+    against a genuinely fresh MariaDB then fails with "table doesn't
+    exist" -- found live during P5.2 load-test setup, the first time this
+    revision was replayed start-to-finish against an empty database rather
+    than one that already had the full current schema. Reflecting the bind
+    is what "data-driven" was meant to deliver: exactly the tables/columns
+    that exist at THIS point in the chain, whichever revision that turns
+    out to be.
+    """
+    inspector = sa.inspect(bind)
     cols = []
-    for table in Base.metadata.sorted_tables:
-        for col in table.columns:
-            if isinstance(col.type, sa.DateTime):
-                cols.append((table.name, col.name, col.nullable))
+    for table in inspector.get_table_names():
+        for col in inspector.get_columns(table):
+            if isinstance(col["type"], sa.DateTime):
+                cols.append((table, col["name"], col["nullable"]))
     return cols
 
 
@@ -44,7 +59,7 @@ def _apply(datetime_type: str) -> None:
     bind = op.get_bind()
     if bind.dialect.name != "mysql":
         return
-    for table, column, nullable in _datetime_columns():
+    for table, column, nullable in _datetime_columns(bind):
         null_sql = "NULL" if nullable else "NOT NULL"
         op.execute(f"ALTER TABLE `{table}` MODIFY `{column}` {datetime_type} {null_sql}")
 

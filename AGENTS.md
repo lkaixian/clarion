@@ -401,13 +401,51 @@ client-side query interpolation) fixed with an explicit exporter flag +
 upgraded secret-tier docs. 528/528 tests pass. See the roadmap changelog
 for full detail.
 
-Next: every top-5 demo priority, every P4.x item, and P1.7b are done; P5.1
-is done except WhatsApp. Remaining backlog: P4.7's real-hardware Modality
-Worklist gap (deploy-time, not buildable here), the RustFS migration off
-MinIO (deliberately deferred), the SMP/SMS/e-klinik/university-DB
-integration (needs real campus specs), P1.7b's own two skipped sub-items if a
-real need shows up, or the rest of P5 (P5.2 load testing, P5.3 two-campus
-rollout, P5.4 docs & handover, all still unstarted) — surface the choice
+**P5.2 landed 2026-09-15, scoped** (load testing, the last unstarted top-
+level P5 item — asked the user which to pick up next with P5.1 done): NEW
+`backend/loadtest/{locustfile.py,README.md}` (Locust, weighted realistic
+clinic traffic). Standing up the MariaDB-backed stack to run it for real
+(pool/worker tuning is meaningless against SQLite) surfaced **5 real,
+previously-undiscovered bugs**, the significant one being that slowapi's
+rate limiting was broken two independent ways — a multi-worker in-memory
+storage bypass (fixed: Redis-backed `storage_uri`) and `SlowAPIMiddleware`
+being a confirmed total no-op on this app's fastapi/starlette versions, so
+`default_limits=["60/minute"]` had **never** been enforced on any route
+without its own explicit decorator (fixed: a new global FastAPI
+dependency, `enforce_rate_limits`, replaces it). Plus 4 MariaDB/migration
+bugs found getting a truly-fresh `docker compose up` + `alembic upgrade
+head` to work at all (a P5.1 regression zeroed out DB account creation; the
+`migrate` service ran from the wrong `WORKDIR`; P1.2b's DATETIME(6)
+migration imported live `app.models` instead of reflecting the actual DB,
+breaking on tables added after it was written; P2.9's audit trigger needed
+`log_bin_trust_function_creators`, not more privilege). Gunicorn tuning
+(`--timeout`/`--graceful-timeout`/`--max-requests`+jitter) also applied.
+531/531 backend tests pass. **voltagent security-auditor caught one real
+CRITICAL before it shipped:** the new global rate-limit dependency had no
+`in_memory_fallback_enabled=True`, so a Redis outage would fail-closed
+site-wide — 500 on literally every request, including `GET /healthz` and
+the unauthenticated emergency-scan endpoints this "Emergency-first" system
+is supposed to keep reachable no matter what. Fixed + verified live
+(stopped the `redis` container, confirmed `/healthz`/`/auth/login` both
+still 200, restarted it, confirmed recovery). **Marked 🟡, not ✅**: the load
+test itself is a single-test-machine run (one apparent client IP) and so
+could never exercise the DB-pool/worker ceiling regardless of user count
+— a real capacity number needs a distributed generator or an
+operator-authorized rate-limit bypass in staging; this session's own
+attempt to widen `FORWARDED_ALLOW_IPS` for that purpose was correctly
+declined by Claude Code's own safety controls, which is the right call
+for a repo, not a session, to make unilaterally. See
+`healthcare/Implementation Roadmap.md`'s changelog and
+`backend/loadtest/README.md` for full detail.
+
+Next: every top-5 demo priority, every P4.x item, P1.7b, and now P5.2 are
+done/scoped; P5.1 is done except WhatsApp. Remaining backlog: P4.7's
+real-hardware Modality Worklist gap (deploy-time, not buildable here), the
+RustFS migration off MinIO (deliberately deferred), the SMP/SMS/e-klinik/
+university-DB integration (needs real campus specs), P1.7b's own two skipped
+sub-items if a real need shows up, P5.2's own distributed/staging capacity
+run if a harder number is ever needed, or the rest of P5 (P5.3 two-campus
+rollout, P5.4 docs & handover, both still unstarted) — surface the choice
 rather than assuming order, same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on

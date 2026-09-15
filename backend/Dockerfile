@@ -81,8 +81,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)"
 
-# 4 uvicorn workers matches the On-Prem Architecture pooling math
-# (pool_size=10 + max_overflow=10 per worker => <= 80 DB connections).
+# 4 uvicorn workers matches the On-Prem Architecture pooling math -- see
+# database.py's own comment: pool_size=10 + max_overflow=30 per worker =>
+# 4 x 40 = 160 conns, under MariaDB's max_connections=200 with headroom for
+# clarion_migrate/clarion_report/exporters. (This comment used to say
+# max_overflow=10; database.py was tuned to 30 without updating it here --
+# found during P5.2 load testing.)
 # uvicorn 0.52 removed the built-in `uvicorn.workers` module, so we use the
 # standalone `uvicorn-worker` package installed in the builder stage.
 #
@@ -93,9 +97,26 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 # backend port is published to the host. Set FORWARDED_ALLOW_IPS to the edge
 # proxy's address/subnet in deployment (roadmap P1.9); leave it at the safe
 # default otherwise. See docs/deployment.md.
+#
+# P5.2 load-test tuning (see backend/loadtest/):
+# --timeout 60: gunicorn's 30s default risked SIGKILLing a worker mid-request
+#   on the local-LLM/whisper paths (CDS hint, voice-to-soap, narrative), which
+# run CPU-bound inference with no GPU guarantee. A true
+#   fix is making those async/backgrounded; this is the stopgap so a slow
+#   inference doesn't also lose the HTTP response.
+# --graceful-timeout 30: give an in-flight request time to finish before a
+#   worker restart (recycle below, or a deploy) kills it outright.
+# --max-requests 2000 --max-requests-jitter 200: recycle each worker after
+#   ~2000 requests (jittered so all 4 don't restart together) -- bounds any
+#   slow per-request memory growth under sustained load; the jitter is what
+#   avoids a synchronized restart-storm dropping all 4 workers at once.
 CMD ["gunicorn", "app.main:app", \
      "-k", "uvicorn_worker.UvicornWorker", \
      "-w", "4", \
      "-b", "0.0.0.0:8000", \
+     "--timeout", "60", \
+     "--graceful-timeout", "30", \
+     "--max-requests", "2000", \
+     "--max-requests-jitter", "200", \
      "--access-logfile", "-", \
      "--error-logfile", "-"]

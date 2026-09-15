@@ -124,3 +124,13 @@ healthcare/.claudian/
 # Design source files -- large binaries, keep them out of app history
 # (use external storage / git-lfs if they must be versioned).
 *.psd
+
+# P5.2: raw locust CSV output from a load-test run -- regenerate on demand
+# (backend/loadtest/README.md documents how); summarised results live in
+# that README, not as committed per-run CSVs.
+backend/loadtest/results/
+
+# Local, per-machine Compose overrides (e.g. publishing backend's port
+# directly for a load test -- see docs/deployment.md / backend/loadtest/
+# README.md). Compose auto-loads this file; never meant to be shared.
+docker-compose.override.yml
