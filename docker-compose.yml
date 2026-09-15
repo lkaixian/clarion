@@ -214,6 +214,15 @@ services:
     image: clarion/backend:local
     environment:
       DATABASE_URL: ${MIGRATE_DATABASE_URL:-mysql+pymysql://clarion_migrate:${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}@mariadb:3306/clarion?charset=utf8mb4}
+    # backend/Dockerfile's runtime image sets WORKDIR /app/data (so the
+    # `backend` service's relative SQLite path resolves there); alembic.ini
+    # lives at /app and alembic only looks for it in the CWD, with no -c flag
+    # on the command below. Without this override `alembic upgrade head`
+    # silently loads an empty Config ("No 'script_location' key found") and
+    # does nothing -- found live during P5.2 load-test setup (docs/deployment.md
+    # documented this exact `docker compose run --rm migrate` invocation, but
+    # it had never actually been re-run since WORKDIR moved to /app/data).
+    working_dir: /app
     command: ["python", "-m", "alembic", "upgrade", "head"]
     networks:
       - internal
@@ -267,6 +276,14 @@ services:
       MARIADB_APP_PASSWORD: ${MARIADB_APP_PASSWORD:-change-me-app}
       MARIADB_MIGRATE_PASSWORD: ${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}
       MARIADB_REPORT_PASSWORD: ${MARIADB_REPORT_PASSWORD:-change-me-report}
+      # P5.1 added the clarion_metrics account (mysqld-exporter) to
+      # 10-accounts.sh's required-var check, but never added it here -- the
+      # script aborts on a missing required var BEFORE creating any account,
+      # so clarion_app/clarion_migrate/clarion_report silently never existed
+      # either. Found live during P5.2 load-test setup (docker logs showed
+      # "MARIADB_METRICS_PASSWORD must be set", then every account's login
+      # failed with 1045 Access Denied).
+      MARIADB_METRICS_PASSWORD: ${MARIADB_METRICS_PASSWORD:-change-me-metrics}
       MARIADB_AUTO_UPGRADE: "1"
     command:
       - --character-set-server=utf8mb4
@@ -281,6 +298,17 @@ services:
       # 7 days on disk -- P2.8 ships them off every 15 min, so local is just
       # the replay buffer. (`--expire-logs-days` is deprecated in 11.4.)
       - --binlog-expire-logs-seconds=604800
+      # MariaDB refuses CREATE TRIGGER/FUNCTION from a non-SUPER account
+      # while binary logging is on, to stop a non-deterministic routine from
+      # corrupting a STATEMENT-replicated replica. Irrelevant here --
+      # binlog-format is ROW above, which replicates actual row changes, not
+      # statements, so that failure mode doesn't exist -- but the check
+      # fires regardless of format. Without this, P2.9's audit_logs
+      # append-only trigger (clarion_migrate, deliberately not SUPER --
+      # least privilege) fails outright: found live running `alembic
+      # upgrade head` against MariaDB for the first time (P5.2 load-test
+      # setup; error 1419).
+      - --log-bin-trust-function-creators=1
       # The three least-privilege accounts (clarion_app / clarion_migrate /
       # clarion_report) are created on first init by
       # ./backend/db/mariadb/10-accounts.sh (mounted below).

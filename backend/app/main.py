@@ -73,14 +73,13 @@ from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import inspect
 
 from fastapi import Depends
 
 from . import auth
 from .database import engine, DB_BACKEND
-from .rate_limit import limiter
+from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
 from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir
 
@@ -175,6 +174,11 @@ app = FastAPI(
     title="CLARION API",
     description="Emergency-first, interoperable health record continuity system.",
     version="0.1.0",
+    # P5.2: enforce_rate_limits (app/rate_limit.py) applies the shared
+    # Limiter's default_limits to every route globally -- see that module's
+    # docstring for why this replaced SlowAPIMiddleware (a confirmed no-op
+    # against this app's fastapi/starlette versions).
+    dependencies=[Depends(enforce_rate_limits)],
 )
 
 # Browser CORS. Precedence:
@@ -235,15 +239,19 @@ app.add_middleware(
 )
 
 # Rate limiting (slowapi -- see app/rate_limit.py for the shared Limiter
-# instance and default-limit rationale). Individual routes opt out via
-# @limiter.exempt (the three password/lockout endpoints in auth_router.py
-# that already have their own stricter, persisted-in-DB lockout logic) or
-# override with their own @limiter.limit(...) (the two unauthenticated
-# emergency-scan endpoints in emergency.py, tighter than the 60/minute
-# default).
+# instance, the enforce_rate_limits dependency wired above, and
+# default-limit rationale). Individual routes opt out via @limiter.exempt
+# (the three password/lockout endpoints in auth_router.py that already
+# have their own stricter, persisted-in-DB lockout logic) or override with
+# their own @limiter.limit(...) (the two unauthenticated emergency-scan
+# endpoints in emergency.py, tighter than the 60/minute default).
+# app.state.limiter is still set for slowapi's own internals (it reads
+# app.state.limiter in a couple of code paths); SlowAPIMiddleware itself is
+# NOT registered here -- see rate_limit.py's docstring: it was a confirmed
+# no-op on this app's fastapi/starlette versions (_find_route_handler never
+# matched any route), so enforce_rate_limits above replaces it entirely.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
 
 
 @app.middleware("http")
