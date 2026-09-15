@@ -81,7 +81,7 @@ from . import auth
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -476,6 +476,11 @@ app.include_router(
     fhir.router,
     dependencies=[Depends(auth.require_page_access("patients"))],
 )
+# MOCK stand-in for the University's SMP/SMS/e-klinik-panel/Registrar systems (P4.8's
+# documented gap, filled in as a demo mock 2026-09-15 -- see
+# routers/campus_registry_mock.py's module docstring). Deliberately NOT
+# page-gated -- see that router's own docstring for why.
+app.include_router(campus_registry_mock.router)
 
 
 @app.get("/")

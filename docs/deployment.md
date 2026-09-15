@@ -1031,6 +1031,108 @@ docker compose --profile mariadb --profile observability up -d  # + mysqld-expor
 
 ---
 
+## Two-campus rollout & offline emergency-export appliance (P5.3)
+
+`healthcare/On-Prem Architecture.md`'s deployment topology: one central
+stack at Main Campus, Branch reached over the University WAN. Two pieces, both
+scoped to what's buildable without a real second campus/WAN link (same
+class of gap as P4.7's Modality Worklist):
+
+**Branch edge proxy** -- `docker compose --profile branch-edge up -d` brings
+up `branch-proxy` (Caddy, `proxy/branch-edge/Caddyfile`) + `branch-web` (the
+same `clarion/web:local` image the central `web` service builds). Static
+SPA assets are served from Branch's own LAN; every `/api/*` call makes one
+WAN hop to `CLARION_CENTRAL_BACKEND_ORIGIN`. Runs on its own `branch-edge`
+network, isolated from `edge`/`internal`/`observability` -- its only route
+to patient data is that one WAN hop, same trust boundary as any other
+client. Full detail, what's deliberately not built (Redis -- turned out
+unnecessary once the edge just runs the pre-built static image), and the
+WAN-degradation validation procedure (`simulate-wan.sh` + re-running
+P5.2's Locust suite against the edge under injected latency/loss):
+`proxy/branch-edge/README.md`.
+
+**Offline emergency-export appliance** -- `backend/app/emergency_export.py`
++ CLI `backend/db/emergency_export_appliance.py`. Reuses
+`routers/emergency.py`'s own `_scoped_fields`/critical-for-emergency logic
+(the same shape the public QR/NFC scan endpoint returns) and
+`clinical_access.py`'s facility-scoping helper, batched over every patient
+a facility has a relationship to -- independent of any individual
+patient's opt-in `EmergencyToken` card, this is the facility's own offline
+safety net for a WAN cut. Encrypted with `age` (same tool + recipient/
+identity convention as the P2.8 backup pipeline, not a second crypto
+dependency):
+
+```bash
+# central host, nightly cron
+python -m db.emergency_export_appliance build --facility "University Branch" \
+    --recipient age1... --out /appliance/emergency-campus-branch.json.age
+
+# on the appliance itself, during an actual WAN cut
+python -m db.emergency_export_appliance query \
+    --in emergency-campus-branch.json.age --identity /secure/appliance-key.txt \
+    --nric 900101-01-1234
+```
+
+The identity (private key) lives only on the appliance, never on the
+central host that runs `build` -- same custody rule as
+`backend/backup/README.md`'s restore identity.
+
+`build` refuses an unregistered `--facility` (must match a
+`HospitalSetting` row -- catches a typo before it silently produces an
+empty or wrong export) and writes one `audit_logs` row per run
+(`emergency_export_build`, facility + patient count). `query` can't reach
+the central DB by design (that's the entire point of the appliance during
+a WAN cut), so it instead appends one line — timestamp + `sha256(NRIC)`,
+never the NRIC itself — to a local `<export>.access.log`; reconcile that
+into central `audit_logs` once connectivity returns (a manual/scripted
+step at commissioning, not built here — same "documented wiring, not an
+end-to-end pipeline" precedent as the backup service's own
+`status.jsonl`). Both gaps (no audit trail, `--facility` untied to any
+authenticated identity) were the security review's top findings —
+`healthcare/Implementation Roadmap.md`'s P5.3 changelog entry has the
+full review.
+
+Branch's own TLS certs go in `proxy/branch-edge/certs/`, **never**
+`proxy/certs/` (the central site's — would ship its private key to the
+less-trusted Branch container). `branch-proxy`'s entrypoint refuses to start
+if `CLARION_CENTRAL_BACKEND_ORIGIN` doesn't begin with `https://`, so a
+plaintext-WAN misconfiguration fails loudly instead of silently
+downgrading every API call.
+
+---
+
+## University SMP/SMS/e-klinik-panel/Registrar eligibility check -- MOCK
+
+SMP, SMS, and the e-klinik panel are campus-internal systems this environment
+has zero real spec, schema, or credentials for (P4.8's documented gap, same
+call P4.4 made to skip a real MIMS integration). Asked the user how to
+proceed 2026-09-15; the answer was "build a working mock first" for the
+exhibition demo, so what's here is a genuine, working integration
+**boundary** — a real HTTP call, a real adapter, a real UI flow — over
+entirely fictional demo data, never presented as real campus records.
+
+- `backend/app/campus_registry.py` -- the adapter. `check_eligibility(nric)`
+  calls `{CAMPUS_REGISTRY_BASE_URL}/eligibility/{nric}` and never raises: a
+  down/slow/misbehaving registry returns `{"available": false, ...}`
+  instead of blocking patient registration (same "advisory, never a hard
+  gate" discipline as every AI feature in this codebase).
+- `backend/app/routers/campus_registry_mock.py` -- the mock itself, mounted
+  in-process at `/mock-campus-registry` (no separate service to stand up for
+  something that exists only to be swapped out). A handful of entirely
+  fictional student/staff records; every response carries `"mock": true`.
+- `GET /patients/campus-eligibility/{nric}` -- the CLARION-facing endpoint
+  (same roles as `create_patient`: admin/records_officer/clinician),
+  wired into the web console's "New Patient (One-Click Intake)" form —
+  a "Check University Eligibility" button next to the NRIC field, result shown
+  inline, clearly labeled "(mock campus registry — demo)".
+
+**Go-live**: set `CAMPUS_REGISTRY_BASE_URL` to the real SMP/SMS/e-klinik-panel
+endpoint once the University provides one — no code change on CLARION's side. Until
+then this stays a demo-only mock; don't remove the `"mock": true` /
+"(demo)" labeling, it's load-bearing honesty, not decoration.
+
+---
+
 ## Image pinning -- verify before an offline build
 
 Images are pinned by **tag**, not digest. Before building the offline bundle,

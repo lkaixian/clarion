@@ -219,6 +219,12 @@ export const listPatients = ({ skip, limit = 200, breakGlassReason } = {}) =>
     })
     .then((r) => r.data);
 export const createPatient = (payload) => client.post("/patients", payload).then((r) => r.data);
+// University SMP/SMS/e-klinik-panel/Registrar eligibility check
+// -- MOCK stand-in, see backend/app/campus_registry.py's module docstring.
+// Never throws-to-caller on a down registry (backend returns available:false
+// with 200, not an error status), so callers don't need a catch just for this.
+export const checkCampusEligibility = (nric) =>
+  client.get(`/patients/campus-eligibility/${encodeURIComponent(nric)}`).then((r) => r.data);
 export const getPatient = (id) => client.get(`/patients/${id}`).then((r) => r.data);
 export const addCondition = (id, payload) => client.post(`/patients/${id}/conditions`, payload).then((r) => r.data);
 export const addMedication = (id, payload) => client.post(`/patients/${id}/medications`, payload).then((r) => r.data);

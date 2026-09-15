@@ -26,7 +26,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Dashboard: queue/attended/availability/wait KPIs | Partial | Build a management dashboard over `queue_tickets`, `staff_clock_events`, `room_claims` | Yes |
 | | Patient-flow **prediction** engine | Gap | EWMA / gradient-boosted over historical queue + appointments | Yes (flagship) |
 | | Real-time **operational health score** | Gap | Composite index; cheap once referrals exist | Yes |
-| | Frontdesk ↔ SMP/SMS/e-klinik; Registrar eligibility | Gap | Mock adapter + documented integration layer | Mock |
+| | Frontdesk ↔ SMP/SMS/e-klinik; Registrar eligibility | Demo | Done 2026-09-15: `app/campus_registry.py` adapter + `/mock-campus-registry` mock + `GET /patients/campus-eligibility/{nric}`, wired into the web "New Patient" form. Real the University specs/credentials still needed for a non-mock integration | Mock (working) |
 | | Pre-registration (self-register before visit) | Have | `self_registration.py` + Flutter self_register | Yes |
 | | Patient mgmt: CRUD, assign physician, payment method | Partial | CRUD + room/queue assign present; payment-method setting = Gap | Yes |
 | | Appointments: manage, reminders, history, reschedule | Have | `appointments.py` + reschedule requests; reminder *delivery* job = Gap | Yes |
@@ -51,7 +51,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Admin: user/role mgmt, password reset, access monitoring, change notify | Have | `admin.py` roster + `permissions.py` matrix + Access Control tab; change-notification = Gap | Yes |
 | | Admin: patient mgmt, history/appointments | Have | `admin.py` + `patients.py` | — |
 | | Admin: appointment slots, reminders | Partial | Dashboard exists; reminder-delivery job = Gap | — |
-| | Admin billing + SMP/SMS/e-klinik | Gap | Billing + integrations | — |
+| | Admin billing + SMP/SMS/e-klinik | Partial | Billing = Have (P3.3); the SMP/SMS/e-klinik half is Gap here specifically — the 2026-09-15 mock covers the frontdesk eligibility touchpoint, not a billing-time integration | — |
 | | Patient medical-info reports, data export | Partial | Some export; comprehensive reporting = Gap | — |
 | | System Configuration: notifications, content/text/appearance | Partial | `hospital_settings` + admin config; content/appearance CMS = Gap | — |
 | | Security Management: data recovery/backup, security protocol | Have | `backend/backup/` + DR runbook (P2.8); security protocol via [[Security Audit]] | — |
@@ -89,7 +89,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | | Web responsive | Partial | React + Tailwind; audit responsiveness |
 | –6,.9–10 | The University provides hosting/network/AV; security via PTM | N/A | Contractual |
 | | Integrate label printer, blood-test machine, X-ray viewer | Partial | Label printer = Demo (P3.9, see the tender); X-ray viewer = P4.7 (Orthanc/DICOM); blood-test machine = P4.8 2026-09-14, see the tender below |
-| | Integrate SMP / SMS / e-klinik | Gap | Mock adapters + integration layer |
+| | Integrate SMP / SMS / e-klinik | Demo | Working mock adapter + integration layer landed 2026-09-15 → see the tender. Real integration still needs the University specs/credentials |
 | –13 | DB/hosting compatibility, secure/scalable config | Partial | [[On-Prem Architecture]] |
 | | Resize uploaded images | Gap | Pillow resize on upload (easy) |
 | | **Embedded AI, NO cloud APIs**, offline | Gap (conflict) | [[On-Prem Clinical AI]] — biggest bet |
@@ -101,7 +101,7 @@ Rough totals across Section 10: **~18 Have · ~21 Partial · ~44 Gap · ~17 N/A.
 | Clause | Requirement | Status | Note |
 |---|---|---|---|
 | | OWASP | Partial | [[Security Audit]] drives this; CI enforces (ruff/bandit/semgrep, P2.11) |
-| –6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Partial | 30 tables; no stored procs/views (fine); schema docs = Gap |
+| –6 | Structured normalized scalable DB; tables/indexes/procs/views; schema docs | Have | 57 tables; no stored procs/views (fine); schema docs done 2026-09-15 (P5.4) — auto-generated data dictionary + Mermaid ERD, `backend/db/gen_data_dictionary.py` → [[../docs/data-dictionary.md]] |
 | –8 | The University hosts DB; vendor supplies no DB server | N/A | App connects to University MariaDB |
 | | AI-assisted code quality / OWASP review in pipeline | Partial | `ci/run.sh` = ruff + bandit + semgrep(local rules) + osv-scanner + check_schema + pytest (P2.11, 2026-09-08); LLM-review step still to add |
 | | **FHIR-compatible schema**, MySejahtera/PADU interop | Have | [[FHIR Schema Readiness]] — coding triples + `resource_identifiers` + read-only façade landed 2026-09-14 (P4.1/P4.2) |

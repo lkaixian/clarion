@@ -23,6 +23,235 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-15 — P4.8 follow-up: working University SMP/SMS/e-klinik-panel/Registrar eligibility MOCK
+
+With every P0–P5 roadmap row statused, asked the user what to pick up
+next; the answer named the item P4.8 (2026-09-14) had deliberately left
+as a documented gap — SMP/SMS/e-klinik/Registrar integration — for lacking
+real campus specs/credentials, same call P4.4 made for MIMS. Flagged that
+history back to the user before building anything (never fabricate a real
+integration against a system with zero real spec). Asked a follow-up:
+build the documented "mock adapter" fallback for real, or leave the gap.
+**Answer: "build a working mock first, will show in the exhibition."**
+
+Built a genuine, working integration **boundary** — not a documentation
+stub — over entirely fictional demo data:
+- NEW `backend/app/campus_registry.py`: the adapter. `check_eligibility(nric)`
+  makes a real `httpx` call (the same already-pinned dependency
+  `ai/interactions.py` uses for RxNav/DailyMed) to
+  `{CAMPUS_REGISTRY_BASE_URL}/eligibility/{nric}` and never raises — a down/
+  slow/misbehaving registry degrades to `{"available": false, ...}`
+  instead of blocking patient registration, same "advisory, never a hard
+  gate" discipline as every AI feature in this codebase.
+- NEW `backend/app/routers/campus_registry_mock.py`: the mock itself,
+  mounted in-process at `/mock-campus-registry` (no separate service/container to
+  stand up and keep alive for something that exists only to be swapped
+  out once real campus endpoints exist — `CAMPUS_REGISTRY_BASE_URL` is the
+  entire swap point, zero code change). A handful of entirely fictional
+  student/staff records; every response carries `"mock": true`,
+  deliberately unauthenticated (a real SMP/SMS/e-klinik-panel endpoint
+  would sit behind the University's own auth, not CLARION's `require_page_access` —
+  gating the mock with that would demo a shape the real integration won't
+  have).
+- NEW `GET /patients/campus-eligibility/{nric}` (same role list as
+  `create_patient`: admin/records_officer/clinician), wired into the web
+  console's "New Patient (One-Click Intake)" form — a "Check the University
+  Eligibility" button next to the NRIC field, result shown inline and
+  clearly labeled "(mock campus registry — demo)" so it can never be
+  mistaken for a real result on stage. A positive match offers to
+  auto-fill an empty Full Name field (never overwrites one already typed).
+- `healthcare/Compliance Matrix.md` rows moved
+  Gap → Demo; (the billing-side SMP/SMS/e-klinik touchpoint,
+  a distinct integration point this pass did not build) moved Gap →
+  Partial, noted separately.
+
+NEW `backend/tests/test_campus_registry.py` (8 tests): mock-registry data/
+404/normalization correctness (direct unit tests, no server needed);
+the adapter's success/404/unreachable-registry paths, exercised in-process
+against the real FastAPI app via `httpx.ASGITransport` (this repo has no
+async-test plugin, so `asyncio.run()` inside a plain `def test_...()`
+drives the coroutine — same no-new-dependency discipline as everywhere
+else); the real endpoint's RBAC gate and its fail-open behavior via the
+normal `TestClient`. `npm run build`/`lint` clean.
+
+**voltagent code-reviewer found + fixed 1 real bug:** `check_eligibility()`
+only caught `httpx.HTTPError`, but a raw f-string built the outbound URL
+from `nric` directly — a control character (tab/newline/NUL, none rejected
+by Starlette's default `str` path converter) raised `httpx.InvalidURL`,
+which is **not** an `HTTPError` subclass, uncaught — reproduced live as an
+unhandled 500 through the real endpoint, directly contradicting the
+module's own documented "always returns a dict, never raises" contract.
+Fixed with `urllib.parse.quote(nric, safe="")` before building the URL (a
+fat-fingered NRIC paste with a stray tab now degrades to "not found"
+advisory, not a mid-demo 500); regression test added. RBAC (identical to
+`create_patient`, both the endpoint-level role check and the router-level
+page gate), the mock's isolation (no DB access, fully fictional, `mock:
+true` on every response), and the frontend (auto-fill never overwrites a
+typed name; the "(mock campus registry — demo)" label is unconditional in
+both the eligible and not-found branches, so it can't silently vanish on
+stage) all reviewed clean. One informational note left as-is (this
+adapter opens a fresh `httpx.AsyncClient` per call rather than the shared
+pooled client `ai/interactions.py` moved to for RxNav — reviewer's own
+call: negligible against an in-process loopback mock, not worth the
+churn at demo scale). 9/9 `test_campus_registry.py` tests pass.
+
+### 2026-09-15 — P5.4: Docs & handover — data dictionary/ERD, Operations/Programming/Maintenance manuals, Transfer-of-Technology package
+
+Asked the user which backlog item to pick up next; picked P5.4 then P5.3
+(the two remaining unstarted P5 rows). NEW `backend/db/gen_data_dictionary.py`
+: introspects `app.models`' live SQLAlchemy metadata (no
+hand-maintained copy to drift) and writes `docs/data-dictionary.md` — a
+Mermaid ERD (PK/FK columns only, 57 tables of full columns would be
+unreadable as a diagram) + a per-table column reference. NEW
+`docs/{operations,programming,maintenance,transfer-of-technology}-manual.md`
+(clauses 7.1(a-c), 3.2.5) — each an index into already-existing deep
+technical docs (`docs/deployment.md`, `backend/backup/README.md`) rather
+than a duplicate: the DR runbook clause 7.1/3.2.5 asks for was already done
+at P2.8, reused not rebuilt. `healthcare/Compliance Matrix.md`'s
+–6 row moved Partial → Have.
+
+**voltagent code-reviewer caught 4 real issues in `gen_data_dictionary.py`,
+all fixed:** (1) table-level `UniqueConstraint`s declared via
+`__table_args__` (not `Column(unique=True)`) were invisible — `room_claims`'s
+two generated-column unique constraints, the exact DB-level backstop its own
+docstring describes, rendered with a blank Notes cell; fixed with a
+constraints-aware pass that also lists multi-column constraints
+(`queue_tickets`, `appointments`, etc.) in a new per-table "Table-level
+constraints" block. (2) `Table.foreign_keys` is a plain `set` of objects with
+no value-based `__hash__`, so the ERD's relationship-line order varied
+between runs with zero schema changes — defeated the doc's own "auto-
+generated, not hand-maintained" premise with spurious diffs; fixed with an
+explicit sort, verified deterministic across repeated runs. (3) Docstring
+paragraph breaks were being collapsed into run-on sentences (`" ".join
+(doc.split())` on the whole docstring) — fixed to collapse whitespace only
+within each paragraph. Incidentally caught by this: `RoomClaim`'s own
+docstring had a genuinely broken/stale sentence describing its MariaDB-
+portable unique-constraint fix as still "scheduled" when it had already
+landed at P1.3 sitting in the same class body — fixed in `models.py`. (4)
+The dominant lambda default in the schema (66 columns, the "now, UTC"
+timestamp pattern) rendered as the literal string `<lambda>` — special-cased
+to `"now (UTC)"`.
+
+532/532 backend tests pass (added `test_gen_data_dictionary.py`, an
+assert-based smoke test that would have caught the Computed-column crash
+this script hit once already during development).
+
+### 2026-09-15 — P5.3 (scoped): Two-campus rollout — Branch edge proxy + offline emergency-export appliance
+
+Second half of the same session (P5.4 → P5.3). Scoped down like every
+other item in this codebase that needs real multi-site hardware/network to
+fully validate (same class as P4.7's Modality Worklist): no real second
+campus or WAN link exists here to test against. Built the two genuinely
+buildable pieces from `healthcare/On-Prem Architecture.md`'s deployment
+topology:
+
+- **Branch edge proxy**: NEW `docker-compose.yml` `branch-edge` profile
+  (`branch-proxy` + `branch-web`) on its OWN isolated network, not
+  `edge`/`internal`/`observability` — its only path to patient data is a
+  WAN hop to the central site's public HTTPS origin
+  (`CLARION_CENTRAL_BACKEND_ORIGIN`), same trust boundary as any other
+  client. `branch-web` reuses the exact `clarion/web:local` image the
+  central `web` service builds (no separate build, no sync mechanism) —
+  serving the static SPA off Branch's own LAN is the entire "static/SPA off
+  the WAN" win the architecture note was after. NEW
+  `proxy/branch-edge/{Caddyfile,README.md,simulate-wan.sh}` — the last is a
+  `tc netem`-based same-machine substitute for real WAN validation (inject
+  latency/jitter/loss, re-run P5.2's Locust suite against the edge).
+  Deliberately not built: Redis (the architecture sketch's "light edge
+  proxy + Redis for static/SPA" — turned out unnecessary once the edge
+  just runs the pre-built static image; nginx already serves it natively,
+  and Caddy has no built-in Redis-backed cache module without a custom
+  xcaddy build).
+- **Offline emergency-export appliance**: NEW `backend/app/
+  emergency_export.py` + CLI `backend/db/emergency_export_appliance.py`
+  (`build`/`query`). Reuses `routers/emergency.py`'s own `_scoped_fields`/
+  `_resolved_discontinued_ids` (the same critical-for-emergency logic the
+  public QR/NFC scan endpoint uses) batched over every patient a facility
+  has a relationship to (`clinical_access.py`'s facility-scoping helper) —
+  independent of any individual patient's opt-in `EmergencyToken` card,
+  this is the facility's own offline safety net for a WAN cut. Encrypted
+  with `age`, same tool + recipient/identity convention as the P2.8 backup
+  pipeline (not a second crypto dependency); the private key stays only on
+  the appliance, same custody rule as the backup runbook's restore
+  identity. NEW `test_emergency_export.py` (facility-scoping +
+  critical-only assertions; the `age` roundtrip test self-skips where the
+  CLI isn't installed).
+
+**Self-caught while validating, before any review:** `branch-proxy` was
+initially defined with the same `*env-file` YAML anchor the central
+`proxy` service uses. Compose loads an *entire* env file into a container
+regardless of whether the image reads any of it — that would have handed
+every MariaDB/MinIO root password, `SECRET_KEY`, and `OTP_HMAC_KEY` into a
+container modelled as running at a physically separate, less-trusted site.
+Fixed by dropping the anchor and listing only the 4 vars `branch-proxy`
+actually needs. Separately: `docker compose config` validates every service's
+`${VAR:?...}` required vars at parse time for *any* invocation regardless
+of active `--profile` — an initial `CLARION_CENTRAL_BACKEND_ORIGIN:?...`
+broke a plain `docker compose up` with no `branch-edge` profile at all;
+switched to `:-` (matching the existing pattern this same bug already has
+elsewhere in the file — `GRAFANA_ADMIN_PASSWORD:?`, P5.1, left as-is since
+a real admin password deliberately has no guessable default, but now
+documented in `docs/operations-manual.md`). All three `docker compose
+config` scenarios (no profile / branch-edge without origin set / branch-edge
+with origin set) verified passing.
+
+**voltagent security-auditor reviewed it and found 4 real issues (2
+Medium, 1 High, 1 Low), all fixed:**
+- **(High) Zero audit trail for a bulk PHI export.** `build_emergency_export`
+  built full name + NRIC + critical allergies/medications/conditions for
+  every patient at a facility in one call and never wrote to `audit_logs`
+  — unlike every other reader of this exact data shape
+  (`/emergency/scan`, `get_patient_full_record`, `list_patients`), and
+  invisible to P4.5's own access-anomaly detection despite the data then
+  leaving the network entirely as a file. Fixed: one `log_access` row per
+  `build` run (facility + patient count), plus the same
+  `_audit_sharing_bypass_if_any` cross-hospital-sharing-bypass trail the
+  live scan endpoint writes, now written per patient here too. The
+  appliance's own offline `query` command still can't reach the central
+  DB during an actual WAN cut (the whole point of the appliance) — it now
+  appends timestamp + `sha256(NRIC)` (never the NRIC itself) to a local
+  `<export>.access.log` instead, to be reconciled into `audit_logs` once
+  connectivity returns.
+- **(Medium) `--facility` was untied to any authenticated identity or
+  registry**, so a typo (or a bad actor with host access) could silently
+  export the wrong facility, or any facility, with no record. Fixed:
+  `build` now refuses a `facility_name` that doesn't match a registered
+  `HospitalSetting` row (`UnknownFacilityError`) — paired with the audit
+  fix above for accountability, since this CLI is intentionally
+  operator-trusted like every other `backend/db/*.py` maintenance script
+  (no in-script RBAC was added; that would be a different, larger
+  design).
+- **(Medium) `branch-proxy`'s cert volume mounted `proxy/certs/`** — the
+  central site's directory, which per its own doc comment holds the
+  CAMPUS-CA private key in production. A real deployment provisioning
+  Branch from the same checkout would have copied the central TLS private
+  key onto a container explicitly modelled as running at a
+  less-trusted site. Fixed: new `proxy/branch-edge/certs/`, Branch's own,
+  wired into compose instead.
+- **(Low) No enforced `https://` scheme on `CLARION_CENTRAL_BACKEND_ORIGIN`**
+  — a bare `host:port` or `http://` value would make Caddy reverse-proxy
+  every `/api/*` call in plaintext across the real WAN with no error.
+  Fixed: `branch-proxy`'s compose `command:` now validates the scheme
+  before exec'ing `caddy run`, same "fail loud on a bad env var before it
+  does damage" discipline as `web/entrypoint.sh`'s existing `API_BASE`
+  guard — verified against the real `caddy:2.8-alpine` image, both the
+  pass and fail path.
+
+Reviewed and found sound (no change): facility-scoping in the underlying
+query (parameterized, and a dedicated test confirms a same-name patient at
+a different facility is excluded); `age`/`age-keygen` subprocess usage
+(argv-list, no `shell=True`, not injectable); no code path writes an
+unencrypted or partial-plaintext file (`encrypt_export` raises before
+`age` runs with no recipients, and `check=True` means a failed `age`
+invocation is raised before the caller ever calls `write_bytes`); the
+`reverse_proxy {$CLARION_CENTRAL_BACKEND_ORIGIN}` + `header_up Host
+{upstream_hostport}` Caddy construction (a real placeholder, not a
+Host/SNI bypass); `simulate-wan.sh`'s `docker exec`/`tc` argument handling.
+2 new tests (`test_export_is_facility_scoped_and_critical_only`'s audit
+assertion, `test_unregistered_facility_is_refused`). 534/534 backend tests
+pass, 1 skipped (the `age` roundtrip test — no `age` binary on this
+machine; it self-skips via `shutil.which`).
+
 ### 2026-09-15 — P5.2 (scoped): Load testing — Locust suite, gunicorn tuning, 5 real bugs found & fixed
 
 Asked the user which backlog item to pick up next with P5.1 landed; picked
@@ -2425,8 +2654,8 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 |---|---|---|---|---|
 | P5.1 | Observability — structured logging, Loki, Prometheus, Grafana, Alertmanager (email + WhatsApp) | M | | 🟡 2026-09-15 (everything except WhatsApp — no real Meta/Twilio account exists — see changelog) |
 | P5.2 | Load testing to 23k users; tune pools + workers | M | | 🟡 2026-09-15 (Locust suite + gunicorn tuning + 5 real bugs found & fixed; single-machine run only, see changelog) |
-| P5.3 | Two-campus rollout — WAN validation + Branch edge + offline emergency-export appliance | M | — | — |
-| P5.4 | Docs & handover — auto-generated ERD / data dictionary, Operations / Programming / Maintenance manuals, DR runbook, Transfer-of-Technology package | M | 7.1 / 3.2.5 / | — |
+| P5.3 | Two-campus rollout — WAN validation + Branch edge + offline emergency-export appliance | M | — | 🟡 2026-09-15 (Branch edge config + emergency-export appliance done; real WAN validation needs the actual link — see changelog) |
+| P5.4 | Docs & handover — auto-generated ERD / data dictionary, Operations / Programming / Maintenance manuals, DR runbook, Transfer-of-Technology package | M | 7.1 / 3.2.5 / | ✅ 2026-09-15 (DR runbook was already done at P2.8, reused not duplicated — see changelog) |
 
 ---
 

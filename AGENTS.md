@@ -438,15 +438,81 @@ for a repo, not a session, to make unilaterally. See
 `healthcare/Implementation Roadmap.md`'s changelog and
 `backend/loadtest/README.md` for full detail.
 
-Next: every top-5 demo priority, every P4.x item, P1.7b, and now P5.2 are
-done/scoped; P5.1 is done except WhatsApp. Remaining backlog: P4.7's
-real-hardware Modality Worklist gap (deploy-time, not buildable here), the
-RustFS migration off MinIO (deliberately deferred), the SMP/SMS/e-klinik/
-university-DB integration (needs real campus specs), P1.7b's own two skipped
-sub-items if a real need shows up, P5.2's own distributed/staging capacity
-run if a harder number is ever needed, or the rest of P5 (P5.3 two-campus
-rollout, P5.4 docs & handover, both still unstarted) — surface the choice
-rather than assuming order, same discipline as every prior phase boundary.
+**P5.4 landed 2026-09-15** (docs & handover — the whole roadmap's last
+unstarted row): NEW `backend/db/gen_data_dictionary.py` (the tender,
+auto-generated Mermaid ERD + column reference from live SQLAlchemy
+metadata, `docs/data-dictionary.md`) + NEW `docs/{operations,programming,
+maintenance,transfer-of-technology}-manual.md` (clauses 7.1/3.2.5) — each
+an index into already-existing deep docs, not a duplicate (the DR runbook
+these clauses also ask for was already done at P2.8). voltagent
+code-reviewer caught + fixed 4 real issues in the generator script
+(invisible table-level UniqueConstraints, non-deterministic ERD ordering,
+docstring paragraphs collapsed to run-ons, `<lambda>` defaults) — see
+`healthcare/Implementation Roadmap.md`'s changelog. 532/532 tests pass.
+
+**P5.3 landed 2026-09-15, scoped** (two-campus rollout — the roadmap's
+last row overall): a Branch edge Compose profile (`branch-edge` — isolated
+network, reuses the central `web` image, no new Redis dependency) +
+offline emergency-export appliance (`backend/app/emergency_export.py` +
+`db/emergency_export_appliance.py`, reuses `routers/emergency.py`'s own
+critical-for-emergency logic, `age`-encrypted like the P2.8 backup
+pipeline). Self-caught (before review): an `*env-file` anchor would have
+leaked every central secret into the less-trusted Branch container, and a
+`:?`-required compose var was breaking `docker compose up` even with
+`branch-edge` not enabled — both fixed. Real WAN validation still needs the
+actual link (same class of gap as P4.7's Modality Worklist) —
+`proxy/branch-edge/simulate-wan.sh` + re-running P5.2's Locust suite is the
+same-machine substitute. **voltagent security-auditor found + fixed 4 more
+(1 High, 2 Medium, 1 Low):** the bulk export wrote zero `audit_logs` rows
+despite the PHI then leaving the network as a file (fixed: a `log_access`
+row per `build` run + the appliance's own local hashed-NRIC access log for
+offline `query` lookups); `--facility` was untied to any registry (fixed:
+refuses an unregistered `HospitalSetting` name); `branch-proxy` mounted the
+CENTRAL site's cert directory, which holds its TLS private key in
+production (fixed: separate `proxy/branch-edge/certs/`); no enforced
+`https://` scheme on `CLARION_CENTRAL_BACKEND_ORIGIN` (fixed: the
+container refuses to start on a bad scheme, verified live against the
+real `caddy:2.8-alpine` image). 534/534 backend tests pass (1 skipped —
+`age` not installed on this machine). See `healthcare/Implementation
+Roadmap.md`'s changelog for the full review and what was found sound.
+
+**Every row in the P0–P5 roadmap now has a status.** Asked the user what
+to pick up next; they named SMP/SMS/e-klinik/Registrar — flagged back
+that this was already investigated (P4.8) and deliberately left a gap for
+lacking real campus specs, same call P4.4 made for MIMS. Follow-up answer:
+**"build a working mock first, will show in the exhibition."**
+
+**Landed 2026-09-15:** a working, genuinely-integrated demo mock for
+the tender — NEW `backend/app/campus_registry.py` (real
+`httpx` adapter, never raises/blocks patient registration) +
+`backend/app/routers/campus_registry_mock.py` (in-process mock at
+`/mock-campus-registry`, fictional seed identities, `"mock": true` on every
+response) + `GET /patients/campus-eligibility/{nric}` wired into the web
+console's "New Patient" form (a "Check University Eligibility" button, result
+labeled "(mock campus registry — demo)" so it can't be mistaken for real
+data on stage). `CAMPUS_REGISTRY_BASE_URL` is the entire swap point for a
+real campus endpoint later — zero code change. **voltagent code-reviewer
+found + fixed 1 real bug:** the adapter's own "never raises" contract had
+a hole — a control character (tab/newline) in the NRIC raised
+`httpx.InvalidURL` (not an `HTTPError` subclass) uncaught, a live-
+reproduced 500 through the real endpoint; fixed with URL-encoding +
+a regression test. RBAC, mock isolation, and frontend auto-fill/labeling
+all reviewed clean. moved Gap → Demo in the
+Compliance Matrix; (the separate billing-side touchpoint, not
+built this pass) moved Gap → Partial. 543/543 backend tests pass (1
+skipped — `age` not installed), `npm run build`/`lint` clean. See
+`healthcare/Implementation Roadmap.md`'s changelog for the full detail.
+
+Remaining backlog: P4.7's real-hardware Modality Worklist gap (deploy-time,
+not buildable here), the RustFS migration off MinIO (deliberately
+deferred), a REAL SMP/SMS/e-klinik/Registrar integration (still needs
+actual campus specs/credentials — today's mock is a demo stand-in, not a
+step toward one without those), P1.7b's own two skipped sub-items and
+P5.2's own distributed/staging capacity run if either need ever gets real,
+P5.3's own real WAN validation once a real second campus link exists, and
+the tender's billing-side SMP/SMS/e-klinik touchpoint if that's ever
+wanted — surface the choice rather than assuming order, same discipline as
+every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

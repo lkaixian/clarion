@@ -6,6 +6,7 @@ import {
   getConsultationRooms, getMyConsultationRoom, startConsultationSession,
   endConsultationSession, callConsultationTicket, completeConsultationTicket,
   cancelConsultationTicket, listAncillaryRequests, getCdsHint, getVoiceToSoap,
+  checkCampusEligibility,
 } from "../api/client";
 import SignaturePad from "../components/SignaturePad";
 
@@ -562,6 +563,23 @@ export default function PatientList() {
   const [form, setForm] = useState({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  // University SMP/SMS/e-klinik-panel/Registrar eligibility check (tender
+  //) -- MOCK stand-in, see backend/app/campus_registry.py.
+  // Advisory only: never blocks submitting the form either way.
+  const [eligibility, setEligibility] = useState(null); // null | "checking" | result object
+  async function runEligibilityCheck() {
+    if (!form.national_id.trim()) return;
+    setEligibility("checking");
+    try {
+      const result = await checkCampusEligibility(form.national_id.trim());
+      setEligibility(result);
+      if (result.available && result.eligible && result.full_name && !form.full_name.trim()) {
+        setForm((f) => ({ ...f, full_name: result.full_name.replace(/\s*\(mock\)\s*$/i, "") }));
+      }
+    } catch {
+      setEligibility({ available: false, detail: "Eligibility check failed." });
+    }
+  }
   // Client-side only — listPatients() fetches up to 200 (this project's
   // demo/clinic scale, not a national registry), so a dedicated backend
   // search endpoint would be scope creep. Filters as-you-type; no debounce
@@ -614,6 +632,7 @@ export default function PatientList() {
       await createPatient(form);
       setShowForm(false);
       setForm({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false });
+      setEligibility(null);
       refresh(crossFacilitySearch ? breakGlassReason : undefined);
     } catch (err) {
       setError(err?.response?.data?.detail || "Failed to create patient. Check the fields and try again.");
@@ -648,7 +667,7 @@ export default function PatientList() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <button
-            onClick={() => setShowForm((s) => !s)}
+            onClick={() => { setShowForm((s) => !s); setEligibility(null); }}
             className="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
           >
             {showForm ? "Cancel" : "+ New Patient (One-Click Intake)"}
@@ -700,8 +719,37 @@ export default function PatientList() {
       {showForm && (
         <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-xl p-5 mb-6 grid grid-cols-2 gap-4">
           {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded col-span-2">{error}</div>}
-          <input required placeholder="NRIC (e.g. 520314-01-1234)" className="border rounded-lg px-3 py-2 col-span-2"
-            value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} />
+          <div className="col-span-2 flex gap-2">
+            <input required placeholder="NRIC (e.g. 520314-01-1234)" className="border rounded-lg px-3 py-2 flex-1"
+              value={form.national_id}
+              onChange={(e) => { setForm({ ...form, national_id: e.target.value }); setEligibility(null); }} />
+            <button type="button" onClick={runEligibilityCheck}
+              disabled={!form.national_id.trim() || eligibility === "checking"}
+              className="border border-blue-300 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap disabled:opacity-50">
+              {eligibility === "checking" ? "Checking…" : "Check University Eligibility"}
+            </button>
+          </div>
+          {/* SMP/SMS/e-klinik-panel/Registrar eligibility check (tender
+) -- MOCK stand-in, labeled as such on purpose (see
+              backend/app/campus_registry.py). Advisory only: submitting the
+              form works regardless of this result. */}
+          {eligibility && eligibility !== "checking" && (
+            <div className={`col-span-2 text-sm rounded-lg px-3 py-2 ${
+              !eligibility.available ? "bg-slate-100 text-slate-600"
+                : eligibility.eligible ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                : "bg-amber-50 text-amber-800 border border-amber-200"
+            }`}>
+              {!eligibility.available ? (
+                <>The University registry unavailable — {eligibility.detail || "try again, or proceed without it"}.</>
+              ) : eligibility.eligible ? (
+                <>✓ Eligible via {eligibility.source} ({eligibility.category}, {eligibility.faculty_or_department}) — {eligibility.full_name}
+                  <span className="ml-1 text-xs opacity-70">(mock campus registry — demo)</span></>
+              ) : (
+                <>Not found / not eligible in the University registry — {eligibility.detail || `status: ${eligibility.status || "unknown"}`}
+                  <span className="ml-1 text-xs opacity-70">(mock campus registry — demo)</span></>
+              )}
+            </div>
+          )}
           <input required placeholder="Full name" className="border rounded-lg px-3 py-2 col-span-2"
             value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           {derivedDob ? (

@@ -25,6 +25,7 @@ from ..storage import (
 )
 from ..derived import ALLOWED_THUMBNAIL_SIZES, get_or_make_thumbnail
 from ..document_generation import render_document
+from ..campus_registry import check_eligibility
 from ..clinical_access import (
     _facility_known_patient_ids_select,
     _hidden_author_facilities,
@@ -339,6 +340,24 @@ def list_booking_options(
             for c in clinicians
         ],
     )
+
+
+@router.get("/campus-eligibility/{nric}")
+async def check_campus_eligibility(
+    nric: str,
+    current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
+):
+    """New-patient eligibility check against the University's SMP/SMS/e-klinik panel /
+    Registrar system -- called from the "New Patient"
+    intake form before/while filling it in. Same role list as create_patient
+    (this router isn't reachable by `receptionist` by default -- see
+    permissions.py::DEFAULT_ROLE_PAGES -- and patient creation itself is
+    already admin/records_officer/clinician only; this check follows that
+    existing design rather than opening a new carve-out). Advisory only --
+    see app/campus_registry.py, which this app knows nothing real about, is a
+    documented mock (2026-09-15), and never blocks patient creation on its
+    own."""
+    return await check_eligibility(nric)
 
 
 @router.post("", response_model=schemas.PatientOut)
