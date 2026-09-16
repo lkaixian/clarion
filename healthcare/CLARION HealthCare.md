@@ -50,6 +50,9 @@ This vault is the persistent reference for that effort. Start here.
 ## Deliverables
 - — the operational briefing (synthesis)
 - [[Report 2 - Nationwide HIE]] — the strategic briefing (synthesis)
+- [[Security & Stability Test Suite]] — 209 black-box test cases (security vulns +
+  infra stability) derived from docs only; traces every [[Security Audit]] finding +
+  tender clause; CSV export at `healthcare/testcases-security-stability.csv`
 - [[Sources]] — every external reference, checked
 
 ---
