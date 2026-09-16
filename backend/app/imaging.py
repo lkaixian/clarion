@@ -35,18 +35,31 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+import pillow_heif
 import pypdfium2 as pdfium
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+# P1.7b: registers Pillow's "HEIF" format/plugin process-wide (any later
+# Image.open() call anywhere in this process, e.g. app/ai/ocr.py's own
+# separate decode path, transparently gains it too) -- an iPhone camera's
+# default photo format, a real source for a medicine-packaging photo or a
+# phone-scanned document.
+pillow_heif.register_heif_opener()
 
 # Decoder allowlist — passed to Image.open(formats=...) so nothing else is even
 # parsed. Deliberately NO TIFF (Pillow's most CVE-prone decoder), NO svg, NO
 # pdf. A phone MPO (multi-picture JPEG) still opens here via the JPEG plugin —
 # its primary image is a valid JPEG.
-_OPEN_FORMATS = ["JPEG", "PNG", "GIF", "WEBP", "BMP"]
+_OPEN_FORMATS = ["JPEG", "PNG", "GIF", "WEBP", "BMP", "HEIF"]
 
 SUPPORTED_INPUT_MIMES: frozenset[str] = frozenset(
-    {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"}
+    {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/heic"}
 )
+
+# ISO-BMFF "ftyp" box brands that mark a HEIC/HEIF container -- the same set
+# pillow_heif's own accept() check uses. Matched at bytes [4:12]; the box
+# size in [0:4] varies and isn't checked (sniffing doesn't need it).
+_HEIF_BRANDS = (b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs", b"mif1", b"msf1")
 
 DEFAULT_MAX_EDGE = 2500
 DEFAULT_QUALITY = 82
@@ -117,6 +130,8 @@ def sniff_image_mime(raw: bytes) -> Optional[str]:
         return "image/bmp"
     if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
         return "image/webp"
+    if raw[4:8] == b"ftyp" and raw[8:12] in _HEIF_BRANDS:
+        return "image/heic"
     return None
 
 

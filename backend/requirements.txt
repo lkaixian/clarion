@@ -31,6 +31,9 @@ limits==5.8.0
 packaging==26.3
 passlib==1.7.4
 pillow==12.3.0
+# P1.7b: HEIC/HEIF input (app/imaging.py) -- an iPhone camera's default
+# photo format. Ships prebuilt libheif binaries, no host libs needed.
+pillow-heif==1.7.0
 # P5.1: Prometheus /metrics (app/main.py). Both pure Python, no host libs needed.
 prometheus-fastapi-instrumentator==8.1.0
 prometheus_client==0.26.0

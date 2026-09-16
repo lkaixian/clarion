@@ -77,7 +77,7 @@ from sqlalchemy import inspect
 
 from fastapi import Depends
 
-from . import auth
+from . import auth, jobs
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
@@ -169,6 +169,14 @@ def _ensure_schema_locked(cfg, head) -> None:
 
 
 _ensure_schema()
+
+# P1.7b: one background worker thread per process, polling the `jobs` table
+# (see app/jobs.py). Every router import above already ran its module-level
+# jobs.register(...) calls (derived.py's), so a handler is always registered
+# before this can claim a row. Safe under gunicorn's multi-worker import --
+# each worker gets its own thread, and MariaDB's SKIP LOCKED claim keeps them
+# from double-running the same job.
+jobs.start_worker_thread()
 
 app = FastAPI(
     title="CLARION API",
