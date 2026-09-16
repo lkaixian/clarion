@@ -23,6 +23,39 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-16 — Demo-topology support: separate on-prem GPU host for Ollama
+
+Follow-up on a direct question about running local AI (Qwen/MedGemma
+candidates, an AMD RX9060 GPU) on a separate box from the demo laptop,
+reached live on stage. `local_llm.py`'s `_is_on_prem_host` guard already
+accepts any loopback/private/link-local address, so pointing
+`CLARION_LOCAL_LLM_URL` at a second host on the private LAN was already
+supported — **no code change needed**, this was purely a documentation gap.
+
+Found and resolved a real conflict first: the existing demo script's Scene
+2 ("cable unplugged") disconnects the laptop's whole network to prove
+the tender (no cloud AI dependency) — if Ollama runs on a second
+machine reached over that same link, unplugging it kills the demo instead
+of proving the point. Asked the user directly: the box is meant to be live
+on stage, not just dev/build. Resolved by splitting the network into two
+physically separate links — venue WiFi/internet (what Scene 2 actually
+disconnects) and a private wired Ethernet link to the AI host (never
+touched) — which is a stronger demo claim than the original single-machine
+version ("that dedicated box was never on the internet to begin with"), not
+just a workaround.
+
+Updated `docs/exhibition-demo-script.md` (kit/network section, T-1 day/hour
+checklists, Scene 2's staging + talking points for both single-machine and
+separate-host cases, a new fallback row and Q&A row), `docs/deployment.md`
+(new "Running Ollama on a separate GPU host" note under the existing
+on-prem AI section, incl. an AMD/ROCm driver-support caveat for a
+brand-new GPU SKU and MedGemma's license explicitly prohibiting autonomous
+diagnosis — a non-issue here since every AI feature is a reference aid),
+and `backend/.env.example` (a commented example pointing
+`CLARION_LOCAL_LLM_URL` at a LAN address). Documentation-only — no agy
+delegation (nothing mechanical/bulk) or voltagent review (no code/security
+surface changed).
+
 ### 2026-09-16 — Housekeeping: dedup `test_ldap_auth.py` against `tests/conftest.py`
 
 The other item on AGENTS.md's "ongoing housekeeping" list (the datetime

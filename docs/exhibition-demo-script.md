@@ -18,10 +18,22 @@ Can be cut down to Scenes 1–2 alone (~3 min) for a walk-by / short slot.
 | Presenter | drives the web console | Laptop, on the venue's own screen/projector |
 | "Patient" | shows the phone side | A phone/tablet running the Flutter app (or the Android emulator, less convincing live) |
 | Second presenter (optional) | plays "responder" for the emergency scan | Can be the same laptop if solo |
+| AI inference host (optional) | runs Ollama for Scene 2, if not running on the laptop itself | A separate GPU box — see the Network note below |
 
-**Network**: the laptop needs its own switchable connection (WiFi toggle or
-a pluggable Ethernet cable) — Scene 2 depends on being able to visibly cut
-it mid-demo.
+**Network — two SEPARATE links, not one:**
+1. **Venue internet** (WiFi) — this is what Scene 2 disconnects on stage.
+2. **Private AI link** — laptop ↔ Ollama host, wired Ethernet (a direct
+   cable, or a small unmanaged switch with no WAN port connected). Never
+   touches the venue network and is **never disconnected during the demo**.
+
+If Ollama runs on the laptop itself, link 2 doesn't apply — skip straight to
+Scene 2 as originally written (unplug/WiFi-off is the whole story). If
+Ollama runs on a separate box (e.g. a dedicated GPU host), point the
+backend's `CLARION_LOCAL_LLM_URL` at that box's private-LAN address ahead of
+time (see `docs/deployment.md`'s "Running Ollama on a separate GPU host"
+note) and rehearse Scene 2's disconnect step against link 1 ONLY — confirm
+out loud, before the event, that toggling WiFi off does not also kill the
+Ethernet link to the AI box.
 
 ## 2. Pre-event setup
 
@@ -31,8 +43,13 @@ docker compose --env-file .env.docker up -d --build   # or: local dev per README
 ollama pull llama3.2   # text model — CDS hint, voice-to-SOAP, NL summaries
 ollama pull llava      # vision model — NRIC OCR (not in the core script, have it ready anyway)
 ```
-Confirm both models answer locally: `ollama run llama3.2 "hello"` should
-respond with **no** internet needed for that call.
+Run these two `ollama pull` commands on whichever machine actually serves
+Ollama — the laptop, or the separate AI host if using one (see § 1's
+Network note). Confirm both models answer locally: `ollama run llama3.2
+"hello"` should respond with **no** internet needed for that call — on a
+separate AI host, run this ON that host directly, then separately confirm
+the backend can reach it over the private link (`curl
+http://<ai-host-lan-ip>:11434/api/tags` from the laptop).
 
 Seed / reset demo data if the DB has drifted from a clean state (see § 7
 Reset procedure).
@@ -54,9 +71,14 @@ too, it's just an extra step you don't need mid-script).
 ### T-1 hour (at the venue — do this WITH internet, before going dark)
 - [ ] Stack is up: `docker compose ps` — everything `Up`/`healthy`.
 - [ ] `curl -k https://localhost/healthz` → `{"status":"ok"}`.
-- [ ] Ollama is running on the SAME machine/LAN the backend reaches, and
-      has already answered once (models are loaded into memory/cache —
-      the first real call after a cold Ollama start is slower).
+- [ ] Ollama is running and reachable (same machine, or the separate AI
+      host over the private link), and has already answered once (models
+      are loaded into memory/cache — the first real call after a cold
+      Ollama start is slower).
+- [ ] If using a separate AI host: confirm its private link to the laptop
+      is up, and specifically confirm toggling the laptop's venue WiFi off
+      does NOT drop that link (test this now, not for the first time on
+      stage).
 - [ ] Log in as each demo role once (below) to warm up JWT/browser state
       and confirm no password has drifted from the table.
 - [ ] Flutter app installed + logged in as the demo patient on the phone.
@@ -118,15 +140,25 @@ too, it's just an extra step you don't need mid-script).
 - Mention the NFC alternative exists too (physical card tap) for patients
   without a smartphone — don't demo it unless you brought an NFC tag.
 
-### Scene 2 — Offline AI, cable unplugged (the tender requirement differentiator) — ~3 min
+### Scene 2 — Offline AI, internet disconnected (the tender requirement differentiator) — ~3 min
 
 *This is the flagship beat. Don't rush it.*
+
+**If Ollama runs on the laptop itself**, "disconnect" means unplug the
+Ethernet cable or toggle WiFi off — the original single-machine staging.
+**If using a separate AI host** (§ 1's Network note), "disconnect" means
+**toggle WiFi off only** — the private Ethernet link to the AI host is a
+physically different cable/link and stays plugged in throughout. Know which
+case you're in before you're on stage; say the right thing out loud (see
+talking points).
 
 1. On the laptop, log in as **clinician@clarion.demo**.
 2. Go to **Patients**, "Start Session" (clock in + claim a room in one
    step), open a queued patient into consultation.
-3. **Now physically disconnect the network** — unplug the cable or
-   toggle WiFi off, visibly, and say so: *"I am now offline."*
+3. **Now disconnect the laptop from the internet** — toggle WiFi off (or
+   unplug the internet-facing cable), visibly, and say so: *"I am now
+   disconnecting from the internet."* If running a separate AI host, do
+   NOT touch its private link to the laptop.
 4. Click **"Get CDS hint (on-prem AI, reference only)"** — wait for the
    response (a few seconds on CPU, faster with a GPU). It still works.
 5. Add a medication that conflicts with a recorded allergy (any seeded
@@ -135,14 +167,20 @@ too, it's just an extra step you don't need mid-script).
    fires, still offline.
 
 **Talking points:**
-- "Every AI call you just saw went to a model running on this laptop /
-  this rack — not Anthropic, not OpenAI, not any cloud API. Clause
-   forbids third-party AI cloud APIs for exactly the reason
-  we're demonstrating: this has to keep working when the WAN to Branch, or
-  the internet at large, is down."
+- Single-machine staging: "Every AI call you just saw went to a model
+  running on this laptop — not Anthropic, not OpenAI, not any cloud API."
+- Separate-AI-host staging: "Every AI call you just saw went to **that box
+  right there** — dedicated hardware, in this room, on its own private
+  link that was never connected to the internet in the first place. I just
+  proved the venue's internet is off; that box never needed it." (Point at
+  the AI host. This is a STRONGER claim than the single-machine version —
+  use it if you have the hardware for it.)
+- Either way: "the tender forbids third-party AI cloud APIs for
+  exactly the reason we're demonstrating: this has to keep working when the
+  WAN to Branch, or the internet at large, is down."
 - "This is advisory, never authoritative — a clinician always signs off.
   We say that about every AI feature in this system, not just this one."
-- Reconnect the network once the beat is done (quietly, don't make a show
+- Reconnect the internet once the beat is done (quietly, don't make a show
   of it — Scene 5's dashboard doesn't need to be offline).
 
 ### Scene 3 — Voice → SOAP — ~1.5 min
@@ -228,7 +266,8 @@ manager can staff ahead of a surge instead of reacting to one."
 | If this happens | Do this |
 |---|---|
 | Ollama is cold / slow on first call | Warm it up during Scene 1 (run one throwaway CDS-hint call before the audience arrives — see T-1 hour checklist) |
-| WiFi/network toggle doesn't visibly "look offline" to the audience | Say it out loud twice — "I've disconnected the network" — the point is the claim, the AI response proves it, not a visual network icon |
+| WiFi/network toggle doesn't visibly "look offline" to the audience | Say it out loud twice — "I've disconnected the internet" — the point is the claim, the AI response proves it, not a visual network icon |
+| Using a separate AI host and unsure the audience will buy that WiFi-off really cut the internet | Rehearsed this ahead of time (§ 2 T-1 hour checklist) is the real answer — on stage, just say plainly which link you cut and which one stays up; the honesty is more convincing than a bigger show |
 | A scene's demo data got used/consumed by an earlier visitor (e.g. the NRIC from Scene 6 is now a registered patient) | Use a different seeded/mock NRIC, or run § 7 Reset between visitor groups if you have a gap |
 | The DICOM viewer has no study to open | Skip Scene 4, mention it verbally instead — don't debug live |
 | A login fails | Check `APP_ENV=demo` is actually set (README.md) — outside demo mode these passwords don't exist |
@@ -246,6 +285,7 @@ manager can staff ahead of a surge instead of reacting to one."
 | "What about the two-campus / Branch setup?" | Built and configured (an isolated edge proxy + an offline emergency-data export for a WAN outage) — not shown live today since it needs two real network sites to demo properly. Ask if you want the architecture walked through. |
 | "If the ENTIRE network/backend is down, not just slow — can a responder still get emergency info?" | For a physical NFC card that's been written for it: yes — the card's blood type/allergies/critical meds are written directly onto the tag itself, readable by any NFC reader with zero network. The QR/pointer flow (and an unwritten NFC card) still needs a live lookup, same as any pointer-based system. This is a genuine tradeoff, not a limitation to hide: on-tag data can't be revoked in real time once written, so it's deliberately the *minimum* critical set, not the full record. |
 | "How much of the tender does this actually cover?" | Point at `healthcare/Compliance Matrix.md` if asked for specifics — don't recite percentages from memory, they change as work lands. |
+| "How do I know that AI box isn't secretly still on the internet?" (if using a separate AI host) | Fair question — it's a private, isolated link to the laptop only, no WAN port connected on that side at all. Happy to show the physical cabling, or `CLARION_LOCAL_LLM_URL`'s config, if asked. |
 
 ## 7. Reset procedure (between visitor groups / before the next day)
 
