@@ -283,7 +283,7 @@ services:
       # either. Found live during P5.2 load-test setup (docker logs showed
       # "MARIADB_METRICS_PASSWORD must be set", then every account's login
       # failed with 1045 Access Denied).
-      MARIADB_METRICS_PASSWORD: ${MARIADB_METRICS_PASSWORD:-change-me-metrics}
+      MARIADB_METRICS_PASSWORD: ${MARIADB_METRICS_PASSWORD:-change-me-metrics-password}
       MARIADB_AUTO_UPGRADE: "1"
     command:
       - --character-set-server=utf8mb4
