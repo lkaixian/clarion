@@ -653,6 +653,32 @@ ollama serve           # or run as a system service; listens on :11434
 - Swapping models (a smaller quantised one for a CPU-only demo box, a larger
   one for real deployment) is a config change only, no code change.
 
+**Running Ollama on a separate GPU host** (e.g. a dedicated inference box on
+the same private LAN, instead of the machine running the backend) needs no
+code change either — `CLARION_LOCAL_LLM_URL` just points at that host's
+`:11434` instead of `localhost`/`host.docker.internal`
+(`http://<lan-ip>:11434`). `_is_on_prem_host` (`local_llm.py`) accepts any
+loopback/private/link-local address, so an RFC1918 LAN address works exactly
+like `localhost` does today — this is a supported topology, not a workaround.
+Two things worth checking before relying on it:
+- **AMD/ROCm GPUs**: Ollama's GPU acceleration on AMD needs ROCm, and ROCm's
+  supported-device list typically lags a few months behind a brand-new GPU
+  launch. If the card isn't yet in Ollama's ROCm support matrix, it silently
+  falls back to CPU — confirm actual GPU utilization (`ollama ps`, or the
+  card's own usage monitor) during a real inference call before depending on
+  it for a live/timed demo; CPU is too slow for real-time voice-to-SOAP.
+- **Model licensing**: MedGemma's terms explicitly prohibit autonomous
+  diagnosis — a non-issue here since every AI feature in this codebase is a
+  clinician reference aid, never autonomous (see `healthcare/On-Prem Clinical
+  AI.md`'s licence table for the full comparison against Qwen2.5/Llama/etc).
+  Confirm the exact model tag before `ollama pull` — Qwen's released line is
+  1.5 → 2 → 2.5 → 3; there is no "Qwen 3.6".
+
+If this second host is meant to be reachable **live on stage** (not just for
+development), see `docs/exhibition-demo-script.md`'s network setup — the
+"network cable unplugged" beat needs the AI host on a private link that's
+separate from the venue's internet uplink, not the same one being cut.
+
 **Voice → SOAP (P4.3c)** adds a second local model, `faster-whisper`
 (installed via `requirements.txt`, no separate binary): first use downloads
 the chosen Whisper model from Hugging Face and caches it under the
