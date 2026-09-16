@@ -138,6 +138,18 @@ class UserOut(BaseModel):
     # POST /auth/login and GET /auth/me -- lets a client show/hide the
     # "save your signature" nudge and know a consultation sign-off won't 409.
     has_signature: bool = False
+    # Free-text professional bio + internal contact email (models.User.bio /
+    # .contact_email) -- plain ORM columns, picked up automatically via
+    # from_attributes, same as `section` above. `bio` is PUBLIC (patient
+    # booking picker); `contact_email` is internal-only and is never the
+    # login/auth email. Self- or admin-editable, see routers/profile.py /
+    # routers/admin.py.
+    bio: Optional[str] = None
+    contact_email: Optional[str] = None
+    # True when this user has a saved profile photo
+    # (models.User.photo_object_key is set). Same computed-and-stashed
+    # pattern as has_signature above.
+    has_photo: bool = False
     # The console pages this user is allowed to reach -- drives the web
     # console's nav, routing, and post-login landing page. Computed (not a
     # DB column) and stashed as an unmapped attribute by auth_router
@@ -642,6 +654,11 @@ class BookingClinicianOut(BaseModel):
     id: str
     full_name: str
     department: Optional[str] = None  # the clinician's pinned User.section, if any
+    # PUBLIC-facing (models.User.bio) -- unlike contact_email, this is meant
+    # for a patient's self-booking clinician picker. has_photo drives
+    # whether the client bothers calling GET /patients/clinicians/{id}/photo.
+    bio: Optional[str] = None
+    has_photo: bool = False
 
 
 class BookingOptionsOut(BaseModel):
@@ -1591,6 +1608,28 @@ class StaffRosterEntryOut(BaseModel):
     clocked_in: bool
     since: Optional[datetime] = None
     last_clock_out_at: Optional[datetime] = None
+    bio: Optional[str] = None
+    contact_email: Optional[str] = None
+    has_photo: bool = False
+
+
+class MyProfileUpdate(BaseModel):
+    """Body for PUT /me/profile -- self-service bio + internal contact email.
+    Full-replace semantics like StaffSectionAssign: both fields are always
+    written (send null to clear one), neither is a partial patch. Never
+    touches the login/auth email."""
+
+    bio: Optional[str] = None
+    contact_email: Optional[EmailStr] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class StaffProfileUpdate(MyProfileUpdate):
+    """Body for PATCH /admin/staff/{user_id}/profile -- identical shape to
+    MyProfileUpdate, admin-editing a colleague's bio/contact_email instead of
+    their own."""
 
 
 # ---------- Emergency ----------

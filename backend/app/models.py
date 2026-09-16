@@ -145,6 +145,29 @@ class User(Base):
     # server_default keeps this NOT NULL migration additive against
     # existing rows (all backfill to "local", their real/only behaviour).
     # See app/ldap_auth.py and healthcare/Integration Engine and LDAP.md.
+    # Free-text professional bio / working experience. PUBLIC-facing:
+    # surfaced on the patient self-booking clinician picker (routers/
+    # patients.py::list_booking_options) for role="clinician" rows. Self- or
+    # admin-editable (PUT /me/profile, PATCH /admin/staff/{id}/profile).
+    bio = Column(Text, nullable=True)
+    # Display-only contact email, INTERNAL (never shown to patients, never
+    # used for login/notifications/LDAP -- that's the unique `email` column
+    # above). Deliberately a separate nullable field so editing it can never
+    # touch the account's real identity/auth email. Self- or admin-editable,
+    # same two endpoints as `bio`.
+    contact_email = Column(String(255), nullable=True)
+
+    # Staff profile photo. Same shape/pattern as signature_* above (P1.6
+    # ObjectStore columns), `clarion-staff-photos` bucket (see app/storage.py),
+    # key `users/{user_id}.jpg` -- a real photograph, so it goes through
+    # app/imaging.py::normalise_image (EXIF/GPS strip + resize) like a
+    # medicine photo, NOT stored raw like the signature PNG. Not a legal
+    # record -- bucket is not WORM, freely replaceable.
+    photo_object_key = Column(String(512), nullable=True)
+    photo_sha256 = Column(String(64), nullable=True)
+    photo_bytes = Column(Integer, nullable=True)
+    photo_mime = Column(String(128), nullable=True)
+
     auth_source = Column(String(32), nullable=False, server_default="local")
     # Cached directory DN for audit/debugging only -- never used to bypass
     # the search-then-bind flow on a subsequent login (ldap_auth always

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getSections,
   getStaffRoster, getStaffClockHistory, updateStaffMember,
+  updateStaffProfile, uploadStaffPhoto, getStaffPhotoBlob,
 } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
@@ -38,6 +39,25 @@ export default function StaffRosterTab() {
   // Per-row transient feedback after a section save: { [userId]: string }.
   const [sectionMsg, setSectionMsg] = useState({});
   const [sectionSavingId, setSectionSavingId] = useState(null);
+  // Bio / contact-email draft per row, seeded from the roster row itself
+  // the first time it's expanded (same lazy-on-expand ethos as
+  // historyById above) — not saved until "Save profile" is clicked.
+  const [profileDraftById, setProfileDraftById] = useState({});
+  const [profileMsgById, setProfileMsgById] = useState({});
+  const [profileSavingId, setProfileSavingId] = useState(null);
+  // Photo: fetched as a blob (auth header required) -> object URL, same
+  // pattern as Profile.jsx's own signature/photo preview. Cached per row;
+  // every held URL is revoked on unmount.
+  const [photoUrlById, setPhotoUrlById] = useState({});
+  const [photoUploadingId, setPhotoUploadingId] = useState(null);
+  const photoUrlsRef = useRef({});
+
+  useEffect(
+    () => () => {
+      Object.values(photoUrlsRef.current).forEach((url) => url && URL.revokeObjectURL(url));
+    },
+    [],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -74,6 +94,18 @@ export default function StaffRosterTab() {
       return;
     }
     setExpandedId(member.id);
+    if (!profileDraftById[member.id]) {
+      setProfileDraftById((prev) => ({
+        ...prev,
+        [member.id]: { bio: member.bio || "", contact_email: member.contact_email || "" },
+      }));
+    }
+    if (member.has_photo && !(member.id in photoUrlById)) {
+      getStaffPhotoBlob(member.id).then((url) => {
+        photoUrlsRef.current[member.id] = url;
+        setPhotoUrlById((prev) => ({ ...prev, [member.id]: url }));
+      });
+    }
     // Fetch on demand, only for the row actually being opened — not eagerly
     // for the whole roster up front (avoids N+1 requests).
     if (!historyById[member.id]) {
@@ -84,6 +116,47 @@ export default function StaffRosterTab() {
       } finally {
         setHistoryLoading(false);
       }
+    }
+  }
+
+  async function saveProfile(member) {
+    const draft = profileDraftById[member.id] || { bio: "", contact_email: "" };
+    setProfileSavingId(member.id);
+    setProfileMsgById((prev) => ({ ...prev, [member.id]: "" }));
+    try {
+      const updated = await updateStaffProfile(member.id, {
+        bio: draft.bio || null,
+        contact_email: draft.contact_email || null,
+      });
+      setStaff((prev) => prev.map((x) => (x.id === member.id ? { ...x, ...updated } : x)));
+      setProfileMsgById((prev) => ({ ...prev, [member.id]: "Saved" }));
+    } catch (err) {
+      setProfileMsgById((prev) => ({
+        ...prev,
+        [member.id]: err?.response?.data?.detail || "Failed to save profile.",
+      }));
+    } finally {
+      setProfileSavingId(null);
+    }
+  }
+
+  async function changePhoto(member, file) {
+    if (!file) return;
+    setPhotoUploadingId(member.id);
+    try {
+      await uploadStaffPhoto(member.id, file);
+      const url = await getStaffPhotoBlob(member.id);
+      if (photoUrlsRef.current[member.id]) URL.revokeObjectURL(photoUrlsRef.current[member.id]);
+      photoUrlsRef.current[member.id] = url;
+      setPhotoUrlById((prev) => ({ ...prev, [member.id]: url }));
+      setStaff((prev) => prev.map((x) => (x.id === member.id ? { ...x, has_photo: true } : x)));
+    } catch (err) {
+      setProfileMsgById((prev) => ({
+        ...prev,
+        [member.id]: err?.response?.data?.detail || "Failed to upload photo.",
+      }));
+    } finally {
+      setPhotoUploadingId(null);
     }
   }
 
@@ -158,7 +231,76 @@ export default function StaffRosterTab() {
               )}
 
               {expandedId === s.id && (
-                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0">
+                      {photoUrlById[s.id] ? (
+                        <img
+                          src={photoUrlById[s.id]}
+                          alt=""
+                          className="w-14 h-14 rounded-full object-cover border border-slate-200 bg-white"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full border border-slate-200 bg-white" />
+                      )}
+                      <label className="block mt-1 text-xs text-blue-800 cursor-pointer text-center">
+                        {photoUploadingId === s.id ? "Uploading…" : "Change"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/heic"
+                          className="hidden"
+                          disabled={photoUploadingId === s.id}
+                          onChange={(e) => changePhoto(s, e.target.files?.[0])}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <textarea
+                        rows={2}
+                        placeholder="Bio / working experience (shown to patients on the booking screen)"
+                        value={profileDraftById[s.id]?.bio ?? ""}
+                        onChange={(e) =>
+                          setProfileDraftById((prev) => ({
+                            ...prev,
+                            [s.id]: { ...prev[s.id], bio: e.target.value },
+                          }))
+                        }
+                        className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Internal contact email (not shown to patients)"
+                        value={profileDraftById[s.id]?.contact_email ?? ""}
+                        onChange={(e) =>
+                          setProfileDraftById((prev) => ({
+                            ...prev,
+                            [s.id]: { ...prev[s.id], contact_email: e.target.value },
+                          }))
+                        }
+                        className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => saveProfile(s)}
+                          disabled={profileSavingId === s.id}
+                          className="text-xs bg-blue-800 text-white px-2 py-1 rounded-lg disabled:opacity-50"
+                        >
+                          {profileSavingId === s.id ? "Saving…" : "Save profile"}
+                        </button>
+                        {profileMsgById[s.id] && (
+                          <span
+                            className={`text-xs ${
+                              profileMsgById[s.id] === "Saved" ? "text-green-700" : "text-red-700"
+                            }`}
+                          >
+                            {profileMsgById[s.id]}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {historyLoading && !historyById[s.id] ? (
                     <p className="text-xs text-slate-400">Loading history...</p>
                   ) : (historyById[s.id] || []).length === 0 ? (
