@@ -31,6 +31,7 @@ thumbnail endpoint can't force repeated full-original reads.
 """
 import logging
 
+from . import jobs
 from .imaging import (
     ImageProcessingError,
     is_pdf,
@@ -142,9 +143,27 @@ def _cache_negative(store, nkey: str) -> None:
 
 
 def prime_thumbnail(source_bucket: str, source_key: str, sha256: "str | None" = None) -> None:
-    """Best-effort proactive generation at upload time. Never raises — an
-    upload must not fail because a thumbnail couldn't be built."""
+    """Best-effort proactive generation. Never raises — a caller must not
+    fail because a thumbnail couldn't be built. Called synchronously by
+    nothing anymore (P1.7b) — this is the ``prime_thumbnail`` job handler's
+    body, run by ``app/jobs.py``'s background worker; upload paths enqueue
+    a job instead of calling this inline. Kept as a plain function (not
+    folded into the handler below) since tests call it directly."""
     try:
         get_or_make_thumbnail(source_bucket, source_key, sha256=sha256)
     except Exception as exc:  # noqa: BLE001 - deliberately swallow everything
         logger.info("prime_thumbnail(%s/%s) failed: %s", source_bucket, source_key, exc)
+
+
+def _prime_thumbnail_job(payload: dict) -> None:
+    prime_thumbnail(payload["bucket"], payload["key"], payload.get("sha256"))
+
+
+jobs.register("prime_thumbnail", _prime_thumbnail_job)
+
+
+def enqueue_prime_thumbnail(db, source_bucket: str, source_key: str, sha256: "str | None" = None) -> None:
+    """What upload paths call instead of ``prime_thumbnail`` directly (P1.7b)
+    -- queues the same work as a background job so the request doesn't wait
+    on it."""
+    jobs.enqueue(db, "prime_thumbnail", {"bucket": source_bucket, "key": source_key, "sha256": sha256})

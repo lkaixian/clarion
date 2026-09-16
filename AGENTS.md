@@ -527,16 +527,22 @@ NDEF wire-format correctness) directly against source instead. 548/548
 backend tests pass, `flutter analyze`/`npm run build` clean. See
 `healthcare/Implementation Roadmap.md`'s changelog for full detail.
 
+**P1.7b's last two leftovers (HEIC input + async thumbnail-priming worker)
+landed 2026-09-16** — see the roadmap changelog. voltagent caught a real
+HIGH (the SQLite claim path in the new job queue had no locking at all,
+a real double-run race under this app's own documented gunicorn-4-workers-
+on-one-SQLite-file topology) + a MEDIUM (a crashed worker's "running" row
+was never reclaimed), both fixed. P1.7b is now fully ✅.
+
 Remaining backlog: P4.7's real-hardware Modality Worklist gap (deploy-time,
 not buildable here), the RustFS migration off MinIO (deliberately
 deferred), a REAL SMP/SMS/e-klinik/Registrar integration (still needs
 actual campus specs/credentials — today's mock is a demo stand-in, not a
-step toward one without those), P1.7b's own two skipped sub-items and
-P5.2's own distributed/staging capacity run if either need ever gets real,
-P5.3's own real WAN validation once a real second campus link exists, and
-the tender's billing-side SMP/SMS/e-klinik touchpoint if that's ever
-wanted — surface the choice rather than assuming order, same discipline as
-every prior phase boundary.
+step toward one without those), P5.2's own distributed/staging capacity
+run if that need ever gets real, P5.3's own real WAN validation once a
+real second campus link exists, and the tender's billing-side SMP/SMS/
+e-klinik touchpoint if that's ever wanted — surface the choice rather than
+assuming order, same discipline as every prior phase boundary.
 
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still

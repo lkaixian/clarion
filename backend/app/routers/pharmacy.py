@@ -247,7 +247,7 @@ def upload_inventory_image(
     current_user: models.User = Depends(auth.require_roles(*_PHARMACY_ROLES)),
 ):
     """Attach/replace a photo of the medicine or its packaging. Multipart
-    `file`; max 2MB; PNG/JPEG/WebP only (declared content-type, filename
+    `file`; max 2MB; PNG/JPEG/WebP/HEIC only (declared content-type, filename
     extension and magic bytes must all agree). Replacing an existing image
     deletes the old file best-effort."""
     facility = _require_facility(current_user)

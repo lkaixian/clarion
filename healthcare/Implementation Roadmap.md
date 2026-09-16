@@ -1,7 +1,7 @@
 ---
 title: Implementation Roadmap
 type: plan
-updated: 2026-09-14
+updated: 2026-09-16
 tags: [plan, roadmap, clarion, campus]
 ---
 
@@ -22,6 +22,61 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 > notes). Full implementation detail is in git — search the commit log for the task id.
 
 ## Changelog
+
+### 2026-09-16 — P1.7b's last two leftovers: HEIC input + async thumbnail worker
+
+The only two sub-items P1.7b had explicitly deferred (no reported real
+upload source / no reported latency problem) — picked up on direct
+request after every other roadmap row already had a status.
+
+**HEIC input**: `app/imaging.py` calls `pillow_heif.register_heif_opener()`
+at import time (process-wide -- `app/ai/ocr.py`'s own separate PIL decode
+path picks it up for free too), adds `"HEIF"` to the existing
+`_OPEN_FORMATS` allowlist so it gets the same pixel-bomb/animation-frame/
+concurrency-gate hardening as every other format, and `sniff_image_mime()`
+gains an ISO-BMFF `ftyp`-box brand check. `inventory.py`'s medicine-photo
+upload allowlist (`_MEDICINE_IMAGE_TYPES`/`_MEDICINE_SNIFF_OK`) now accepts
+it — deliberately NOT `_MEDICINE_IMAGE_MEDIA_TYPES` (the serve-back
+allowlist), since `normalise_image` always re-encodes to JPEG before
+storage regardless of input format.
+
+**Async thumbnail-priming worker**: the roadmap's own stated design --
+a MariaDB/SQLite `jobs` table, not Redis/rq/Celery (Redis is provisioned,
+but a PHP CI4 port has neither it nor Celery). NEW `app/jobs.py` (generic
+enqueue/claim/dispatch/retry + a background poll thread started once per
+process from `main.py`) + `models.Job` (Alembic `2b9e7a4c6f13`).
+`inventory.py`'s medicine-photo upload and `ai_router.py`'s document
+upload now call `derived.enqueue_prime_thumbnail()` instead of running
+`prime_thumbnail()` inline -- the upload response no longer waits on it.
+Zero API-contract change: `get_or_make_thumbnail` already regenerated on
+a cache miss, so a thumbnail viewed before the worker catches up just
+builds on demand, identical to today's behaviour when priming was
+skipped for any other reason.
+
+**voltagent security-auditor caught 1 real HIGH + 1 real MEDIUM before
+this landed:** the first version's SQLite claim path had no locking at
+all (only MariaDB got `FOR UPDATE SKIP LOCKED`) -- under this app's own
+documented gunicorn-4-workers-on-one-SQLite-file demo topology (see
+`main.py`'s `_schema_lock` / `audit.py`'s `_cross_process_chain_lock`,
+both added for exactly that reason), two worker processes' poll threads
+could both SELECT the same pending row before either committed, and both
+run the handler. Fixed by replacing the whole dialect-branched
+select-then-update with one atomic conditional
+`UPDATE ... WHERE id = :id AND status = 'pending'` -- correct on both
+dialects, no file lock or `SKIP LOCKED` needed, and removes the
+dialect branch entirely. Also fixed the related MEDIUM: a "running" row
+was never reclaimed if its process crashed mid-job (OOM/SIGKILL) --
+`_claim_one` now also reclaims a "running" row past a 5-minute staleness
+cutoff. A LOW (the `jobs` table is never pruned) was accepted as a
+documented residual, same as this codebase's other unbounded-but-cheap
+tables. Regression tests for both fixes in `tests/test_jobs.py`.
+
+557/557 backend tests pass (1 pre-existing skip -- `age` not installed),
+`check_schema` PASS, pyflakes clean. `tests/conftest.py` now stops the
+background worker thread for the whole test session (it would otherwise
+race the suite's own direct `run_pending()` calls); nothing in the
+existing HTTP-level tests depended on priming actually completing before
+the response, so this is a test-only change.
 
 ### 2026-09-15/16 — Offline NFC emergency tag: true zero-network fallback
 
@@ -2679,7 +2734,7 @@ Full suite 271/271, `check_schema` PASS, web lint/build clean.
 | P1.5 | Delete `_migrate_lightweight` + `create_all`; `db/check_schema.py` CI gate | S | / [[Security Audit#M9]] | ✅ 2026-08-30 |
 | P1.6 | `ObjectStore` abstraction + MinIO + `*_object_key` columns + move `uploads/` | M | | ✅ 2026-08-30 |
 | P1.7 | Image-normalisation pipeline (Pillow: EXIF/GPS strip, resize, thumbnail) | S | | ✅ 2026-08-30 (sync-at-upload; async worker → P1.7b) |
-| P1.7b | Imaging follow-ups: PDF first-page preview (`pypdfium2`, not AGPL PyMuPDF); ~1400px web-preview variant (cuts the 15MB original off the Branch WAN, metadata-stripped by default); HEIC input; async job seam = MariaDB `jobs` table + `FOR UPDATE SKIP LOCKED` (not rq/Celery — survives the CI4 port); consolidate the 3 magic-byte sniff copies; ETag on derived responses; bump `clarion-derived` ILM 30→180d | M | | 🟡 2026-09-15 (PDF preview + 1400 variant + ETag + ILM bump done; magic-byte sniff was already consolidated pre-P1.7b; HEIC + async worker deliberately skipped — see changelog) |
+| P1.7b | Imaging follow-ups: PDF first-page preview (`pypdfium2`, not AGPL PyMuPDF); ~1400px web-preview variant (cuts the 15MB original off the Branch WAN, metadata-stripped by default); HEIC input; async job seam = MariaDB `jobs` table (not rq/Celery — survives the CI4 port); consolidate the 3 magic-byte sniff copies; ETag on derived responses; bump `clarion-derived` ILM 30→180d | M | | ✅ 2026-09-16 (HEIC input + async thumbnail-priming worker landed, closing the last two deferred sub-items — see changelog) |
 | P1.8 | Env-driven config — kill hardcoded `localhost`, CORS allowlist, runtime `config.js` | S | / [[Security Audit#M3]] | ✅ 2026-08-30 |
 | P1.9 | Reverse proxy (Caddy) + CAMPUS-CA TLS + CSP + HSTS | S | | ✅ 2026-08-30 (prod TODO: drop the CAMPUS-CA cert in `proxy/certs/`, flip `CLARION_TLS_DIRECTIVE`; tighten `style-src`) |
 | P1.10 | **LDAP/AD** provider — service bind → search → user bind, JIT provision, `ldap_role_map` | M | **** | ✅ 2026-09-07 (backend + admin CRUD; no web UI yet) |

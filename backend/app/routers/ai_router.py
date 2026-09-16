@@ -19,7 +19,7 @@ from ..ai.interactions import (
 )
 from ..ai.ocr import extract_text_from_image, extract_structured_fields
 from ..storage import BUCKET_DOCUMENTS, ObjectStoreError, apply_object_meta, get_object_store, sanitize_filename
-from ..derived import prime_thumbnail
+from ..derived import enqueue_prime_thumbnail
 from ..imaging import ImageProcessingError, is_supported_image, validate_image_safe_to_decode
 from ._uploads import enforce_upload_size, sniff_document_mime
 from .patients import _serialize_patient
@@ -253,11 +253,11 @@ async def digitise_document(
         apply_object_meta(doc, meta, "file")
         db.add(doc)
         db.commit()
-        # P1.7: pre-build the preview thumbnail (no-op for a PDF / non-image).
-        # The WORM original is untouched -- prime_thumbnail only reads it. Runs
-        # in the threadpool: this is an `async def` handler and a Pillow decode
-        # would otherwise block the event loop for every other request.
-        await run_in_threadpool(prime_thumbnail, BUCKET_DOCUMENTS, meta.key, meta.sha256)
+        # P1.7/P1.7b: queue the preview-thumbnail build (no-op for a PDF /
+        # non-image) rather than generating it inline -- the WORM original
+        # is untouched either way, only read by the background job's
+        # eventual prime_thumbnail call (see app/jobs.py).
+        await run_in_threadpool(enqueue_prime_thumbnail, db, BUCKET_DOCUMENTS, meta.key, meta.sha256)
     except (OSError, ValueError, ObjectStoreError):
         # Best-effort persistence: the OCR ingestion already succeeded and is
         # not rolled back. But this used to swallow the storage failure

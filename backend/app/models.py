@@ -2440,3 +2440,42 @@ class ReportTemplate(Base):
     created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     created_by_name = Column(String(255), nullable=True)
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Job(Base):
+    """Generic async work queue (P1.7b) -- the background half of moving
+    heavy, best-effort work off the request/response cycle. A plain
+    MariaDB/SQLite table, not Redis/rq/Celery, so ``app/jobs.py``'s claim
+    loop re-implements trivially as a PHP CI4 cron job at port time (the
+    roadmap's own call). Workers claim a row with ``FOR UPDATE SKIP LOCKED``
+    on MariaDB so multiple gunicorn workers can poll safely; SQLite (already
+    single-writer) claims with a plain select+update in one transaction.
+
+    Currently the only ``kind`` is ``prime_thumbnail`` (registered by
+    ``app/derived.py``) -- generating a document/medicine-photo preview no
+    longer happens inline during upload; ``get_or_make_thumbnail`` already
+    regenerates on a cache miss, so a thumbnail viewed before the worker
+    catches up just builds on demand instead, identical to today's
+    behaviour when priming was skipped for any other reason.
+
+    # ponytail: done/failed rows are never pruned (unlike AuditLog/
+    # MedicineStockEvent, this table has no compliance reason to be
+    # permanent -- it's pure operational bookkeeping). Not urgent: every
+    # filter column is indexed so query cost stays flat as it grows.
+    # Upgrade path if row count ever matters: a scheduled DELETE of
+    # done/failed rows older than N days, same idiom as data_quality's
+    # auto-resolve.
+    """
+    __tablename__ = "jobs"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    kind = Column(String(64), nullable=False, index=True)
+    payload = Column(Text, nullable=False)  # JSON
+    status = Column(String(16), nullable=False, default="pending", index=True)  # pending | running | done | failed
+    attempts = Column(Integer, nullable=False, default=0)
+    error = Column(Text, nullable=True)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(
+        TZDateTime, nullable=False,
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+    )

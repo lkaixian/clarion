@@ -17,7 +17,7 @@ from . import models
 from .audit import log_access
 from .storage import BUCKET_MEDICINE, ObjectStoreError, apply_object_meta, get_object_store, sanitize_filename
 from .imaging import ImageProcessingError, normalise_image, sniff_image_mime
-from .derived import prime_thumbnail
+from .derived import enqueue_prime_thumbnail
 from .routers._uploads import enforce_upload_size
 
 
@@ -40,16 +40,21 @@ _MEDICINE_IMAGE_TYPES = {
     "image/png": {".png"},
     "image/jpeg": {".jpg", ".jpeg"},
     "image/webp": {".webp"},
+    # P1.7b: an iPhone camera's default format -- normalise_image always
+    # re-encodes to JPEG below, so this never reaches _MEDICINE_IMAGE_MEDIA_TYPES.
+    "image/heic": {".heic", ".heif"},
 }
 # Same allowlist, keyed by the type mimetypes.guess_type() derives from the
 # sanitized on-disk name when serving the file back -- anything else falls
 # back to application/octet-stream (download-only), never served with a
 # guessed executable type (same stored-XSS guard as
-# patients.py::get_document_file).
+# patients.py::get_document_file). Deliberately NOT extended with HEIC --
+# the stored file is always the normalise_image JPEG output, never the
+# original bytes.
 _MEDICINE_IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
-_MEDICINE_SNIFF_OK = {"image/png", "image/jpeg", "image/webp"}
+_MEDICINE_SNIFF_OK = {"image/png", "image/jpeg", "image/webp", "image/heic"}
 
 
 def _sniff_image_bytes(raw: bytes) -> Optional[str]:
@@ -135,7 +140,7 @@ def save_medicine_image(
             get_object_store().delete(BUCKET_MEDICINE, old_key)
         except (OSError, ValueError, ObjectStoreError):
             pass
-    prime_thumbnail(BUCKET_MEDICINE, key, meta.sha256)
+    enqueue_prime_thumbnail(db, BUCKET_MEDICINE, key, meta.sha256)
 
     log_access(
         db, None, current_user.id, current_user.role, "upload_medicine_image",

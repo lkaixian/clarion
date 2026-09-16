@@ -31,9 +31,21 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import auth as auth_module  # noqa: E402
+from app import jobs  # noqa: E402
 from app import models  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402 -- importing this runs _ensure_schema() against _TMP_DB_PATH
+
+# P1.7b: importing app.main started one real background thread polling the
+# `jobs` table (app/jobs.py). Tests that call jobs.run_pending() directly
+# (test_jobs.py) need deterministic, single-caller control over which row
+# gets claimed and when -- a live poller racing the same SQLite file (no
+# row locking there, see jobs._claim_one) could double-run a job or steal
+# one out from under an assertion. Nothing in this suite's HTTP-level tests
+# depends on the background thread actually draining a real prime_thumbnail
+# job (get_or_make_thumbnail regenerates on a cache miss regardless), so
+# stopping it for the whole test session is safe.
+jobs.stop_worker_thread()
 
 
 @atexit.register

@@ -200,6 +200,32 @@ def test_concurrency_gate_is_bounded():
 
 
 # --------------------------------------------------------------------------
+# HEIC input (P1.7b) — an iPhone camera's default photo format
+# --------------------------------------------------------------------------
+def _heic_bytes(w=64, h=48, color=(10, 20, 200)) -> bytes:
+    import pillow_heif
+    buf = io.BytesIO()
+    pillow_heif.from_pillow(Image.new("RGB", (w, h), color)).save(buf, quality=80)
+    return buf.getvalue()
+
+
+def test_heic_is_recognised_and_decodes():
+    raw = _heic_bytes()
+    assert is_supported_image(raw)
+    out = normalise_image(raw)
+    assert out.mime == "image/jpeg"  # every input normalises to JPEG, HEIC included
+    img = _decode(out.data)
+    assert img.format == "JPEG"
+    assert img.size == (64, 48)
+
+
+def test_heic_thumbnail():
+    out = make_thumbnail(_heic_bytes(400, 300), size=100)
+    img = _decode(out.data)
+    assert max(img.size) <= 100
+
+
+# --------------------------------------------------------------------------
 # render_pdf_first_page (P1.7b)
 # --------------------------------------------------------------------------
 def _pdf_bytes(w=400, h=300) -> bytes:
