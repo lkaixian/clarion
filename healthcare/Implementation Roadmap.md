@@ -23,6 +23,73 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-17 — Clinician profile (bio / internal contact email / photo)
+
+New `models.User` columns (`bio`, `contact_email`, `photo_object_key`/
+`_sha256`/`_bytes`/`_mime` — Alembic `229b668af939`, additive/nullable) plus
+a new non-WORM `clarion-staff-photos` bucket. `bio` is **PUBLIC** — surfaced
+on the patient self-booking clinician picker (`GET /patients/booking-options`,
+`GET /patients/clinicians/{id}/photo`, open to any authenticated user
+including patients, scoped to `role="clinician"` rows only). `contact_email`
+is a deliberately separate internal-only display field that never touches
+the real login/auth `email` column.
+
+Self-service (`PUT /me/profile`, `POST/GET/DELETE /me/photo` —
+`routers/profile.py`) mirrors the existing signature endpoints; the photo
+goes through `imaging.normalise_image` (EXIF/GPS strip + resize + re-encode
+JPEG) like a medicine photo, not stored raw. Admin editing
+(`PATCH /admin/staff/{id}/profile`, `POST /admin/staff/{id}/photo` —
+`routers/admin.py`) is facility-scoped through the same
+`_require_facility`/`_get_roster_user_or_404` helpers and non-leaking 404 as
+the existing `assign_staff_section`. Web: a self-edit widget on `/profile`,
+admin edit on the Staff Roster tab's expanded row.
+
+**voltagent security-auditor reviewed clean** — no RBAC/facility-scoping
+issue found (the category this codebase's reviews most often catch bugs
+in). One finding actioned: `contact_email` typed `EmailStr` (was a bare
+`str` with no format validation). New `backend/tests/test_staff_profile.py`
+covers the security-relevant paths: self-edit never touches the login
+email, admin edits are facility-scoped, a clinician's photo is
+patient-readable but a non-clinician's isn't through the same open
+endpoint. Deliberately out of scope: wiring bio/photo into the Flutter
+mobile booking screen (`book_appointment_screen.dart`) — the backend
+already serves both, left as UI-only follow-up.
+
+### 2026-09-17 — 3rd-party pentest-scan triage (ship-safe) + 3 fixes
+
+`npx ship-safe` (a generic static/secrets scanner, distinct from the
+`qa/blackbox` suite above) flagged 32 critical/high findings; ship-safe's
+own `investigate` pass already self-refuted most (0 confirmed, 5 likely, 38
+unresolved, 7 refuted). Hand-verified every "likely"/"critical" item against
+real source + git history: JWT-verification-disabled was a line-number
+false positive (a docstring line, not the actual `jwt.decode()` call, which
+does pass `SECRET_KEY`+`algorithms=[...]`); all 11 "SQL injection via
+f-string" hits were table/column *names* reflected from SQLAlchemy metadata
+in an offline operator-run migration script, not attacker-reachable values;
+the 3 "RAG: no retrieval filter" hits were a heuristic misfire against a DB
+migration script with no LLM/RAG involvement at all; all 5 "historical
+secret" hits were placeholders (`PASSWORD`, `medibridge-dev-secret-change-me`
+— the latter already moved to env) or a phantom string that doesn't
+actually appear in git history.
+
+3 real, low-severity items fixed: `bridge/nfc_bridge.py`'s debug-token
+compare is now `hmac.compare_digest` (was `!=`, a genuine if low-value
+timing side-channel on a localhost-only, opt-in-disabled-by-default
+endpoint); `web/src/ErrorBoundary.jsx` (new) now wraps `<App/>` so an
+unhandled render error shows a recoverable message instead of a blank page;
+`mobile_flutter` gained optional SHA-1 leaf-cert pinning (dart:io's native
+`X509Certificate.sha1`, no new dependency), off by default, reviewed by
+voltagent flutter-expert (documented ceilings: leaf- not SPKI-pinning,
+`badCertificateCallback` only fires when the OS doesn't already trust the
+signing CA — true for the private CAMPUS-CA today).
+
+2 items deliberately left alone after tracing the actual usage first: the
+backup container's "run as non-root" suggestion would break the compose
+`backup` service's system-cron mechanism (`/etc/cron.d`, needs root); PII
+field-level encryption on `Patient.national_id` would break its indexed
+`normalized_national_id` exact-match lookup (login/search) — MariaDB TDE
+(P2 wave) already covers at-rest encryption.
+
 ### 2026-09-16 — 3 findings fixed from the independent QA test suite's first run
 
 An independent QA pass (209 black-box cases, `healthcare/Security & Stability

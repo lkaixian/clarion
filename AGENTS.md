@@ -534,6 +534,23 @@ a real double-run race under this app's own documented gunicorn-4-workers-
 on-one-SQLite-file topology) + a MEDIUM (a crashed worker's "running" row
 was never reclaimed), both fixed. P1.7b is now fully ✅.
 
+**A 3rd-party ship-safe pentest scan was triaged and a clinician-profile
+feature landed, both 2026-09-17** — see the roadmap changelog for full
+detail. Scan triage: of 32 claimed critical/high findings, hand-verification
+against real source + git history found every "critical" SQL-injection and
+JWT-verification hit a false positive (line-number/heuristic misfires, not
+real code paths), fixed 3 genuine low-severity items (timing-safe
+debug-token compare in `bridge/nfc_bridge.py`, a web `ErrorBoundary`,
+optional mobile TLS leaf-cert pinning — voltagent flutter-expert reviewed),
+and deliberately left 2 alone after tracing actual usage (the backup
+container's cron mechanism needs root; `Patient.national_id` field
+encryption would break its own indexed exact-match lookup). Feature: staff
+`bio`/`contact_email`/profile photo (self- and admin-editable), `bio`
+surfaced publicly on the patient self-booking clinician picker,
+`contact_email` deliberately never touches the real login `email` column —
+voltagent security-auditor reviewed clean (no RBAC/facility-scoping issue,
+the category this codebase's reviews most often catch bugs in).
+
 Remaining backlog: P4.7's real-hardware Modality Worklist gap (deploy-time,
 not buildable here), the RustFS migration off MinIO (deliberately
 deferred), a REAL SMP/SMS/e-klinik/Registrar integration (still needs
