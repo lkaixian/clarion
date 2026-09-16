@@ -14,7 +14,7 @@ Admin-initiated clock actions (an admin clocking someone else in/out) and any
 account editing/deactivation are explicitly OUT OF SCOPE for this pass -- see
 the roster endpoints in admin.py, which are read-only.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -153,7 +153,7 @@ def clock_out(
     if not open_event:
         raise HTTPException(status_code=409, detail="You are not currently clocked in.")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     open_event.clock_out_at = now
     db.add(open_event)
 

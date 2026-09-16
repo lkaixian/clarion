@@ -1,10 +1,22 @@
 import re
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from . import permissions
 from . import models as _models
+
+
+def _aware_utc(dt: datetime) -> datetime:
+    """Normalise to aware UTC for a same-scope comparison against
+    datetime.now(timezone.utc) -- a client-submitted datetime (Pydantic
+    preserves whatever offset the request sent, e.g. '+08:00') would
+    otherwise raise "can't compare offset-naive and offset-aware datetimes"
+    against this codebase's naive-UTC "now" convention whenever the client
+    includes a timezone offset. Genuinely offset-bearing input is CONVERTED
+    (not just re-labelled), a naive one is tagged UTC -- same convention as
+    routers/appointments.py::_to_aware_utc."""
+    return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 # Minimum acceptable length for any newly-set password (staff-issued temp
 # passwords are exempt -- they're generated server-side via
@@ -557,7 +569,7 @@ class AppointmentCreate(BaseModel):
         # past -- almost certainly a typo (wrong date/year) rather than an
         # intentional backdated record; this app has no legitimate use case
         # for a "past" scheduled appointment (that's what encounters are for).
-        if v < datetime.utcnow():
+        if _aware_utc(v) < datetime.now(timezone.utc):
             raise ValueError("scheduled_at cannot be in the past.")
         return v
 
@@ -729,7 +741,7 @@ class RescheduleAppointmentRequest(BaseModel):
     @field_validator("new_scheduled_at")
     @classmethod
     def _check_not_past(cls, v: datetime) -> datetime:
-        if v < datetime.utcnow():
+        if _aware_utc(v) < datetime.now(timezone.utc):
             raise ValueError("new_scheduled_at cannot be in the past.")
         return v
 

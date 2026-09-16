@@ -7,7 +7,7 @@ here (see the approved plan's assumptions). Each admission also records an
 `inpatient` Encounter on the patient, mirroring patients.py::add_encounter.
 """
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -296,7 +296,7 @@ def discharge_admission(
     if adm.discharged_at is not None:
         raise HTTPException(status_code=400, detail="That admission has already been discharged.")
 
-    adm.discharged_at = datetime.utcnow()
+    adm.discharged_at = datetime.now(timezone.utc).replace(tzinfo=None)
     adm.discharged_by = current_user.id
     db.commit()
     db.refresh(adm)

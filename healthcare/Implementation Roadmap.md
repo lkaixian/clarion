@@ -23,6 +23,114 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-16 — Housekeeping: dedup `test_ldap_auth.py` against `tests/conftest.py`
+
+The other item on AGENTS.md's "ongoing housekeeping" list (the datetime
+sweep above was the first, picked by direct user choice). Of the four files
+that note flagged (`test_storage.py`/`test_imaging.py`/`test_derived.py`/
+`test_ldap_auth.py`), only `test_ldap_auth.py` turned out to actually
+duplicate anything — the other three are pure unit tests against
+`app.storage`/`app.imaging`/`app.derived` with no DB/HTTP dependency at all,
+nothing to dedupe there; the housekeeping note was broader than the real
+scope.
+
+`test_ldap_auth.py` predates `tests/conftest.py` (P1.10 landed before
+P1.12's shared fixtures existed) and still carried its own dead setup from
+before: a second, unused throwaway SQLite temp-DB file + its own `atexit`
+cleanup (its own `DATABASE_URL` line was already a silent no-op —
+conftest.py's own env block runs first via pytest's always-import-conftest-
+first behavior, and the SQLAlchemy engine is a module-level global fixed at
+first import), its own module-level `client = TestClient(app)` instead of
+the shared `test_client` fixture, and its own local `db_session` fixture
+that was byte-for-byte identical to (and therefore just silently shadowing)
+conftest.py's.
+
+Removed all of it directly (single file, fully understood already — below
+delegation break-even, so not sent to agy this time, per the its own
+"tiny/self-contained tasks are a net loss to delegate" guidance). Added
+`test_client` as an explicit fixture parameter to the 10 test functions that
+used the old bare `client.post(...)`, renamed those calls, deleted the dead
+temp-DB/atexit/local-fixture code. Pure mechanical dedup, zero intended
+behavior change. Verified: `pyflakes` clean, this file's own 33 tests pass,
+**full suite 561/561 — unchanged**. **voltagent code-reviewer** confirmed:
+all 10 signatures correct, no assertion changed anywhere, the removed local
+`db_session` fixture was genuinely identical to conftest.py's, and nothing
+beyond the described dedup was touched (one incidental fix: the module
+docstring referenced a `_mock_ldap` fixture name that never actually existed
+in code — the real fixture has always been `mock_ldap` — corrected to match
+reality). Net -34 lines.
+
+### 2026-09-16 — Housekeeping: `datetime.utcnow()` deprecation sweep
+
+Picked up from AGENTS.md's "small follow-ups" backlog (asked the user, since
+every P0–P5 roadmap row already had a status and nothing else was an obvious
+unblocked next item — see that question's own three genuinely-buildable
+options). Python 3.12 deprecates `datetime.utcnow()`; the repo's own test
+suite showed 2090 DeprecationWarnings, all from this one call.
+
+Investigated before touching anything: this codebase's `TZDateTime` columns
+(`models.py`) come back **naive on Python read regardless of backend** —
+verified empirically on SQLite too, not just the already-documented MariaDB
+case (`DateTime(timezone=True)` silently strips tzinfo on SQLite round-trip
+in this SQLAlchemy version). So the codebase's real, load-bearing convention
+for anything touching a DB timestamp is naive-UTC by design (see
+`appointments.py::compute_reminder_offsets` and
+`reception/_common.py::_malaysia_today`, both already naive on purpose). A
+blind sweep to `datetime.now(timezone.utc)` would have broken every
+Python-side comparison against an already-fetched naive column value
+(`row.expires_at < now`, etc.) — exactly the hazard AGENTS.md's own note
+flagged. Used the actual stdlib-recommended drop-in instead:
+
+    datetime.utcnow()  ->  datetime.now(timezone.utc).replace(tzinfo=None)
+
+Byte-for-byte identical naive-UTC value, every time — silences the warning
+with zero behavior change, no per-site risk analysis needed.
+
+Delegated the mechanical multi-file substitution to **agy** (`agy-job`,
+`--tier pro --yolo`, 25 files, exact line-by-line spec) since it was a large
+but fully deterministic find-replace + import-line fix. Verified before
+trusting it: reviewed every file's `git diff` (81 insertions/81 deletions,
+exact 1:1 substitutions, the two deliberately-naive functions above
+correctly left semantically unchanged), `pyflakes` clean, full backend test
+suite **557 passed / 1 skipped — identical to the pre-sweep baseline**,
+warnings 2090 → 154 (all remaining ones third-party/stdlib, unrelated).
+**voltagent security-auditor** then reviewed `auth.py`/`emergency.py`/
+`schemas.py` specifically (the JWT/refresh-token/emergency-card-expiry
+logic) and confirmed no behavioral difference in any of those files.
+
+**Surfaced two pre-existing, sweep-unrelated issues while reviewing** (not
+introduced by this change, not fixed here):
+- `auth.py`'s `create_access_token` embeds `password_changed_at.timestamp()`
+  in the JWT's `pwd_changed_at` claim — `.timestamp()` on a naive datetime
+  reads it as local time, not UTC. Low severity: the decode side
+  (`_resolve_current_user`) applies the identical naive-as-local bias to the
+  same column's value, so the `>` comparison the revocation-on-password-
+  change check depends on still holds. Self-cancelling, not load-bearing.
+- `schemas.py`'s two "not in the past" validators
+  (`AppointmentCreate`/`RescheduleAppointmentRequest`) compare a
+  Pydantic-parsed client `datetime` against naive-UTC now. Pydantic v2
+  preserves an incoming ISO datetime's offset, so a client that sends one
+  (e.g. `...+08:00`) gets a naive/aware `TypeError` -> 500 instead of a
+  clean 422. Pre-existing (was equally naive before this sweep); a real fix
+  needs the same `_aware()`-style normalizer `retention.py` and
+  `routers/appointments.py::_to_aware_utc` already use elsewhere, applied to
+  the validator's input. Not fixed here — out of scope for a mechanical
+  deprecation sweep, flagged as a follow-up.
+
+**Both follow-ups fixed same day, on direct request ("fix it").** `auth.py`
+gets a new `_epoch_utc()` helper (naive-tagged-UTC or aware alike) used by
+both `create_access_token`'s `pwd_changed_at` claim AND
+`_resolve_current_user`'s decode-side check, so the two sides can't drift
+apart again the way the old duplicated `.timestamp()` calls could have.
+`schemas.py` gets a new `_aware_utc()` normalizer (same convention as
+`routers/appointments.py::_to_aware_utc`) applied on the comparison side of
+both "not in the past" validators — an offset-bearing client datetime now
+gets a clean 422 instead of a 500. NEW `tests/test_datetime_utc_fixes.py`
+(4 tests: epoch equivalence for naive vs. aware input; both validators
+accept an offset-bearing future datetime and cleanly reject an
+offset-bearing past one). 561/561 backend tests pass (557 baseline + 4
+new), `pyflakes` clean.
+
 ### 2026-09-16 — P1.7b's last two leftovers: HEIC input + async thumbnail worker
 
 The only two sub-items P1.7b had explicitly deferred (no reported real

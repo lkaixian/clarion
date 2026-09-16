@@ -7,7 +7,7 @@ Covers: successful reset actually changes the password + clears the OTP,
 5 wrong guesses invalidate the live OTP, an expired OTP is rejected and
 cleared, and the failure responses are enumeration-identical.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app import auth, models
 
@@ -33,7 +33,7 @@ def _patient_with_login(db_session, nric="880808-08-8888", password="OldPass1234
 def _arm_otp(db_session, user, code="123456", ttl_minutes=10):
     db_session.query(models.User).filter_by(id=user.id).update({
         "otp_code_hash": auth.hash_otp_code(code),
-        "otp_expires_at": datetime.utcnow() + timedelta(minutes=ttl_minutes),
+        "otp_expires_at": datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=ttl_minutes),
         "otp_attempt_count": 0,
     })
     db_session.commit()

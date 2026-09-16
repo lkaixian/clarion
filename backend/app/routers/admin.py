@@ -265,7 +265,7 @@ def update_inventory_item(
     # actually get more stock" (see module-level task spec for the exact
     # reasoning this preserves).
     if "quantity_on_hand" in submitted_fields and item.quantity_on_hand > previous_quantity:
-        item.last_restocked_at = datetime.utcnow()
+        item.last_restocked_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if submitted_fields:
         item.updated_by = current_user.id
@@ -374,7 +374,7 @@ def approve_inventory_delete_request(
 
     req.status = "approved"
     req.resolved_by = current_user.id
-    req.resolved_at = datetime.utcnow()
+    req.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(req)
 
@@ -403,7 +403,7 @@ def reject_inventory_delete_request(
     req.status = "rejected"
     req.admin_note = payload.admin_note
     req.resolved_by = current_user.id
-    req.resolved_at = datetime.utcnow()
+    req.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(req)
 
@@ -507,7 +507,7 @@ def approve_purchase_proposal(
             {
                 "status": "approved",
                 "reviewed_by": current_user.id,
-                "reviewed_at": datetime.utcnow(),
+                "reviewed_at": datetime.now(timezone.utc).replace(tzinfo=None),
             },
             synchronize_session=False,
         )
@@ -578,7 +578,7 @@ def reject_purchase_proposal(
     proposal.status = "rejected"
     proposal.admin_note = payload.reason
     proposal.reviewed_by = current_user.id
-    proposal.reviewed_at = datetime.utcnow()
+    proposal.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(proposal)
 
@@ -1316,7 +1316,7 @@ def delete_room(
     room = _get_room_or_404(db, room_id, facility)
     room_name = room.room_name
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for claim in (
         db.query(models.RoomClaim)
         .filter(models.RoomClaim.room_id == room_id, models.RoomClaim.released_at.is_(None))

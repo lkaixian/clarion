@@ -6,7 +6,7 @@ depend on it, instead of ``pharmacy.py`` importing service helpers straight
 from another router module.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -261,7 +261,7 @@ def _apply_restock(
     item's stored unit_cost); like the adjust endpoint it is recorded on the
     stock event only and never overwrites the catalogue item.unit_cost.
     """
-    now = now or datetime.utcnow()
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     effective_unit_cost = unit_cost_paid if unit_cost_paid is not None else item.unit_cost
     cost = float(effective_unit_cost or 0.0) * quantity
 

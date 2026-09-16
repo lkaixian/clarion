@@ -18,7 +18,7 @@ credentials are contained to a non-production environment by construction
 by accident in a real deployment).
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from alembic import command
@@ -185,7 +185,7 @@ if not db.query(models.User).filter(models.User.email == "admin@clarion.demo").f
     # -- see routers/admin.py). All facility_name="Hospital Sejahtera" so it
     # shows up for the seeded admin above; varied enough to demo both the
     # low-stock indicator and a capacity-pressure indicator on first login.
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add_all([
         # Clearly LOW relative to its threshold -- demos the is_low_stock
         # computed flag without needing any manual data entry first.

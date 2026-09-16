@@ -1,7 +1,7 @@
 """Clinician room claims + the "My Room" worklist (GET /reception/rooms,
 POST /reception/rooms/{room_id}/claim, POST /reception/rooms/release,
 GET /reception/my-room)."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -81,7 +81,7 @@ def release_room(
     """Give up the room the caller currently holds (no-op if they hold none)."""
     claim = _active_claim_for_user(db, current_user.id)
     if claim:
-        claim.released_at = datetime.utcnow()
+        claim.released_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         log_access(
             db, None, current_user.id, current_user.role, "reception_release_room",

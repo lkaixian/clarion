@@ -1,7 +1,7 @@
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
@@ -461,7 +461,7 @@ def login(
         # identifier (ldap_auth/_jit_provision_ldap_user already logged why).
 
     if user:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if user.login_locked_until and now < user.login_locked_until:
             raise HTTPException(
                 status_code=429,
@@ -600,7 +600,7 @@ def _apply_new_password(db: Session, user: models.User, new_password: str, must_
     # JWT revocation watermark -- any token issued before this moment now
     # fails auth._resolve_current_user's pwd_changed_at check (see that
     # function's docstring / models.User.password_changed_at's comment).
-    user.password_changed_at = datetime.utcnow()
+    user.password_changed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(user)
     db.commit()
     # P2.5 (Security Audit M4): the watermark above only ever covered the
@@ -702,7 +702,7 @@ def request_password_reset_otp(request: Request, payload: schemas.PasswordResetO
     if not user:
         return _REQUEST_OTP_GENERIC_RESPONSE
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # OTP *request* rate limiting -- separate rolling-window counter from
     # the per-OTP verify-attempt counter below. Applies uniformly to every
@@ -770,7 +770,7 @@ def reset_password_with_otp(request: Request, payload: schemas.PasswordResetWith
     if not user or not user.otp_code_hash or not user.otp_expires_at:
         raise HTTPException(status_code=400, detail=_RESET_WITH_OTP_GENERIC_ERROR)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if now > user.otp_expires_at:
         # Expired -- clear it out rather than leaving a stale hash a client
         # could keep guessing against indefinitely; caller must request a

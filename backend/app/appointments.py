@@ -102,7 +102,7 @@ def compute_reminder_offsets(appointment: models.Appointment) -> list[dict]:
         source, route it through the same collapsing dict keyed on
         hours_before, don't just list.append() a new entry.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # hours_before -> label, built in priority order (later entries in this
     # function only overwrite an existing key if they're considered more

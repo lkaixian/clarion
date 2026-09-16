@@ -255,7 +255,7 @@ def reschedule_appointment(
     )
     if pending_request:
         pending_request.status = "accepted"
-        pending_request.resolved_at = datetime.utcnow()
+        pending_request.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
         pending_request.resolved_by = current_user.id
 
     db.add(appointment)
@@ -366,7 +366,7 @@ def accept_reschedule_request(
     split into two steps)."""
     request_row = _get_reschedule_request_or_404(db, patient_id, appointment_id, request_id)
     request_row.status = "accepted"
-    request_row.resolved_at = datetime.utcnow()
+    request_row.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
     request_row.resolved_by = current_user.id
     db.commit()
     db.refresh(request_row)
@@ -397,7 +397,7 @@ def reject_reschedule_request(
     request_row = _get_reschedule_request_or_404(db, patient_id, appointment_id, request_id)
     request_row.status = "rejected"
     request_row.clinician_note = payload.clinician_note
-    request_row.resolved_at = datetime.utcnow()
+    request_row.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
     request_row.resolved_by = current_user.id
     db.commit()
     db.refresh(request_row)

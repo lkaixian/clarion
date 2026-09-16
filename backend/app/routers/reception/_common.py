@@ -6,7 +6,7 @@ imported directly by another router (consultation.py / admin.py / display.py /
 patients.py). The parent package re-exports the names other modules rely on --
 see ``reception/__init__.py``.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -135,7 +135,7 @@ def _call_ticket_impl(ticket_id: str, db: Session, current_user: models.User) ->
     else:
         previously_called_q = previously_called_q.filter(models.QueueTicket.department.is_(None))
     previously_called = previously_called_q.all()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for other in previously_called:
         other.status = "done"
         other.completed_at = now
@@ -159,7 +159,7 @@ def _cancel_ticket_impl(ticket_id: str, db: Session, current_user: models.User) 
         raise HTTPException(status_code=400, detail=f"Ticket is already '{ticket.status}'")
 
     ticket.status = "cancelled"
-    ticket.completed_at = datetime.utcnow()
+    ticket.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(ticket)
 
@@ -264,7 +264,7 @@ def _claim_room_impl(room_id: str, db: Session, current_user: models.User):
     if existing_on_room and existing_on_room.user_id != current_user.id:
         raise HTTPException(status_code=409, detail="That room is currently claimed by another clinician.")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     prior = _active_claim_for_user(db, current_user.id)
     if prior and prior.room_id != room_id:
         prior.released_at = now

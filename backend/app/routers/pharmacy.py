@@ -23,7 +23,7 @@ auto-approved path runs here, so the two can never drift.
 """
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -157,7 +157,7 @@ def adjust_stock(
     facility = _require_facility(current_user)
     item = _get_inventory_item_or_404(db, item_id, facility)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if payload.delta > 0:
         if not item.auto_approved:

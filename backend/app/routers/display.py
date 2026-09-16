@@ -16,7 +16,7 @@ The token is an unguessable secrets.token_urlsafe(16); a revoked or unknown
 token is an identical 404. Rate-limited per IP (same pattern as
 emergency.py's scan endpoints) so the token space can't be swept.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -139,7 +139,7 @@ def get_display_feed(token: str, request: Request, db: Session = Depends(get_db)
     return {
         "facility_display_name": facility_display_name,
         "section": section,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "now_serving": now_serving,
         "up_next": up_next,
         "brand_primary_color": brand_primary_color,

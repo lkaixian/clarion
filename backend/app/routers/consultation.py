@@ -21,7 +21,7 @@ reception.py does NOT import this module, so importing its helpers here is
 cycle-free (same direction as admin.py importing reception.py).
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -243,7 +243,7 @@ def end_session(
 ):
     """Close the caller's open shift and release their room claim (best
     effort -- a no-op if they had neither). Returns the now-cleared state."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     open_event = (
         db.query(models.StaffClockEvent)
@@ -345,7 +345,7 @@ def complete_consultation_ticket(
         ):
             raise HTTPException(status_code=404, detail="Referral service request not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     ticket.status = "done"
     ticket.completed_at = now
 

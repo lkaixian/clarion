@@ -549,10 +549,11 @@ SQLite this session — a real `alembic upgrade head` on MariaDB is still
 owed (no local DB creds). It uses the same dialect-branched patterns as the
 other MariaDB-verified migrations.
 
-**Ongoing housekeeping:** existing test files predating `tests/conftest.py`
-(`test_storage.py`/`test_imaging.py`/`test_derived.py`/`test_ldap_auth.py`)
-still carry their own setup where applicable — dedup opportunistically, not
-urgent.
+**Ongoing housekeeping:** ✅ done 2026-09-16 — of the four files flagged,
+only `test_ldap_auth.py` actually duplicated `tests/conftest.py`'s fixtures
+(the other three are dependency-free unit tests, nothing to dedupe); its
+dead temp-DB/atexit/module-client/shadowing-`db_session` setup is gone,
+561/561 tests still pass. See the roadmap changelog for detail.
 
 **P1.9 leftovers (deploy-time, not code):** drop the CAMPUS-CA cert pair in
 `proxy/certs/` and set `CLARION_TLS_DIRECTIVE` to the file form; wire MariaDB

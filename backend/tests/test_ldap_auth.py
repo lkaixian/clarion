@@ -2,46 +2,21 @@
 
 Two layers:
   1. app/ldap_auth.py in isolation, against ldap3's MOCK_SYNC strategy (no
-     real directory server -- see _mock_ldap fixture below).
-  2. End-to-end through POST /auth/login (TestClient + a throwaway SQLite
-     DB). There's no shared pytest DB/app fixture yet (that's P1.12's job,
-     not landed) so this file sets up its own minimal one, self-contained,
-     via the module-level env-var block below -- it MUST run before `app`
-     is imported anywhere, which is why it's at the very top of the file
-     ahead of even stdlib imports that would otherwise sort first.
+     real directory server -- see mock_ldap fixture below).
+  2. End-to-end through POST /auth/login, via the shared test_client /
+     db_session fixtures from conftest.py (P1.12 -- this file predates it
+     and used to set up its own throwaway DB/TestClient; deduped 2026-09-16,
+     see git history for the old self-contained version).
 """
 import os
-import tempfile
+import logging
 
-_TMP_DB_FD, _TMP_DB_PATH = tempfile.mkstemp(suffix=".db", prefix="clarion_test_ldap_")
-os.close(_TMP_DB_FD)
-os.environ["DATABASE_URL"] = "sqlite:///" + _TMP_DB_PATH.replace("\\", "/")
-os.environ.setdefault("SECRET_KEY", "test-only-secret-key-not-for-any-real-deployment")
-os.environ.setdefault("OTP_HMAC_KEY", "test-only-otp-hmac-key-not-for-any-real-deployment")
-os.environ.setdefault("APP_ENV", "demo")
+import pytest
+from ldap3 import Connection, MOCK_SYNC, Server
+
+from app import ldap_auth, models
+
 os.environ.pop("LDAP_ENABLED", None)  # ensure a clean starting state regardless of the outer shell env
-
-import atexit  # noqa: E402
-import logging  # noqa: E402
-
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from ldap3 import Connection, MOCK_SYNC, Server  # noqa: E402
-
-from app import ldap_auth, models  # noqa: E402
-from app.database import SessionLocal  # noqa: E402
-from app.main import app  # noqa: E402 -- importing this runs _ensure_schema() against _TMP_DB_PATH
-
-
-@atexit.register
-def _cleanup_tmp_db():
-    try:
-        os.remove(_TMP_DB_PATH)
-    except OSError:
-        pass
-
-
-client = TestClient(app)
 
 
 # --------------------------------------------------------------------------
@@ -109,15 +84,6 @@ def mock_ldap(monkeypatch):
     )
     monkeypatch.setattr(ldap_auth, "Connection", _seeded_mock_connection)
     yield
-
-
-@pytest.fixture
-def db_session():
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def _map_group(db_session, group_dn: str, role: str, facility: str | None = None, priority: int = 0):
@@ -254,21 +220,21 @@ def test_resolve_role_case_insensitive(db_session):
 # --------------------------------------------------------------------------
 # 3. End-to-end through POST /auth/login
 # --------------------------------------------------------------------------
-def test_ldap_disabled_login_unaffected(db_session):
+def test_ldap_disabled_login_unaffected(db_session, test_client):
     """LDAP_ENABLED unset (the default) -- an identifier with no local
     account behaves exactly as before P1.10: generic 401, no directory
     contacted (no mock_ldap fixture applied here at all)."""
     assert os.environ.get("LDAP_ENABLED") is None
-    resp = client.post("/auth/login", data={"username": "nobody@example.com", "password": "x"})
+    resp = test_client.post("/auth/login", data={"username": "nobody@example.com", "password": "x"})
     assert resp.status_code == 401
 
 
-def test_case_a_jit_provision_and_login(mock_ldap, db_session):
+def test_case_a_jit_provision_and_login(mock_ldap, db_session, test_client):
     _map_group(db_session, "cn=Clinicians,ou=groups,dc=example,dc=com", "clinician", facility="Branch Campus")
 
     assert db_session.query(models.User).filter(models.User.email == "alice@example.com").first() is None
 
-    resp = client.post(
+    resp = test_client.post(
         "/auth/login", data={"username": "alice@example.com", "password": "alicepass"}
     )
     assert resp.status_code == 200, resp.text
@@ -289,18 +255,18 @@ def test_case_a_jit_provision_and_login(mock_ldap, db_session):
     assert not auth_module.verify_password("alicepass", row.hashed_password)
 
 
-def test_case_a_jit_denied_when_no_group_mapped(mock_ldap, db_session):
+def test_case_a_jit_denied_when_no_group_mapped(mock_ldap, db_session, test_client):
     """bob authenticates fine against the mock directory but his only
     group has no mapping -- login must be denied, and no User row created
     (no silent default role)."""
-    resp = client.post("/auth/login", data={"username": "bob@example.com", "password": "bobpass"})
+    resp = test_client.post("/auth/login", data={"username": "bob@example.com", "password": "bobpass"})
     assert resp.status_code == 401
     assert db_session.query(models.User).filter(models.User.email == "bob@example.com").first() is None
 
 
-def test_case_b_existing_ldap_user_resync_on_group_change(mock_ldap, db_session):
+def test_case_b_existing_ldap_user_resync_on_group_change(mock_ldap, db_session, test_client):
     _map_group(db_session, "cn=Clinicians,ou=groups,dc=example,dc=com", "clinician")
-    first = client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
+    first = test_client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
     assert first.status_code == 200
     assert first.json()["user"]["role"] == "clinician"
 
@@ -310,7 +276,7 @@ def test_case_b_existing_ldap_user_resync_on_group_change(mock_ldap, db_session)
     db_session.commit()
     _map_group(db_session, "cn=AllStaff,ou=groups,dc=example,dc=com", "records_officer")
 
-    second = client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
+    second = test_client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
     assert second.status_code == 200
     assert second.json()["user"]["role"] == "records_officer"
 
@@ -319,13 +285,13 @@ def test_case_b_existing_ldap_user_resync_on_group_change(mock_ldap, db_session)
     assert len(users) == 1  # re-synced the same row, not a duplicate
 
 
-def test_case_b_failed_ldap_rebind_increments_lockout(mock_ldap, db_session):
+def test_case_b_failed_ldap_rebind_increments_lockout(mock_ldap, db_session, test_client):
     _map_group(db_session, "cn=Clinicians,ou=groups,dc=example,dc=com", "clinician")
-    good = client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
+    good = test_client.post("/auth/login", data={"username": "alice@example.com", "password": "alicepass"})
     assert good.status_code == 200
 
     for _ in range(5):
-        bad = client.post("/auth/login", data={"username": "alice@example.com", "password": "WRONG"})
+        bad = test_client.post("/auth/login", data={"username": "alice@example.com", "password": "WRONG"})
         assert bad.status_code == 401
 
     db_session.expire_all()
@@ -334,13 +300,13 @@ def test_case_b_failed_ldap_rebind_increments_lockout(mock_ldap, db_session):
 
     # Locked out now even with the CORRECT password -- same per-account
     # lockout an LDAP-backed account is not exempt from.
-    locked_attempt = client.post(
+    locked_attempt = test_client.post(
         "/auth/login", data={"username": "alice@example.com", "password": "alicepass"}
     )
     assert locked_attempt.status_code == 429
 
 
-def test_case_c_local_account_unaffected_by_ldap_enabled(mock_ldap, db_session):
+def test_case_c_local_account_unaffected_by_ldap_enabled(mock_ldap, db_session, test_client):
     """A pre-existing LOCAL account (auth_source default) must keep
     authenticating with its own local password even while LDAP_ENABLED is
     true -- LDAP is never consulted for it."""
@@ -355,7 +321,7 @@ def test_case_c_local_account_unaffected_by_ldap_enabled(mock_ldap, db_session):
     db_session.add(local_user)
     db_session.commit()
 
-    resp = client.post(
+    resp = test_client.post(
         "/auth/login", data={"username": "carol.local@example.com", "password": "carolpass"}
     )
     assert resp.status_code == 200
@@ -368,7 +334,7 @@ def test_case_c_local_account_unaffected_by_ldap_enabled(mock_ldap, db_session):
     db_session.commit()
 
 
-def test_real_patient_nric_never_reaches_ldap(mock_ldap, db_session, monkeypatch):
+def test_real_patient_nric_never_reaches_ldap(mock_ldap, db_session, monkeypatch, test_client):
     """A real Patient's NRIC -- even one with NO linked User account yet --
     must fall through to the generic 401 WITHOUT ever contacting the
     directory. This is the actual staff-only boundary (see
@@ -385,7 +351,7 @@ def test_real_patient_nric_never_reaches_ldap(mock_ldap, db_session, monkeypatch
     orig = ldap_auth.authenticate_ldap
     monkeypatch.setattr(ldap_auth, "authenticate_ldap", lambda *a, **kw: (called.append(1), orig(*a, **kw))[1])
 
-    resp = client.post("/auth/login", data={"username": "990101-01-1234", "password": "whatever"})
+    resp = test_client.post("/auth/login", data={"username": "990101-01-1234", "password": "whatever"})
     assert resp.status_code == 401
     assert called == []
 
@@ -393,7 +359,7 @@ def test_real_patient_nric_never_reaches_ldap(mock_ldap, db_session, monkeypatch
     db_session.commit()
 
 
-def test_unmatched_garbage_identifier_may_reach_ldap_but_is_denied(mock_ldap, db_session):
+def test_unmatched_garbage_identifier_may_reach_ldap_but_is_denied(mock_ldap, db_session, test_client):
     """An identifier that is neither a known email nor a real patient's NRIC
     (garbage / a typo) is LDAP-eligible -- the search simply comes back
     empty and the login is denied with the same generic 401. This is NOT a
@@ -401,14 +367,14 @@ def test_unmatched_garbage_identifier_may_reach_ldap_but_is_denied(mock_ldap, db
     exposed either way); it documents actual behavior rather than asserting
     a stronger guarantee this codebase's normalize_nric (format-agnostic by
     design) can't cheaply provide."""
-    resp = client.post("/auth/login", data={"username": "990101-01-1234", "password": "whatever"})
+    resp = test_client.post("/auth/login", data={"username": "990101-01-1234", "password": "whatever"})
     assert resp.status_code == 401
 
 
 # --------------------------------------------------------------------------
 # 4. voltagent security review follow-ups (C1, L3, M4, and coverage gaps)
 # --------------------------------------------------------------------------
-def test_c1_regression_non_mail_filter_survives_second_login(mock_ldap, monkeypatch, db_session):
+def test_c1_regression_non_mail_filter_survives_second_login(mock_ldap, monkeypatch, db_session, test_client):
     """THE regression test for voltagent finding C1: under a realistic
     sAMAccountName-based search filter (where mail and the login string
     are DIFFERENT values), a second login for the same identity must find
@@ -418,7 +384,7 @@ def test_c1_regression_non_mail_filter_survives_second_login(mock_ldap, monkeypa
     monkeypatch.setenv("LDAP_USER_SEARCH_FILTER", "(sAMAccountName={username})")
     _map_group(db_session, "cn=Clinicians,ou=groups,dc=example,dc=com", "clinician")
 
-    first = client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
+    first = test_client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
     assert first.status_code == 200, first.text
     assert first.json()["user"]["email"] == "alice@example.com"
 
@@ -427,7 +393,7 @@ def test_c1_regression_non_mail_filter_survives_second_login(mock_ldap, monkeypa
     assert len(rows) == 1
     assert rows[0].ldap_username == "alice.example"
 
-    second = client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
+    second = test_client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
     assert second.status_code == 200, second.text  # NOT a 500
 
     db_session.expire_all()
@@ -435,7 +401,7 @@ def test_c1_regression_non_mail_filter_survives_second_login(mock_ldap, monkeypa
     assert len(rows_after) == 1  # still exactly one row -- no duplicate provisioning
 
 
-def test_c1_regression_group_revocation_takes_effect_under_non_mail_filter(mock_ldap, monkeypatch, db_session):
+def test_c1_regression_group_revocation_takes_effect_under_non_mail_filter(mock_ldap, monkeypatch, db_session, test_client):
     """Companion to the above: the "revoked AD group takes effect on next
     login" resync (Case B) must also work under a non-mail filter -- before
     the fix, Case B searched the directory BY user.email, which doesn't
@@ -443,7 +409,7 @@ def test_c1_regression_group_revocation_takes_effect_under_non_mail_filter(mock_
     monkeypatch.setenv("LDAP_USER_SEARCH_FILTER", "(sAMAccountName={username})")
     _map_group(db_session, "cn=Clinicians,ou=groups,dc=example,dc=com", "clinician")
 
-    first = client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
+    first = test_client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
     assert first.status_code == 200
     assert first.json()["user"]["role"] == "clinician"
 
@@ -451,7 +417,7 @@ def test_c1_regression_group_revocation_takes_effect_under_non_mail_filter(mock_
     db_session.commit()
     _map_group(db_session, "cn=AllStaff,ou=groups,dc=example,dc=com", "records_officer")
 
-    second = client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
+    second = test_client.post("/auth/login", data={"username": "alice.example", "password": "alicepass"})
     assert second.status_code == 200, second.text
     assert second.json()["user"]["role"] == "records_officer"
 
