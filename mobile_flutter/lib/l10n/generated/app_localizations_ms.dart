@@ -773,6 +773,55 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
+  String get scanResultOfflineBanner =>
+      'LUAR TALIAN — dibaca terus daripada kad, tiada rangkaian. Mungkin sudah lapuk; nama dan umur tidak disimpan pada kad.';
+
+  @override
+  String get scanResultOfflinePlaceholderName =>
+      'Pemegang kad (bacaan luar talian)';
+
+  @override
+  String get writeOfflineTagTooltip =>
+      'Tulis Tag Luar Talian (kakitangan sahaja)';
+
+  @override
+  String get writeOfflineTagTitle => 'Tulis Tag Luar Talian';
+
+  @override
+  String get writeOfflineTagDesc =>
+      'Tampal teks yang dipaparkan selepas mendaftarkan kad NFC di konsol web, kemudian sentuh kad fizikal yang SAMA untuk menulisnya terus pada tag. Setelah ditulis, maklumat kritikal kad itu boleh dibaca tanpa rangkaian — oleh aplikasi ini atau mana-mana pembaca NFC standard.';
+
+  @override
+  String get writeOfflineTagTextLabel => 'Teks tag luar talian';
+
+  @override
+  String get writeOfflineTagButton => 'Sentuh kad untuk menulis';
+
+  @override
+  String get writeOfflineTagWriting =>
+      'Tahan kad pada bahagian belakang telefon…';
+
+  @override
+  String get writeOfflineTagSuccess =>
+      'Berjaya ditulis. Kad ini kini membawa maklumat kritikalnya secara luar talian.';
+
+  @override
+  String get writeOfflineTagNotNdef =>
+      'Tag ini tidak menyokong NDEF — cuba kad fizikal lain.';
+
+  @override
+  String get writeOfflineTagNotWritable =>
+      'Tag ini hanya boleh dibaca (dikunci) dan tidak boleh ditulis.';
+
+  @override
+  String get writeOfflineTagTooLarge =>
+      'Teks ini terlalu besar untuk memori tag ini. Daftar semula dengan kurang medan dipilih, atau gunakan tag berkapasiti lebih tinggi.';
+
+  @override
+  String get writeOfflineTagWriteFailed =>
+      'Penulisan pada tag gagal. Cuba sentuh semula, pegang kad dengan stabil.';
+
+  @override
   String seniorBloodType(String type) {
     return 'JENIS DARAH: $type';
   }

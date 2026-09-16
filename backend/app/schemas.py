@@ -1652,6 +1652,12 @@ class NfcRegisterRequest(BaseModel):
     # Physical cards are meant to last a long time (not reissued every
     # login like the QR flow) — default to ~1 year.
     valid_minutes: int = 525600
+    # The physical tag's real NDEF capacity in bytes, if the registering
+    # device already tapped it and knows (e.g. NdefAndroid.maxSize --
+    # NTAG213=144B, NTAG215=504B, NTAG216=888B). Drives how much of the
+    # compact on-tag `tag_text` response the backend fits before
+    # truncating. None = a conservative default (see _TAG_TEXT_MAX_BYTES).
+    tag_max_bytes: "int | None" = None
 
     @field_validator("valid_minutes")
     @classmethod
@@ -1660,6 +1666,15 @@ class NfcRegisterRequest(BaseModel):
             raise ValueError(
                 f"valid_minutes must be between 1 and {NFC_VALID_MINUTES_MAX} (2 years)."
             )
+        return v
+
+    @field_validator("tag_max_bytes")
+    @classmethod
+    def _check_tag_max_bytes(cls, v: "int | None") -> "int | None":
+        # Real-world tag range is ~48B (tiny) to a few KB (rare); this is
+        # sanity bounds on a client-supplied number, not a spec limit.
+        if v is not None and not (16 <= v <= 8192):
+            raise ValueError("tag_max_bytes must be between 16 and 8192.")
         return v
 
     _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)

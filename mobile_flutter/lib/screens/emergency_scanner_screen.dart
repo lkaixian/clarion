@@ -48,6 +48,10 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
   bool _loading = false;
   String? _error;
   EmergencyScanResult? _result;
+  // True when _result came from a tag's own on-card text (no network),
+  // not a live server lookup -- drives the "offline / may be outdated"
+  // banner in _buildResultCard. Always false outside NFC-tap mode.
+  bool _resultIsOffline = false;
 
   @override
   void initState() {
@@ -92,11 +96,16 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
 
   Future<void> _beginNfcSession() async {
     setState(() => _nfcSessionActive = true);
-    final uid = await NfcService.readTagUidOnce();
+    // One tap reads BOTH the hardware UID (the online lookup key) and
+    // whatever offline text is already written on the tag -- see
+    // NfcService.readTagOnce's own doc comment for why this beats reading
+    // the UID first and only deciding to re-tap for text if the network
+    // call fails.
+    final read = await NfcService.readTagOnce();
     if (!mounted) return;
     setState(() => _nfcSessionActive = false);
-    if (uid != null) {
-      await _lookup(nfcUid: uid);
+    if (read.uid != null) {
+      await _lookup(nfcUid: read.uid, offlineNdefText: read.ndefText);
     }
   }
 
@@ -106,6 +115,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       _mode = mode;
       _result = null;
       _error = null;
+      _resultIsOffline = false;
     });
     _startModeResources();
   }
@@ -128,11 +138,12 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     }
   }
 
-  Future<void> _lookup({String? cardReference, String? nfcUid}) async {
+  Future<void> _lookup({String? cardReference, String? nfcUid, String? offlineNdefText}) async {
     setState(() {
       _loading = true;
       _error = null;
       _result = null;
+      _resultIsOffline = false;
     });
     try {
       final api = context.read<ApiClient>();
@@ -151,7 +162,26 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       setState(() => _result = EmergencyScanResult.fromJson(raw));
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+      // statusCode == null means no response reached us at all (a
+      // connection error, not a real server answer like a 404) -- see
+      // ApiException.data's doc comment. THAT specific case, and only
+      // that case, is when falling back to whatever's written on the tag
+      // itself is appropriate: a real 404 ("not registered") is an
+      // authoritative answer from a server that IS reachable, and must
+      // not be silently overridden by stale on-tag data.
+      if (e.statusCode == null && offlineNdefText != null) {
+        final l10n = AppLocalizations.of(context);
+        setState(() {
+          _result = EmergencyScanResult.fromCompactTagText(
+            offlineNdefText,
+            placeholderName: l10n.scanResultOfflinePlaceholderName,
+          );
+          _resultIsOffline = true;
+          _error = null;
+        });
+      } else {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
       // Deliberately not e.toString() here — never interpolate a raw
       // error object into user-facing text (see api_exception.dart's
@@ -243,6 +273,35 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.palette.textMuted, letterSpacing: 0.5),
           ),
         ),
+        // Only ever shown when the server was unreachable and this came
+        // from the tag's own on-card text instead -- see _lookup's
+        // statusCode == null branch. Deliberately loud (not a quiet
+        // footnote): a responder acting on this must know it could be
+        // stale, and that a name/age/full history couldn't fit on the tag.
+        if (_resultIsOffline) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: context.palette.emergencyBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.palette.emergency),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.wifi_off, size: 18, color: context.palette.emergency),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.scanResultOfflineBanner,
+                    style: TextStyle(fontSize: 12, color: context.palette.textBody, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         _ScanResultHeader(result: result, l10n: l10n),
         const SizedBox(height: 16),
         // Allergies first and in the app's established "urgent" red -- the

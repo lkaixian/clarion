@@ -271,6 +271,70 @@ def _scoped_fields(
     return result
 
 
+# Conservative default: fits an NTAG213 (144B usable) several times over
+# and leaves headroom under an NTAG215 (504B) for the NDEF record's own
+# type/length overhead -- register_nfc_card lets the caller override this
+# with the physical tag's real capacity once it's actually been tapped.
+_TAG_TEXT_MAX_BYTES_DEFAULT = 128
+
+
+def _build_compact_tag_text(patient, scope: set, resolved_cond_ids, discontinued_med_ids,
+                             max_bytes: int = _TAG_TEXT_MAX_BYTES_DEFAULT) -> "tuple[str, bool]":
+    """Ultra-compact plaintext for writing DIRECTLY onto a physical NFC
+    tag's own NDEF memory -- readable by ANY standard NFC reader (even a
+    generic phone with no CLARION app installed), with ZERO network,
+    app, or server dependency. This is the true "the entire backend is
+    unreachable, not just a WAN link" fallback the QR/NFC *pointer* model
+    (_scoped_fields, looked up server-side by UID/reference) can't cover
+    on its own. Reuses _scoped_fields rather than re-deriving "what's
+    critical" a second way, so the two can't drift apart.
+
+    Fixed truncation priority when the tag can't fit everything (most
+    life-threatening-to-miss first): blood type, then allergies, then
+    active medications, then conditions. A responder who at minimum
+    avoids the wrong blood product and a known severe allergic reaction
+    has covered the two highest-stakes mistakes even if nothing else
+    fits on a small tag. Returns (text, truncated) -- truncated is True
+    if ANY item had to be dropped to fit `max_bytes`."""
+    fields = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids)
+    parts: list = []
+    truncated = False
+
+    def _sanitize(text: str) -> str:
+        # `|` is this format's field separator with no escaping -- free-text
+        # clinical fields (substance/drug name/condition) could in principle
+        # contain one, which would otherwise silently corrupt the parse on
+        # the reading side (mobile_flutter's fromCompactTagText). Strip it;
+        # losing a literal pipe character from a name is a far smaller harm
+        # than misattributing which allergy/medication a value belongs to.
+        return text.replace("|", "/")
+
+    def _try_add(label: str, text: str) -> bool:
+        nonlocal truncated
+        text = _sanitize(text)
+        joined = "|".join(parts + [f"{label}:{text}"])
+        if len(joined.encode("utf-8")) > max_bytes:
+            truncated = True
+            return False
+        parts.append(f"{label}:{text}")
+        return True
+
+    if fields.get("blood_type"):
+        _try_add("BT", fields["blood_type"])
+    for a in fields.get("allergies", []):
+        if not _try_add("AL", f"{a['substance']}({a['severity']})"):
+            break
+    for m in fields.get("medications", []):
+        dose = f" {m['dosage']}" if m.get("dosage") else ""
+        if not _try_add("MED", f"{m['drug_name']}{dose}"):
+            break
+    for c in fields.get("conditions", []):
+        if not _try_add("COND", c):
+            break
+
+    return "|".join(parts), truncated
+
+
 def _resolved_discontinued_ids(db: Session, patient_id: str) -> "tuple[set, set]":
     """(resolved_condition_ids, discontinued_medication_ids) from the
     patient's append-only ClinicalRecordAnnotation rows -- threaded into
@@ -597,10 +661,25 @@ def register_nfc_card(
                detail=f"card_id={grant.id} last4={grant.nfc_uid_last4}",
                actor_facility=current_user.facility)
 
+    # tag_text: the compact, write-it-directly-onto-the-physical-tag
+    # fallback (see _build_compact_tag_text's own docstring for why this
+    # exists alongside the UID pointer above) -- computed with the SAME
+    # scope just granted, so the tag never carries more than the patient
+    # already consented to share via this card's pointer half. The
+    # registering app is expected to write this into an NDEF text record
+    # on the same physical tag right after this call returns.
+    resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, payload.patient_id)
+    max_bytes = payload.tag_max_bytes or _TAG_TEXT_MAX_BYTES_DEFAULT
+    tag_text, tag_text_truncated = _build_compact_tag_text(
+        patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, max_bytes,
+    )
+
     return {
         "id": grant.id,
         "nfc_uid_last4": grant.nfc_uid_last4,
         "scope": grant.scope,
+        "tag_text": tag_text,
+        "tag_text_truncated": tag_text_truncated,
         "grant_valid_until": grant.expires_at.isoformat(),
         "revoked": grant.revoked,
     }

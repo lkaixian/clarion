@@ -25,6 +25,13 @@ import 'queue_status_screen.dart';
 import 'reminders_screen.dart';
 import 'scan_checkin_screen.dart';
 import 'settings_screen.dart';
+import 'write_offline_tag_screen.dart';
+
+/// Same role set backend/app/routers/emergency.py::register_nfc_card
+/// requires for POST /emergency/nfc/register -- writing the offline tag
+/// text is a companion step to that same staff-only action, not a
+/// separately-decided permission.
+const _kNfcRegistrationRoles = {'admin', 'records_officer', 'clinician'};
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -135,6 +142,16 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (_) => const EmergencyScannerScreen()),
             ),
           ),
+          // Staff-only: writes the compact offline-fallback text (from the
+          // web console's NFC registration flow) onto a physical tag.
+          if (_kNfcRegistrationRoles.contains(auth.user?.role))
+            IconButton(
+              tooltip: l10n.writeOfflineTagTooltip,
+              icon: const Icon(Icons.nfc),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WriteOfflineTagScreen()),
+              ),
+            ),
           // Only meaningful for patient-role accounts — staff/clinician
           // accounts don't have a Patient record of their own to edit here.
           if (auth.user?.role == 'patient')
