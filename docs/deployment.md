@@ -986,6 +986,17 @@ docker compose --profile mariadb --profile observability up -d  # + mysqld-expor
   differently here -- worth recording so a future reviewer doesn't have to
   re-derive it (voltagent review, 2026-09-15). `web` stays `edge`-only, so
   the pre-existing web/edge <-> data-tier isolation is untouched.
+- **Go-live gate:** `grafana` is the one `observability`-profile service
+  that publishes a host port directly (`${GRAFANA_PORT:-3000}:3000`,
+  deliberate -- see the service's own comment in `docker-compose.yml`),
+  which is a deviation from `healthcare/On-Prem Architecture.md`'s "only the
+  proxy publishes" convention. Acceptable for a demo/single-host deploy
+  (profile-gated, `GRAFANA_ADMIN_PASSWORD` fails closed if unset, real
+  login required, no anonymous access) but re-check at a real multi-host
+  go-live: either firewall port 3000 to the ops network only, or front it
+  through the reverse proxy like everything else instead of a direct host
+  publish (confirmed live, 2026-09-16 test run: `healthcare/Test Suite Run
+  Report 2026-09-16.md` F-RUN-4).
 - **Prometheus** (`observability/prometheus.yml` + `alert.rules.yml`)
   scrapes `backend:8000/metrics`, `node-exporter:9100`, and
   `mysqld-exporter:9104` (only up with both `mariadb` + `observability`

@@ -1207,7 +1207,7 @@ def get_document_thumbnail(
     log_access(db, patient_id, current_user.id, current_user.role, "view_document_thumbnail",
                detail=document_id, actor_facility=current_user.facility)
 
-    etag = f'"{hashlib.sha1(thumb).hexdigest()}"'
+    etag = f'"{hashlib.sha1(thumb, usedforsecurity=False).hexdigest()}"'  # cache-freshness tag only, not a security use
     headers = {
         "ETag": etag,
         "X-Content-Type-Options": "nosniff",

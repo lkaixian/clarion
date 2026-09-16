@@ -455,7 +455,9 @@ def login(
     if user is None and ldap_eligible and ldap_auth.ldap_enabled():
         user = _jit_provision_ldap_user(db, form_data.username, form_data.password)
         if user is not None:
-            return _issue_login_response(db, response, user, fingerprint=fp)
+            result = _issue_login_response(db, response, user, fingerprint=fp)
+            log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
+            return result
         # Unknown to the directory, or authenticated but unmapped to any
         # role -- fall through to the same generic 401 as an unknown local
         # identifier (ldap_auth/_jit_provision_ldap_user already logged why).
@@ -493,7 +495,9 @@ def login(
                 user.login_locked_until = None
                 db.add(user)
                 db.commit()
-            return _issue_login_response(db, response, user, fingerprint=fp)
+            result = _issue_login_response(db, response, user, fingerprint=fp)
+            log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
+            return result
 
         # Same per-account lockout bookkeeping for an LDAP-backed account's
         # failed bind as for a local account's wrong password -- LDAP-backed
