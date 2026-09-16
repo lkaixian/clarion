@@ -1101,6 +1101,53 @@ downgrading every API call.
 
 ---
 
+## Offline NFC emergency tag (true zero-network fallback)
+
+Two independent things live on the same physical NFC card
+(`EmergencyToken`, `routers/emergency.py`):
+
+- **The pointer model** (existing): the tag's hardware UID is hashed
+  (`auth.hash_nfc_uid`, Security Audit M7) and looked up server-side on
+  every scan. Rich, revocable, fully audited -- but needs the backend
+  reachable. This also covers the QR/`card_reference` flow.
+- **The on-tag model** (new): a compact plaintext summary (blood type,
+  critical allergies, critical active medications, critical conditions —
+  in that truncation priority) written DIRECTLY onto the tag's own NDEF
+  memory. Readable by **any** standard NFC reader with **zero** network,
+  app, or server dependency -- the answer to "the entire backend is down,
+  not just the WAN link, can a responder still get anything." Not
+  revocable in real time (it's physically on the tag until rewritten) and
+  deliberately minimal -- no name/age, no non-critical items. That's an
+  accepted tradeoff for this specific fallback, not a bug.
+
+**Registration flow** (staff, same roles as today's NFC registration --
+admin/records_officer/clinician):
+1. Web console → Patient → "Register NFC Card" (unchanged) — now the
+   response includes `tag_text` (+ `tag_text_truncated` if it didn't all
+   fit). The prompt shown after registering walks staff through the next
+   step.
+2. On a phone running the CLARION app (staff role), open the NFC icon in
+   the Home app bar → **"Write Offline Tag"** → paste the text → tap the
+   SAME physical card. This is the one thing a desktop browser can't do
+   (generic NDEF write needs a phone's native NFC) -- see
+   `mobile_flutter/lib/services/nfc_service.dart`.
+
+**Reading it back**: the existing "Scan Emergency Card" → NFC mode
+already does this automatically -- one tap reads both the UID (tries the
+live server lookup first) and the on-tag text in the same session. If the
+live call fails with **no response at all** (a real connection failure,
+never a legitimate 404 "not registered") and on-tag text exists, the
+scanner falls back to it and shows a loud "OFFLINE — read directly from
+the card" banner. A live, reachable answer from the server always wins
+over the tag's own (possibly stale) copy.
+
+`tag_max_bytes` on the registration request lets the app pass the actual
+tapped tag's real NDEF capacity (`NdefAndroid.maxSize` -- NTAG213=144B,
+NTAG215=504B, NTAG216=888B); the backend default (128B) is conservative
+enough to fit the smallest common tag without it.
+
+---
+
 ## University SMP/SMS/e-klinik-panel/Registrar eligibility check -- MOCK
 
 SMP, SMS, and the e-klinik panel are campus-internal systems this environment

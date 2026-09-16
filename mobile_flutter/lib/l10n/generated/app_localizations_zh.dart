@@ -730,6 +730,48 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get scanResultOfflineBanner =>
+      '离线——直接从卡片读取，无网络连接。信息可能已过期；卡片上未存储姓名和年龄。';
+
+  @override
+  String get scanResultOfflinePlaceholderName => '持卡人（离线读取）';
+
+  @override
+  String get writeOfflineTagTooltip => '写入离线标签（仅限工作人员）';
+
+  @override
+  String get writeOfflineTagTitle => '写入离线标签';
+
+  @override
+  String get writeOfflineTagDesc =>
+      '在网页控制台注册 NFC 卡后，复制显示的文本，然后触碰同一张实体卡将其直接写入标签。写入后，该卡的关键信息可在无网络的情况下读取——通过本应用或任何标准 NFC 读卡器均可。';
+
+  @override
+  String get writeOfflineTagTextLabel => '离线标签文本';
+
+  @override
+  String get writeOfflineTagButton => '触碰卡片以写入';
+
+  @override
+  String get writeOfflineTagWriting => '将卡片贴近手机背面…';
+
+  @override
+  String get writeOfflineTagSuccess => '写入成功。此卡现已离线携带其关键信息。';
+
+  @override
+  String get writeOfflineTagNotNdef => '此标签不支持 NDEF——请尝试其他实体卡。';
+
+  @override
+  String get writeOfflineTagNotWritable => '此标签为只读（已锁定），无法写入。';
+
+  @override
+  String get writeOfflineTagTooLarge =>
+      '此文本对该标签的存储容量来说太大。请选择更少字段重新注册，或使用容量更大的标签。';
+
+  @override
+  String get writeOfflineTagWriteFailed => '写入标签失败。请重新触碰，并保持卡片稳定。';
+
+  @override
   String seniorBloodType(String type) {
     return '血型：$type';
   }

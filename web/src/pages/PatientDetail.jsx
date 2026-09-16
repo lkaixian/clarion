@@ -1715,8 +1715,26 @@ export default function PatientDetail() {
     const scope = (scopeInput || "").split(",").map((s) => s.trim()).filter(Boolean);
     setBusy("nfc");
     try {
-      await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"]);
+      const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"]);
       refresh();
+      // tag_text is the compact fallback meant to be written DIRECTLY onto
+      // the physical tag's own NDEF memory (readable with zero network —
+      // see app/campus_registry... no, app/routers/emergency.py's
+      // _build_compact_tag_text docstring) -- this pointer-based /register
+      // call can't write it itself (no browser API does generic NDEF write
+      // on desktop), so hand it to staff to carry to a phone running the
+      // CLARION app's "Write Offline Tag" screen (same physical card).
+      if (result?.tag_text) {
+        const note = result.tag_text_truncated
+          ? "\n\n(truncated to fit the tag — not everything critical fit)"
+          : "";
+        prompt(
+          "Card registered. To make this card readable with NO network at all, copy this " +
+          "text and write it to the SAME physical card from a phone: open the CLARION app, " +
+          "tap the NFC icon in the top bar (\"Write Offline Tag\" — staff only), paste, and tap." + note,
+          result.tag_text,
+        );
+      }
     } catch (e) {
       alert(e?.response?.data?.detail || "Failed to register NFC card.");
     } finally {

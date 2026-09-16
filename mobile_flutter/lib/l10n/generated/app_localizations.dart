@@ -1422,6 +1422,84 @@ abstract class AppLocalizations {
   /// **'+{count} more allergies on file, not shown here — not flagged as emergency-critical.'**
   String scanResultOmittedAllergies(int count);
 
+  /// No description provided for @scanResultOfflineBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'OFFLINE — read directly from the card, no network. May be outdated; name and age aren\'t stored on the card.'**
+  String get scanResultOfflineBanner;
+
+  /// No description provided for @scanResultOfflinePlaceholderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Card holder (offline read)'**
+  String get scanResultOfflinePlaceholderName;
+
+  /// No description provided for @writeOfflineTagTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Write Offline Tag (staff only)'**
+  String get writeOfflineTagTooltip;
+
+  /// No description provided for @writeOfflineTagTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Write Offline Tag'**
+  String get writeOfflineTagTitle;
+
+  /// No description provided for @writeOfflineTagDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the text shown after registering an NFC card on the web console, then tap the SAME physical card to write it directly onto the tag. Once written, that card\'s critical info can be read with zero network — by this app or any standard NFC reader.'**
+  String get writeOfflineTagDesc;
+
+  /// No description provided for @writeOfflineTagTextLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline tag text'**
+  String get writeOfflineTagTextLabel;
+
+  /// No description provided for @writeOfflineTagButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap card to write'**
+  String get writeOfflineTagButton;
+
+  /// No description provided for @writeOfflineTagWriting.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold the card against the back of the phone…'**
+  String get writeOfflineTagWriting;
+
+  /// No description provided for @writeOfflineTagSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Written. This card now carries its critical info offline.'**
+  String get writeOfflineTagSuccess;
+
+  /// No description provided for @writeOfflineTagNotNdef.
+  ///
+  /// In en, this message translates to:
+  /// **'This tag doesn\'t support NDEF — try a different physical card.'**
+  String get writeOfflineTagNotNdef;
+
+  /// No description provided for @writeOfflineTagNotWritable.
+  ///
+  /// In en, this message translates to:
+  /// **'This tag is read-only (locked) and can\'t be written to.'**
+  String get writeOfflineTagNotWritable;
+
+  /// No description provided for @writeOfflineTagTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'This text is too large for this tag\'s memory. Re-register with fewer fields selected, or use a higher-capacity tag.'**
+  String get writeOfflineTagTooLarge;
+
+  /// No description provided for @writeOfflineTagWriteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing to the tag failed. Try tapping again, holding the card steady.'**
+  String get writeOfflineTagWriteFailed;
+
   /// No description provided for @seniorBloodType.
   ///
   /// In en, this message translates to:

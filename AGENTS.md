@@ -503,6 +503,30 @@ built this pass) moved Gap → Partial. 543/543 backend tests pass (1
 skipped — `age` not installed), `npm run build`/`lint` clean. See
 `healthcare/Implementation Roadmap.md`'s changelog for the full detail.
 
+**Offline NFC emergency tag landed 2026-09-15/16**, answering a direct
+user question ("if the entire network is outage, can we retrieve
+emergency info offline using the NFC card?" — answer at the time was no,
+the existing flow only stored the tag's UID as a server-resolved lookup
+key). Two rejected design directions first (a bulk UID→patient export
+would have meant reversing the M7 "never persist the raw UID" fix or
+shipping the server's HMAC secret to every phone), then the real ask
+clarified ("if the entire infrastructure is down... only the most basic
+emergency information") — landed as the standard medical-alert-tag
+pattern: critical data (blood type/allergies/meds/conditions, fixed
+truncation priority) written DIRECTLY onto the physical tag's own NDEF
+memory via a new `write_offline_tag_screen.dart` (staff-only,
+`mobile_flutter`), read back with zero network by the existing scanner
+screen's already-built NFC-tap mode (falls back to on-tag text only on a
+genuine no-response network failure, never a real 404, verified against
+`api_exception.dart`). `register_nfc_card`'s response now returns the
+compact `tag_text` for staff to carry to a phone and write. Self-caught +
+fixed a real bug (the compact format's `|` separator had no escaping).
+The voltagent review agent stalled twice and wasn't retried further;
+self-reviewed the two highest-risk points (offline-trigger correctness,
+NDEF wire-format correctness) directly against source instead. 548/548
+backend tests pass, `flutter analyze`/`npm run build` clean. See
+`healthcare/Implementation Roadmap.md`'s changelog for full detail.
+
 Remaining backlog: P4.7's real-hardware Modality Worklist gap (deploy-time,
 not buildable here), the RustFS migration off MinIO (deliberately
 deferred), a REAL SMP/SMS/e-klinik/Registrar integration (still needs

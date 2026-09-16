@@ -768,6 +768,53 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get scanResultOfflineBanner =>
+      'OFFLINE — read directly from the card, no network. May be outdated; name and age aren\'t stored on the card.';
+
+  @override
+  String get scanResultOfflinePlaceholderName => 'Card holder (offline read)';
+
+  @override
+  String get writeOfflineTagTooltip => 'Write Offline Tag (staff only)';
+
+  @override
+  String get writeOfflineTagTitle => 'Write Offline Tag';
+
+  @override
+  String get writeOfflineTagDesc =>
+      'Paste the text shown after registering an NFC card on the web console, then tap the SAME physical card to write it directly onto the tag. Once written, that card\'s critical info can be read with zero network — by this app or any standard NFC reader.';
+
+  @override
+  String get writeOfflineTagTextLabel => 'Offline tag text';
+
+  @override
+  String get writeOfflineTagButton => 'Tap card to write';
+
+  @override
+  String get writeOfflineTagWriting =>
+      'Hold the card against the back of the phone…';
+
+  @override
+  String get writeOfflineTagSuccess =>
+      'Written. This card now carries its critical info offline.';
+
+  @override
+  String get writeOfflineTagNotNdef =>
+      'This tag doesn\'t support NDEF — try a different physical card.';
+
+  @override
+  String get writeOfflineTagNotWritable =>
+      'This tag is read-only (locked) and can\'t be written to.';
+
+  @override
+  String get writeOfflineTagTooLarge =>
+      'This text is too large for this tag\'s memory. Re-register with fewer fields selected, or use a higher-capacity tag.';
+
+  @override
+  String get writeOfflineTagWriteFailed =>
+      'Writing to the tag failed. Try tapping again, holding the card steady.';
+
+  @override
   String seniorBloodType(String type) {
     return 'BLOOD TYPE: $type';
   }

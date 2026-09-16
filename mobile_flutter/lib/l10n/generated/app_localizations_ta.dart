@@ -776,6 +776,55 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String get scanResultOfflineBanner =>
+      'ஆஃப்லைன் — கார்டிலிருந்து நேரடியாகப் படிக்கப்பட்டது, நெட்வொர்க் இல்லை. காலாவதியாக இருக்கலாம்; பெயரும் வயதும் கார்டில் சேமிக்கப்படவில்லை.';
+
+  @override
+  String get scanResultOfflinePlaceholderName =>
+      'கார்டு வைத்திருப்பவர் (ஆஃப்லைன் வாசிப்பு)';
+
+  @override
+  String get writeOfflineTagTooltip =>
+      'ஆஃப்லைன் டேக் எழுதவும் (பணியாளர் மட்டும்)';
+
+  @override
+  String get writeOfflineTagTitle => 'ஆஃப்லைன் டேக் எழுதவும்';
+
+  @override
+  String get writeOfflineTagDesc =>
+      'வலை பணியகத்தில் NFC கார்டை பதிவு செய்த பிறகு காட்டப்படும் உரையை ஒட்டவும், பின்னர் அதே பௌதீக கார்டைத் தொட்டு நேரடியாக டேக்கில் எழுதவும். எழுதப்பட்டதும், அந்த கார்டின் முக்கிய தகவல்களை நெட்வொர்க் இல்லாமல் — இந்த ஆப்பாலோ எந்த நிலையான NFC ரீடராலோ — படிக்க முடியும்.';
+
+  @override
+  String get writeOfflineTagTextLabel => 'ஆஃப்லைன் டேக் உரை';
+
+  @override
+  String get writeOfflineTagButton => 'எழுத கார்டைத் தொடவும்';
+
+  @override
+  String get writeOfflineTagWriting =>
+      'தொலைபேசியின் பின்பக்கத்தில் கார்டைப் பிடிக்கவும்…';
+
+  @override
+  String get writeOfflineTagSuccess =>
+      'எழுதப்பட்டது. இந்த கார்டு இப்போது அதன் முக்கிய தகவல்களை ஆஃப்லைனில் கொண்டுள்ளது.';
+
+  @override
+  String get writeOfflineTagNotNdef =>
+      'இந்த டேக் NDEF ஐ ஆதரிக்கவில்லை — வேறு பௌதீக கார்டை முயற்சிக்கவும்.';
+
+  @override
+  String get writeOfflineTagNotWritable =>
+      'இந்த டேக் படிக்க மட்டும் (பூட்டப்பட்டது), எழுத முடியாது.';
+
+  @override
+  String get writeOfflineTagTooLarge =>
+      'இந்த உரை இந்த டேக்கின் நினைவகத்திற்கு மிகப் பெரியது. குறைவான புலங்களுடன் மீண்டும் பதிவு செய்யவும், அல்லது அதிக கொள்ளளவு கொண்ட டேக்கைப் பயன்படுத்தவும்.';
+
+  @override
+  String get writeOfflineTagWriteFailed =>
+      'டேக்கில் எழுதுவது தோல்வியடைந்தது. மீண்டும் தொட்டு முயற்சிக்கவும், கார்டை உறுதியாகப் பிடிக்கவும்.';
+
+  @override
   String seniorBloodType(String type) {
     return 'இரத்த வகை: $type';
   }

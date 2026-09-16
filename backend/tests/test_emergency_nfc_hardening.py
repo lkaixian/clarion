@@ -245,3 +245,116 @@ def test_different_cards_do_not_cross_trigger_anomaly(test_client, db_session, m
         .filter_by(action="emergency_card_scan_anomaly", patient_id=patient.id)
         .count() == 0
     )
+
+
+# --------------------------------------------------------------------------
+# Offline NFC-tag fallback (P5.x follow-up): the register response now
+# includes a compact `tag_text` meant to be written DIRECTLY onto the
+# physical tag's own NDEF memory, so a responder can still read blood
+# type / allergies / meds with ZERO network (not just when the WAN link
+# specifically is down, but the whole backend). See
+# routers/emergency.py::_build_compact_tag_text's own docstring.
+# --------------------------------------------------------------------------
+
+def test_register_response_includes_tag_text(test_client, db_session, make_user, auth_headers):
+    staff = make_user(role="clinician", facility="H7")
+    patient = _patient(db_session, full_name="M7 TagText", blood_type="O+")
+    _present(db_session, patient, "H7")
+    db_session.add(models.AllergyIntolerance(
+        patient_id=patient.id, substance="Penicillin", severity="severe", critical_for_emergency=True,
+    ))
+    db_session.commit()
+
+    resp = _register(test_client, auth_headers, staff, patient.id, _uid())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["tag_text"] == "BT:O+|AL:Penicillin(severe)"
+    assert body["tag_text_truncated"] is False
+
+
+def test_register_response_omits_non_critical_and_non_scoped_items(test_client, db_session, make_user, auth_headers):
+    """Only critical_for_emergency items make it onto the tag, and only
+    for categories actually in the requested scope -- same rules the
+    online _scoped_fields already enforces, reused not re-derived."""
+    staff = make_user(role="clinician", facility="H8")
+    patient = _patient(db_session, full_name="M7 ScopeCheck", blood_type="A-")
+    _present(db_session, patient, "H8")
+    db_session.add_all([
+        models.AllergyIntolerance(
+            patient_id=patient.id, substance="Pollen", severity="mild", critical_for_emergency=False,
+        ),
+        models.MedicationStatement(
+            patient_id=patient.id, drug_name="Paracetamol", active=True, critical_for_emergency=True,
+        ),
+    ])
+    db_session.commit()
+
+    resp = test_client.post(
+        "/emergency/nfc/register",
+        headers=auth_headers(staff),
+        json={"patient_id": patient.id, "nfc_uid": _uid(), "scope": ["allergies", "blood_type"]},
+    )
+    assert resp.status_code == 200, resp.text
+    # medications not in scope -> never appears; the mild allergy isn't
+    # critical -> also never appears. Only blood type makes it on.
+    assert resp.json()["tag_text"] == "BT:A-"
+
+
+def test_tag_text_truncates_to_the_requested_capacity_and_flags_it(test_client, db_session, make_user, auth_headers):
+    staff = make_user(role="clinician", facility="H9")
+    patient = _patient(db_session, full_name="M7 Truncate", blood_type="AB+")
+    _present(db_session, patient, "H9")
+    db_session.add_all([
+        models.AllergyIntolerance(
+            patient_id=patient.id, substance="Penicillin", severity="severe", critical_for_emergency=True,
+        ),
+        models.AllergyIntolerance(
+            patient_id=patient.id, substance="Sulfa Drugs", severity="severe", critical_for_emergency=True,
+        ),
+    ])
+    db_session.commit()
+
+    # Tiny tag (schema floor is 16) -- fits "BT:AB+" but not the first
+    # allergy on top of it.
+    resp = test_client.post(
+        "/emergency/nfc/register",
+        headers=auth_headers(staff),
+        json={"patient_id": patient.id, "nfc_uid": _uid(), "tag_max_bytes": 16},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["tag_text"] == "BT:AB+"
+    assert body["tag_text_truncated"] is True
+
+
+def test_tag_text_sanitizes_the_field_separator_out_of_free_text(test_client, db_session, make_user, auth_headers):
+    """`|` is the compact format's own field separator with no escaping --
+    a substance name that happened to contain one would otherwise corrupt
+    the parse on the mobile reading side."""
+    staff = make_user(role="clinician", facility="H11")
+    patient = _patient(db_session, full_name="M7 PipeChar")
+    _present(db_session, patient, "H11")
+    db_session.add(models.AllergyIntolerance(
+        patient_id=patient.id, substance="Foo|Bar", severity="severe", critical_for_emergency=True,
+    ))
+    db_session.commit()
+
+    resp = _register(test_client, auth_headers, staff, patient.id, _uid())
+    assert resp.status_code == 200, resp.text
+    # The stray "|" became "/" -- had it survived, this would parse back
+    # (mobile_flutter's fromCompactTagText) as two separate fields instead
+    # of one allergy.
+    assert resp.json()["tag_text"] == "AL:Foo/Bar(severe)"
+
+
+def test_tag_max_bytes_out_of_range_is_rejected(test_client, db_session, make_user, auth_headers):
+    staff = make_user(role="clinician", facility="H10")
+    patient = _patient(db_session, full_name="M7 BadBytes")
+    _present(db_session, patient, "H10")
+
+    resp = test_client.post(
+        "/emergency/nfc/register",
+        headers=auth_headers(staff),
+        json={"patient_id": patient.id, "nfc_uid": _uid(), "tag_max_bytes": 4},
+    )
+    assert resp.status_code == 422

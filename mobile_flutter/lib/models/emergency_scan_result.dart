@@ -99,4 +99,61 @@ class EmergencyScanResult {
         omittedNonCritical: (json['omitted_non_critical'] as Map<String, dynamic>? ?? {})
             .map((key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0)),
       );
+
+  /// Parses the compact `BT:..|AL:sub(sev)|MED:name dose|COND:name` text
+  /// written directly onto a physical NFC tag by
+  /// `backend/app/routers/emergency.py::_build_compact_tag_text` (see that
+  /// function's docstring) -- the true offline fallback, read with zero
+  /// network via `NfcService.readTagOnce`.
+  ///
+  /// Deliberately degraded vs. [fromJson]: there's no name/age on the tag
+  /// (byte budget went to allergies/meds/blood type instead -- see the
+  /// backend's own truncation-priority comment), and a medication's
+  /// dosage/frequency isn't split back out of its single compact string
+  /// (both land in `drugName` together) since there's no reliable
+  /// delimiter to un-join them. That's an accepted, documented loss of
+  /// fidelity for the "the entire backend is unreachable" case, not a bug
+  /// -- the online path ([fromJson]) is always preferred when reachable.
+  factory EmergencyScanResult.fromCompactTagText(String text, {required String placeholderName}) {
+    String? bloodType;
+    final allergies = <ScanAllergy>[];
+    final medications = <ScanMedication>[];
+    final conditions = <String>[];
+    final allergySeverityPattern = RegExp(r'^(.*)\(([^()]*)\)$');
+
+    for (final part in text.split('|')) {
+      final sep = part.indexOf(':');
+      if (sep < 0) continue;
+      final label = part.substring(0, sep);
+      final value = part.substring(sep + 1).trim();
+      if (value.isEmpty) continue;
+      switch (label) {
+        case 'BT':
+          bloodType = value;
+          break;
+        case 'AL':
+          final match = allergySeverityPattern.firstMatch(value);
+          allergies.add(
+            match != null
+                ? ScanAllergy(substance: match.group(1)!.trim(), severity: match.group(2)!.trim())
+                : ScanAllergy(substance: value, severity: ''),
+          );
+          break;
+        case 'MED':
+          medications.add(ScanMedication(drugName: value));
+          break;
+        case 'COND':
+          conditions.add(value);
+          break;
+      }
+    }
+
+    return EmergencyScanResult(
+      fullName: placeholderName,
+      bloodType: bloodType,
+      allergies: allergies,
+      medications: medications,
+      conditions: conditions,
+    );
+  }
 }

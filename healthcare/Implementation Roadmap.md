@@ -23,6 +23,88 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-15/16 — Offline NFC emergency tag: true zero-network fallback
+
+User question after the P5.3 review: "if the entire network is outage,
+can we retrieve emergency info offline using the NFC card?" **Answer at
+the time: no** — the existing NFC flow only ever stored the tag's UID as
+a lookup KEY (`auth.hash_nfc_uid`, Security Audit M7), resolved
+server-side on every scan; a total backend outage (not just the Branch
+WAN link P5.3 covers) breaks it exactly like the QR flow. Asked what they
+actually needed: "if the entire infrastructure is down and broken, how
+does a first responder still retrieve info offline, with only the most
+basic emergency information" — the standard medical-alert-tag pattern:
+write the critical data DIRECTLY onto the physical tag's own memory.
+
+Two earlier design directions were explicitly walked back before landing
+on this one, both flagged to the user rather than built silently: (1) a
+bulk facility-wide UID→patient export for the phone turned out to
+require either reversing M7's "never persist the raw UID" fix or shipping
+the server's OTP/NFC-hash HMAC secret onto every field phone — both
+rejected; (2) a narrower "cache what this device already scanned online"
+design was floated but superseded once the user clarified they meant
+total-infrastructure-down resilience, not just this-device convenience.
+
+**Landed:**
+- `backend/app/routers/emergency.py::_build_compact_tag_text` — reuses
+  `_scoped_fields` (no second "what's critical" derivation to drift from
+  the first) to build an ultra-compact `BT:..|AL:sub(sev)|MED:name
+  dose|COND:name` string, fixed truncation priority (blood type >
+  allergies > medications > conditions) when it doesn't fit the tag.
+  `register_nfc_card`'s existing response (unchanged role gate: admin/
+  records_officer/clinician) now also returns `tag_text` +
+  `tag_text_truncated`; a new `tag_max_bytes` request field (schema-
+  validated 16–8192) lets the caller pass the physical tag's real NDEF
+  capacity once it's been tapped, default 128B fits the smallest common
+  tag (NTAG213, 144B usable) conservatively.
+- `mobile_flutter/lib/services/nfc_service.dart` — `readTagOnce` (one tap
+  now returns both the UID AND whatever offline text is already on the
+  tag) and `writeNdefText` (a correct NFC Forum RTD_TEXT record: status
+  byte + language code + UTF-8 text, hand-verified against the spec byte
+  layout since no convenience helper exists in `ndef_record` 1.4.2).
+- `emergency_scanner_screen.dart`: the NFC-tap scan now falls back to the
+  tag's own on-card text ONLY when `ApiException.statusCode == null` —
+  traced through `api_exception.dart`'s `fromDioException` to confirm
+  that's exclusively Dio's no-response-ever-arrived cases
+  (timeout/connectionError), never a real 404 "not registered" from a
+  reachable server. A loud "OFFLINE — read directly from the card"
+  banner marks the result so a responder never mistakes it for a live
+  answer.
+- NEW `write_offline_tag_screen.dart`, staff-only (same role set as
+  registration), reachable from a new Home app-bar icon — pastes the
+  `tag_text` from the web console's registration flow (which now shows
+  it in the same `prompt()` UI style as everything else on that page)
+  and writes it to the same physical card. Deliberately NOT a second
+  patient-search UI on mobile — registration (who/what scope) stays on
+  the web console; this only adds the one thing a desktop browser can't
+  do (real NDEF write needs a phone's native NFC).
+
+**Self-caught before review:** the compact format's `|` field separator
+has no escaping — a substance/drug/condition name containing one would
+have silently corrupted the parse on the reading side. Fixed with a
+`_sanitize()` pass (strips `|`→`/`) before joining, regression test
+added (`test_tag_text_sanitizes_the_field_separator_out_of_free_text`).
+
+**Review note:** a voltagent security-auditor pass was attempted but
+stalled (no progress for 600s, environment issue not a code finding) and
+was not retried a second time. Self-reviewed the two highest-risk points
+directly against source instead: the offline-fallback trigger condition
+(traced `api_exception.dart` end-to-end, confirmed `statusCode == null`
+cannot coincide with a real server answer) and the NDEF Text record wire
+format (status-byte bit layout, language-code length field, UTF-8
+selection — all verified against the NFC Forum RTD_TEXT spec by hand).
+14/14 new/changed tests in `test_emergency_nfc_hardening.py` pass,
+548/548 full backend suite passes (1 skipped, no `age` binary on this
+machine), `flutter analyze` clean (10 pre-existing unrelated info-level
+lints only), `npm run build`/`lint` clean.
+
+Not done, deliberately: on-tag data can't be revoked in real time once
+written (physically on the card until rewritten) and carries no
+name/age/audit trail for an offline read — both accepted, documented
+tradeoffs of this specific fallback, not gaps to close later. Full
+detail: `docs/deployment.md`'s "Offline NFC emergency tag" section,
+`docs/exhibition-demo-script.md`'s Q&A.
+
 ### 2026-09-15 — P4.8 follow-up: working University SMP/SMS/e-klinik-panel/Registrar eligibility MOCK
 
 With every P0–P5 roadmap row statused, asked the user what to pick up
