@@ -37,7 +37,7 @@ from ..clinical_access import (
 from .auth_router import _resolve_patient_by_nric
 from .appointments import _booked_times_for_clinician, _clinicians_for
 from ..appointments import compute_available_slots
-from .profile import save_signature_from_b64, copy_signature_snapshot
+from .profile import save_signature_from_b64, copy_signature_snapshot, photo_response
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -336,9 +336,39 @@ def list_booking_options(
     return schemas.BookingOptionsOut(
         departments=departments,
         clinicians=[
-            schemas.BookingClinicianOut(id=c.id, full_name=c.full_name, department=c.section)
+            schemas.BookingClinicianOut(
+                id=c.id, full_name=c.full_name, department=c.section,
+                bio=c.bio, has_photo=bool(c.photo_object_key),
+            )
             for c in clinicians
         ],
+    )
+
+
+@router.get("/clinicians/{clinician_id}/photo")
+def get_clinician_photo(
+    clinician_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """A clinician's profile photo for the self-booking picker (P3.10).
+    Deliberately as open as GET /booking-options above (any authenticated
+    user, patients included) -- this is the PUBLIC half of the profile
+    photo feature; see routers/profile.py::get_staff_photo for the
+    facility-scoped colleague-only version. Only ever serves a role="clinician"
+    row -- never leaks another staff member's photo through this path."""
+    target = (
+        db.query(models.User)
+        .filter(models.User.id == clinician_id, models.User.role == "clinician")
+        .first()
+    )
+    if target is None or not target.photo_object_key:
+        raise HTTPException(status_code=404, detail="Photo not found.")
+
+    return photo_response(
+        target.photo_object_key,
+        sha256=target.photo_sha256,
+        not_found_detail="Photo not found.",
     )
 
 

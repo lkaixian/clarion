@@ -315,6 +315,13 @@ def _attach_has_signature(user: models.User) -> models.User:
     return user
 
 
+def _attach_has_photo(user: models.User) -> models.User:
+    """Same technique as _attach_has_signature above, for
+    schemas.UserOut.has_photo / models.User.photo_object_key."""
+    user.has_photo = bool(getattr(user, "photo_object_key", None))
+    return user
+
+
 # ---------- Session / refresh tokens (P2.5, Security Audit M4) ----------
 _REFRESH_COOKIE_NAME = "clarion_refresh_token"
 
@@ -398,6 +405,7 @@ def _issue_login_response(
     _with_missing_profile_fields(user)
     _attach_allowed_pages(db, user)
     _attach_has_signature(user)
+    _attach_has_photo(user)
     return schemas.Token(access_token=token, user=user, refresh_token=refresh_plaintext)
 
 
@@ -585,6 +593,7 @@ def me(
     _with_missing_profile_fields(current_user)
     _attach_allowed_pages(db, current_user)
     _attach_has_signature(current_user)
+    _attach_has_photo(current_user)
     return current_user
 
 

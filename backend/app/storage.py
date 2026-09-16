@@ -55,6 +55,7 @@ from typing import Iterator, Optional
 BUCKET_DOCUMENTS = "clarion-documents"          # clinical-document originals
 BUCKET_SIGNATURES = "clarion-signatures"        # staff signatures + per-record snapshots
 BUCKET_MEDICINE = "clarion-medicine"            # medicine photos
+BUCKET_STAFF_PHOTOS = "clarion-staff-photos"    # staff profile photos
 BUCKET_DERIVED = "clarion-derived"              # thumbnails / normalised images (P1.7) — no backup
 BUCKET_SCRATCH = "clarion-scratch"              # OCR / NRIC photos — 7-day expiry
 BUCKET_DICOM = "clarion-dicom"                  # PACS objects (P4.7)
@@ -64,6 +65,7 @@ ALL_BUCKETS = (
     BUCKET_DOCUMENTS,
     BUCKET_SIGNATURES,
     BUCKET_MEDICINE,
+    BUCKET_STAFF_PHOTOS,
     BUCKET_DERIVED,
     BUCKET_SCRATCH,
     BUCKET_DICOM,

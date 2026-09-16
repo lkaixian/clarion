@@ -38,6 +38,7 @@ from ..database import get_db
 from ..audit import log_access
 from ..appointments import compute_reminder_offsets
 from ..clinical_access import _facility_known_patient_ids_select
+from .profile import _persist_photo
 from ..inventory import (
     _get_inventory_item_or_404,
     _serialize_inventory_item,
@@ -1653,6 +1654,9 @@ def list_staff_roster(
                 clocked_in=status.clocked_in,
                 since=status.since,
                 last_clock_out_at=status.last_clock_out_at,
+                bio=u.bio,
+                contact_email=u.contact_email,
+                has_photo=bool(u.photo_object_key),
             )
         )
     return results
@@ -1725,7 +1729,77 @@ def assign_staff_section(
         clocked_in=status.clocked_in,
         since=status.since,
         last_clock_out_at=status.last_clock_out_at,
+        bio=user.bio,
+        contact_email=user.contact_email,
+        has_photo=bool(user.photo_object_key),
     )
+
+
+@router.patch("/staff/{user_id}/profile", response_model=schemas.StaffRosterEntryOut)
+def update_staff_profile(
+    user_id: str,
+    payload: schemas.StaffProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Admin-edit a roster member's bio + internal contact email (full-
+    replace, same semantics as PUT /me/profile) -- HR-style correction on
+    top of the self-service version. Same facility-scoped non-leaking-404
+    as assign_staff_section above; never touches login/auth email."""
+    facility = _require_facility(current_user)
+    user = _get_roster_user_or_404(db, user_id, facility)
+
+    user.bio = payload.bio
+    user.contact_email = payload.contact_email
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    log_access(
+        db, None, current_user.id, current_user.role, "admin_update_staff_profile",
+        detail=f"user={user.email}", actor_facility=current_user.facility,
+    )
+
+    status = _get_clock_status(db, user.id)
+    return schemas.StaffRosterEntryOut(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        facility=user.facility,
+        section=user.section,
+        must_change_password=user.must_change_password,
+        clocked_in=status.clocked_in,
+        since=status.since,
+        last_clock_out_at=status.last_clock_out_at,
+        bio=user.bio,
+        contact_email=user.contact_email,
+        has_photo=bool(user.photo_object_key),
+    )
+
+
+@router.post("/staff/{user_id}/photo")
+def upload_staff_photo(
+    user_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Admin uploads (overwrites) a roster member's profile photo -- e.g.
+    an official ID photo taken at onboarding. Shares _persist_photo with the
+    self-service POST /me/photo (routers/profile.py); same validation,
+    normalisation and storage. Same facility-scoped non-leaking-404 as the
+    rest of this router."""
+    facility = _require_facility(current_user)
+    user = _get_roster_user_or_404(db, user_id, facility)
+
+    _persist_photo(db, user, file)
+
+    log_access(
+        db, None, current_user.id, current_user.role, "admin_set_staff_photo",
+        detail=f"user={user.email}", actor_facility=current_user.facility,
+    )
+    return {"status": "ok", "has_photo": True}
 
 
 @router.get("/staff/{user_id}/clock-history", response_model=List[schemas.ClockEventOut])

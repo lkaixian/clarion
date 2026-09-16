@@ -8,6 +8,7 @@
         "arn:aws:s3:::clarion-documents", "arn:aws:s3:::clarion-documents/*",
         "arn:aws:s3:::clarion-signatures", "arn:aws:s3:::clarion-signatures/*",
         "arn:aws:s3:::clarion-medicine", "arn:aws:s3:::clarion-medicine/*",
+        "arn:aws:s3:::clarion-staff-photos", "arn:aws:s3:::clarion-staff-photos/*",
         "arn:aws:s3:::clarion-dicom", "arn:aws:s3:::clarion-dicom/*",
         "arn:aws:s3:::clarion-reports-archive", "arn:aws:s3:::clarion-reports-archive/*",
         "arn:aws:s3:::clarion-scratch", "arn:aws:s3:::clarion-scratch/*"

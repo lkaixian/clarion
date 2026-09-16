@@ -29,15 +29,18 @@ read of a colleague's signature for rendering "signed by Dr X" thumbnails.
 """
 import base64
 import os
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
-from .. import models, auth
+from .. import models, auth, schemas
 from ..database import get_db
 from ..audit import log_access
+from ..imaging import ImageProcessingError, normalise_image, sniff_image_mime
 from ..storage import (
     BUCKET_SIGNATURES,
+    BUCKET_STAFF_PHOTOS,
     ObjectMeta,
     ObjectNotFound,
     ObjectStoreError,
@@ -244,4 +247,204 @@ def get_staff_signature(
         target.signature_object_key,
         sha256=target.signature_sha256,
         not_found_detail="Signature not found.",
+    )
+
+
+# ---------- Bio / contact email / profile photo ----------
+# Same "for yourself" posture as the signature endpoints above, plus the
+# matching admin-editing endpoints on routers/admin.py (PATCH
+# /admin/staff/{id}/profile, POST /admin/staff/{id}/photo) for a facility's
+# own roster. `bio` is PUBLIC (see routers/patients.py::list_booking_options
+# + GET /patients/clinicians/{id}/photo); `contact_email` stays
+# internal/staff-only, never surfaced there.
+
+PHOTO_MIME = "image/jpeg"  # normalise_image always re-encodes to JPEG
+
+# A profile photo is a single headshot, not a multi-page scan -- same
+# ceiling as a medicine packaging photo (inventory.py::MAX_MEDICINE_IMAGE_BYTES).
+MAX_PHOTO_BYTES = 2 * 1024 * 1024
+
+# content-type -> allowed extension. Declared type, extension and sniffed
+# magic bytes must all agree (same triple-check as the medicine-photo path
+# in app/inventory.py) before the bytes are even handed to normalise_image.
+_PHOTO_TYPES = {
+    "image/png": {".png"},
+    "image/jpeg": {".jpg", ".jpeg"},
+    "image/webp": {".webp"},
+    "image/heic": {".heic", ".heif"},  # iPhone default; always re-encoded to JPEG below
+}
+_PHOTO_SNIFF_OK = set(_PHOTO_TYPES)
+
+
+def photo_key_for_user(user_id: str) -> str:
+    return f"users/{user_id}.jpg"
+
+
+def _persist_photo(db: Session, user: models.User, file: UploadFile) -> None:
+    """Validate + normalise + persist an uploaded profile photo, best-effort
+    replacing any existing one. Shared by POST /me/photo and POST
+    /admin/staff/{id}/photo. Commits the row."""
+    enforce_upload_size(file, MAX_PHOTO_BYTES, "Photo")
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Empty file.")
+    if len(raw) > MAX_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Photo too large — max {MAX_PHOTO_BYTES // (1024 * 1024)}MB",
+        )
+
+    declared_type = (file.content_type or "").split(";")[0].strip().lower()
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    sniffed_type = sniff_image_mime(raw)
+    allowed_exts = _PHOTO_TYPES.get(declared_type)
+    if (
+        allowed_exts is None
+        or ext not in allowed_exts
+        or sniffed_type not in _PHOTO_SNIFF_OK
+        or sniffed_type != declared_type
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Photo must be a PNG, JPEG, WebP or HEIC file (content-type, extension and contents must all agree).",
+        )
+
+    # Strips EXIF/GPS, auto-orients, caps the long edge, re-encodes as JPEG --
+    # identical treatment to a medicine photo (P1.7). A profile photo is not
+    # a legal record, so overwriting the stored bytes on replace is fine.
+    try:
+        processed = normalise_image(raw)
+    except ImageProcessingError:
+        raise HTTPException(status_code=422, detail="Could not process that image. Try a different file.")
+
+    try:
+        meta = get_object_store().put(
+            BUCKET_STAFF_PHOTOS, photo_key_for_user(user.id), processed.data, mime=processed.mime
+        )
+    except (OSError, ValueError, ObjectStoreError):
+        raise HTTPException(status_code=500, detail="Could not store the photo. Try again.")
+
+    apply_object_meta(user, meta, "photo")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+
+def photo_response(key: Optional[str], *, sha256: Optional[str], not_found_detail: str) -> Response:
+    """Fetch a staff/clinician photo by key (integrity-checked against
+    `sha256`) and return it with a nosniff header. Public (no leading
+    underscore) -- shared with routers/patients.py::get_clinician_photo,
+    same reason save_signature_from_b64 is shared."""
+    if not key:
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    try:
+        data = get_object_store().get_checked(BUCKET_STAFF_PHOTOS, key, sha256)
+    except (ObjectNotFound, ValueError):
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    except ObjectStoreError:
+        raise HTTPException(status_code=503, detail="Photo storage is temporarily unavailable.")
+    return Response(
+        content=data,
+        media_type=PHOTO_MIME,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.put("/me/profile")
+def update_my_profile(
+    payload: schemas.MyProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Set (full-replace) the caller's own bio + internal contact email.
+    Never touches the login/auth email -- see schemas.MyProfileUpdate."""
+    current_user.bio = payload.bio
+    current_user.contact_email = payload.contact_email
+    db.add(current_user)
+    db.commit()
+
+    log_access(
+        db, None, current_user.id, current_user.role, "update_own_profile",
+        actor_facility=current_user.facility,
+    )
+    return {"status": "ok", "bio": current_user.bio, "contact_email": current_user.contact_email}
+
+
+@router.post("/me/photo")
+def upload_my_photo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Save (overwrite) the caller's own profile photo."""
+    _persist_photo(db, current_user, file)
+
+    log_access(
+        db, None, current_user.id, current_user.role, "set_profile_photo",
+        actor_facility=current_user.facility,
+    )
+    return {"status": "ok", "has_photo": True}
+
+
+@router.get("/me/photo")
+def get_my_photo(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    return photo_response(
+        current_user.photo_object_key,
+        sha256=current_user.photo_sha256,
+        not_found_detail="No photo saved.",
+    )
+
+
+@router.delete("/me/photo")
+def delete_my_photo(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    key = current_user.photo_object_key
+    apply_object_meta(current_user, None, "photo")
+    db.add(current_user)
+    db.commit()
+    if key:
+        try:
+            get_object_store().delete(BUCKET_STAFF_PHOTOS, key)
+        except OSError:
+            pass
+
+    log_access(
+        db, None, current_user.id, current_user.role, "clear_profile_photo",
+        actor_facility=current_user.facility,
+    )
+    return {"status": "ok", "has_photo": False}
+
+
+@router.get("/staff/{user_id}/photo")
+def get_staff_photo(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """A colleague's saved profile photo. Same facility-scoped, non-leaking-
+    404 posture as GET /staff/{user_id}/signature above. Patient-facing
+    access to a CLINICIAN's photo (the public-booking use case) is a
+    separate, deliberately-broader endpoint:
+    GET /patients/clinicians/{id}/photo."""
+    if current_user.role == "patient":
+        raise HTTPException(status_code=403, detail="Not available for patient accounts.")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if (
+        target is None
+        or not current_user.facility
+        or target.facility != current_user.facility
+        or not target.photo_object_key
+    ):
+        raise HTTPException(status_code=404, detail="Photo not found.")
+
+    return photo_response(
+        target.photo_object_key,
+        sha256=target.photo_sha256,
+        not_found_detail="Photo not found.",
     )

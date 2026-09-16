@@ -624,13 +624,13 @@ export const rejectRescheduleRequest = (patientId, appointmentId, requestId, pay
   client.post(`/patients/${patientId}/appointments/${appointmentId}/reschedule-requests/${requestId}/reject`, payload).then((r) => r.data);
 
 // --- Digital signatures + clinical-record sign-off (annotations) ---------
-// Every signature GET needs the same Bearer auth as the rest of this client,
-// so a bare <img src> can't fetch it — they're pulled as blobs and handed
-// back as object URLs (same pattern as getDocumentFileBlob / medicine
-// images). The caller owns revoking that URL when its component unmounts.
-// "No signature on file" is a deliberate 404 on the backend — resolve to
+// Every signature/photo GET needs the same Bearer auth as the rest of this
+// client, so a bare <img src> can't fetch it — they're pulled as blobs and
+// handed back as object URLs (same pattern as getDocumentFileBlob /
+// medicine images). The caller owns revoking that URL when its component
+// unmounts. "Not on file" is a deliberate 404 on the backend — resolve to
 // null in that one case so callers render an empty state, not an error.
-const signatureBlobUrl = (path) =>
+const authedBlobUrl = (path) =>
   client
     .get(path, { responseType: "blob" })
     .then((r) => URL.createObjectURL(r.data))
@@ -639,7 +639,7 @@ const signatureBlobUrl = (path) =>
       throw e;
     });
 
-export const getMySignatureBlob = () => signatureBlobUrl("/me/signature");
+export const getMySignatureBlob = () => authedBlobUrl("/me/signature");
 
 export const uploadMySignature = (blob) => {
   const form = new FormData();
@@ -653,10 +653,42 @@ export const uploadMySignature = (blob) => {
 
 export const deleteMySignature = () => client.delete("/me/signature").then((r) => r.data);
 
-export const getStaffSignatureBlob = (userId) => signatureBlobUrl(`/staff/${userId}/signature`);
+export const getStaffSignatureBlob = (userId) => authedBlobUrl(`/staff/${userId}/signature`);
+
+// --- Bio / internal contact email / profile photo ------------------------
+// Same blob-fetch pattern as the signature helpers above. `bio` is PUBLIC
+// (shown on a patient's self-booking clinician picker); `contact_email` is
+// internal-only and separate from the account's real login email.
+export const updateMyProfile = (payload) => client.put("/me/profile", payload).then((r) => r.data);
+
+export const getMyPhotoBlob = () => authedBlobUrl("/me/photo");
+
+export const uploadMyPhoto = (file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post("/me/photo", form, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
+
+export const deleteMyPhoto = () => client.delete("/me/photo").then((r) => r.data);
+
+export const getStaffPhotoBlob = (userId) => authedBlobUrl(`/staff/${userId}/photo`);
+
+// Admin editing a roster member's bio/contact_email/photo -- see
+// getStaffRoster/updateStaffMember above for the rest of the roster API.
+export const updateStaffProfile = (userId, payload) =>
+  client.patch(`/admin/staff/${userId}/profile`, payload).then((r) => r.data);
+export const uploadStaffPhoto = (userId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post(`/admin/staff/${userId}/photo`, form, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
 
 export const getAnnotationSignatureBlob = (patientId, annotationId) =>
-  signatureBlobUrl(`/patients/${patientId}/annotations/${annotationId}/signature`);
+  authedBlobUrl(`/patients/${patientId}/annotations/${annotationId}/signature`);
 
 export const getPatientAnnotations = (patientId) =>
   client.get(`/patients/${patientId}/annotations`).then((r) => r.data);
