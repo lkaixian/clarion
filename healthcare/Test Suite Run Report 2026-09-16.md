@@ -62,11 +62,14 @@ Per-case status + evidence is machine-readable: **`healthcare/testcases-security
 | # | Sev | Case | Finding | Suggested action |
 |---|---|---|---|---|
 | **F-RUN-1** | Medium (policy gap) | S-G-002 | `POST /ai/digitise/{patient_id}` **stores** a PE binary renamed `scan.jpg` (200, `raw_text="[OCR skipped: not an image format"`), same for broken-PNG (`"image failed safety"`). M5's *remediation wording* implies reject; actual posture = store-anything-but-process. No exec risk observed (served opaque), but WORM buckets may accumulate arbitrary binaries under patient records. | Either reject non-image/non-PDF with 4xx, or re-word the M5 closure note to "archived unprocessed". One-line gate in `digitise_document`. |
-| **F-RUN-2** | Low (CI hygiene) | I-T-001 | `ci/run.sh`'s **bandit hard gate is red** on current tree: `B104` `hl7_listener.py:163` (bind 0.0.0.0 — by design for MLLP) + `B324` `patients.py:1210`, `pharmacy.py:343` (SHA1 used for **ETag**, non-security). Docs claim all gates green; last full run predates P4.8/P1.7b. | `# nosec B104` + justification; `hashlib.sha1(..., usedforsecurity=False)`; re-run `ci/run.sh` incl. semgrep/osv/trivy on a box that has them. |
+| **F-RUN-2** | Low (CI hygiene) | I-T-001 | `ci/run.sh` **two hard gates are red**: ① bandit -ll exit 1 (`B104` `hl7_listener.py:163` bind 0.0.0.0 by design; `B324` ×2 ETag SHA1) ② osv-scanner exit≠0 (see F-RUN-8). ruff, semgrep (16 INFO `broad-except-pass` advisories filtered by the ERROR/WARNING gate → green), check_schema, pytest all GREEN. | `# nosec B104` + justification; `usedforsecurity=False`; bump pycryptodome; re-run `ci/run.sh` end-to-end. |
 | **F-RUN-3** | Info | S-A-006 | Access-token claims are `exp/sub/role` — **no `iat`**; TTL assertions still pass via pytest. | Add `iat` for session-age analytics if ever needed; harmless to leave. |
 | **F-RUN-4** | Info | S-H-006 / I-K-006 | `grafana` publishes `${GRAFANA_PORT:-3000}` to the host under the `observability` profile — deviation from the architecture note's "only the proxy publishes". Profile-gated + `GRAFANA_ADMIN_PASSWORD:?` required, so acceptable; must be re-checked at deploy. | Document in deployment.md go-live gates, or bind `127.0.0.1:3000`. |
 | **F-RUN-5** | Info | I-K-010 | All images are **tag**-pinned, none digest-pinned; offline `docker save`/registry + Docker secrets remain TODO (matches P1.11's own open items — not drift, just confirming). | Track under P1.11 leftovers. |
 | **F-RUN-6** | Info | S-J-009 | A successful staff login wrote **no** `audit_logs` row in the live DB (only explicit `log_access` call sites do). Intentional? anomaly/AI-audit features would benefit from login events. | Decide intent; if yes, add `log_access` on login success. |
+| **F-RUN-7** | Medium (CI supply) | I-T-001 | The repo's documented dev install `pip install -r requirements.txt -r requirements-dev.txt` is **UNRESOLVABLE today**: `requirements.txt` pins `wrapt==2.3.0`, `semgrep==1.176.1` requires `wrapt<2.0.0` (live uv resolution failure). P2.11's "all hard gates green" can't be reproduced via the documented path. Local workaround used: separate CI venv. | Reconcile the pin (allow wrapt<2 or bump semgrep when compatible); note in ci/README. |
+| **F-RUN-8** | High→triage | I-T-003 | osv-scanner (hard gate) live: **3 HIGH** — `ecdsa 0.19.2` PYSEC-2026-1325 (CVSS 7.4, **no fix**, python-jose dep — extends the SA-L1 family), `pycryptodome 3.9.9` PYSEC-2026-1811 (CVSS 7.1, **fixable → 3.19.1**, transitive via ldap3) — the latter is a NEW untriaged HIGH. | Bump/pin pycryptodome ≥3.19.1; record ecdsa as accepted residual next to L1. |
+| **F-RUN-9** | Medium | I-N/S-F hardening | trivy misconfig (soft gate): `DS-0002` **HIGH ×2 — backend and web Dockerfiles run as root** (no USER). Docker-on-Windows mitigates somewhat; tender OWASP/ASVS posture expects non-root. | Add `USER app` (non-root) to both Dockerfiles at next container pass (P1.11 leftovers). |
 
 **Re-confirmed documented residuals (not new):** `SA-L1` bcrypt 72-byte truncation —
 **live-confirmed collision** (two 74+-char passwords differing only after byte 72 both
@@ -81,6 +84,25 @@ authenticate). Everything else in the accepted-residuals register (`S-J-011`) st
 5. `I-P-*` — timed restore drill (RTO ≤ 4 h), PITR (RPO), pre-update gate, restic check --verify.
 6. `I-R-*` — branch-edge boot, https-scheme refusal, tc-netem WAN, appliance round-trip (needs `age`).
 7. `I-S-*` — Locust baseline, soak, audit-storm.
+
+## Toolchain installed during this session (all on D: per user request)
+
+| Tool | Version | Location | Unblocks |
+|---|---|---|---|
+| Backend venv (runtime deps) | py3.11 + all pins | `D:\CLARION\clarion\backend\.venv` | pytest/live-stack (used) |
+| CI venv (semgrep 1.176.1, locust 2.46.5, ruff, bandit, shellcheck-py, mitmproxy 12.2.3) | — | `D:\CLARION\tools\ci-venv` | I-T-001 ✓ran, S-E-003, loadtests |
+| osv-scanner | 2.6.0 | `D:\CLARION\tools\` | I-T-003 ✓ran → F-RUN-8 |
+| trivy (+ cached DBs) | 0.74.0 | `D:\CLARION\tools\` | I-T-003/I-N hardening ✓ran → F-RUN-9 |
+| age / age-keygen | 1.3.2 | `D:\CLARION\tools\` | I-F-005/006, I-R-006, un-skips 1 pytest |
+| restic | 0.19.1 | `D:\CLARION\tools\` | I-P-* backup/restore drills |
+| testssl.sh | latest | `D:\CLARION\tools\testssl.sh` | S-F-008/S-H-008 TLS probes |
+| Flutter stable | 3.47.4 | `D:\flutter` | I-T-007 release-signing |
+| **Docker Desktop** | latest (winget) | `C:\Program Files\Docker` | **53 BLOCKED(docker) cases** |
+| **WSL2 + Virtual Machine Platform** | enabled | system | Docker backend |
+
+`D:\CLARION\tools` added to user PATH. **A reboot is required** before WSL2/Docker
+will start (feature-enable pending). Note: Docker Desktop's VM data can be pointed to
+`D:` from Settings → Resources → Advanced → *Disk image location* on first launch.
 
 ## Method notes for future QA runs (self-inflicted traps, recorded so nobody repeats them)
 
