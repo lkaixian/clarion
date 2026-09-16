@@ -14,7 +14,7 @@ Covers the fix:
   * a staff read whose facility has no relationship to the patient is logged
     as `view_appointments_cross_facility`, not plain `view_appointments`.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app import models
 
@@ -37,7 +37,7 @@ def _make_creator(db_session):
     from app import auth as auth_module
 
     user = models.User(
-        email=f"appt-creator-{datetime.utcnow().timestamp()}@example.com",
+        email=f"appt-creator-{datetime.now(timezone.utc).replace(tzinfo=None).timestamp()}@example.com",
         hashed_password=auth_module.hash_password("TestPass123!"),
         full_name="Appt Creator",
         role="clinician",
@@ -53,7 +53,7 @@ def _make_appointment(db_session, patient, facility="Facility A"):
     appt = models.Appointment(
         patient_id=patient.id,
         facility_name=facility,
-        scheduled_at=datetime.utcnow() + timedelta(days=3),
+        scheduled_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3),
         reason="Cardiology follow-up",
         created_by=_make_creator(db_session).id,
     )

@@ -1,7 +1,7 @@
 import base64
 import io
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 
 import qrcode
@@ -47,7 +47,7 @@ def _age_from_dob(dob: "str | None", *, today: "date | None" = None) -> "int | N
     `today` is injectable for deterministic tests."""
     if not dob:
         return None
-    ref = today or datetime.utcnow().date()
+    ref = today or datetime.now(timezone.utc).replace(tzinfo=None).date()
     try:
         year, month, day = (int(p) for p in str(dob)[:10].split("-"))
         age = ref.year - year - ((ref.month, ref.day) < (month, day))
@@ -90,7 +90,7 @@ def _flag_nfc_scan_anomaly_if_needed(
     Runs on the (life-safety) scan path, so both queries are `.count()`
     (no row materialisation) and windowed on the indexed `timestamp`
     column."""
-    since = datetime.utcnow() - _NFC_SCAN_ANOMALY_WINDOW
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - _NFC_SCAN_ANOMALY_WINDOW
     marker = f"nfc_hash={nfc_hash[:16]}"
     windowed = db.query(models.AuditLog).filter(
         models.AuditLog.timestamp >= since,
@@ -419,7 +419,7 @@ def issue_emergency_card(
             models.EmergencyToken.patient_id == payload.patient_id,
             models.EmergencyToken.card_reference.isnot(None),
             models.EmergencyToken.revoked.is_(False),
-            models.EmergencyToken.expires_at > datetime.utcnow(),
+            models.EmergencyToken.expires_at > datetime.now(timezone.utc).replace(tzinfo=None),
         )
         .all()
     )
@@ -434,7 +434,7 @@ def issue_emergency_card(
         token=token_value,
         card_reference=card_reference,
         scope=payload.scope,
-        expires_at=datetime.utcnow() + timedelta(minutes=payload.valid_minutes),
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes),
     )
     db.add(grant)
     db.commit()
@@ -486,7 +486,7 @@ def scan_emergency_card(
         .filter(models.EmergencyToken.card_reference == payload.card_reference)
         .first()
     )
-    if not grant or grant.revoked or grant.expires_at < datetime.utcnow():
+    if not grant or grant.revoked or grant.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         # Failed scan (invalid/expired/revoked card_reference) -- no
         # patient_id available since the lookup itself failed
         # (AuditLog.patient_id is nullable for exactly this reason). Only
@@ -580,7 +580,7 @@ def get_current_card_status(
             models.EmergencyToken.patient_id == patient_id,
             models.EmergencyToken.card_reference.isnot(None),
             models.EmergencyToken.revoked.is_(False),
-            models.EmergencyToken.expires_at > datetime.utcnow(),
+            models.EmergencyToken.expires_at > datetime.now(timezone.utc).replace(tzinfo=None),
         )
         .order_by(models.EmergencyToken.created_at.desc())
         .first()
@@ -634,7 +634,7 @@ def register_nfc_card(
 
     if existing:
         existing.scope = payload.scope
-        existing.expires_at = datetime.utcnow() + timedelta(minutes=payload.valid_minutes)
+        existing.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes)
         existing.revoked = False
         existing.registered_by = current_user.id
         existing.nfc_uid_last4 = auth.nfc_uid_last4(payload.nfc_uid)
@@ -647,7 +647,7 @@ def register_nfc_card(
             nfc_uid=uid_hash,
             nfc_uid_last4=auth.nfc_uid_last4(payload.nfc_uid),
             scope=payload.scope,
-            expires_at=datetime.utcnow() + timedelta(minutes=payload.valid_minutes),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes),
             registered_by=current_user.id,
         )
         db.add(grant)
@@ -704,7 +704,7 @@ def scan_nfc_card(
         .filter(models.EmergencyToken.nfc_uid == uid_hash)
         .first()
     )
-    if not grant or grant.revoked or grant.expires_at < datetime.utcnow():
+    if not grant or grant.revoked or grant.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         # Failed scan -- see POST /emergency/scan above for why this is
         # logged with patient_id=None. The raw UID is never logged (M7).
         log_access(

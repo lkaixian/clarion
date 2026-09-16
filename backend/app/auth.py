@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -204,6 +204,17 @@ def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)
 
 
+def _epoch_utc(dt: datetime) -> float:
+    """Epoch seconds for a naive-UTC (this codebase's DB-timestamp
+    convention) or aware datetime alike. Plain `.timestamp()` on a naive
+    value reads it as LOCAL time, not UTC -- wrong in absolute terms, though
+    it happened to cancel out here because both create_access_token and
+    _resolve_current_user called it directly on the same naive convention.
+    Centralised so the two call sites can't drift apart and reintroduce a
+    real bug."""
+    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
+
+
 def create_access_token(
     data: dict,
     expires_delta: Optional[timedelta] = None,
@@ -221,10 +232,10 @@ def create_access_token(
     this call site doesn't have one to embed), which is exactly the
     backward-compatible "don't reject" case on the decode side."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.now(timezone.utc).replace(tzinfo=None) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     if password_changed_at is not None:
-        to_encode["pwd_changed_at"] = password_changed_at.timestamp()
+        to_encode["pwd_changed_at"] = _epoch_utc(password_changed_at)
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -268,7 +279,7 @@ def issue_refresh_token(
     row = models.RefreshToken(
         user_id=user.id,
         token_hash=_hash_refresh_token(plaintext),
-        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         client_fingerprint=fingerprint,
     )
     db.add(row)
@@ -286,7 +297,7 @@ def revoke_all_refresh_tokens_for_user(db: Session, user: "models.User") -> None
     db.query(models.RefreshToken).filter(
         models.RefreshToken.user_id == user.id,
         models.RefreshToken.revoked_at.is_(None),
-    ).update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+    ).update({"revoked_at": datetime.now(timezone.utc).replace(tzinfo=None)}, synchronize_session=False)
     db.commit()
 
 
@@ -316,7 +327,7 @@ def _is_concurrent_refresh_race(
     """
     if revoked_row.replaced_by_id is None or revoked_row.revoked_at is None:
         return False
-    if datetime.utcnow() - revoked_row.revoked_at > timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS):
+    if datetime.now(timezone.utc).replace(tzinfo=None) - revoked_row.revoked_at > timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS):
         return False
     if (
         revoked_row.client_fingerprint
@@ -380,7 +391,7 @@ def rotate_refresh_token(
         if row.user is not None:
             revoke_all_refresh_tokens_for_user(db, row.user)
         return None
-    if row.expires_at < datetime.utcnow():
+    if row.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         return None
 
     user = row.user
@@ -388,7 +399,7 @@ def rotate_refresh_token(
         return None
 
     new_plaintext, new_row = issue_refresh_token(db, user, fingerprint=presented_fingerprint)
-    row.revoked_at = datetime.utcnow()
+    row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     row.replaced_by_id = new_row.id
     db.add(row)
     db.commit()
@@ -404,7 +415,7 @@ def revoke_refresh_token(db: Session, raw_token: str) -> None:
     token_hash = _hash_refresh_token(raw_token)
     row = db.query(models.RefreshToken).filter(models.RefreshToken.token_hash == token_hash).first()
     if row is not None and row.revoked_at is None:
-        row.revoked_at = datetime.utcnow()
+        row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(row)
         db.commit()
 
@@ -460,7 +471,7 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
             # carries no watermark at all -- it necessarily predates that
             # change (see docstring above). Stale, reject.
             raise credentials_exception
-        if user.password_changed_at.timestamp() > float(token_pwd_changed_at):
+        if _epoch_utc(user.password_changed_at) > float(token_pwd_changed_at):
             raise credentials_exception
 
     # P5.1: bind once here (the single choke point every authenticated

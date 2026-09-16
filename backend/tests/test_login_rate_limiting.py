@@ -3,7 +3,7 @@ and the OTP/self-registration endpoints (previously all @limiter.exempt,
 with zero per-IP protection), plus the M1 lockout-counter-never-resets bug
 in auth_router.login().
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app import models
 from app.auth import LOGIN_MAX_ATTEMPTS
@@ -41,7 +41,7 @@ def test_lockout_counter_resets_after_lock_lapses_not_on_next_wrong_guess(
     # LOGIN_MAX_ATTEMPTS wrong guesses happened a while ago and the
     # cooldown has since passed).
     user.login_failed_count = LOGIN_MAX_ATTEMPTS
-    user.login_locked_until = datetime.utcnow() - timedelta(minutes=1)
+    user.login_locked_until = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
     db_session.add(user)
     db_session.commit()
 
@@ -70,7 +70,7 @@ def test_lockout_still_engages_after_a_full_new_run_of_wrong_guesses_post_lapse(
     still re-lock the account."""
     user = make_user(role="clinician", facility="Facility A")
     user.login_failed_count = LOGIN_MAX_ATTEMPTS
-    user.login_locked_until = datetime.utcnow() - timedelta(minutes=1)
+    user.login_locked_until = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
     db_session.add(user)
     db_session.commit()
 
@@ -84,7 +84,7 @@ def test_lockout_still_engages_after_a_full_new_run_of_wrong_guesses_post_lapse(
     db_session.expire_all()
     refreshed = db_session.query(models.User).filter_by(id=user.id).first()
     assert refreshed.login_locked_until is not None
-    assert refreshed.login_locked_until > datetime.utcnow()
+    assert refreshed.login_locked_until > datetime.now(timezone.utc).replace(tzinfo=None)
 
     locked_out = test_client.post(
         "/auth/login", data={"username": user.email, "password": user.plaintext_password}

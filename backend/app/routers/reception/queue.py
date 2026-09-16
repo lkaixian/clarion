@@ -1,6 +1,6 @@
 """The reception queue board + per-ticket actions (call / complete / cancel /
 assign-room) + a patient's own queue status."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
@@ -115,7 +115,7 @@ def complete_ticket(
         raise HTTPException(status_code=400, detail=f"Ticket is already '{ticket.status}'")
 
     ticket.status = "done"
-    ticket.completed_at = datetime.utcnow()
+    ticket.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(ticket)
 

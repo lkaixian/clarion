@@ -19,7 +19,7 @@ NULL (never overwrites a facility an operator has since changed by hand).
 
 Run once: python backfill_richer_demo_data.py
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.database import SessionLocal, engine, Base
 from app import models
@@ -204,7 +204,7 @@ def _has_ward(ward_name: str, facility: str) -> bool:
     )
 
 
-_now = datetime.utcnow()
+_now = datetime.now(timezone.utc).replace(tzinfo=None)
 _HOSPITAL = "Hospital Sejahtera"
 
 _inventory_seed = [

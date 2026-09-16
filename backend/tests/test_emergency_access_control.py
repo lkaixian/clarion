@@ -140,8 +140,8 @@ def test_revoke_and_status_also_facility_scoped(test_client, make_user, auth_hea
     card_reference = issued.json()["card_reference"]
 
     # Patient discharged -- no longer "present" at Facility A.
-    from datetime import datetime
-    db_session.query(models.Admission).filter_by(id=admission.id).update({"discharged_at": datetime.utcnow()})
+    from datetime import datetime, timezone
+    db_session.query(models.Admission).filter_by(id=admission.id).update({"discharged_at": datetime.now(timezone.utc).replace(tzinfo=None)})
     db_session.commit()
 
     status_resp = test_client.get(f"/emergency/current/{patient.id}", headers=auth_headers(clinician))

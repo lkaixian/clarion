@@ -36,7 +36,7 @@ import hashlib
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -112,7 +112,7 @@ def _debug_save_photo(kind: str, image_bytes: bytes, media_type: str) -> "Path |
         ext = "png" if "png" in (media_type or "") else "jpg"
         out_dir = Path(_DEBUG_SAVE_DIR)
         out_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}_{kind}.{ext}"
+        filename = f"{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d_%H%M%S_%f')}_{kind}.{ext}"
         image_path = out_dir / filename
         image_path.write_bytes(image_bytes)
         logger.debug("self_registration: debug-saved %s photo to %s", kind, image_path)
@@ -313,7 +313,7 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
     attempt = _get_or_reserve_attempt(db, patient, payload.email)
 
     if attempt is not None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         # OTP *request* rate limiting -- same rolling-window counter
         # semantics as auth_router.request_password_reset_otp, applied to
         # this SelfRegistrationAttempt row instead of a User row (no User
@@ -387,7 +387,7 @@ def verify_self_registration_otp(request: Request, payload: schemas.SelfRegister
     if not attempt or attempt.status != "pending_otp" or not attempt.otp_code_hash or not attempt.otp_expires_at:
         raise HTTPException(status_code=400, detail=_VERIFY_OTP_GENERIC_ERROR)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if now > attempt.otp_expires_at:
         # Expired -- clear it rather than leaving a stale hash guessable
         # indefinitely; caller must call /start again for a fresh code.
@@ -546,7 +546,7 @@ async def verify_self_registration_photos(
     if not attempt or attempt.status != "pending_photo":
         raise HTTPException(status_code=400, detail=_RESTART_REQUIRED_ERROR)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if not attempt.photo_verification_deadline or now >= attempt.photo_verification_deadline:
         raise HTTPException(
             status_code=400,

@@ -39,7 +39,7 @@ import io
 import json
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from .local_llm import generate_vision_text
@@ -90,7 +90,7 @@ def _resolve_dob_from_yymmdd(yymmdd: str) -> Optional[str]:
         return None
 
     yy, mm, dd = yymmdd[0:2], yymmdd[2:4], yymmdd[4:6]
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).replace(tzinfo=None).date()
     candidates = []
     for century in (2000, 1900):
         year = century + int(yy)

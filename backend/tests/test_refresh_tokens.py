@@ -187,7 +187,7 @@ def test_delayed_reuse_of_rotated_token_revokes_the_whole_chain(test_client, mak
     """Security-critical: reuse of an already-rotated token OUTSIDE the
     concurrent-tab grace window is still a compromise signal -- every
     refresh token for that user is revoked, not just the one reused."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     from app import auth
 
@@ -204,7 +204,7 @@ def test_delayed_reuse_of_rotated_token_revokes_the_whole_chain(test_client, mak
 
     # Age the revoked row past the grace window.
     old_hash = auth._hash_refresh_token(original_refresh)
-    stale = datetime.utcnow() - timedelta(seconds=auth.REFRESH_REUSE_GRACE_SECONDS + 60)
+    stale = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=auth.REFRESH_REUSE_GRACE_SECONDS + 60)
     db_session.query(models.RefreshToken).filter_by(token_hash=old_hash).update({"revoked_at": stale})
     db_session.commit()
 
