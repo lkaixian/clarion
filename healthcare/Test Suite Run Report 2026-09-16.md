@@ -104,6 +104,36 @@ authenticate). Everything else in the accepted-residuals register (`S-J-011`) st
 will start (feature-enable pending). Note: Docker Desktop's VM data can be pointed to
 `D:` from Settings → Resources → Advanced → *Disk image location* on first launch.
 
+## Tooling provisioned 2026-09-16 (post-run), all on D:
+
+| Tool | Version | Location | Unblocks |
+|---|---|---|---|
+| semgrep (CI-pinned 1.176.1) | 1.176.1 | `D:\CLARION\tools\ci-venv` | S-D-014, I-T-001 full gate |
+| locust | 2.46.5 | app `.venv` (pin-matched) | I-S-001 load runs |
+| ruff / bandit / shellcheck-py / pytest | current pins | app `.venv` | I-T-* |
+| trivy / osv-scanner / gitleaks / age / restic | 0.74.0 / 2.6.0 / 8.30.1 / 1.3.2 / 0.19.1 | `D:\CLARION\tools\bin` | I-T-003, I-P-*, F-* crypto drills |
+| testssl.sh | clone | `D:\CLARION\tools\testssl.sh` | S-F-010, S-H-010 TLS suites |
+| Flutter / Dart | 3.47.4 / 3.13.3 | `D:\CLARION\tools\flutter` | I-T-007 — first `flutter analyze` ran; enable Windows **Developer Mode** (`start ms-settings:developers`) for symlink-based plugin builds |
+| MariaDB native | 11.4.5 winx64 | `D:\CLARION\tools\db` | I-L-005 owed MariaDB runs, I-M-* pool tests |
+| Redis native | 8.10.1 winx64 | `D:\CLARION\tools\redis` | S-I-001 shared-counter (multi-process) |
+| mitmproxy | latest | app `.venv` | S-E-003 NIH payload capture |
+
+PATH persisted (user scope): `D:\CLARION\tools\bin`, `D:\CLARION\tools\flutter\bin`.
+
+**Still blocked:**
+- **Docker engine** — Docker Desktop 29.8.0 is *installed* but the VM cannot start:
+  `HypervisorPresent=False` (virtualisation off in firmware). Needs a UEFI reboot to enable
+  VT-x/AMD-V (then likely `wsl --install` from an admin shell). Unblocks the 53 `BLOCKED (docker)`
+  cases — bootstrap trio, edge/TLS/header/XFF probes, Redis/MinIO outage drills, backup restores,
+  branch-edge, WORM enforcement.
+- **MinIO native binary** — `dl.min.io` now returns **410 Gone** (upstream retired, matching
+  the vault's "MinIO is dead upstream" note); only the quay.io *container* images remain, so
+  MinIO-dependent cases also wait on virtualisation.
+- **LDAP server** for live AD drills — docker-only (e.g. `osixia/openldap`) ⇒ same gate.
+- **F-RUN-7 (new, low)** — `requirements-dev.txt` (semgrep 1.176.1 → `wrapt<2`) is
+  **incompatible with** `requirements.txt` (`wrapt==2.3.0`) in a single venv; CI/dev setup needs
+  two envs (as done here) or a semgrep bump. Repo hygiene note.
+
 ## Method notes for future QA runs (self-inflicted traps, recorded so nobody repeats them)
 
 - The agent/tooling layer **redacts literal password-looking values in payloads**
