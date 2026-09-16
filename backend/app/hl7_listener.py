@@ -160,7 +160,10 @@ def serve(host: str, port: int, session_factory) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--host", default="0.0.0.0")
+    # Binds all interfaces by design: the analyser is on a different host on
+    # the internal network, same reachability need as any HL7/DICOM/PACS
+    # service -- bandit's blanket-bind warning doesn't know that constraint.
+    ap.add_argument("--host", default="0.0.0.0")  # nosec B104
     ap.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = ap.parse_args()
 

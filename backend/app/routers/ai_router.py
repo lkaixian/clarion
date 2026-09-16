@@ -20,7 +20,7 @@ from ..ai.interactions import (
 from ..ai.ocr import extract_text_from_image, extract_structured_fields
 from ..storage import BUCKET_DOCUMENTS, ObjectStoreError, apply_object_meta, get_object_store, sanitize_filename
 from ..derived import enqueue_prime_thumbnail
-from ..imaging import ImageProcessingError, is_supported_image, validate_image_safe_to_decode
+from ..imaging import ImageProcessingError, is_pdf, is_supported_image, validate_image_safe_to_decode
 from ._uploads import enforce_upload_size, sniff_document_mime
 from .patients import _serialize_patient
 
@@ -204,10 +204,21 @@ async def digitise_document(
     # already built exactly that hardening for the medicine-photo and
     # document-preview paths, but this one bypassed it entirely, so e.g. a
     # crafted TIFF (the CVE-prone format P1.7 deliberately excludes) could
-    # still reach a raw Image.open() here. A non-image upload (a genuine
-    # PDF scan, most commonly) is NOT rejected -- OCR is simply skipped for
-    # it, same tolerant behavior as before; only the "is this superficially
-    # image-shaped" path is now safety-gated before any decode is attempted.
+    # still reach a raw Image.open() here. A genuine PDF scan is NOT
+    # rejected -- OCR is simply skipped for it, same tolerant behavior as
+    # before; only the "is this superficially image-shaped" path is
+    # safety-gated before any decode is attempted. Live QA run 2026-09-16
+    # (F-RUN-1, healthcare/Test Suite Run Report 2026-09-16.md) found this
+    # permissive fallback also silently ACCEPTED and stored anything else
+    # (e.g. a PE binary renamed .jpg) with a 200 -- reject those instead,
+    # they are neither an image nor a document format this endpoint exists
+    # to handle.
+    if not is_supported_image(file_bytes) and not is_pdf(file_bytes):
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported file format — upload an image or a PDF scan",
+        )
+
     if is_supported_image(file_bytes):
         try:
             await run_in_threadpool(validate_image_safe_to_decode, file_bytes)
@@ -228,7 +239,9 @@ async def digitise_document(
             finally:
                 os.unlink(tmp_path)
     else:
-        raw_text = "[OCR skipped: not an image format OCR supports — archived as-is]"
+        # Guaranteed a PDF here -- the guard above rejects anything that is
+        # neither a supported image nor a PDF.
+        raw_text = "[OCR skipped: PDF — archived unprocessed]"
     structured = extract_structured_fields(raw_text)
 
     doc = models.ClinicalDocument(

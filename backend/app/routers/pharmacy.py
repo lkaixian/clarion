@@ -340,7 +340,7 @@ def get_inventory_image_thumbnail(
         db, None, current_user.id, current_user.role, "view_medicine_thumbnail",
         detail=item.drug_name, actor_facility=facility,
     )
-    etag = f'"{hashlib.sha1(thumb).hexdigest()}"'
+    etag = f'"{hashlib.sha1(thumb, usedforsecurity=False).hexdigest()}"'  # cache-freshness tag only, not a security use
     headers = {
         "ETag": etag,
         "X-Content-Type-Options": "nosniff",

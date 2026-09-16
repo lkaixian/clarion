@@ -23,6 +23,65 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-09-16 — 3 findings fixed from the independent QA test suite's first run
+
+An independent QA pass (209 black-box cases, `healthcare/Security & Stability
+Test Suite.md`, run live against this system by separate tooling — see
+`healthcare/Test Suite Run Report 2026-09-16.md`) found 117 PASS, 20
+PARTIAL, 1 FAIL, 70 blocked pending Docker, plus 6 new findings (F-RUN-1..6)
+and live-reconfirmed the documented `SA-L1` bcrypt 72-byte residual. Picked
+up the FAIL and the two judgment-call findings the same day (asked the
+user on each; both took the recommended/stricter option):
+
+- **I-T-001 / F-RUN-2 (the one FAIL)** — `ci/run.sh`'s bandit hard gate was
+  actually red: `B104` on `hl7_listener.py`'s `--host=0.0.0.0` default (a
+  real, by-design MLLP-listener need, not a real finding) and `B324` x2 on
+  `patients.py`/`pharmacy.py`'s thumbnail `ETag` computation (SHA1 used
+  purely as a cache-freshness tag, never for security). Fixed with `# nosec
+  B104` (justification comment, not a bare suppression) and
+  `usedforsecurity=False` on both SHA1 calls. Docs had claimed all gates
+  green since before P4.8/P1.7b landed — now genuinely re-verified:
+  `bandit -q -r app -ll -x app/tests` exits 0.
+- **S-G-002 / F-RUN-1 (Medium)** — `POST /ai/digitise/{patient_id}` used to
+  silently STORE and 200 anything that wasn't image-shaped, including a
+  non-image/non-PDF file (e.g. a renamed executable) — OCR was just
+  skipped, the file still persisted. User chose "reject with 4xx" over
+  "just re-word the docs." Now rejects (422) anything that is neither
+  `is_supported_image()` nor `is_pdf()` before any persistence happens; a
+  genuine PDF (the documented, intentional tolerance — clinicians commonly
+  upload PDF scans) still passes through unchanged. New regression test
+  `test_neither_image_nor_pdf_upload_is_rejected`.
+- **S-J-009 / F-RUN-6 (Info)** — a successful login wrote no `audit_logs`
+  row at all. User chose to log it (strengthens P4.5's access-anomaly
+  detection). Added `log_access(..., "login_success", ...)` at both of
+  `login()`'s real success branches (password-verified — covers both local
+  and LDAP-resync, since both feed the same `password_ok` — and LDAP
+  JIT-provision), deliberately NOT inside the shared `_issue_login_response`
+  helper since that's also called by `POST /auth/refresh`, and a token
+  refresh is not a new login event. **voltagent security-auditor review**
+  caught one real ordering issue before this landed: the initial placement
+  called `log_access` *before* `_issue_login_response` instead of after,
+  breaking `audit.py`'s own documented "call last, after your own domain
+  work is committed" contract that every other call site in this file
+  follows — fixed by capturing `_issue_login_response`'s result first, then
+  logging, then returning it. Confirmed no RBAC/PHI issue (writes only the
+  authenticating user's own patient_id/facility, same shape as every other
+  call site) and no bypass of the F-RUN-1 fix (only one other
+  `ClinicalDocument` creation path exists, `generate_document`, and it
+  renders its own server-side PDF — never ingests arbitrary upload bytes).
+
+The other 3 findings (F-RUN-3 no `iat` JWT claim, F-RUN-5 tag- vs
+digest-pinned images) are informational/already-tracked, left as-is;
+**F-RUN-4** (grafana's direct host-port publish under the `observability`
+profile) got a go-live-gate note added to `docs/deployment.md` rather than
+a behavior change, since the direct publish is itself a deliberate,
+already-commented design choice, not an oversight. The QA suite's own CSV
+(`healthcare/testcases-security-stability.csv`) is left untouched — it's
+that specific run's dated, immutable snapshot; a future re-run of the full
+209-case suite is what would properly re-verify and re-date these rows, not
+a hand-edit standing in for one. 562/562 backend tests pass (561 baseline +
+1 new), `pyflakes` clean, bandit gate green.
+
 ### 2026-09-16 — Demo-topology support: separate on-prem GPU host for Ollama
 
 Follow-up on a direct question about running local AI (Qwen/MedGemma
