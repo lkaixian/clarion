@@ -20,6 +20,21 @@ class AppConfig extends ChangeNotifier {
 
   static const String _prefsKey = 'mb_api_base_url_override';
 
+  static const String _pinnedCertSha1 =
+      String.fromEnvironment('PINNED_CERT_SHA1', defaultValue: '');
+
+  /// Hex SHA-1 fingerprints of the backend's expected TLS leaf certificate,
+  /// comma-separated (list both old+new during a cert renewal window).
+  /// Empty (the default) means pinning is off -- same "supplied at deploy"
+  /// pattern as the backend's `CLARION_TLS_DIRECTIVE`/`LDAP_CA_CERT_FILE`.
+  /// See [ApiClient]'s constructor for where this is enforced and why it's
+  /// only checked against [compileTimeDefault], not a Settings override.
+  List<String> get pinnedCertSha1Fingerprints => _pinnedCertSha1
+      .split(',')
+      .map((s) => s.trim().toLowerCase().replaceAll(':', ''))
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
+
   String _baseUrl = _compileTimeDefault;
   bool _loaded = false;
 

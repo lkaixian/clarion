@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 
 import '../config/app_config.dart';
 import '../models/booking.dart';
@@ -25,6 +28,39 @@ class ApiClient {
           connectTimeout: const Duration(seconds: 12),
           receiveTimeout: const Duration(seconds: 12),
         )) {
+    final adapter = _dio.httpClientAdapter;
+    if (adapter is IOHttpClientAdapter) {
+      adapter.createHttpClient = () {
+        final client = HttpClient();
+        // ponytail: SHA-1 *leaf-cert* pin via dart:io's built-in
+        // X509Certificate.sha1 -- no crypto package needed. Two known
+        // ceilings, both accepted for now: (1) pins the leaf, not the
+        // SPKI/CA, so ops must roll the dart-define on every cert
+        // renewal -- upgrade to SPKI SHA-256 pinning if that becomes
+        // painful; (2) badCertificateCallback only fires when the OS
+        // does NOT already trust the signing CA, which is true for
+        // CLARION's private CAMPUS-CA today but would silently stop being
+        // enforced if the deployment ever switched to a publicly-trusted
+        // CA. Only pins the compile-time production endpoint -- a
+        // Settings-screen tunnel/dev override (see AppConfig) is
+        // deliberately never pinned. NOTE: badCertificateCallback fires
+        // for ANY validation failure (expired/revoked/hostname-mismatch,
+        // not just untrusted-CA) -- a pin match overrides all of those at
+        // once. Accepted: leaf-pinning already requires the attacker to
+        // also hold the matching private key.
+        client.badCertificateCallback = (cert, host, port) {
+          // If a release build forgets --dart-define=PINNED_CERT_SHA1,
+          // pinning silently no-ops (falls back to default OS trust only)
+          // -- assert it's set in the release checklist, not here.
+          final pins = _config.pinnedCertSha1Fingerprints;
+          if (pins.isEmpty || _config.isOverridden) return false;
+          final fingerprint =
+              cert.sha1.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+          return pins.contains(fingerprint.toLowerCase());
+        };
+        return client;
+      };
+    }
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {

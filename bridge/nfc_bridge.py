@@ -35,6 +35,7 @@ Run:  python bridge/nfc_bridge.py
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
 import signal
@@ -456,7 +457,7 @@ def make_handler(state: BridgeState, config: Config):
                     if part.startswith("token="):
                         supplied = part[len("token="):]
                         break
-            if supplied != config.debug_token:
+            if not supplied or not hmac.compare_digest(supplied, config.debug_token):
                 self._send_json({"error": "forbidden"}, code=403)
                 return
 
