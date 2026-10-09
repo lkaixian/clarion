@@ -4,8 +4,10 @@ import { login } from "../api/client";
 import { landingPathFor } from "../lib/access";
 
 export default function Login() {
-  const [email, setEmail] = useState("clinician@clarion.demo");
-  const [password, setPassword] = useState("clinician123");
+  // Pre-filled demo account only in dev / when the demo hint is on; a public build starts empty.
+  const demo = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_HINT === "1";
+  const [email, setEmail] = useState(demo ? "clinician@clarion.demo" : "");
+  const [password, setPassword] = useState(demo ? "clinician123" : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -23,7 +25,8 @@ export default function Login() {
       // /reception, a pharmacist on /pharmacy, a clinician/records_officer on
       // /patients, and a patient on their own record (/patients/{id}, which
       // the backend scopes for them — they can't call the staff list).
-      navigate(landingPathFor(data.user));
+      // A temporary password must be replaced first; the API refuses everything else until then.
+      navigate(data.user.must_change_password ? "/change-password" : landingPathFor(data.user));
     } catch {
       setError("Login failed. Check credentials or that the API server is running.");
     } finally {
@@ -72,6 +75,8 @@ export default function Login() {
           {loading ? "Signing in..." : "Sign In"}
         </button>
 
+        {/* Demo logins only exist with APP_ENV=demo; hide them in container builds (set VITE_SHOW_DEMO_HINT=1 to show). */}
+        {demo && (
         <p className="text-xs text-slate-400 mt-4">
           Demo (staff): clinician@clarion.demo / clinician123
           <br />
@@ -79,6 +84,7 @@ export default function Login() {
           <br />
           Demo (patient): patient@clarion.demo / patient123 (or NRIC 520314-01-1234)
         </p>
+        )}
       </form>
     </div>
   );

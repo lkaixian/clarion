@@ -139,7 +139,7 @@ export default function Layout({ children }) {
             <span className="text-blue-200">{user.full_name} · {user.role}</span>
           )}
           <button
-            onClick={() => { logout(); navigate("/"); }}
+            onClick={() => { logout(); navigate("/login"); }}
             className="bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg"
           >
             Sign out

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLARION | System status</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#00467c">
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png">
+<link rel="apple-touch-icon" href="/brand/icon-180.png">
+<link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/motion.css">
+<script src="/site.js"></script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CLARION home"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/status.html" aria-current="page">Status</a></li>
+    </ul>
+    <a class="btn" href="/login">Sign in</a>
+  </div>
+</header>
+
+<main>
+<section>
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">System status</span>
+      <h1>Is CLARION up?</h1>
+    </div>
+
+    <div id="overall" class="banner wait" role="status" aria-live="polite">Checking…</div>
+
+    <div class="comp-grid mt">
+      <article class="card comp" data-reveal>
+        <h2>Web console</h2>
+        <div class="svc"><span class="dot" data-dot="web"></span> Pages and app <b data-val="web">Checking…</b></div>
+        <p class="about">The site you are looking at, served by the web container.</p>
+        <div class="hist" data-hist="web" aria-label="Recent web console checks"></div>
+      </article>
+      <article class="card comp" data-reveal>
+        <h2>API</h2>
+        <div class="svc"><span class="dot" data-dot="api"></span> Round trip <b data-val="api">Checking…</b></div>
+        <p class="about">Sign-in, patient records, bookings and emergency scan. The time includes the network to your browser.</p>
+        <div class="hist" data-hist="api" aria-label="Recent API checks"></div>
+      </article>
+      <article class="card comp" data-reveal>
+        <h2>Database</h2>
+        <div class="svc"><span class="dot" data-dot="database"></span> Query time <b data-val="database">Checking…</b></div>
+        <p class="about">Where records, appointments and the audit trail are stored.</p>
+        <div class="hist" data-hist="database" aria-label="Recent database checks"></div>
+      </article>
+      <article class="card comp" data-reveal>
+        <h2>File storage</h2>
+        <div class="svc"><span class="dot" data-dot="object_store"></span> Access time <b data-val="object_store">Checking…</b></div>
+        <p class="about">Documents, signatures, medicine photos and thumbnails.</p>
+        <div class="hist" data-hist="object_store" aria-label="Recent file storage checks"></div>
+      </article>
+      <article class="card comp" data-reveal>
+        <h2>Cache &amp; rate limiting</h2>
+        <div class="svc"><span class="dot" data-dot="cache"></span> Ping <b data-val="cache">Checking…</b></div>
+        <p class="about">Shared counters that throttle repeated sign-in attempts and heavy callers.</p>
+        <div class="hist" data-hist="cache" aria-label="Recent cache checks"></div>
+      </article>
+      <article class="card comp" data-reveal>
+        <h2>Local AI</h2>
+        <div class="svc"><span class="dot" data-dot="local_ai"></span> On-site model <b data-val="local_ai">Checking…</b></div>
+        <p class="about">Optional. Summaries and document reading run on-site; without it the system falls back to simpler built-in methods.</p>
+        <div class="hist" data-hist="local_ai" aria-label="Recent local AI checks"></div>
+      </article>
+    </div>
+
+    <p class="muted mt"><span data-checked>Checking…</span>. Re-checks every 15 seconds. Bars show recent checks made from your own browser while this page is open; bar height follows response time. This is not a server-side uptime record.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <p>Demo environment. All patient data is fictional.</p>
+    <p><a href="/">Home</a> &nbsp;·&nbsp; <a href="/login">Sign in</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

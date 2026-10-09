@@ -696,7 +696,7 @@ def request_password_reset_otp(request: Request, payload: schemas.PasswordResetO
     yet, and an NRIC/login with no registered email on file all return the
     exact identical generic success-shaped response as an NRIC that really
     did just get a code emailed to it — a caller cannot distinguish any of
-    these four cases from the response alone. Whether Mailgun is even
+    these four cases from the response alone. Whether Mailtrap is even
     configured is folded into the same non-signal (see email_service.py) —
     a misconfigured deployment must not become externally detectable
     either.
@@ -756,7 +756,7 @@ def request_password_reset_otp(request: Request, payload: schemas.PasswordResetO
     db.commit()
 
     # send_password_reset_otp_email degrades gracefully (logs, returns
-    # False) if Mailgun isn't configured or the call fails -- deliberately
+    # False) if Mailtrap isn't configured or the call fails -- deliberately
     # NOT branching the response on its return value (see docstring above).
     send_password_reset_otp_email(patient.email, otp_code, patient.full_name)
 

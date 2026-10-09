@@ -81,6 +81,7 @@ const UNAUTHENTICATED_AUTH_PATHS = [
   "/auth/request-password-reset-otp",
   "/auth/reset-password-with-otp",
   "/auth/refresh",
+  "/auth/change-password", // a wrong current password is a 401 that must reach the form, not trigger a session refresh
 ];
 
 // Single-flight refresh: if several requests 401 around the same moment
@@ -120,8 +121,8 @@ function bounceToLogin() {
   // gets thrown away along with it, which a client-side-only redirect
   // wouldn't. Don't "simplify" this into useNavigate later — it isn't
   // reachable from a non-component module like this one.
-  if (window.location.pathname !== "/") {
-    window.location.href = "/";
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
   }
 }
 
@@ -130,6 +131,14 @@ client.interceptors.response.use(
   async (error) => {
     const requestUrl = error.config?.url || "";
     const isUnauthenticatedAuthCall = UNAUTHENTICATED_AUTH_PATHS.some((path) => requestUrl.includes(path));
+
+    // Account still on a temporary password: every other API call is refused with a
+    // 403 {must_change_password: true}. Send the user to the screen that fixes it.
+    if (error.response?.status === 403 && error.response?.data?.detail?.must_change_password
+        && window.location.pathname !== "/change-password") {
+      window.location.href = "/change-password";
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !isUnauthenticatedAuthCall) {
       // Try exactly once to silently recover via the refresh cookie before
@@ -172,6 +181,12 @@ export async function login(email, password) {
   // ONLY in the HttpOnly cookie the browser already stored automatically,
   // never in JS-reachable storage.
   return data;
+}
+
+// POST /auth/change-password -- also the only call (besides /auth/me) the backend
+// allows while an account is still flagged must_change_password.
+export async function changePassword(currentPassword, newPassword) {
+  await client.post("/auth/change-password", { current_password: currentPassword, new_password: newPassword });
 }
 
 export function logout() {

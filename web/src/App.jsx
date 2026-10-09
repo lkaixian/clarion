@@ -13,11 +13,12 @@ import Billing from "./pages/Billing";
 import Reporting from "./pages/Reporting";
 import Dashboard from "./pages/Dashboard";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
+import ChangePassword from "./pages/ChangePassword";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
 
 function Protected({ children }) {
-  return getCurrentUser() ? children : <Navigate to="/" />;
+  return getCurrentUser() ? children : <Navigate to="/login" />;
 }
 
 // One generic page guard, driven by the per-facility `allowed_pages` matrix
@@ -35,7 +36,7 @@ function Protected({ children }) {
 //   older cached user object).
 function RequirePage({ page, children }) {
   const user = getCurrentUser();
-  if (!user) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/login" />;
   if (user.role === "patient") return <Navigate to={landingPathFor(user)} />;
   const pages = user.allowed_pages || [];
   if (user.role === "admin" || pages.includes(page)) return children;
@@ -47,6 +48,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         {/* Public big-screen waiting-room board — no auth, deliberately
             OUTSIDE <Protected>: a lobby TV has no logged-in user. The page

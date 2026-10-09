@@ -52,6 +52,7 @@ web-build/
 .env.*
 !.env.example
 !.env.docker.example
+!.env.tunnel.example
 
 # TLS material for the edge proxy (P1.9) -- never commit real keys/certs
 proxy/certs/*

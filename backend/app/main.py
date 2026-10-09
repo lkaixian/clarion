@@ -1,12 +1,13 @@
 import contextlib
 import logging
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 # Loaded as early as possible, before anything (email_service in
-# particular) reads MAILGUN_* / other env vars, so a local backend/.env
+# particular) reads MAILTRAP_* / other env vars, so a local backend/.env
 # file works the same as real environment variables in a deployment. A
 # missing .env is fine -- load_dotenv() just no-ops.
 load_dotenv()
@@ -537,6 +538,65 @@ def readyz(response: Response):
     ok = all(checks.values())
     response.status_code = 200 if ok else 503
     return {"status": "ok" if ok else "unavailable", "checks": checks}
+
+
+_STATUS_TTL_S = 5.0
+_status_cache: dict = {"at": 0.0, "body": None}
+
+
+def _timed(check) -> dict:
+    t0 = time.perf_counter()
+    ok = check()
+    return {"status": "up", "ms": round((time.perf_counter() - t0) * 1000)} if ok else {"status": "down"}
+
+
+def _check_cache() -> dict:
+    url = os.environ.get("REDIS_URL", "")
+    if not url.startswith("redis"):
+        return {"status": "disabled"}  # rate limiting is in-process on this node
+    def ping() -> bool:
+        try:
+            import redis
+            return bool(redis.Redis.from_url(url, socket_timeout=1, socket_connect_timeout=1).ping())
+        except Exception:  # noqa: BLE001 -- any failure means "down", never crash the probe
+            return False
+    return _timed(ping)
+
+
+def _check_local_ai() -> dict:
+    from .ai import local_llm
+    if not local_llm.local_llm_enabled():
+        return {"status": "disabled"}
+    def ping() -> bool:
+        try:
+            import httpx
+            return httpx.get(local_llm._base_url() + "/api/tags", timeout=1.0).status_code == 200
+        except Exception:  # noqa: BLE001
+            return False
+    return _timed(ping)
+
+
+@app.get("/status", include_in_schema=False)
+def public_status():
+    """Public component status for the website's status page. Booleans and
+    latencies only -- no hostnames, versions, error text or counts. Cached
+    for a few seconds per worker so polling can't fan out into dependency
+    checks (the local-AI probe makes an outbound call)."""
+    now = time.monotonic()
+    if _status_cache["body"] is not None and now - _status_cache["at"] < _STATUS_TTL_S:
+        return _status_cache["body"]
+    components = {
+        "api": {"status": "up"},
+        "database": _timed(_check_database),
+        "object_store": _timed(_check_object_store),
+        "cache": _check_cache(),
+        "local_ai": _check_local_ai(),
+    }
+    # Local AI is optional (every AI feature falls back without it), so it never degrades the whole.
+    core = ("database", "object_store", "cache")
+    body = {"status": "ok" if all(components[k]["status"] != "down" for k in core) else "degraded", "components": components}
+    _status_cache.update(at=now, body=body)
+    return body
 
 
 def _check_database() -> bool:

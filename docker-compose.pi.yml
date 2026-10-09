@@ -1,0 +1,153 @@
+# CLARION on a Raspberry Pi 4 behind a Cloudflare Tunnel -- the public demo node.
+#
+# Slim sibling of docker-compose.yml: SQLite + local object store, no MariaDB /
+# MinIO / Orthanc / observability, no host ports. The ONLY way in is the tunnel:
+#
+#   internet -> Cloudflare -> cloudflared -> proxy (Caddy, headers + routing)
+#                                              |- /            welcome + status page
+#                                              |- /login ...   React SPA (web)
+#                                              '- /api/*       FastAPI (backend)
+#
+# One-time setup
+#   1. Cloudflare Zero Trust > Networks > Tunnels > create tunnel, copy the token.
+#      Public hostname: clarion.larmkx.com -> Service  HTTPS://proxy:443
+#      Additional settings: No TLS Verify = on, Origin Server Name = clarion.larmkx.com
+#   2. .env.docker (see .env.docker.example) needs, at minimum:
+#        SECRET_KEY, OTP_HMAC_KEY            (two different token_hex(32) values)
+#        CLARION_SITE_ADDRESS=clarion.larmkx.com
+#      .env.tunnel (separate file, NOT .env.docker): TUNNEL_TOKEN=...
+#   3. docker compose -f docker-compose.pi.yml --env-file .env.docker up -d --build
+#   4. docker compose -f docker-compose.pi.yml exec backend python /app/seed.py
+#      APP_ENV is "production" here, so seed prints a random password per demo
+#      account ONCE -- copy them. (The admin123-style demo logins are deliberately
+#      NOT used on a public URL.) Put Cloudflare Access in front if you want a gate.
+#
+# First build on a Pi 4 is slow (10-20 min: Python wheels + vite). Use a 64-bit OS.
+
+name: clarion-pi
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-env-file: &env-file
+  env_file:
+    - path: ./.env.docker
+      required: false
+
+services:
+  cloudflared:
+    <<: *restart
+    image: cloudflare/cloudflared:2024.12.2
+    command: tunnel --no-autoupdate run
+    # Token lives in its own file so the backend (which loads .env.docker) never holds it.
+    env_file: ./.env.tunnel
+    networks:
+      app:
+        ipv4_address: 172.29.0.3
+    depends_on:
+      proxy:
+        condition: service_healthy
+
+  proxy:
+    <<: *restart
+    image: caddy:2.8-alpine
+    environment:
+      CLARION_SITE_ADDRESS: ${CLARION_SITE_ADDRESS:?set CLARION_SITE_ADDRESS in .env.docker}
+      CLARION_TLS_DIRECTIVE: tls internal   # Cloudflare holds the public cert; this hop is private
+      CLARION_HSTS: ${CLARION_HSTS:-max-age=300}
+      # Real client IP: trust cloudflared's X-Forwarded-For (compose subnet only)
+      # so the per-IP rate limiter doesn't see every visitor as cloudflared.
+      CLARION_TRUSTED_PROXIES: 172.29.0.3/32   # cloudflared, the only client Caddy trusts
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      app:
+        ipv4_address: 172.29.0.2
+    depends_on:
+      web:
+        condition: service_started   # healthy races nginx's first probe on slow starts
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  backend:
+    <<: [*restart, *env-file]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: clarion/backend:local
+    # 2 workers (image default is 4): a Pi 4 has 4 cores and 2-8 GB shared with everything.
+    command: ["gunicorn", "app.main:app", "-k", "uvicorn_worker.UvicornWorker", "-w", "2",
+              "-b", "0.0.0.0:8000", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite:////app/data/clarion.db
+      CLARION_STORAGE_BACKEND: local
+      CLARION_STORAGE_ROOT: /app/data/object_store
+      REDIS_URL: redis://redis:6379/0
+      LOG_FORMAT: json
+      CLARION_DISABLE_LOCAL_AI: "1"   # no Ollama on the Pi; AI falls back to deterministic paths
+      # Trust X-Forwarded-* from exactly the proxy and cloudflared hops. gunicorn takes plain IPs
+      # only (a CIDR crashes it at boot), hence the pinned addresses on those two services.
+      FORWARDED_ALLOW_IPS: 172.29.0.2,172.29.0.3
+    volumes:
+      - clarion_db:/app/data
+    expose: ["8000"]
+    networks: [app]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  web:
+    <<: *restart
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: clarion/web:local
+    environment:
+      API_BASE: /api
+    expose: ["8080"]
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  redis:
+    <<: *restart
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+          ip_range: 172.29.0.128/25   # dynamic IPs; .2/.3 stay free for proxy/cloudflared
+
+volumes:
+  clarion_db:
+  redis_data:
+  caddy_data:

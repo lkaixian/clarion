@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLARION | Emergency-first clinic system</title>
+<meta name="description" content="CLARION is an emergency-first, on-premises clinic information system. Demo environment.">
+<meta name="theme-color" content="#00467c">
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png">
+<link rel="apple-touch-icon" href="/brand/icon-180.png">
+<link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/motion.css">
+<script src="/site.js"></script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CLARION home"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <ul>
+      <li><a href="#emergency">Emergency-first</a></li>
+      <li><a href="#tour">Product tour</a></li>
+      <li><a href="#modules">Modules</a></li>
+      <li><a href="#people">Patients &amp; staff</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+      <li><a href="/status.html">Status</a></li>
+    </ul>
+    <a class="btn" href="/login">Sign in</a>
+  </div>
+</header>
+
+<main>
+<section class="hero" aria-labelledby="h">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Clinical Access, Records &amp; Information Operations Network</span>
+      <h1 id="h">Clinic records that still work when the network doesn't.</h1>
+      <p class="lead">CLARION puts a patient's critical facts in a responder's hands in seconds, keeps every access on the record, and runs entirely on your own hardware. No cloud AI, no data leaving the building.</p>
+      <div class="cta">
+        <a class="btn big" href="/login">Sign in <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#arrow"/></svg></a>
+        <a class="btn big ghost" href="/status.html">View system status</a>
+      </div>
+    </div>
+
+    <figure class="frame">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <img src="/brand/shot-patient.webp" width="1560" height="1170" alt="CLARION patient record showing conditions, medications, a severe penicillin allergy and a visit timeline that includes read-only entries from other clinics">
+      <figcaption class="muted">The patient record. Fictional demo data.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<div class="statusbar" aria-label="Live system status">
+  <div class="wrap">
+    <span class="svcline"><span class="dot" data-dot="web"></span> Web console <b data-val="web">Checking…</b></span>
+    <span class="svcline"><span class="dot" data-dot="api"></span> API <b data-val="api">Checking…</b></span>
+    <span class="muted"><span data-checked>Checking…</span> · <a href="/status.html">Details</a></span>
+  </div>
+</div>
+
+<section id="emergency" aria-labelledby="e">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">Emergency-first</span>
+      <h2 class="t" id="e">Built for the worst five minutes of someone's day.</h2>
+      <p class="lead">Most systems optimise for the clerk. CLARION optimises for the person who has seconds to learn a patient's blood type, allergies and medications.</p>
+    </div>
+    <div class="grid g3">
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#nfc"/></svg>
+        <h3>Scan to the critical facts</h3>
+        <p>An emergency QR code or NFC card opens a focused view: blood type, allergies, current medications and conditions. Nothing else.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#tag"/></svg>
+        <h3>Works with the network down</h3>
+        <p>The critical data can be written onto the NFC tag itself, so the mobile app reads it with no connection at all.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#lock"/></svg>
+        <h3>Break-glass, always audited</h3>
+        <p>Emergency access across facilities is allowed, never silent. Every view is written to a tamper-evident audit trail.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="tour" class="alt" aria-labelledby="t">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">Product tour</span>
+      <h2 class="t" id="t">See what staff see.</h2>
+      <p class="lead">Real screens from the running system. Fictional patients only.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Product tour" data-reveal>
+      <button class="tab" role="tab" id="tab-record" aria-controls="pn-record" aria-selected="true">Patient record</button>
+      <button class="tab" role="tab" id="tab-safety" aria-controls="pn-safety" aria-selected="false">Medication safety</button>
+      <button class="tab" role="tab" id="tab-emergency" aria-controls="pn-emergency" aria-selected="false">Emergency &amp; audit</button>
+    </div>
+
+    <div class="panel-tour tour" id="pn-record" role="tabpanel" aria-labelledby="tab-record">
+      <div>
+        <h3>One record across clinics</h3>
+        <p>Conditions, medications and allergies in a single view. Entries recorded by another clinic appear as read-only, so nobody can rewrite another clinic's history.</p>
+      </div>
+      <figure class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/brand/shot-patient.webp" width="1560" height="1170" alt="Patient record with conditions, medications, allergies and a visit timeline" loading="lazy"></figure>
+    </div>
+
+    <div class="panel-tour tour" id="pn-safety" role="tabpanel" aria-labelledby="tab-safety" hidden>
+      <div>
+        <h3>Dangerous combinations, flagged</h3>
+        <p>The interaction check reads every prescription across facilities: warfarin with aspirin, a statin with clarithromycin, and the same drug prescribed twice by different clinics.</p>
+      </div>
+      <figure class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/brand/tour-interactions.webp" width="1560" height="1000" alt="Medication interaction check showing two high-risk warnings and a duplicate prescription" loading="lazy"></figure>
+    </div>
+
+    <div class="panel-tour tour" id="pn-emergency" role="tabpanel" aria-labelledby="tab-emergency" hidden>
+      <div>
+        <h3>Emergency access with a paper trail</h3>
+        <p>Issue a scoped QR code or NFC card that returns only the critical fields, with no login. Every view of the record is logged, and staff can see exactly who looked.</p>
+      </div>
+      <figure class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/brand/tour-emergency.webp" width="1560" height="1000" alt="Emergency access card controls and an access audit log of who viewed the record" loading="lazy"></figure>
+    </div>
+  </div>
+</section>
+
+<section id="modules" aria-labelledby="m">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">One system</span>
+      <h2 class="t" id="m">Fifteen modules, one record.</h2>
+      <p class="lead">From the front desk to the imaging viewer, every team works on the same patient record under role-based access.</p>
+    </div>
+    <div class="mods">
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dashboard"/></svg>Dashboard</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#frontdesk"/></svg>Front desk</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#consultation"/></svg>Consultation</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pharmacy"/></svg>Pharmacy</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#admin"/></svg>Admin</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#billing"/></svg>Billing</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#procedure"/></svg>Procedure</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#laboratory"/></svg>Laboratory</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#xray"/></svg>X-ray</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#physio"/></svg>Physiotherapy</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dental"/></svg>Dental</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#reporting"/></svg>Reporting</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#mobile"/></svg>Mobile app</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#calling"/></svg>Calling system</div>
+      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pacs"/></svg>PACS imaging</div>
+    </div>
+  </div>
+</section>
+
+<section id="people" class="alt" aria-labelledby="p">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">Who it's for</span>
+      <h2 class="t" id="p">One sign-in, two experiences.</h2>
+    </div>
+    <div class="grid g2">
+      <article class="card panel" data-reveal>
+        <h3>For patients</h3>
+        <ul>
+          <li>Book by department and doctor</li>
+          <li>See your vitals and visit history</li>
+          <li>Download a visit summary as PDF</li>
+          <li>Read clinic announcements</li>
+        </ul>
+        <a class="btn" href="/login">Patient sign-in</a>
+      </article>
+      <article class="card panel" data-reveal>
+        <h3>For clinic staff</h3>
+        <ul>
+          <li>Admin, clinician, pharmacist and receptionist roles</li>
+          <li>Pages shown per role and per facility</li>
+          <li>Medication safety checks before a prescription is saved</li>
+          <li>Clinical records are signed and cannot be silently edited</li>
+        </ul>
+        <a class="btn" href="/login">Staff sign-in</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" aria-labelledby="s">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">Privacy &amp; security</span>
+      <h2 class="t" id="s">Your data stays on your hardware.</h2>
+    </div>
+    <div class="grid g3">
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#cpu"/></svg>
+        <h3>AI that never phones home</h3>
+        <p>Summaries, document reading and dictation run on a local model. No third-party AI cloud is called.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#link"/></svg>
+        <h3>Tamper-evident audit trail</h3>
+        <p>Every access is chained cryptographically, so a changed or deleted entry is detectable.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#filecheck"/></svg>
+        <h3>PDPA-aware</h3>
+        <p>Consent records, data-subject requests and retention rules are part of the system, not an afterthought.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#users"/></svg>
+        <h3>Directory sign-in</h3>
+        <p>Staff can sign in with an existing LDAP or Active Directory account; roles follow group membership.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#database"/></svg>
+        <h3>Encrypted backups</h3>
+        <p>Automated, encrypted backups with a documented restore procedure.</p>
+      </article>
+      <article class="card feat" data-reveal>
+        <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#nodes"/></svg>
+        <h3>FHIR-ready</h3>
+        <p>A read-only FHIR interface exposes core records in the standard format other systems expect.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="alt" aria-labelledby="a">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <span class="eyebrow">How this demo is hosted</span>
+      <h2 class="t" id="a">A small server, a secure tunnel.</h2>
+      <p class="lead">This demo runs on a Raspberry Pi. There is no open port on the network; visitors reach it only through an outbound-only tunnel.</p>
+    </div>
+    <div class="flow" role="list">
+      <div class="step" role="listitem" data-reveal><b>You</b><span>Browser or phone</span></div>
+      <svg class="ic arr" aria-hidden="true"><use href="/brand/sprite.svg#arrow"/></svg>
+      <div class="step" role="listitem" data-reveal><b>Cloudflare</b><span>Public HTTPS, tunnel</span></div>
+      <svg class="ic arr" aria-hidden="true"><use href="/brand/sprite.svg#arrow"/></svg>
+      <div class="step node" role="listitem" data-reveal><b>Edge proxy</b><span>Security headers, routing</span></div>
+      <svg class="ic arr" aria-hidden="true"><use href="/brand/sprite.svg#arrow"/></svg>
+      <div class="step node" role="listitem" data-reveal><b>Web console</b><span>React app</span></div>
+      <div class="step node" role="listitem" data-reveal><b>API</b><span>FastAPI, rate limits</span></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <p>Demo environment. All patient data is fictional.</p>
+    <p><a href="/status.html">Status</a> &nbsp;·&nbsp; <a href="/login">Sign in</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

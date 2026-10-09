@@ -192,7 +192,7 @@ LDAP) every later controller sits on top of.
 ### CP7 — Ops parity, contract validation, cutover (~41 PD)
 | # | Task | Size | Source | Notes |
 |---|---|---|---|---|
-| CP7.1 | Email service: Mailgun HTTP client, uniform-false-on-any-failure contract (never leak *why* it failed) | S | `email_service.py` |
+| CP7.1 | Email service: Mailtrap HTTP client, uniform-false-on-any-failure contract (never leak *why* it failed) | S | `email_service.py` |
 | CP7.2 | Emergency-export appliance: nightly bulk export (reuses CP2.11's scoped-fields helpers) + `age`-CLI encrypt/decrypt (shell-out, same as backup pipeline) + facility validation + dual audit trail | M | `emergency_export.py` |
 | CP7.3 | Observability parity: request-scoped logging context as a CI4 service/DI object (no `contextvars` equivalent needed — PHP's per-request model has no cross-request leak risk to guard against) + `/metrics` (promphp) | M | `log_context.py` |
 | CP7.4 | Contract-test harness: freeze OpenAPI, schema-driven battery runnable against either backend base URL | M | uses CP0.2 |

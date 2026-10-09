@@ -11,7 +11,20 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.VITE_DEV_API_PROXY || 'http://localhost:8000'
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        // Mirror nginx: "/" is the landing page, the SPA login is /login.
+        name: 'landing-at-root',
+        configureServer(server) {
+          server.middlewares.use((req, _res, next) => {
+            if (req.url === '/' || req.url.startsWith('/?')) req.url = '/welcome.html'
+            next()
+          })
+        },
+      },
+    ],
     server: {
       host: '0.0.0.0',
       port: 5173,
