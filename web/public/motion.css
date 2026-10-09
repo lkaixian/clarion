@@ -1,0 +1,71 @@
+/* Motion + tour. Everything animated is disabled under prefers-reduced-motion (bottom). */
+
+/* ---- scroll reveal (hidden only once site.js has marked the page as .js) ---- */
+.js [data-reveal]{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease;transition-delay:var(--d,0s)}
+.js [data-reveal].in{opacity:1;transform:none}
+
+/* ---- hero entrance + drifting background ---- */
+@keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes slide-in{from{opacity:0;transform:translateX(40px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.12)}100%{transform:translate(0,0) scale(1)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.hero{position:relative;overflow:hidden}
+.hero::before,.hero::after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.35;pointer-events:none;z-index:0}
+.hero::before{width:26rem;height:26rem;background:var(--cyan);top:-8rem;right:-6rem;animation:drift 14s ease-in-out infinite}
+.hero::after{width:22rem;height:22rem;background:var(--teal);bottom:-9rem;left:-6rem;opacity:.2;animation:drift 18s ease-in-out infinite reverse}
+.hero .wrap{position:relative;z-index:1}
+.hero .eyebrow{display:inline-block}
+.hero .eyebrow,.hero h1,.hero .lead,.hero .cta{animation:rise .8s ease both}
+.hero h1{animation-delay:.1s}.hero .lead{animation-delay:.22s}.hero .cta{animation-delay:.34s}
+.hero .frame{animation:slide-in .9s .25s cubic-bezier(.2,.7,.2,1) both,float 6s 1.4s ease-in-out infinite}
+
+/* ---- live status dots pulse when up ---- */
+@keyframes ping{0%{box-shadow:0 0 0 0 #16975a99}80%,100%{box-shadow:0 0 0 .55rem #16975a00}}
+.dot.up{animation:ping 2s ease-out infinite}
+.dot.off{background:transparent;border:2px solid var(--wait)}
+
+/* ---- buttons, cards, tiles ---- */
+.btn{transition:transform .2s ease,box-shadow .2s ease,background .2s,border-color .2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px #00467c30}
+.btn .ic{transition:transform .2s ease}
+.btn:hover .ic{transform:translateX(4px)}
+.card,.mod{transition:transform .25s ease,box-shadow .25s ease,border-color .25s}
+.card:hover,.mod:hover{transform:translateY(-4px);box-shadow:0 14px 32px #00467c1f;border-color:var(--cyan)}
+.feat .ic{transition:transform .3s ease}
+.feat:hover .ic{transform:rotate(-6deg) scale(1.08)}
+.mod .ic{transition:transform .25s ease}
+.mod:hover .ic{transform:scale(1.2)}
+.nav{transition:box-shadow .25s}
+.nav.scrolled{box-shadow:0 4px 20px #00467c1a}
+
+/* ---- flow arrows: pulse left to right ---- */
+@keyframes nudge{0%,100%{transform:translateX(0);opacity:.35}50%{transform:translateX(7px);opacity:1}}
+.flow .arr{animation:nudge 1.6s ease-in-out infinite}
+.flow .arr:nth-of-type(2){animation-delay:.2s}.flow .arr:nth-of-type(4){animation-delay:.4s}.flow .arr:nth-of-type(6){animation-delay:.6s}
+@media(max-width:46rem){.flow .arr{animation:none}}
+
+/* ---- product tour ---- */
+.tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1.2rem}
+.tab{font:inherit;font-weight:600;color:var(--navy);background:#fff;border:1px solid var(--line);border-radius:999px;padding:.5rem 1.1rem;cursor:pointer;transition:background .2s,color .2s,border-color .2s,transform .2s}
+.tab:hover{border-color:var(--teal);transform:translateY(-1px)}
+.tab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tour{display:grid;gap:2rem;grid-template-columns:.8fr 1.2fr;align-items:center}
+@media(max-width:52rem){.tour{grid-template-columns:1fr}}
+.tour h3{margin:0 0 .5rem;font-size:1.4rem;color:var(--navy)}
+.tour p{color:var(--muted);margin:0}
+.panel-tour[hidden]{display:none}
+.panel-tour{animation:rise .5s ease both}
+
+/* ---- status page ---- */
+.comp-grid{display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))}
+.comp .svc b{white-space:nowrap}
+.comp p.about{margin:.4rem 0 0;color:var(--muted);font-size:.9rem}
+.hist i{transition:height .3s ease;align-self:flex-end;min-height:3px}
+.banner{transition:background .3s,color .3s}
+.banner::before{content:"";width:.9rem;height:.9rem;border-radius:50%;background:currentColor;flex:none;animation:ping-b 2s ease-out infinite}
+@keyframes ping-b{0%{box-shadow:0 0 0 0 currentColor}80%,100%{box-shadow:0 0 0 .6rem transparent}}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .js [data-reveal]{opacity:1;transform:none}
+}

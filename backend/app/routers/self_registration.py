@@ -346,7 +346,7 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
         db.commit()
 
         # send_self_registration_otp_email degrades gracefully (logs,
-        # returns False) if Mailgun isn't configured or the call fails --
+        # returns False) if Mailtrap isn't configured or the call fails --
         # deliberately NOT branching the response on its return value, same
         # discipline as request_password_reset_otp.
         send_self_registration_otp_email(payload.email, otp_code, patient.full_name)

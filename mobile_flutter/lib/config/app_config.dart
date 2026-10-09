@@ -7,8 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///   1. A value the user has saved in the in-app Settings screen
 ///      (persisted via [SharedPreferences]) — wins if present.
 ///   2. The compile-time `--dart-define=API_BASE_URL=...` value.
-///   3. `http://10.0.2.2:8000` (the Android-emulator alias for the host
-///      machine's localhost) as an ultimate fallback.
+///   3. `https://clarion.larmkx.com/api` (the central node's fixed public
+///      name, served by the Cloudflare Tunnel) as the fallback. For an emulator
+///      against a local backend: --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ///
 /// This makes the app "tunnel-ready": once a `trycloudflare.com` URL is
 /// available, point the app at it from the Settings screen without a
@@ -16,7 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// into the binary would be a bad fit.
 class AppConfig extends ChangeNotifier {
   static const String _compileTimeDefault =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
+      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://clarion.larmkx.com/api');
 
   static const String _prefsKey = 'mb_api_base_url_override';
 

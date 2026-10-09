@@ -31,7 +31,9 @@
 		protocols h1 h2
 		# Caddy is hop 1 from the internet -- never trust an inbound
 		# X-Forwarded-* header. (This is already the default; stated for audit.)
-		trusted_proxies static
+		trusted_proxies static {$CLARION_TRUSTED_PROXIES:}
+		# Take the RIGHT-most untrusted XFF entry as the client (the left one is visitor-supplied).
+		trusted_proxies_strict
 		# Reject Host/SNI mismatch games.
 		strict_sni_host on
 		# Shed slow clients before they reach a backend worker.
@@ -123,7 +125,7 @@
 	# handle/handle_path blocks in the order written (unlike bare
 	# directives, which it's free to reorder). /healthz stays reachable --
 	# a public liveness probe is harmless and often useful.
-	@backend_diag path /api/metrics /api/readyz
+	@backend_diag path /api/metrics /api/readyz /api/docs* /api/redoc* /api/openapi.json
 	handle @backend_diag {
 		respond 404
 	}

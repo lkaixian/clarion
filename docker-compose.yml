@@ -126,7 +126,7 @@ services:
       # either way) until a deployment points this at real hardware.
       CLARION_HL7_ANALYSER_HOST: ${CLARION_HL7_ANALYSER_HOST:-}
       CLARION_HL7_ANALYSER_PORT: ${CLARION_HL7_ANALYSER_PORT:-2575}
-      # SECRET_KEY, OTP_HMAC_KEY, MAILGUN_*, CLARION_LOCAL_LLM_MODEL,
+      # SECRET_KEY, OTP_HMAC_KEY, MAILTRAP_*, CLARION_LOCAL_LLM_MODEL,
       # CLARION_LOCAL_VISION_MODEL, CLARION_DISABLE_LOCAL_AI come from
       # ./.env.docker via env_file -- never inline real secrets here.
     extra_hosts:
@@ -623,7 +623,7 @@ services:
     # No env_file (unlike most services above) -- it needs only the two
     # GRAFANA_ADMIN_* vars, already resolved via ${...} interpolation below,
     # and this way it never sees MARIADB_ROOT_PASSWORD/MINIO_ROOT_PASSWORD/
-    # SECRET_KEY/MAILGUN_* the way env_file's blanket dump would hand it.
+    # SECRET_KEY/MAILTRAP_* the way env_file's blanket dump would hand it.
     <<: *restart
     profiles: ["observability"]
     image: grafana/grafana:11.4.0

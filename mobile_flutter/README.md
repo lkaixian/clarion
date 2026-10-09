@@ -148,9 +148,10 @@ flutter run -d <device-id>          # flutter devices  to list attached devices/
 ### Pointing at your backend
 
 **Compile-time default** (used if nothing else is set):
-`http://10.0.2.2:8000` — the special alias the **Android emulator** uses to
-reach your host machine's `localhost`. This does **not** work on a
-physical phone or from a real network address.
+`https://clarion.larmkx.com/api` - the central node's fixed public name, so a
+phone needs no IP address. For an **Android emulator** against a backend on your
+own machine, build with `--dart-define=API_BASE_URL=http://10.0.2.2:8000`
+(10.0.2.2 is the emulator's alias for the host's `localhost`).
 
 Override at build/run time:
 
