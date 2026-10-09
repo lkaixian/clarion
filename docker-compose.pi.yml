@@ -37,10 +37,14 @@ x-env-file: &env-file
 services:
   cloudflared:
     <<: *restart
-    image: cloudflare/cloudflared:2024.12.2
+    image: cloudflare/cloudflared:2026.10.0
     command: tunnel --no-autoupdate run
     # Token lives in its own file so the backend (which loads .env.docker) never holds it.
     env_file: ./.env.tunnel
+    volumes:
+      # Caddy's local root CA (public cert only, copied from the proxy container) so cloudflared can
+      # verify the proxy: dashboard > Additional settings > CA Pool = this path, No TLS Verify off.
+      - ./proxy/certs/caddy-root.crt:/etc/cloudflared/caddy-root.crt:ro
     networks:
       app:
         ipv4_address: 172.29.0.3
