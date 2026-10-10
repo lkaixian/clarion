@@ -775,6 +775,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanResultOfflinePlaceholderName => 'Card holder (offline read)';
 
   @override
+  String get mfaTitle => 'Two-step verification';
+
+  @override
+  String get mfaPrompt =>
+      'Enter the 6-digit code from your authenticator app, or one of your recovery codes.';
+
+  @override
+  String get mfaCodeLabel => 'Code';
+
+  @override
+  String get mfaVerifyButton => 'Verify';
+
+  @override
+  String get mfaCancelButton => 'Back to sign in';
+
+  @override
   String get nfcBasicTagWarning =>
       'This tag type (NTAG213/215/216) works, but has no tamper-proof read counter: offline reads of it can\'t be checked for missing entries. Use an NTAG 424 DNA where accountability matters.';
 

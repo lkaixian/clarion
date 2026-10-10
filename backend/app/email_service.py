@@ -135,3 +135,38 @@ def send_self_registration_otp_email(to_email: str, otp_code: str, patient_name:
         to_email, "Your CLARION registration verification code", text_body, html_body,
         "self-registration", "send_self_registration_otp_email",
     )
+
+
+def send_new_signin_email(to_email: str, name: str, when_utc: str, device: str) -> bool:
+    """Heads-up that a sign-in came from a device this account hasn't used
+    before. Best effort; callers ignore False."""
+    text_body = (
+        f"Hello {name},\n\n"
+        f"Your CLARION account was just signed in to from a new device ({device}) at {when_utc} UTC.\n"
+        "If this was you, nothing to do. If not, change your password now and "
+        "sign out other sessions from the Security page.\n\n-- CLARION"
+    )
+    html_body = (
+        f"<p>Hello {html.escape(name)},</p>"
+        f"<p>Your CLARION account was just signed in to from a new device "
+        f"(<strong>{html.escape(device)}</strong>) at {html.escape(when_utc)} UTC.</p>"
+        "<p>If this was you, nothing to do. If not, change your password now and "
+        "sign out other sessions from the Security page.</p><p>-- CLARION</p>"
+    )
+    return _send(to_email, "New sign-in to your CLARION account", text_body, html_body,
+                 "new-signin", "send_new_signin_email")
+
+
+def send_security_notice_email(to_email: str, name: str, what: str) -> bool:
+    """Short "your account security changed" notice (MFA enabled / disabled /
+    reset, recovery code used). Best effort; callers ignore False."""
+    text_body = (
+        f"Hello {name},\n\n{what}\n\n"
+        "If this wasn't you, change your password and contact your administrator immediately.\n\n-- CLARION"
+    )
+    html_body = (
+        f"<p>Hello {html.escape(name)},</p><p>{html.escape(what)}</p>"
+        "<p>If this wasn't you, change your password and contact your administrator immediately.</p><p>-- CLARION</p>"
+    )
+    return _send(to_email, "CLARION account security change", text_body, html_body,
+                 "security-notice", "send_security_notice_email")

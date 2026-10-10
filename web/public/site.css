@@ -98,3 +98,24 @@ footer .brand img{background:#fff;border-radius:8px;padding:.2rem;height:2.4rem}
 .statusbar .svcline{display:inline-flex;align-items:center;gap:.5rem}
 .statusbar .muted,.statusbar a{color:#cfe3ee}
 .statusbar .muted{margin-left:auto;font-size:.85rem}
+
+/* expandable status cards */
+details.comp summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:.15rem;position:relative;padding-right:1.5rem}
+details.comp summary::-webkit-details-marker{display:none}
+details.comp summary::after{content:"";position:absolute;right:.25rem;top:.55rem;width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s}
+details.comp[open] summary::after{transform:rotate(-135deg)}
+details.comp summary .svc{border-top:0;padding:0}
+details.comp summary h2{margin:0;font-size:1.05rem}
+details.comp .svc-label{margin-left:1.35rem;font-size:.82rem}
+.more{border-top:1px solid var(--line);margin-top:.75rem;padding-top:.75rem}
+.more p{margin:.35rem 0}
+.typical{color:var(--navy);font-weight:600;font-size:.9rem}
+.impact{font-size:.9rem;color:var(--muted)}
+.checks{list-style:none;margin:.4rem 0 .6rem;padding:0}
+.checks li{display:flex;align-items:center;gap:.55rem;padding:.4rem 0;border-top:1px solid var(--line);font-size:.92rem}
+.checks li:first-child{border-top:0}
+.checks li b{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.checks li small{display:block;color:var(--muted);font-weight:400}
+.break{word-break:break-all}
+.muted-inline{font-weight:400;opacity:.85;margin-left:.25rem;font-size:.85em}
+[hidden]{display:none!important}

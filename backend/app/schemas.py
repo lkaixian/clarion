@@ -116,6 +116,8 @@ class UserOut(BaseModel):
     facility: Optional[str] = None
     patient_id: Optional[str] = None
     must_change_password: bool = False
+    # True once TOTP MFA is confirmed (models.User.mfa_enabled property).
+    mfa_enabled: bool = False
     # Per-counter reception scoping (models.User.section) -- the
     # FacilitySection name this receptionist/clinician is hard-pinned to, or
     # None if unscoped. Plain ORM column, so UserOut.from_attributes picks it
@@ -167,6 +169,47 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MfaChallenge(BaseModel):
+    """POST /auth/login when a second factor is still needed: NO access
+    token yet. `mfa_enrol` = the account's role requires MFA but it has not
+    been set up (the client shows the enrolment screen instead of a code box)."""
+    mfa_required: bool = True
+    mfa_enrol: bool = False
+    mfa_token: str
+
+
+class MfaCodeRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(min_length=6, max_length=16)
+
+
+class MfaTokenRequest(BaseModel):
+    mfa_token: str
+
+
+class MfaEnrolStartOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_png_base64: str
+
+
+class PasswordOnly(BaseModel):
+    password: str
+
+
+class PasswordAndCode(BaseModel):
+    password: str
+    code: str = Field(min_length=6, max_length=16)
+
+
+class SessionOut(BaseModel):
+    id: str
+    ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    issued_at: Any = None
+    current: bool = False
 
 
 class Token(BaseModel):
@@ -3121,3 +3164,9 @@ class DashboardFlowForecastOut(BaseModel):
 # ---------- AI ----------
 class SummaryRequest(BaseModel):
     patient_id: str
+
+
+class MfaTokenWithRecovery(Token):
+    """Returned once when MFA enrolment is confirmed: the session AND the
+    recovery codes (shown a single time, never retrievable again)."""
+    recovery_codes: List[str]

@@ -14,6 +14,7 @@ import Reporting from "./pages/Reporting";
 import Dashboard from "./pages/Dashboard";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import ChangePassword from "./pages/ChangePassword";
+import Security from "./pages/Security";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
 
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/security" element={<Protected><Security /></Protected>} />
         {/* Public big-screen waiting-room board — no auth, deliberately
             OUTSIDE <Protected>: a lobby TV has no logged-in user. The page
             itself calls the unauthenticated /display/{token} endpoint. */}

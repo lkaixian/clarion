@@ -2,7 +2,7 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
@@ -10,12 +10,13 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth, permissions, ldap_auth
+from .. import models, schemas, auth, permissions, ldap_auth, mfa
 from ..database import get_db
 from ..audit import log_access
-from ..email_service import send_password_reset_otp_email
+from ..email_service import send_new_signin_email, send_password_reset_otp_email
 from ..nric import normalize_nric
 from ..rate_limit import limiter
+from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,16 @@ _REFRESH_COOKIE_NAME = "clarion_refresh_token"
 _REFRESH_COOKIE_PATH = os.environ.get("REFRESH_COOKIE_PATH", "/").strip() or "/"
 
 
+_DUMMY_HASH: Optional[str] = None
+
+
+def _dummy_hash() -> str:
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = auth.hash_password(secrets.token_urlsafe(16))
+    return _DUMMY_HASH
+
+
 def _is_demo_env() -> bool:
     """Same demo-detection as main.py's CORS wildcard opt-in and seed.py's
     password-seeding gate -- duplicated rather than shared-imported, same
@@ -377,10 +388,63 @@ def _set_refresh_cookie(response: Response, plaintext_refresh_token: str) -> Non
     )
 
 
+def _client_meta(request: Request) -> "tuple[str, str]":
+    """(ip, user_agent) for the sessions list. The IP is the proxy-resolved
+    client address (same source the rate limiter keys on)."""
+    return get_remote_address(request), (request.headers.get("user-agent") or "")[:255]
+
+
+def _device_label(user_agent: str) -> str:
+    ua = user_agent or "unknown device"
+    for needle, label in (("Edg/", "Edge"), ("Chrome/", "Chrome"), ("Firefox/", "Firefox"),
+                          ("Safari/", "Safari"), ("okhttp", "CLARION mobile app"), ("Dart/", "CLARION mobile app")):
+        if needle in ua:
+            return label
+    return ua[:60]
+
+
+def _finish_primary_auth(
+    db: Session, request: Request, response: Response, user: models.User, fp: Optional[str],
+) -> "Union[schemas.Token, schemas.MfaChallenge]":
+    """Everything after a verified first factor: either hand back an MFA
+    challenge (no token) or issue the session. Shared by the local, LDAP-JIT
+    and LDAP-resync branches of login()."""
+    kind = mfa.challenge_kind(user)
+    if kind is not None:
+        log_access(db, user.patient_id, user.id, user.role, "login_mfa_challenge",
+                   detail=f"kind={kind}", actor_facility=user.facility)
+        return schemas.MfaChallenge(
+            mfa_enrol=(kind == "enrol"),
+            mfa_token=mfa.make_challenge(user.id, kind, mfa.password_marker(user)),
+        )
+    return _complete_login(db, request, response, user, fp)
+
+
+def _complete_login(
+    db: Session, request: Request, response: Response, user: models.User, fp: Optional[str],
+    mfa_ok: bool = False,
+) -> schemas.Token:
+    ip, ua = _client_meta(request)
+    new_device = bool(fp) and not db.query(models.RefreshToken.id).filter_by(
+        user_id=user.id, client_fingerprint=fp).first()
+    result = _issue_login_response(db, response, user, fingerprint=fp, ip=ip, user_agent=ua, mfa_ok=mfa_ok)
+    log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
+    if new_device and user.email and not user.email.endswith((".test", ".invalid", ".demo")):
+        try:
+            send_new_signin_email(user.email, user.full_name,
+                                  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"), _device_label(ua))
+        except Exception:  # noqa: BLE001 -- a notice must never break sign-in
+            logging.getLogger("clarion.auth").exception("new-device email failed")
+    return result
+
+
 def _issue_login_response(
     db: Session, response: Response, user: models.User,
     refresh_plaintext: Optional[str] = None,
     fingerprint: Optional[str] = None,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    mfa_ok: bool = False,
 ) -> schemas.Token:
     """Shared by every successful-auth branch in login() (local, LDAP JIT,
     LDAP resync) and by POST /auth/refresh: mints the short-lived access
@@ -400,7 +464,8 @@ def _issue_login_response(
         password_changed_at=user.password_changed_at,
     )
     if refresh_plaintext is None:
-        refresh_plaintext, _row = auth.issue_refresh_token(db, user, fingerprint=fingerprint)
+        refresh_plaintext, _row = auth.issue_refresh_token(
+            db, user, fingerprint=fingerprint, ip=ip, user_agent=user_agent, mfa_ok=mfa_ok)
     _set_refresh_cookie(response, refresh_plaintext)
     _with_missing_profile_fields(user)
     _attach_allowed_pages(db, user)
@@ -409,7 +474,7 @@ def _issue_login_response(
     return schemas.Token(access_token=token, user=user, refresh_token=refresh_plaintext)
 
 
-@router.post("/login", response_model=schemas.Token)
+@router.post("/login", response_model=Union[schemas.Token, schemas.MfaChallenge])
 @limiter.limit("20/minute")  # per-IP, ON TOP OF the per-account lockout below
 # (Security Audit M1) -- the per-account lockout alone doesn't stop
 # password-spraying: an attacker trying ONE guess each against many
@@ -463,9 +528,7 @@ def login(
     if user is None and ldap_eligible and ldap_auth.ldap_enabled():
         user = _jit_provision_ldap_user(db, form_data.username, form_data.password)
         if user is not None:
-            result = _issue_login_response(db, response, user, fingerprint=fp)
-            log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
-            return result
+            return _finish_primary_auth(db, request, response, user, fp)
         # Unknown to the directory, or authenticated but unmapped to any
         # role -- fall through to the same generic 401 as an unknown local
         # identifier (ldap_auth/_jit_provision_ldap_user already logged why).
@@ -503,9 +566,7 @@ def login(
                 user.login_locked_until = None
                 db.add(user)
                 db.commit()
-            result = _issue_login_response(db, response, user, fingerprint=fp)
-            log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
-            return result
+            return _finish_primary_auth(db, request, response, user, fp)
 
         # Same per-account lockout bookkeeping for an LDAP-backed account's
         # failed bind as for a local account's wrong password -- LDAP-backed
@@ -515,6 +576,13 @@ def login(
             user.login_locked_until = now + timedelta(minutes=auth.LOGIN_LOCKOUT_MINUTES)
         db.add(user)
         db.commit()
+        log_access(db, user.patient_id, user.id, user.role,
+                   "login_locked" if user.login_locked_until else "login_failed",
+                   detail=f"count={user.login_failed_count}", actor_facility=user.facility)
+    else:
+        # Unknown identifier: burn the same hashing time a real account costs
+        # so response timing doesn't reveal which identifiers exist.
+        auth.verify_password(form_data.password, _dummy_hash())
 
     raise HTTPException(status_code=401, detail="Incorrect email/NRIC or password")
 
@@ -546,7 +614,8 @@ def refresh_access_token(
         raise HTTPException(status_code=401, detail="No refresh token provided")
 
     fp = auth.client_fingerprint(request.headers.get("user-agent"))
-    result = auth.rotate_refresh_token(db, raw_token, presented_fingerprint=fp)
+    ip, ua = _client_meta(request)
+    result = auth.rotate_refresh_token(db, raw_token, presented_fingerprint=fp, ip=ip, user_agent=ua)
     if result is None:
         # A stale cookie is now definitely dead (either genuinely expired,
         # or auth.rotate_refresh_token just nuked the whole chain on a

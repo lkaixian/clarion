@@ -90,12 +90,75 @@ class AuthProvider extends ChangeNotifier {
     unawaited(offlineLog.sync(_api, u.id));
   }
 
-  Future<bool> login(String email, String password) async {
+  /// Set between a password step that needs a second factor and the code
+  /// step. While non-null the login screen shows the code form.
+  String? mfaToken;
+  bool get awaitingMfa => mfaToken != null;
+
+  void cancelMfa() {
+    mfaToken = null;
+    error = null;
+    notifyListeners();
+  }
+
+  /// Second step: exchange the challenge token + a TOTP/recovery code for a
+  /// session. A failed code keeps the challenge so the user can retry; an
+  /// expired challenge (401 "start again") drops back to the password step.
+  Future<bool> verifyMfa(String code) async {
+    final token = mfaToken;
+    if (token == null) return false;
     isBusy = true;
     error = null;
     notifyListeners();
     try {
+      final data = await _api.verifyMfa(token, code);
+      await _adoptSession(data);
+      mfaToken = null;
+      return true;
+    } on ApiException catch (e) {
+      error = e.message;
+      if (e.statusCode == 401 && e.message.toLowerCase().contains('start again')) mfaToken = null;
+      return false;
+    } catch (e) {
+      error = 'Unexpected error: $e';
+      return false;
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _adoptSession(Map<String, dynamic> data) async {
+    final token = data['access_token'] as String;
+    final userJson = data['user'] as Map<String, dynamic>;
+    await _tokenStorage.saveToken(token);
+    final refreshToken = data['refresh_token'] as String?;
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await _tokenStorage.saveRefreshToken(refreshToken);
+    }
+    await _tokenStorage.saveUser(userJson);
+    user = MBUser.fromJson(userJson);
+    status = AuthStatus.authenticated;
+    syncOfflineTagData();
+  }
+
+  Future<bool> login(String email, String password) async {
+    isBusy = true;
+    error = null;
+    mfaToken = null;
+    notifyListeners();
+    try {
       final data = await _api.login(email, password);
+      if (data['mfa_required'] == true) {
+        if (data['mfa_enrol'] == true) {
+          // Enrolment (QR + recovery codes) lives in the web console.
+          error = 'Your role requires two-step verification. Set it up in the '
+              'CLARION web console first, then sign in here.';
+          return false;
+        }
+        mfaToken = data['mfa_token'] as String?;
+        return false;
+      }
       final token = data['access_token'] as String;
       final userJson = data['user'] as Map<String, dynamic>;
       await _tokenStorage.saveToken(token);

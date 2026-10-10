@@ -1212,6 +1212,63 @@ Behaviour you should expect:
 
 ---
 
+## Public site: status page details and the app download
+
+- **Status page (`/status`):** every card expands. The **API** card shows
+  what it is made of -- Sign-in, Patient records, Emergency card lookup,
+  Queue & appointments, Background jobs, and Hospital network sync (central
+  reachable, when federation is configured) -- each a cheap read-only
+  probe run on the server (`backend/app/main.py::_api_checks`), with latency.
+  Each component also shows what "normal" looks like (typical and p95 latency
+  over this server's last ~10 minutes of checks) and what stops working if it
+  is down. Still status + milliseconds only; no counts, hostnames or errors.
+  A failing sub-check turns the API "degraded" and the overall banner
+  "Partial outage".
+- **Get the app (`/get-app`):** static page for people who don't have CLARION:
+  Android download, install steps, QR code for the page, SHA-256 of the file,
+  and the web console as the fallback. The sign-in page and the landing page
+  link to it.
+- **Publishing the APK** (the file is never committed):
+  1. `flutter build apk --release` in `mobile_flutter/` (the default API base
+     is baked in as `https://clarion.larmkx.com/api`; override with
+     `--dart-define=API_BASE_URL=...`).
+  2. Copy `build/app/outputs/flutter-apk/app-release.apk` to
+     `web/public/downloads/clarion.apk` and write its fingerprint:
+     `sha256sum clarion.apk | cut -d' ' -f1 > clarion.apk.sha256`.
+  3. Rebuild the `web` image. Until the file exists the page shows
+     "Download is being prepared".
+  Note: release builds are currently signed with the DEBUG key (fine for
+  direct installs/demos; a real keystore is needed for the Play Store).
+
+---
+
+## Sign-in security (public access)
+
+- **Login page:** `/login` has two paths (Patient / public, Staff); the
+  backend resolves the identifier either way. Errors are uniform (no account
+  enumeration, dummy hash for unknown identifiers), lockout feedback shows
+  when to retry, and failed/locked sign-ins are written to the audit log
+  (`login_failed`, `login_locked`, `mfa_failed`, ...).
+- **MFA (TOTP):** `CLARION_MFA_REQUIRED_ROLES` (comma list; the central compose
+  file defaults it to `admin,clinician,records_officer`, the app default is
+  empty = opt-in). A required role is walked through enrolment (QR +
+  recovery codes) at first sign-in; anyone who has enrolled is always
+  challenged. Secrets are AES-GCM encrypted at rest (key derived from
+  `SECRET_KEY`); a code can't be replayed; wrong codes feed the same account
+  lockout as wrong passwords. The challenge token is not a JWT, so it can
+  never act as an access token.
+- **Lost phone + codes:** an admin clears it (`POST /auth/mfa/reset/{user_id}`),
+  the user re-enrols at next sign-in. Rotating `SECRET_KEY` invalidates every
+  enrolled secret -- re-enrol everyone.
+- **Sessions:** `/security` in the web console lists signed-in devices
+  (IP, browser, last active) and lets a user sign out one or all others. A
+  sign-in from a never-seen browser sends a "new sign-in" email (Mailtrap,
+  best effort).
+- **Mobile:** the app prompts for the code after the password; enrolment
+  itself is done once in the web console.
+
+---
+
 ## Federation: central MPI + hospital nodes
 
 Each hospital keeps its own database. The central node runs `mpi`

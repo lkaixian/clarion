@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLARION | Get the app</title>
+<meta name="description" content="Download the CLARION mobile app for Android: patient records, emergency card, queue status and bookings.">
+<meta name="theme-color" content="#00467c">
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png">
+<link rel="apple-touch-icon" href="/brand/icon-180.png">
+<link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/motion.css">
+<script src="/site.js"></script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CLARION home"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/get-app" aria-current="page">Get the app</a></li>
+      <li><a href="/status.html">Status</a></li>
+    </ul>
+    <a class="btn" href="/login">Sign in</a>
+  </div>
+</header>
+
+<main>
+<section class="hero" aria-labelledby="h">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">CLARION mobile app</span>
+      <h1 id="h">Your records, your queue and your emergency card, on your phone.</h1>
+      <p class="lead">Book visits, see your queue number, view your records and keep your emergency card ready. New here? You can register inside the app with your NRIC.</p>
+      <div class="cta">
+        <a class="btn big" id="apk-btn" href="/downloads/clarion.apk" download hidden data-apk>
+          <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#mobile"/></svg>
+          Download for Android <span class="muted-inline" id="apk-size"></span>
+        </a>
+        <span class="btn big ghost" id="apk-pending" aria-disabled="true">Download is being prepared</span>
+        <a class="btn big ghost" href="/login">Use the web version instead</a>
+      </div>
+      <p class="muted mt" id="apk-meta"></p>
+    </div>
+
+    <div class="card">
+      <h2>Scan to open this page on your phone</h2>
+      <img src="/brand/get-app-qr.png" width="220" height="220" alt="QR code linking to this download page" style="display:block;margin:.5rem auto">
+      <p class="muted">Point your phone camera at the code, then tap Download.</p>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Install on Android</span>
+      <h2 class="t">Three steps</h2>
+    </div>
+    <div class="grid g3">
+      <div class="card feat" data-reveal><h3>1. Download</h3><p>Tap <b>Download for Android</b>. Your browser may warn that this type of file can harm your device; the file comes straight from this site.</p></div>
+      <div class="card feat" data-reveal><h3>2. Allow &amp; install</h3><p>Open the downloaded file. If Android asks, allow your browser to <b>install unknown apps</b>, then tap Install. You can turn that permission off again afterwards.</p></div>
+      <div class="card feat" data-reveal><h3>3. Sign in or register</h3><p>Open CLARION. Patients sign in with their NRIC and password, or choose <b>Register</b> to create an account in a few minutes.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="grid g2">
+      <div class="card" data-reveal>
+        <h3>Check the file (optional)</h3>
+        <p class="muted">After downloading you can compare its SHA-256 fingerprint with the one below to confirm it is the file published here.</p>
+        <p><code id="apk-sha" class="break">Not available yet</code></p>
+      </div>
+      <div class="card" data-reveal>
+        <h3>iPhone and other devices</h3>
+        <p class="muted">There is no iPhone app yet. Everything important is available in the web console: open <a href="/login">the sign-in page</a> in any browser.</p>
+        <p class="muted">Staff accounts: your administrator will tell you how to get set up.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
+    <p>Demo environment. All patient data is fictional.</p>
+    <p><a href="/">Home</a> &nbsp;·&nbsp; <a href="/login">Sign in</a> &nbsp;·&nbsp; <a href="/status.html">Status</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

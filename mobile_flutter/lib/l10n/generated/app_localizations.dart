@@ -1434,6 +1434,36 @@ abstract class AppLocalizations {
   /// **'Card holder (offline read)'**
   String get scanResultOfflinePlaceholderName;
 
+  /// No description provided for @mfaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-step verification'**
+  String get mfaTitle;
+
+  /// No description provided for @mfaPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code from your authenticator app, or one of your recovery codes.'**
+  String get mfaPrompt;
+
+  /// No description provided for @mfaCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get mfaCodeLabel;
+
+  /// No description provided for @mfaVerifyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get mfaVerifyButton;
+
+  /// No description provided for @mfaCancelButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get mfaCancelButton;
+
   /// No description provided for @nfcBasicTagWarning.
   ///
   /// In en, this message translates to:

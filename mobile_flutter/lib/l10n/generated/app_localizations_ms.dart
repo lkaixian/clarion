@@ -781,6 +781,22 @@ class AppLocalizationsMs extends AppLocalizations {
       'Pemegang kad (bacaan luar talian)';
 
   @override
+  String get mfaTitle => 'Pengesahan dua langkah';
+
+  @override
+  String get mfaPrompt =>
+      'Masukkan kod 6 digit daripada aplikasi pengesah anda, atau salah satu kod pemulihan anda.';
+
+  @override
+  String get mfaCodeLabel => 'Kod';
+
+  @override
+  String get mfaVerifyButton => 'Sahkan';
+
+  @override
+  String get mfaCancelButton => 'Kembali ke log masuk';
+
+  @override
   String get nfcBasicTagWarning =>
       'Jenis tag ini (NTAG213/215/216) berfungsi, tetapi tiada pembilang bacaan kalis ubah: bacaan luar talian tidak dapat disemak untuk entri yang hilang. Gunakan NTAG 424 DNA jika akauntabiliti penting.';
 

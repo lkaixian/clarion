@@ -106,6 +106,9 @@ services:
       MINIO_SECURE: "false"
       REDIS_URL: redis://redis:6379/0
       LOG_FORMAT: json
+      # The public node: these roles must enrol an authenticator app (TOTP) at
+      # first sign-in. Anyone who enrols is challenged regardless of role.
+      CLARION_MFA_REQUIRED_ROLES: ${CLARION_MFA_REQUIRED_ROLES:-admin,clinician,records_officer}
       CLARION_DISABLE_LOCAL_AI: "1"   # no Ollama on the Pi; AI falls back to deterministic paths
       # Trust X-Forwarded-* from exactly the proxy and cloudflared hops. gunicorn takes plain IPs
       # only (a CIDR crashes it at boot), hence the pinned addresses on those two services.

@@ -228,6 +228,18 @@ class ApiClient {
     });
   }
 
+  /// `POST /auth/mfa/verify` -- second step of a login that answered with an
+  /// MFA challenge. Same response shape as [login] on success.
+  Future<Map<String, dynamic>> verifyMfa(String mfaToken, String code) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/mfa/verify',
+        data: {'mfa_token': mfaToken, 'code': code},
+      );
+      return response.data!;
+    });
+  }
+
   /// `POST /auth/request-password-reset-otp` — public (no bearer token
   /// needed, and none is sent even if one happens to be cached — this is
   /// reachable straight from the pre-login LoginScreen). Step 1 of the

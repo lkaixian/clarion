@@ -24,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // generically named for that reason.
   final _identifierController = TextEditingController(text: 'patient@clarion.demo');
   final _passwordController = TextEditingController(text: 'patient123');
+  final _codeController = TextEditingController();
   bool _obscure = true;
 
   @override
@@ -52,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _identifierController.dispose();
     _passwordController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -64,6 +66,55 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(content: Text(auth.error ?? l10n.loginFailedGeneric)),
       );
     }
+  }
+
+  Future<void> _handleVerify() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.verifyMfa(_codeController.text.trim());
+    if (ok) {
+      _codeController.clear();
+    } else if (mounted && auth.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(auth.error!)));
+    }
+  }
+
+  List<Widget> _buildMfaStep(AppLocalizations l10n, AuthProvider auth) {
+    return [
+      Text(l10n.mfaTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      Text(l10n.mfaPrompt, textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: context.palette.textMuted)),
+      const SizedBox(height: 16),
+      TextField(
+        controller: _codeController,
+        autofocus: true,
+        autocorrect: false,
+        maxLength: 11,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 20, letterSpacing: 4),
+        decoration: InputDecoration(labelText: l10n.mfaCodeLabel, counterText: ''),
+        onSubmitted: (_) => auth.isBusy ? null : _handleVerify(),
+      ),
+      const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: auth.isBusy ? null : _handleVerify,
+          child: auth.isBusy
+              ? const SizedBox(
+                  height: 20, width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(l10n.mfaVerifyButton),
+        ),
+      ),
+      TextButton(
+        onPressed: () {
+          _codeController.clear();
+          auth.cancelMfa();
+        },
+        child: Text(l10n.mfaCancelButton),
+      ),
+    ];
   }
 
   @override
@@ -119,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                if (auth.awaitingMfa) ..._buildMfaStep(l10n, auth) else ...[
                 TextField(
                   controller: _identifierController,
                   keyboardType: TextInputType.text,
@@ -178,6 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
+                ],
               ],
             ),
           ),
