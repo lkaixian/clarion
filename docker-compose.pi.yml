@@ -1,7 +1,10 @@
 # CLARION on a Raspberry Pi 4 behind a Cloudflare Tunnel -- the public demo node.
 #
-# Slim sibling of docker-compose.yml: SQLite + local object store, no MariaDB /
-# MinIO / Orthanc / observability, no host ports. The ONLY way in is the tunnel:
+# Slim sibling of docker-compose.yml. This is the CENTRAL node: it owns the one
+# shared MariaDB + MinIO that every hospital node (docker-compose.spoke.yml)
+# connects to over a private link. No Orthanc / observability. The ONLY way
+# in from the internet is the tunnel (DB/MinIO ports bind to CENTRAL_BIND_IP,
+# default loopback -- set it to this host's Tailscale/WireGuard address):
 #
 #   internet -> Cloudflare -> cloudflared -> proxy (Caddy, headers + routing)
 #                                              |- /            welcome + status page
@@ -16,7 +19,11 @@
 #        SECRET_KEY, OTP_HMAC_KEY            (two different token_hex(32) values)
 #        CLARION_SITE_ADDRESS=clarion.larmkx.com
 #      .env.tunnel (separate file, NOT .env.docker): TUNNEL_TOKEN=...
-#   3. docker compose -f docker-compose.pi.yml --env-file .env.docker up -d --build
+#      Shared-data values the spokes must also hold: MARIADB_APP_PASSWORD,
+#      MINIO_BACKEND_PASSWORD and the SAME SECRET_KEY / OTP_HMAC_KEY.
+#      CENTRAL_BIND_IP=<this host's private-link address>   (never 0.0.0.0)
+#   3. bash backend/db/mariadb/generate-encryption-key.sh     # once (TDE keyfile)
+#      docker compose -f docker-compose.pi.yml --env-file .env.docker up -d --build
 #   4. docker compose -f docker-compose.pi.yml exec backend python /app/seed.py
 #      APP_ENV is "production" here, so seed prints a random password per demo
 #      account ONCE -- copy them. (The admin123-style demo logins are deliberately
@@ -91,9 +98,12 @@ services:
               "-b", "0.0.0.0:8000", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
     environment:
       APP_ENV: production
-      DATABASE_URL: sqlite:////app/data/clarion.db
-      CLARION_STORAGE_BACKEND: local
-      CLARION_STORAGE_ROOT: /app/data/object_store
+      DATABASE_URL: mysql+pymysql://clarion_app:${MARIADB_APP_PASSWORD:-change-me-app}@mariadb:3306/${MARIADB_DATABASE:-clarion}?charset=utf8mb4
+      CLARION_STORAGE_BACKEND: minio
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: clarion-backend
+      MINIO_SECRET_KEY: ${MINIO_BACKEND_PASSWORD:-change-me-minio-backend}
+      MINIO_SECURE: "false"
       REDIS_URL: redis://redis:6379/0
       LOG_FORMAT: json
       CLARION_DISABLE_LOCAL_AI: "1"   # no Ollama on the Pi; AI falls back to deterministic paths
@@ -107,6 +117,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status==200 else 1)"]
       interval: 30s
@@ -131,6 +145,125 @@ services:
       start_period: 10s
       retries: 3
 
+  # Shared database -- the single source of truth for every node. Reached by
+  # the local backend over `app`, and by spokes via CENTRAL_BIND_IP:3306.
+  mariadb:
+    <<: [*restart, *env-file]
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-change-me-root}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-clarion}
+      MARIADB_APP_PASSWORD: ${MARIADB_APP_PASSWORD:-change-me-app}
+      MARIADB_MIGRATE_PASSWORD: ${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}
+      MARIADB_REPORT_PASSWORD: ${MARIADB_REPORT_PASSWORD:-change-me-report}
+      MARIADB_METRICS_PASSWORD: ${MARIADB_METRICS_PASSWORD:-change-me-metrics-password}
+      MARIADB_AUTO_UPGRADE: "1"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=256M   # Pi 4: shared with everything else
+      - --max-connections=200
+      - --log-bin=clarion-bin
+      - --binlog-format=ROW
+      - --binlog-expire-logs-seconds=604800
+      - --log-bin-trust-function-creators=1
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./backend/db/mariadb:/docker-entrypoint-initdb.d:ro
+      - ./backend/db/mariadb/encryption.cnf:/etc/mysql/mariadb.conf.d/99-encryption.cnf:ro
+      - ./backend/db/mariadb/encryption:/etc/mysql/encryption:ro
+    ports:
+      # Private link only. Loopback unless CENTRAL_BIND_IP is set.
+      - "${CENTRAL_BIND_IP:-127.0.0.1}:${CENTRAL_DB_PORT:-3306}:3306"
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # One-shot: brings the shared schema to head as the DDL account. Spokes never
+  # migrate (their backend verifies-or-refuses), so upgrade central first.
+  migrate:
+    <<: *env-file   # SECRET_KEY: migration b2d7e4a9c1f6 keys the audit hash chain with it
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: clarion/backend:local
+    restart: "no"
+    working_dir: /app
+    environment:
+      DATABASE_URL: mysql+pymysql://clarion_migrate:${MARIADB_MIGRATE_PASSWORD:-change-me-migrate}@mariadb:3306/${MARIADB_DATABASE:-clarion}?charset=utf8mb4
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    networks: [app]
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  # Shared object store (documents, signatures, photos). A spoke writing to a
+  # local disk would hide its uploads from every other node.
+  minio:
+    <<: [*restart, *env-file]
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-clarion}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${CENTRAL_BIND_IP:-127.0.0.1}:9000:9000"   # S3 API; console stays internal
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  minio-init:
+    <<: [*restart, *env-file]
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init/10-accounts.sh"]
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-clarion}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-clarion-dev-secret}
+      MINIO_BACKEND_PASSWORD: ${MINIO_BACKEND_PASSWORD:-change-me-minio-backend}
+      MINIO_ORTHANC_PASSWORD: ${MINIO_ORTHANC_PASSWORD:-change-me-minio-orthanc}
+      MINIO_BACKUP_PASSWORD: ${MINIO_BACKUP_PASSWORD:-change-me-minio-backup}
+    volumes:
+      - ./backend/db/minio/10-accounts.sh:/init/10-accounts.sh:ro
+      - ./backend/db/minio/policies:/policies:ro
+    networks: [app]
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # Central MPI / record locator: holds only hospital public keys and opaque
+  # visit pointers (no PHI, no NRICs). ONE worker on purpose -- its replay
+  # cache is process-local. Reached through the proxy at /mpi/*.
+  mpi:
+    <<: *restart
+    image: clarion/backend:local
+    command: ["uvicorn", "mpi.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]
+    working_dir: /app
+    environment:
+      MPI_DATABASE_URL: sqlite:////data/mpi.db
+      MPI_ADMIN_TOKEN: ${MPI_ADMIN_TOKEN:-}   # unset = hospital registration disabled
+    volumes:
+      - mpi_data:/data
+    expose: ["8100"]
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
   redis:
     <<: *restart
     image: redis:7.4-alpine
@@ -153,5 +286,8 @@ networks:
 
 volumes:
   clarion_db:
+  mpi_data:
+  mariadb_data:
+  minio_data:
   redis_data:
   caddy_data:
