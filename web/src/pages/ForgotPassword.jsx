@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { requestPasswordResetOtp, resetPasswordWithOtp } from "../api/client";
+import { requestPasswordResetOtp, resetPasswordWithOtp, errorMessage } from "../api/client";
+import PasswordRules, { passwordMeetsRules } from "../components/PasswordRules";
 
 // Two-step self-service reset: NRIC only (no date of birth — DOB is
 // guessable/knowable PII, same weakness NRIC itself has, so it was dropped
@@ -32,7 +33,7 @@ export default function ForgotPassword() {
       setInfo("If this NRIC has a registered account with an email on file, a verification code has been sent to it.");
       setStep(2);
     } catch (err) {
-      setError(err?.response?.data?.detail || "Could not request a verification code. Try again shortly.");
+      setError(errorMessage(err, "Could not request a verification code. Try again shortly."));
     } finally {
       setLoading(false);
     }
@@ -45,6 +46,10 @@ export default function ForgotPassword() {
       setError("Enter the code and a new password.");
       return;
     }
+    if (!passwordMeetsRules(newPassword)) {
+      setError("Your new password does not meet all the requirements.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setError("Passwords don't match.");
       return;
@@ -54,7 +59,7 @@ export default function ForgotPassword() {
       await resetPasswordWithOtp(nationalId.trim(), otpCode.trim(), newPassword);
       navigate("/login", { state: { resetSuccess: true } });
     } catch (err) {
-      setError(err?.response?.data?.detail || "Could not reset your password. Check the code and try again.");
+      setError(errorMessage(err, "Could not reset your password. Check the code and try again."));
     } finally {
       setLoading(false);
     }
@@ -109,7 +114,8 @@ export default function ForgotPassword() {
               type="password"
               autoComplete="new-password"
             />
-            <label className="block text-sm font-medium text-slate-700 mb-1">Confirm new password</label>
+            <PasswordRules value={newPassword} />
+            <label className="block text-sm font-medium text-slate-700 mb-1 mt-3">Confirm new password</label>
             <input
               className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={confirmPassword}

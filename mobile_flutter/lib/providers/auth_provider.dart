@@ -192,12 +192,12 @@ class AuthProvider extends ChangeNotifier {
   /// doesn't resurrect the forced-change screen. No fresh login required:
   /// `_AuthGate` is a `Consumer<AuthProvider>`, so notifyListeners() alone
   /// is enough for it to fall through to Home/SeniorHome.
-  Future<bool> changePassword(String currentPassword, String newPassword) async {
+  Future<bool> changePassword(String newPassword) async {
     isBusy = true;
     error = null;
     notifyListeners();
     try {
-      await _api.changePassword(currentPassword: currentPassword, newPassword: newPassword);
+      await _api.changePassword(newPassword: newPassword);
       if (user != null) {
         user = user!.copyWith(mustChangePassword: false);
         await _tokenStorage.saveUser(user!.toJson());

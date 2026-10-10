@@ -2586,3 +2586,16 @@ class OfflineTagRead(Base):
     prev_hash = Column(String(64), nullable=False)
     entry_hash = Column(String(64), nullable=False)
     chain_ok = Column(Boolean, nullable=False, default=True)
+
+
+class StatusDaily(Base):
+    """Per-day, per-component health sample counts behind the public status
+    page's 90-day bars (GET /status/history). `total` probes taken that UTC
+    day, `bad` of them down/degraded. Aggregates only -- no hostnames, error
+    text or per-request data. Days with no samples simply have no row."""
+    __tablename__ = "status_daily"
+
+    day = Column(String(10), primary_key=True)        # UTC YYYY-MM-DD
+    component = Column(String(32), primary_key=True)  # api|database|object_store|cache|local_ai
+    total = Column(Integer, nullable=False, default=0)
+    bad = Column(Integer, nullable=False, default=0)

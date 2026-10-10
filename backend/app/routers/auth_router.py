@@ -906,7 +906,12 @@ def change_password(
     auth.get_current_user (via get_current_user_allow_pending_change
     instead) -- otherwise a user in that state could never call this
     endpoint to clear the flag."""
-    if not auth.verify_password(payload.current_password, current_user.hashed_password):
+    # A forced change (temporary password) is already authenticated by the
+    # session that just signed in with it, so only new + confirm are asked.
+    # Any voluntary change must still prove the current password.
+    if not current_user.must_change_password and not auth.verify_password(
+        payload.current_password or "", current_user.hashed_password
+    ):
         # 400, not 401: a 401 means "session expired" to every client (refresh/bounce).
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 

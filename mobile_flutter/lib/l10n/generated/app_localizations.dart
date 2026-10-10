@@ -318,6 +318,42 @@ abstract class AppLocalizations {
   /// **'New password'**
   String get newPasswordLabel;
 
+  /// No description provided for @passwordRulesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your password needs:'**
+  String get passwordRulesTitle;
+
+  /// No description provided for @passwordRuleLength.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 8 characters'**
+  String get passwordRuleLength;
+
+  /// No description provided for @passwordRuleNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 1 number'**
+  String get passwordRuleNumber;
+
+  /// No description provided for @passwordRuleUpper.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 1 capital letter'**
+  String get passwordRuleUpper;
+
+  /// No description provided for @passwordRuleSpecial.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 1 special character (! @ # \$ * . ?)'**
+  String get passwordRuleSpecial;
+
+  /// No description provided for @passwordRulesNotMet.
+  ///
+  /// In en, this message translates to:
+  /// **'Password does not meet all the requirements.'**
+  String get passwordRulesNotMet;
+
   /// No description provided for @confirmNewPasswordLabel.
   ///
   /// In en, this message translates to:
@@ -1193,6 +1229,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Language'**
   String get languageLabel;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
 
   /// No description provided for @themeLabel.
   ///

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession } from "../api/client";
+import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession, errorMessage } from "../api/client";
 import { landingPathFor } from "../lib/access";
 
 const INPUT =
@@ -15,12 +15,7 @@ function messageFor(err, fallback) {
   const detail = err?.response?.data?.detail;
   if (!err?.response) return "Can't reach the server. Check your connection and try again.";
   if (status === 429) {
-    const m = typeof detail === "string" && detail.match(/after (\S+)/);
-    if (m) {
-      const when = new Date(m[1]);
-      if (!Number.isNaN(when.getTime())) return `Too many attempts. Try again after ${when.toLocaleTimeString()}.`;
-    }
-    return "Too many attempts. Please wait a few minutes and try again.";
+    return errorMessage(err, "Too many attempts. Please wait a few minutes and try again.");
   }
   if (status === 401) return fallback;
   return typeof detail === "string" ? detail : "Something went wrong. Please try again.";

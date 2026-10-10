@@ -1,6 +1,23 @@
 import 'package:dio/dio.dart';
 
 /// A friendly, UI-ready wrapper around whatever Dio throws.
+final _isoUtc = RegExp(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z');
+
+/// "...Try again after 2026-10-10T08:25:40Z." -> "...after 4:25 PM (in 4 minutes)."
+/// in the device's own timezone, 12-hour clock.
+String _friendlyDetail(String text) {
+  text = text.replaceAll('Value error, ', '');
+  return text.replaceAllMapped(_isoUtc, (m) {
+    final when = DateTime.tryParse(m.group(0)!)?.toLocal();
+    if (when == null) return m.group(0)!;
+    final h = when.hour % 12 == 0 ? 12 : when.hour % 12;
+    final clock = '$h:${when.minute.toString().padLeft(2, '0')} ${when.hour < 12 ? 'AM' : 'PM'}';
+    final mins = (when.difference(DateTime.now()).inSeconds / 60).ceil();
+    if (mins <= 0) return clock;
+    return mins <= 1 ? '$clock (in under a minute)' : '$clock (in $mins minutes)';
+  });
+}
+
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
@@ -59,6 +76,8 @@ class ApiException implements Exception {
       // Any other unexpected shape (number, bool, nested object, ...).
       detail = _genericDetailFallback;
     }
+
+    detail = _friendlyDetail(detail);
 
     switch (e.type) {
       case DioExceptionType.connectionTimeout:

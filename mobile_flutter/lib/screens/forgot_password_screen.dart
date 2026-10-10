@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/password_rules.dart';
 
 enum _Step { requestOtp, verifyAndReset }
 
@@ -90,6 +91,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     if (newPassword != confirmPassword) {
       context.snack(l10n.passwordsDoNotMatch);
+      return;
+    }
+    if (!passwordMeetsRules(newPassword)) {
+      context.snack(l10n.passwordRulesNotMet);
       return;
     }
 
@@ -188,6 +193,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
           ),
         ),
+        PasswordRules(controller: _newPasswordController),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmPasswordController,

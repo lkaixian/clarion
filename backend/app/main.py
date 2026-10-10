@@ -508,7 +508,7 @@ def app_version():
     blocking one. Bump CLARION_APP_LATEST_VERSION when a new APK is
     published to /get-app."""
     return {
-        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.5.0"),
+        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.6.0"),
         "min_supported": os.environ.get("CLARION_APP_MIN_VERSION", ""),
         "download_url": os.environ.get("CLARION_APP_DOWNLOAD_URL", "/get-app"),
     }
@@ -677,11 +677,13 @@ def public_status():
     now = time.monotonic()
     if _status_cache["body"] is not None and now - _status_cache["at"] < _STATUS_TTL_S:
         return _status_cache["body"]
+    t_api = time.perf_counter()
     api_checks = _api_checks()
+    api_ms = round((time.perf_counter() - t_api) * 1000)
     api_down = any(c["status"] == "down" for c in api_checks)
     components = {
         # The process answered, so the API is "up"; a failing sub-check makes it "degraded".
-        "api": {"status": "degraded" if api_down else "up", "checks": api_checks},
+        "api": {"status": "degraded" if api_down else "up", "ms": api_ms, "checks": api_checks},
         "database": _with_baseline("database", _timed(_check_database)),
         "object_store": _with_baseline("object_store", _timed(_check_object_store)),
         "cache": _with_baseline("cache", _check_cache()),
@@ -691,7 +693,88 @@ def public_status():
     core = ("api", "database", "object_store", "cache")
     body = {"status": "ok" if all(components[k]["status"] not in ("down", "degraded") for k in core) else "degraded", "components": components}
     _status_cache.update(at=now, body=body)
+    _record_status(components)
     return body
+
+_STATUS_RECORD_EVERY_S = 60.0
+_status_recorded_at = 0.0
+
+
+def _record_status(components: dict) -> None:
+    """Fold one probe round into today's per-component counters. Throttled to
+    one write per minute per process; never raises (status must not break on
+    its own bookkeeping)."""
+    global _status_recorded_at
+    now = time.monotonic()
+    if now - _status_recorded_at < _STATUS_RECORD_EVERY_S:
+        return
+    _status_recorded_at = now
+    from datetime import datetime, timezone
+    from sqlalchemy.exc import IntegrityError
+    from . import models
+    from .database import SessionLocal
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    db = SessionLocal()
+    try:
+        for name, comp in components.items():
+            if comp.get("status") == "disabled":
+                continue
+            bad = 1 if comp.get("status") in ("down", "degraded") else 0
+            for _ in range(2):  # insert race between workers -> retry as update
+                q = db.query(models.StatusDaily).filter_by(day=day, component=name)
+                if q.update({"total": models.StatusDaily.total + 1, "bad": models.StatusDaily.bad + bad}):
+                    break
+                try:
+                    db.add(models.StatusDaily(day=day, component=name, total=1, bad=bad))
+                    db.flush()
+                    break
+                except IntegrityError:
+                    db.rollback()
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    finally:
+        db.close()
+
+
+@app.get("/status/history", include_in_schema=False)
+def public_status_history(days: int = 90):
+    """Per-day sample counts for the status page's uptime bars. Public;
+    aggregates only. `days` is clamped to 1..90."""
+    from datetime import datetime, timedelta, timezone
+    from . import models
+    from .database import SessionLocal
+    days = max(1, min(days, 90))
+    since = (datetime.now(timezone.utc) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    db = SessionLocal()
+    try:
+        rows = db.query(models.StatusDaily).filter(models.StatusDaily.day >= since).all()
+    finally:
+        db.close()
+    out: dict = {}
+    for r in rows:
+        out.setdefault(r.component, {})[r.day] = {"total": r.total, "bad": r.bad}
+    return {"days": days, "components": out}
+
+
+@app.on_event("startup")
+def _start_status_sampler() -> None:
+    """Sample health once a minute even when nobody has the status page open,
+    so the 90-day bars reflect real uptime rather than visitor traffic."""
+    if os.environ.get("CLARION_STATUS_SAMPLER", "1") != "1":
+        return
+    import threading
+
+    def loop() -> None:
+        while True:
+            time.sleep(_STATUS_RECORD_EVERY_S)
+            try:
+                public_status()
+            except Exception:  # noqa: BLE001
+                pass
+
+    threading.Thread(target=loop, name="status-sampler", daemon=True).start()
+
 
 
 def _check_database() -> bool:
