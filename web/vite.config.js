@@ -14,16 +14,6 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      {
-        // Mirror nginx: "/" is the landing page, the SPA login is /login.
-        name: 'landing-at-root',
-        configureServer(server) {
-          server.middlewares.use((req, _res, next) => {
-            if (req.url === '/' || req.url.startsWith('/?')) req.url = '/welcome.html'
-            next()
-          })
-        },
-      },
     ],
     server: {
       host: '0.0.0.0',

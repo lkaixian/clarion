@@ -32,6 +32,7 @@ RUN apk add --no-cache curl
 
 # SPA + /api reverse-proxy config.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 # Static build output.
 COPY --from=build /app/dist /usr/share/nginx/html

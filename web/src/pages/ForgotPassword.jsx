@@ -52,7 +52,7 @@ export default function ForgotPassword() {
     setLoading(true);
     try {
       await resetPasswordWithOtp(nationalId.trim(), otpCode.trim(), newPassword);
-      navigate("/", { state: { resetSuccess: true } });
+      navigate("/login", { state: { resetSuccess: true } });
     } catch (err) {
       setError(err?.response?.data?.detail || "Could not reset your password. Check the code and try again.");
     } finally {
@@ -135,7 +135,7 @@ export default function ForgotPassword() {
         )}
 
         <p className="text-xs text-slate-400 mt-6 text-center">
-          <Link to="/" className="text-blue-700 hover:underline">Back to sign in</Link>
+          <Link to="/login" className="text-blue-700 hover:underline">Back to sign in</Link>
         </p>
       </div>
     </div>
