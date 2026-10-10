@@ -508,7 +508,7 @@ def app_version():
     blocking one. Bump CLARION_APP_LATEST_VERSION when a new APK is
     published to /get-app."""
     return {
-        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.4.0"),
+        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.5.0"),
         "min_supported": os.environ.get("CLARION_APP_MIN_VERSION", ""),
         "download_url": os.environ.get("CLARION_APP_DOWNLOAD_URL", "/get-app"),
     }

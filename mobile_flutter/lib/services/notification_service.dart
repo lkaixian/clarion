@@ -50,7 +50,13 @@ class NotificationService {
     return 1000000 + (serverAppointmentId.hashCode.abs() % 90000) * 10 + (reminderIndex % 10);
   }
 
-  Future<void> init() async {
+  Future<void>? _initFuture;
+
+  /// Concurrency-safe: bootstrap no longer awaits this (it is off the
+  /// first-paint path), and the schedule* methods below still `await init()`.
+  Future<void> init() => _initFuture ??= _init();
+
+  Future<void> _init() async {
     if (_initialized) return;
 
     tz_data.initializeTimeZones();
