@@ -1227,6 +1227,10 @@ NRICs, and the pepper never reaches it.
   `docker compose -f docker-compose.pi.yml exec mpi python -c "..."` or a
   curl to `http://mpi:8100/admin/facilities` from inside the network.
 - Run ONE `mpi` worker (its replay cache is process-local).
+- Locked out (e.g. every seeded account was rotated)? From the central host:
+  `docker compose -f docker-compose.pi.yml exec backend python /app/db/reset_admin_password.py <email>`
+  prints a one-time temporary password to YOUR terminal -- don't run it where
+  output is logged. The account must change it at next sign-in; sessions are revoked.
 
 **Each hospital** (`.env.docker`)
 

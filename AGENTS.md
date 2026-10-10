@@ -561,6 +561,25 @@ real second campus link exists, and the tender's billing-side SMP/SMS/
 e-klinik touchpoint if that's ever wanted — surface the choice rather than
 assuming order, same discipline as every prior phase boundary.
 
+**2026-10-10 -- federation, encrypted offline tag, central node deployed**
+(commits `284a995`, `09e1ba5`, `2b137b5`; detail in `healthcare/Implementation
+Roadmap.md`'s 2026-10-10 entry and `docs/deployment.md`'s "Federation" and
+"Encrypted tags (v2)" sections). **Direction: federated, not shared-DB** --
+each hospital keeps its own DB; `backend/mpi/` (central record locator) holds
+only hospital public keys + newest-3 visit pointers per patient/facility
+keyed by `HMAC(pepper, NRIC)`; a hospital fetches a visit from its origin and
+verifies it against the origin's signed content hash (`app/mpi_client.py`,
+`routers/federation.py`). The NFC tag's on-tag record is now AES-GCM sealed
+(`app/tag_crypto.py`), opened offline only by a signed-in CLARION device, with
+a hash-chained, uploadable offline-read log (`/emergency/tag-keys`,
+`/emergency/offline-reads`). NTAG213/215 still work; web + mobile warn there
+is no tamper-proof read counter (NTAG 424 DNA phase is not built -- needs
+hardware). `docker-compose.pi.yml` is the CENTRAL node (MariaDB + MinIO +
+`mpi` + tunnel); `docker-compose.spoke.yml` is a shared-DB alternative.
+`backend/db/reset_admin_password.py` is the recovery path when no one can sign
+in. **Open decisions:** consent/presence proof for cross-hospital fetch,
+OPRF for the pepper, Redis replay cache, central-node backups.
+
 **P2.9 leftover:** the migration (`b2d7e4a9c1f6`) has only been run on
 SQLite this session — a real `alembic upgrade head` on MariaDB is still
 owed (no local DB creds). It uses the same dialect-branched patterns as the
