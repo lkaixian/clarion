@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { getCurrentUser, logout, getClockStatus, clockIn, clockOut } from "../api/client";
 import { landingPathFor } from "../lib/access";
+import Watermark from "./Watermark";
 
 // Small nav pill only ever needs the time-of-day, not a full date — same
 // "no date library, plain built-in formatting" approach as
@@ -67,8 +68,8 @@ function ClockControl({ user }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-blue-200 whitespace-nowrap">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-blue-200">
         {status.clocked_in ? (
           <>Clocked in since {formatClockTime(status.since)}</>
         ) : status.last_clock_out_at ? (
@@ -88,66 +89,145 @@ function ClockControl({ user }) {
   );
 }
 
+// Grouped nav: [group label, [[page key, route label], ...]]. Group order is
+// the order a clinic actually works in; a group with no visible link is hidden.
+const NAV_GROUPS = [
+  ["Care", [["patients", "Patients"], ["reception", "Reception"], ["ancillary", "Ancillary"], ["dental", "Dental"], ["pharmacy", "Pharmacy"]]],
+  ["Business", [["billing", "Billing"], ["reporting", "Reporting"], ["dashboard", "Dashboard"]]],
+  ["System", [["admin", "Admin Console"]]],
+];
+
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+
+const linkCls = ({ isActive }) =>
+  `block rounded-lg px-3 py-2 text-sm ${FOCUS} ` +
+  (isActive ? "bg-blue-700 text-white font-medium" : "text-blue-200 hover:bg-blue-800 hover:text-white");
+
 export default function Layout({ children }) {
   const user = getCurrentUser();
   const navigate = useNavigate();
-  // "Home" = the first page this user's role is allowed to open at this
-  // facility (a patient → their own record). Same helper Login.jsx and
-  // App.jsx's RequirePage guard use, so the logo link can never point at a
-  // page the guard would immediately bounce them off.
-  const homeHref = landingPathFor(user);
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const menuBtn = useRef(null);
+  const drawer = useRef(null);
+  useEffect(() => setOpen(false), [pathname]); // close the mobile drawer on navigation
+
+  // Drawer: Escape closes, focus moves in on open and back to the Menu button
+  // on close, and it resets if the viewport grows past the md breakpoint.
+  // ponytail: no full Tab trap (scrim covers pointer; add `inert` on <main> if needed).
+  useEffect(() => {
+    if (!open) return;
+    const btn = menuBtn.current;
+    drawer.current?.querySelector("a,button")?.focus();
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    const mq = window.matchMedia("(min-width: 768px)");
+    const onMq = (e) => e.matches && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    mq.addEventListener("change", onMq);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      mq.removeEventListener("change", onMq);
+      btn?.focus();
+    };
+  }, [open]);
+
   // Nav links are driven by the backend's per-facility allowed_pages matrix;
-  // an admin implicitly sees everything.
+  // an admin implicitly sees everything. Mirrors App.jsx's RequirePage guard,
+  // so the nav never advertises a page that would bounce straight back.
   const pages = user?.allowed_pages || [];
   const canSee = (page) => user?.role === "admin" || pages.includes(page);
+  const isPatient = user?.role === "patient";
+  // Every post-login page carries the viewer watermark; on a patient record it
+  // also names the patient.
+  const watchedPatientId = pathname.match(/^\/patients\/([^/]+)/)?.[1];
+  const homeHref = landingPathFor(user);
+
+  const sidebar = (
+    <div className="flex h-full flex-col gap-4 p-4">
+      {/* Logo mark is dark-navy on transparent (public/Logo/Clarion.png), so
+          it sits on a white pill against the dark sidebar. */}
+      <Link to={homeHref} className="flex items-center justify-center bg-white rounded-lg px-3 py-2">
+        <img src="/Logo/Clarion.png" alt="CLARION" className="h-7 w-auto" />
+      </Link>
+
+      <nav aria-label="Main" className="flex-1 space-y-4 overflow-y-auto">
+        {isPatient ? (
+          <NavLink to={homeHref} end className={linkCls}>My record</NavLink>
+        ) : (
+          NAV_GROUPS.map(([label, items]) => {
+            const visible = items.filter(([page]) => canSee(page));
+            if (!visible.length) return null;
+            return (
+              <div key={label}>
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-blue-300">{label}</p>
+                {visible.map(([page, text]) => (
+                  <NavLink key={page} to={`/${page}`} className={linkCls}>{text}</NavLink>
+                ))}
+              </div>
+            );
+          })
+        )}
+      </nav>
+
+      <div className="space-y-2 border-t border-blue-800 pt-3">
+        <ClockControl user={user} />
+        {/* Name/role links to the profile page (signature management) for
+            staff; a patient has no signature or profile, so it's a label. */}
+        {isPatient ? (
+          <div className="px-3 py-2 text-sm text-blue-200">{user.full_name}<span className="block text-xs text-blue-300">patient</span></div>
+        ) : (
+          user && (
+            <NavLink to="/profile" className={linkCls}>
+              {user.full_name}
+              <span className="block text-xs text-blue-300">{user.role}</span>
+            </NavLink>
+          )
+        )}
+        <NavLink to="/security" className={linkCls}>Security</NavLink>
+        <button
+          onClick={() => { logout(); navigate("/login"); }}
+          className={`w-full rounded-lg bg-blue-800 px-3 py-2 text-sm text-white hover:bg-blue-700 ${FOCUS}`}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="bg-blue-900 text-white px-6 py-3 flex items-center justify-between">
-        {/* Logo mark is dark-navy on a transparent background (see
-            public/Logo/Clarion.png) -- unreadable directly against this
-            nav's own dark-navy background, so it sits on a small white
-            pill rather than bare on the nav. */}
-        <Link to={homeHref} className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5">
-          <img src="/Logo/Clarion.png" alt="CLARION" className="h-6 w-auto" />
-          <span className="font-bold text-lg sr-only">CLARION Console</span>
+    <div className="min-h-screen bg-slate-50 md:flex">
+      <Watermark patientId={watchedPatientId} />
+      {/* Desktop: fixed sidebar. Mobile: slim top bar + slide-over drawer. */}
+      <aside className="hidden md:block md:w-60 md:shrink-0 bg-blue-900 text-white md:sticky md:top-0 md:h-screen">
+        {sidebar}
+      </aside>
+
+      <header className="md:hidden flex items-center justify-between bg-blue-900 px-4 py-2 text-white">
+        <Link to={homeHref} className="bg-white rounded-lg px-2 py-1">
+          <img src="/Logo/Clarion.png" alt="CLARION" className="h-5 w-auto" />
         </Link>
-        <div className="flex items-center gap-4 text-sm">
-          {/* Every link below mirrors App.jsx's RequirePage guard — shown only
-              when the user's role is allowed that page at this facility, so
-              the nav never advertises a page that would redirect straight
-              back. A receptionist therefore sees only "Reception". */}
-          {canSee("patients") && <Link to="/patients" className="text-blue-200 hover:text-white">Patients</Link>}
-          {canSee("reception") && <Link to="/reception" className="text-blue-200 hover:text-white">Reception</Link>}
-          {canSee("ancillary") && <Link to="/ancillary" className="text-blue-200 hover:text-white">Ancillary</Link>}
-          {canSee("dental") && <Link to="/dental" className="text-blue-200 hover:text-white">Dental</Link>}
-          {canSee("billing") && <Link to="/billing" className="text-blue-200 hover:text-white">Billing</Link>}
-          {canSee("reporting") && <Link to="/reporting" className="text-blue-200 hover:text-white">Reporting</Link>}
-          {canSee("dashboard") && <Link to="/dashboard" className="text-blue-200 hover:text-white">Dashboard</Link>}
-          {canSee("pharmacy") && <Link to="/pharmacy" className="text-blue-200 hover:text-white">Pharmacy</Link>}
-          {canSee("admin") && <Link to="/admin" className="text-blue-200 hover:text-white">Admin Console</Link>}
-          <ClockControl user={user} />
-          {/* Name/role doubles as the link to the profile page (signature
-              management) — for every non-patient role. A patient account has
-              no signature and no profile page, so it stays a plain label. */}
-          {user && user.role !== "patient" && (
-            <Link to="/profile" className="text-blue-200 hover:text-white">
-              {user.full_name} · {user.role}
-            </Link>
-          )}
-          {user && user.role === "patient" && (
-            <span className="text-blue-200">{user.full_name} · {user.role}</span>
-          )}
-          <Link to="/security" className="text-blue-200 hover:text-white">Security</Link>
-          <button
-            onClick={() => { logout(); navigate("/login"); }}
-            className="bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg"
-          >
-            Sign out
-          </button>
+        <button
+          ref={menuBtn}
+          onClick={() => setOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+          className="rounded-lg bg-blue-800 px-3 py-1.5 text-sm"
+        >
+          Menu
+        </button>
+      </header>
+
+      {open && (
+        <div id="mobile-menu" ref={drawer} className="md:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="w-64 max-w-[80%] bg-blue-900 text-white">{sidebar}</div>
+          <button className="flex-1 bg-black/40" aria-label="Close menu" onClick={() => setOpen(false)} />
         </div>
-      </nav>
-      <main className="max-w-5xl mx-auto p-6">{children}</main>
+      )}
+
+      <main className="min-w-0 flex-1 p-4 md:p-6">
+        <div className="mx-auto max-w-5xl">{children}</div>
+      </main>
     </div>
   );
 }

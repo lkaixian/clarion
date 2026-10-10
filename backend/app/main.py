@@ -433,9 +433,8 @@ app.include_router(
     consultation.router,
     dependencies=[Depends(auth.require_page_access("patients"))],
 )
-# Saved digital signature (POST/GET/DELETE /me/signature, GET
-# /staff/{id}/signature). Registered plainly like staff.py -- "for yourself"
-# plus one facility-scoped colleague read; NOT page-gated.
+# Saved digital signature (POST/GET/DELETE /me/signature -- own signature only;
+# nobody else's image is ever served). NOT page-gated.
 app.include_router(profile.router)
 # Public, unauthenticated waiting-room display feed (GET /display/{token}).
 # Deliberately NO auth dependency and NOT under require_page_access -- a
@@ -499,6 +498,20 @@ app.include_router(campus_registry_mock.router)
 @app.get("/")
 def root():
     return {"status": "CLARION API running", "docs": "/docs"}
+
+
+@app.get("/app/version")
+def app_version():
+    """Mobile update check. Public (no PHI, nothing per-user): the app calls
+    it on launch and compares against its own version. `latest` drives the
+    soft "update available" prompt; `min_supported` (optional) drives a
+    blocking one. Bump CLARION_APP_LATEST_VERSION when a new APK is
+    published to /get-app."""
+    return {
+        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.4.0"),
+        "min_supported": os.environ.get("CLARION_APP_MIN_VERSION", ""),
+        "download_url": os.environ.get("CLARION_APP_DOWNLOAD_URL", "/get-app"),
+    }
 
 
 @app.get("/healthz", include_in_schema=False)

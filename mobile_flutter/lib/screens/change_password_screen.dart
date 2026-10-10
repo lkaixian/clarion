@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 
 /// Forced interstitial shown by `_AuthGate` (see app.dart) instead of
 /// Home/SeniorHome whenever the signed-in account still has
@@ -43,24 +44,23 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final confirmPassword = _confirmPasswordController.text;
 
     if (_currentPasswordController.text.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allFieldsRequired)));
+      context.snack(l10n.allFieldsRequired);
       return;
     }
     if (newPassword != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.passwordsDoNotMatch)));
+      context.snack(l10n.passwordsDoNotMatch);
       return;
     }
 
     final ok = await auth.changePassword(_currentPasswordController.text, newPassword);
     if (!mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.passwordChangedSnack)));
+      context.snack(l10n.passwordChangedSnack);
       // No further navigation needed here: `_AuthGate` is a
       // Consumer<AuthProvider> and `auth.mustChangePassword` is now false,
       // so it will swap this screen out for Home/SeniorHome on its own.
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(auth.error ?? l10n.loginFailedGeneric)));
+      context.snack(auth.error ?? l10n.loginFailedGeneric);
     }
   }
 
@@ -142,11 +142,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   child: ElevatedButton(
                     onPressed: auth.isBusy ? null : _handleSubmit,
                     child: auth.isBusy
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                        ? const ButtonSpinner()
                         : Text(l10n.changePasswordButton),
                   ),
                 ),

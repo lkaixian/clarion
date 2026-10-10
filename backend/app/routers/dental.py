@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, seal
 from ..database import get_db
 from ..audit import log_access
 from ..storage import apply_object_meta
@@ -143,6 +143,7 @@ def create_dental_chart_entry(
         copy_signature_snapshot(current_user, f"dental-chart/{entry.id}.png"),
         "signature",
     )
+    seal.seal("dental_entry", entry)
     db.add(entry)
     db.commit()
     db.refresh(entry)

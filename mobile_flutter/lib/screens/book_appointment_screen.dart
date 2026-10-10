@@ -8,6 +8,8 @@ import '../providers/patient_provider.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import '../widgets/loading_view.dart';
 
 /// P3.10: patient self-service pre-registration — pick a
 /// facility/department/doctor, a date, then a bookable time slot. Every
@@ -170,9 +172,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.bookAppointmentSuccess)));
+      context.snack(l10n.bookAppointmentSuccess);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 409) {
@@ -250,7 +250,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           ],
           if (_loadingOptions) ...[
             const SizedBox(height: 16),
-            const Center(child: CircularProgressIndicator()),
+            const LoadingView(),
           ],
           if (_facility != null && !_loadingOptions) ...[
             const SizedBox(height: 20),
@@ -320,7 +320,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           ],
           if (_loadingSlots) ...[
             const SizedBox(height: 20),
-            const Center(child: CircularProgressIndicator()),
+            const LoadingView(),
           ],
           if (_slots != null && !_loadingSlots) ...[
             const SizedBox(height: 16),
@@ -342,7 +342,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           ],
           if (_booking) ...[
             const SizedBox(height: 16),
-            const Center(child: CircularProgressIndicator()),
+            const LoadingView(),
           ],
         ],
       ),

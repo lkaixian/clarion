@@ -18,7 +18,7 @@ import '../services/api_exception.dart';
 /// same `isRefreshing` guard is kept for consistency with PatientProvider
 /// and so a future action added here doesn't have to relearn/re-add it).
 class QueueProvider extends ChangeNotifier {
-  QueueProvider({required ApiClient api}) : _api = api;
+  QueueProvider({required this._api});
 
   final ApiClient _api;
 

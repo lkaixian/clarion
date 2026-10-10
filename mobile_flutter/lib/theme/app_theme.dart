@@ -180,127 +180,117 @@ class SeniorColorsLight {
   static const safe = Color(0xFF15803D); // darker green than dark-mode's 30D158, for contrast on white
 }
 
-/// Builds the standard app's light `ThemeData` — was the app's only theme
-/// before dark-mode support was added; kept as its own function (rather than
-/// folding into [buildAppTheme]) so `MaterialApp.theme` / `.darkMode` call
-/// sites read as plainly as the two things they are.
-ThemeData buildAppLightTheme() {
+const _radius = 12.0;
+
+/// One builder for both brightnesses — every component theme is derived from
+/// the resolved [PaletteData], so light/dark can never drift structurally
+/// (switching themes changes colour only, never layout).
+ThemeData _buildTheme(PaletteData p, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius));
+  final border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(_radius),
+    borderSide: BorderSide(color: p.border),
+  );
+  final base = dark ? ThemeData.dark() : ThemeData.light();
+  const buttonText = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+  const minSize = Size(64, 48); // >= 48dp tap target
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.light,
+    brightness: brightness,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      primary: AppColors.primary,
-      error: AppColors.emergency,
+      seedColor: p.primary,
+      brightness: brightness,
+      primary: p.primary,
+      onPrimary: Colors.white,
+      error: p.emergency,
+      surface: p.surface,
+      onSurface: p.textPrimary,
+      outline: p.border,
     ),
-    scaffoldBackgroundColor: AppColors.background,
+    scaffoldBackgroundColor: p.background,
     // Explicit text/icon defaults so any widget that *doesn't* go through
-    // context.palette still lands on a readable colour (belt-and-braces for
-    // the dark-mode sweep — see PaletteData).
-    textTheme: ThemeData.light().textTheme.apply(
-          bodyColor: AppColors.textBody,
-          displayColor: AppColors.textPrimary,
-        ),
-    iconTheme: const IconThemeData(color: AppColors.textPrimary),
-    listTileTheme: const ListTileThemeData(
-      textColor: AppColors.textPrimary,
-      iconColor: AppColors.textMuted,
+    // context.palette still lands on a readable colour.
+    textTheme: base.textTheme.apply(bodyColor: p.textBody, displayColor: p.textPrimary),
+    iconTheme: IconThemeData(color: p.textPrimary),
+    dividerTheme: DividerThemeData(color: p.border, space: 1, thickness: 1),
+    listTileTheme: ListTileThemeData(
+      textColor: p.textPrimary,
+      iconColor: p.textMuted,
+      minVerticalPadding: 8,
     ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.primary,
+    appBarTheme: AppBarTheme(
+      backgroundColor: dark ? p.surface : p.primary,
       foregroundColor: Colors.white,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
+      titleTextStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
+      fillColor: p.surface,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border.copyWith(borderSide: BorderSide(color: p.primary, width: 2)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: p.primary,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        elevation: 0,
+        minimumSize: minSize,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        shape: shape,
+        textStyle: buttonText,
       ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(minimumSize: minSize, shape: shape, textStyle: buttonText),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: p.primary,
+        side: BorderSide(color: p.border),
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: buttonText,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(minimumSize: const Size(48, 48), shape: shape),
     ),
     cardTheme: CardThemeData(
-      color: Colors.white,
+      color: p.surface,
       elevation: 0,
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.border),
+        borderRadius: BorderRadius.circular(_radius),
+        side: BorderSide(color: p.border),
       ),
     ),
+    chipTheme: ChipThemeData(
+      backgroundColor: p.chipBg,
+      side: BorderSide.none,
+      shape: shape,
+    ),
+    snackBarTheme: SnackBarThemeData(behavior: SnackBarBehavior.floating, shape: shape),
+    dialogTheme: DialogThemeData(backgroundColor: p.surface, shape: shape),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_radius * 1.5)),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: p.surface,
+      indicatorColor: p.chipBg,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: p.primary),
   );
 }
 
-/// Dark counterpart to [buildAppLightTheme], using [AppColorsDark] for every
-/// semantic colour that [buildAppLightTheme] draws from [AppColors]. Kept
-/// structurally identical to its light counterpart (same theme properties
-/// set, same shapes/paddings/text styles) so switching themes only changes
-/// colour, never layout.
-ThemeData buildAppDarkTheme() {
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColorsDark.primary,
-      brightness: Brightness.dark,
-      primary: AppColorsDark.primary,
-      error: AppColorsDark.emergency,
-      surface: AppColorsDark.surface,
-    ),
-    scaffoldBackgroundColor: AppColorsDark.background,
-    // Explicit text/icon defaults so any widget that *doesn't* go through
-    // context.palette still degrades to a readable colour on the dark surface
-    // rather than the frozen light-mode slate — see PaletteData.
-    textTheme: ThemeData.dark().textTheme.apply(
-          bodyColor: AppColorsDark.textBody,
-          displayColor: AppColorsDark.textPrimary,
-        ),
-    iconTheme: const IconThemeData(color: AppColorsDark.textPrimary),
-    listTileTheme: const ListTileThemeData(
-      textColor: AppColorsDark.textPrimary,
-      iconColor: AppColorsDark.textMuted,
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: AppColorsDark.surface,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: false,
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: AppColorsDark.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColorsDark.border),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColorsDark.primary,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
-    ),
-    cardTheme: CardThemeData(
-      color: AppColorsDark.surface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColorsDark.border),
-      ),
-    ),
-  );
-}
+ThemeData buildAppLightTheme() => _buildTheme(_lightPalette, Brightness.light);
+
+ThemeData buildAppDarkTheme() => _buildTheme(_darkPalette, Brightness.dark);

@@ -66,27 +66,27 @@ export default function AnnouncementsTab() {
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3 max-w-lg mb-6 border border-slate-200 rounded-lg p-3">
-        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+        {error && <div className="alert-error">{error}</div>}
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Title<span className="text-red-600"> *</span></label>
+          <label className="field-label">Title<span className="text-red-600"> *</span></label>
           <input
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             placeholder="e.g. Flu vaccination drive"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Message<span className="text-red-600"> *</span></label>
+          <label className="field-label">Message<span className="text-red-600"> *</span></label>
           <textarea
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             rows={3}
             value={form.body}
             onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Expires (optional)</label>
+          <label className="field-label">Expires (optional)</label>
           <input
             type="datetime-local"
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -95,7 +95,7 @@ export default function AnnouncementsTab() {
           />
           <p className="text-xs text-slate-400 mt-1">Left blank, the announcement never expires on its own — remove it manually.</p>
         </div>
-        <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <button disabled={saving} className="btn-primary">
           {saving ? "Publishing..." : "Publish"}
         </button>
       </form>

@@ -8,6 +8,7 @@ import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import 'edit_profile_screen.dart';
+import '../widgets/common.dart';
 
 /// Runtime-editable API base URL (persisted with shared_preferences) plus
 /// the app's language picker.
@@ -43,9 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final config = context.read<AppConfig>();
     await config.setBaseUrl(_controller.text);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.savedSnack(config.baseUrl))),
-      );
+      context.snack(l10n.savedSnack(config.baseUrl));
     }
   }
 
@@ -55,7 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await config.resetToDefault();
     _controller.text = config.baseUrl;
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.resetSnack)));
+      context.snack(l10n.resetSnack);
     }
   }
 
@@ -97,8 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+                    onPressed: () => context.pushScreen(const EditProfileScreen()),
                     icon: const Icon(Icons.person_outline),
                     label: Text(l10n.editProfileTitle),
                     style: OutlinedButton.styleFrom(

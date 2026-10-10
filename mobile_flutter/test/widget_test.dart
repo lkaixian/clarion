@@ -52,17 +52,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('CLARION'), findsOneWidget);
+    // The login screen shows the CLARION logo image (not a text title) and
+    // pre-fills demo credentials in the two fields; the old demo-hint text
+    // line no longer exists.
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(2));
     expect(find.text('Sign In'), findsOneWidget);
-    // NOTE: kept in sync with lib/l10n/app_en.arb's `demoLoginHint` — this
-    // was found failing (pre-existing, unrelated to this round's bug
-    // fixes) because that ARB string grew an "(or NRIC ...)" suffix in an
-    // earlier round without this assertion being updated to match.
-    expect(
-      find.text(
-        'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)',
-      ),
-      findsOneWidget,
-    );
   });
 }

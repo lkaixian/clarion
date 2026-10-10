@@ -215,7 +215,7 @@ export default function Profile() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Profile</h1>
+        <h1 className="page-title">Profile</h1>
         <p className="text-sm text-slate-500">
           Signed in as {user.full_name} · {user.role}
           {user.facility ? ` · ${user.facility}` : ""}
@@ -284,7 +284,7 @@ export default function Profile() {
                 type="button"
                 onClick={saveProfile}
                 disabled={profileBusy}
-                className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                className="btn-primary"
               >
                 {profileBusy ? "Saving…" : "Save profile"}
               </button>
@@ -300,7 +300,7 @@ export default function Profile() {
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 max-w-lg">
         <h2 className="font-semibold text-slate-800 mb-3">Your signature</h2>
-        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+        {error && <div className="alert-error mb-3">{error}</div>}
 
         {hasSignature && !replacing ? (
           <>
@@ -322,7 +322,7 @@ export default function Profile() {
                   setDraft(null);
                   setError("");
                 }}
-                className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg"
+                className="btn-primary"
               >
                 Replace
               </button>
@@ -346,7 +346,7 @@ export default function Profile() {
                 type="button"
                 onClick={handleSave}
                 disabled={busy || !draft}
-                className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                className="btn-primary"
               >
                 {busy ? "Saving…" : "Save signature"}
               </button>
@@ -358,7 +358,7 @@ export default function Profile() {
                     setDraft(null);
                     setError("");
                   }}
-                  className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>

@@ -1,7 +1,7 @@
 import hashlib
 import mimetypes
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -10,7 +10,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, seal
 from ..database import get_db
 from ..audit import log_access
 from ..ai.nric_ocr import dob_from_ic_number
@@ -117,7 +117,7 @@ def _serialize_annotation(a: models.ClinicalRecordAnnotation) -> dict:
         "signed_by_role": a.signed_by_role,
         "facility_name": a.facility_name,
         "created_at": str(a.created_at),
-        "signature_url": f"/patients/{a.patient_id}/annotations/{a.id}/signature",
+        "seal_status": seal.status("annotation", a),
     }
 
 
@@ -633,13 +633,12 @@ def _serialize_encounter(
         "authored_by_facility": e.facility_name,
         "editable": _record_editable(db, e.patient_id, e, current_user, present_here),
         # Consultation sign-off metadata (routers/consultation.py) -- all
-        # None for an encounter created any other way. signature_url points
-        # at the signer's current profile signature for a "signed by Dr X"
-        # thumbnail (the per-encounter snapshot copy on disk isn't served).
+        # None for an encounter created any other way. Signature images are
+        # never served to viewers -- only the attestation text below.
         "signed_by": e.signed_by,
         "signed_by_name": e.signed_by_name,
         "signed_by_role": e.signed_by_role,
-        "signature_url": f"/staff/{e.signed_by}/signature" if e.signed_by else None,
+        "seal_status": seal.status("encounter", e),
         "annotations": _annotation_dicts(ann_list),
         # P3.10: diagnosis/treatment notes + vitals for this
         # visit -- was previously staff-only via GET /consultation/encounters/
@@ -996,6 +995,7 @@ def get_audit_log(
     patient_id: str, db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=2000),
+    days: Optional[int] = Query(None, ge=1, le=3650),
     current_user: models.User = Depends(auth.get_current_user),
 ):
     """Patients (and staff) can review exactly who accessed the record and
@@ -1025,9 +1025,11 @@ def get_audit_log(
     # PatientDetail open. `limit` defaults to 500 -- well above any
     # demo/clinic patient's real history, so the existing "fetch all" web
     # client is unaffected -- and caps the pathological case.
+    q = db.query(models.AuditLog).filter(models.AuditLog.patient_id == patient_id)
+    if days is not None:  # lazy window: callers ask for 7 days first, widen on demand
+        q = q.filter(models.AuditLog.timestamp >= datetime.now(timezone.utc) - timedelta(days=days))
     logs = (
-        db.query(models.AuditLog)
-        .filter(models.AuditLog.patient_id == patient_id)
+        q
         # id tiebreak: keeps ordering deterministic when two rows share a
         # timestamp (P1.2b -- matters most on MariaDB, and as a floor even with
         # DATETIME(6) precision).
@@ -1573,6 +1575,7 @@ def add_record_annotation(
         copy_signature_snapshot(current_user, f"annotations/{annotation.id}.png"),
         "signature",
     )
+    seal.seal("annotation", annotation)
     db.add(annotation)
     db.commit()
     db.refresh(annotation)
@@ -1607,36 +1610,3 @@ def list_record_annotations(
     return [_serialize_annotation(a) for a in rows]
 
 
-@router.get("/{patient_id}/annotations/{annotation_id}/signature")
-def get_annotation_signature(
-    patient_id: str,
-    annotation_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
-):
-    """The signature PNG snapshotted onto this annotation at signing time.
-    The object key is read from the DB column only; served with nosniff. 404
-    if the annotation isn't this patient's or has no snapshot stored."""
-    annotation = (
-        db.query(models.ClinicalRecordAnnotation)
-        .filter(
-            models.ClinicalRecordAnnotation.id == annotation_id,
-            models.ClinicalRecordAnnotation.patient_id == patient_id,
-        )
-        .first()
-    )
-    if annotation is None or not annotation.signature_object_key:
-        raise HTTPException(status_code=404, detail="Signature not found.")
-    try:
-        data = get_object_store().get_checked(
-            BUCKET_SIGNATURES, annotation.signature_object_key, annotation.signature_sha256
-        )
-    except (ObjectNotFound, ValueError):
-        raise HTTPException(status_code=404, detail="Signature not found.")
-    except ObjectStoreError:
-        raise HTTPException(status_code=503, detail="Signature storage is temporarily unavailable.")
-
-    return Response(
-        content=data, media_type="image/png",
-        headers={"X-Content-Type-Options": "nosniff"},
-    )

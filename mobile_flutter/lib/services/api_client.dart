@@ -22,10 +22,8 @@ import 'token_storage.dart';
 /// recreating the client. The bearer token is attached automatically via an
 /// interceptor that reads it from secure storage.
 class ApiClient {
-  ApiClient({required AppConfig config, required TokenStorage tokenStorage})
-      : _config = config,
-        _tokenStorage = tokenStorage,
-        _dio = Dio(BaseOptions(
+  ApiClient({required this._config, required this._tokenStorage})
+      : _dio = Dio(BaseOptions(
           connectTimeout: const Duration(seconds: 12),
           receiveTimeout: const Duration(seconds: 12),
         )) {
@@ -213,6 +211,14 @@ class ApiClient {
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
+  }
+
+  /// `GET /app/version` -- public update check (see services/update_check.dart).
+  Future<Map<String, dynamic>> getAppVersion() {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>('/app/version');
+      return response.data!;
+    });
   }
 
   /// `POST /auth/login` — form-urlencoded (OAuth2PasswordRequestForm style).
@@ -430,8 +436,8 @@ class ApiClient {
         queryParameters: {
           'facility_name': facilityName,
           'date': date,
-          if (department != null) 'department': department,
-          if (clinicianId != null) 'clinician_id': clinicianId,
+          'department': ?department,
+          'clinician_id': ?clinicianId,
         },
       );
       return (response.data ?? [])
@@ -469,8 +475,8 @@ class ApiClient {
         '/patients/$patientId/appointments/self-book',
         data: {
           'facility_name': facilityName,
-          if (department != null) 'department': department,
-          if (clinicianId != null) 'clinician_id': clinicianId,
+          'department': ?department,
+          'clinician_id': ?clinicianId,
           'scheduled_at': scheduledAt.toUtc().toIso8601String(),
         },
       );

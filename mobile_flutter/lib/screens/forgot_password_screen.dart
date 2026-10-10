@@ -6,6 +6,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 
 enum _Step { requestOtp, verifyAndReset }
 
@@ -54,7 +55,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final l10n = AppLocalizations.of(context);
     final nric = _nricController.text.trim();
     if (nric.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allFieldsRequired)));
+      context.snack(l10n.allFieldsRequired);
       return;
     }
 
@@ -63,17 +64,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final api = context.read<ApiClient>();
       await api.requestPasswordResetOtp(nationalId: nric);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isResend ? l10n.resendCodeSentSnack : l10n.otpRequestedGenericSnack)),
-      );
+      context.snack(isResend ? l10n.resendCodeSentSnack : l10n.otpRequestedGenericSnack);
       setState(() => _step = _Step.verifyAndReset);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      context.snack(e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.requestOtpFailedGeneric)));
+      context.snack(l10n.requestOtpFailedGeneric);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -87,11 +85,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final confirmPassword = _confirmPasswordController.text;
 
     if (otpCode.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allFieldsRequired)));
+      context.snack(l10n.allFieldsRequired);
       return;
     }
     if (newPassword != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.passwordsDoNotMatch)));
+      context.snack(l10n.passwordsDoNotMatch);
       return;
     }
 
@@ -100,15 +98,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final api = context.read<ApiClient>();
       await api.resetPasswordWithOtp(nationalId: nric, otpCode: otpCode, newPassword: newPassword);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.passwordResetSuccessSnack)));
+      context.snack(l10n.passwordResetSuccessSnack);
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      context.snack(e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.forgotPasswordFailedGeneric)));
+      context.snack(l10n.forgotPasswordFailedGeneric);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -152,11 +149,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : () => _requestOtp(),
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.sendCodeButton),
           ),
         ),
@@ -214,11 +207,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _resetPassword,
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.resetPasswordButton),
           ),
         ),

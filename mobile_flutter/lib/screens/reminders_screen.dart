@@ -11,6 +11,7 @@ import '../services/api_exception.dart';
 import '../services/mysejahtera_launcher.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/common.dart';
 
 /// Derives medication reminders directly from the patient's structured
 /// record (active medications become dose reminders), and schedules **real
@@ -113,15 +114,9 @@ class _RemindersScreenState extends State<RemindersScreen>
       body: l10n.testNotificationBody,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
+    context.snack(ok
               ? l10n.testNotificationSentSnack
-              : l10n.testNotificationFailedSnack,
-        ),
-      ),
-    );
+              : l10n.testNotificationFailedSnack);
   }
 
   Future<void> _addAppointment() async {
@@ -214,9 +209,7 @@ class _RemindersScreenState extends State<RemindersScreen>
     final ok = await MySejahteraLauncher.open();
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.mySejahteraLaunchFailed)));
+      context.snack(l10n.mySejahteraLaunchFailed);
     }
   }
 

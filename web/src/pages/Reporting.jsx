@@ -378,7 +378,7 @@ export default function Reporting() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Reporting</h1>
+        <h1 className="page-title">Reporting</h1>
         <p className="text-sm text-slate-500">Canned operational reports and a custom report builder, scoped to your facility.</p>
       </div>
 

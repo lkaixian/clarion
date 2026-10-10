@@ -40,7 +40,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from .. import models, schemas, auth, hl7v2, hl7_client
+from .. import models, schemas, auth, seal, hl7v2, hl7_client
 from ..database import get_db
 from ..audit import log_access
 from ..storage import (
@@ -550,6 +550,7 @@ def sign_off_service_request(
         copy_signature_snapshot(current_user, f"service-results/{result.id}.png"),
         "signature",
     )
+    seal.seal("service_result", result)
     req.status = "signed_off"
     db.add(result)
     db.commit()

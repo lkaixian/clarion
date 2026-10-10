@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
+import '../widgets/common.dart';
 
 /// Self-service contact/profile editor for a patient's own record —
 /// reachable from HomeScreen's app bar and from SettingsScreen. Only
@@ -89,7 +90,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
     if (!mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.profileUpdatedSnack)));
+      context.snack(l10n.profileUpdatedSnack);
       // Best-effort refresh so AuthProvider.missingProfileFields (and the
       // dismissible Home/SeniorHome banner it drives) reflects the edit
       // without requiring a fresh login.
@@ -97,8 +98,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(patientState.profileUpdateError ?? l10n.profileUpdateFailedGeneric)));
+      context.snack(patientState.profileUpdateError ?? l10n.profileUpdateFailedGeneric);
     }
   }
 
@@ -187,11 +187,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   child: ElevatedButton(
                     onPressed: patientState.isUpdatingProfile ? null : _save,
                     child: patientState.isUpdatingProfile
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                        ? const ButtonSpinner()
                         : Text(l10n.saveProfileButton),
                   ),
                 ),

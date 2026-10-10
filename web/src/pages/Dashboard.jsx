@@ -72,7 +72,7 @@ export default function Dashboard() {
     <Layout>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+          <h1 className="page-title">Dashboard</h1>
           <p className="text-sm text-slate-500">Live operational snapshot for your facility{summary ? ` -- ${summary.date}` : ""}.</p>
         </div>
         <button onClick={refresh} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Refresh</button>

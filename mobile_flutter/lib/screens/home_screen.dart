@@ -26,6 +26,7 @@ import 'reminders_screen.dart';
 import 'scan_checkin_screen.dart';
 import 'settings_screen.dart';
 import 'write_offline_tag_screen.dart';
+import '../widgets/common.dart';
 
 /// Same role set backend/app/routers/emergency.py::register_nfc_card
 /// requires for POST /emergency/nfc/register -- writing the offline tag
@@ -111,9 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // scary error -- same ApiException.message-first pattern used
       // everywhere else in this app for a caught form/network failure.
       final message = e is ApiException ? e.message : l10n.visitSummaryUnavailable;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      context.snack(message);
     }
   }
 
@@ -138,9 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: l10n.scanSomeoneElsesCardTooltip,
             icon: const Icon(Icons.qr_code_scanner),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const EmergencyScannerScreen()),
-            ),
+            onPressed: () => context.pushScreen(const EmergencyScannerScreen()),
           ),
           // Staff-only: writes the compact offline-fallback text (from the
           // web console's NFC registration flow) onto a physical tag.
@@ -148,9 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               tooltip: l10n.writeOfflineTagTooltip,
               icon: const Icon(Icons.nfc),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const WriteOfflineTagScreen()),
-              ),
+              onPressed: () => context.pushScreen(const WriteOfflineTagScreen()),
             ),
           // Only meaningful for patient-role accounts — staff/clinician
           // accounts don't have a Patient record of their own to edit here.
@@ -158,16 +153,12 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               tooltip: l10n.editProfileTitle,
               icon: const Icon(Icons.person_outline),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-              ),
+              onPressed: () => context.pushScreen(const EditProfileScreen()),
             ),
           IconButton(
             tooltip: l10n.apiSettingsTooltip,
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onPressed: () => context.pushScreen(const SettingsScreen()),
           ),
         ],
       ),
@@ -256,11 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     auth.missingProfileFields.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   MissingProfileBanner(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const EditProfileScreen(),
-                      ),
-                    ),
+                    onTap: () => context.pushScreen(const EditProfileScreen()),
                     onDismiss: () =>
                         setState(() => _profileBannerDismissed = true),
                   ),
@@ -282,11 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       backgroundColor: context.palette.emergency,
                       padding: const EdgeInsets.all(16),
                     ),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const EmergencyScreen(),
-                      ),
-                    ),
+                    onPressed: () => context.pushScreen(const EmergencyScreen()),
                     child: Text(
                       l10n.emergencyButton,
                       style: const TextStyle(
@@ -300,11 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const RemindersScreen(),
-                      ),
-                    ),
+                    onPressed: () => context.pushScreen(const RemindersScreen()),
                     icon: const Text('💊'),
                     label: Text(l10n.remindersButton),
                     style: OutlinedButton.styleFrom(
@@ -319,11 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ScanCheckinScreen(),
-                      ),
-                    ),
+                    onPressed: () => context.pushScreen(const ScanCheckinScreen()),
                     icon: Icon(Icons.qr_code_scanner, color: context.palette.primary),
                     label: Text(l10n.scanCheckinButton),
                     style: OutlinedButton.styleFrom(
@@ -338,11 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const QueueStatusScreen(),
-                      ),
-                    ),
+                    onPressed: () => context.pushScreen(const QueueStatusScreen()),
                     icon: Icon(Icons.confirmation_number_outlined, color: context.palette.primary),
                     label: Text(l10n.queueStatusButton),
                     style: OutlinedButton.styleFrom(
@@ -358,11 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const BookAppointmentScreen(),
-                      ),
-                    ),
+                    onPressed: () => context.pushScreen(const BookAppointmentScreen()),
                     icon: Icon(Icons.event_available_outlined, color: context.palette.primary),
                     label: Text(l10n.bookAppointmentButton),
                     style: OutlinedButton.styleFrom(
@@ -405,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.clinicAppointmentsSection,
                   child: upcomingAppointments.isEmpty
-                      ? _EmptyLine(l10n.noClinicAppointments)
+                      ? EmptyText(l10n.noClinicAppointments)
                       : ExpandableItemList(
                           items: upcomingAppointments.map((a) {
                             final venue = a.venue;
@@ -425,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.activeConditionsTitle,
                   child: patient.conditions.isEmpty
-                      ? _EmptyLine(l10n.noConditions)
+                      ? EmptyText(l10n.noConditions)
                       : ExpandableItemList(
                           items: patient.conditions.map((c) {
                             final diagnosedAt = c.diagnosedAt;
@@ -443,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.currentMedicationsTitle,
                   child: activeMeds.isEmpty
-                      ? _EmptyLine(l10n.noActiveMedications)
+                      ? EmptyText(l10n.noActiveMedications)
                       : ExpandableItemList(
                           items: activeMeds.map((m) {
                             final doseFreq = _joinNonEmpty([
@@ -465,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.allergiesTitle,
                   child: patient.allergies.isEmpty
-                      ? _EmptyLine(l10n.noAllergies)
+                      ? EmptyText(l10n.noAllergies)
                       : ExpandableItemList(
                           items: patient.allergies.map((a) {
                             final reaction = a.reaction;
@@ -480,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.recentEncountersTitle,
                   child: patient.encounters.isEmpty
-                      ? _EmptyLine(l10n.noEncounters)
+                      ? EmptyText(l10n.noEncounters)
                       : ExpandableItemList(
                           items: patient.encounters.map((e) {
                             final subtitleLines = <String>[];
@@ -536,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SectionCard(
                   title: l10n.documentsTitle,
                   child: patient.documents.isEmpty
-                      ? _EmptyLine(l10n.noDocuments)
+                      ? EmptyText(l10n.noDocuments)
                       : ExpandableItemList(
                           items: patient.documents.map((d) {
                             return _BulletLine(
@@ -573,9 +540,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: TextButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AuditLogScreen()),
-                    ),
+                    onPressed: () => context.pushScreen(const AuditLogScreen()),
                     icon: Icon(
                       Icons.visibility_outlined,
                       size: 18,
@@ -701,15 +666,3 @@ class _BulletLine extends StatelessWidget {
   }
 }
 
-class _EmptyLine extends StatelessWidget {
-  const _EmptyLine(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(fontSize: 13, color: context.palette.textFaint),
-    );
-  }
-}

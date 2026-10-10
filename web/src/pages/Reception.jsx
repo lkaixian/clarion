@@ -287,7 +287,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="e.g. 520314-01-1234"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="field-input"
               autoFocus
             />
           )}
@@ -298,7 +298,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="Patient's internal ID (fallback)"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="field-input"
             />
           )}
 
@@ -347,7 +347,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder="NFC UID (auto-fills on tap, or type it)"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="field-input"
               />
               {nfc.lastScan?.scanned_at && (
                 <p className="text-xs text-slate-400">Last tap {formatTime(nfc.lastScan.scanned_at)}</p>
@@ -374,7 +374,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               <select
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="field-input"
               >
                 <option value="">— none —</option>
                 {departmentOptions.map((d) => (
@@ -390,12 +390,12 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Fever and cough"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="field-input"
             />
           </div>
         </div>
 
-        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+        {error && <div className="alert-error">{error}</div>}
 
         <button
           type="submit"
@@ -511,7 +511,7 @@ function SelfCheckinQrSection({ departmentOptions, lockedSection }) {
 
   return (
     <Section title="Self Check-in QR">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
 
       {station ? (
         <div className="flex items-start gap-4">
@@ -767,7 +767,7 @@ function MyRoomTab() {
   if (!state.room) {
     return (
       <Section title="Consultation Rooms">
-        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+        {error && <div className="alert-error mb-3">{error}</div>}
         {canClaimRoom ? (
           !state.clocked_in && (
             <p className="text-xs text-slate-500 mb-3">
@@ -814,7 +814,7 @@ function MyRoomTab() {
 
   return (
     <Section title={`My Room — ${state.room.room_name}`}>
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-slate-500">
           {state.room.department || "Any department"} · {state.tickets.length} patient(s) today
@@ -969,7 +969,7 @@ export default function Reception() {
       <h1 className="text-xl font-bold text-slate-800 mb-4">
         Reception{userSection ? ` — ${userSection} counter` : ""}
       </h1>
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
 
       <TabBar active={activeTab} onChange={setActiveTab} tabs={visibleTabs} />
 

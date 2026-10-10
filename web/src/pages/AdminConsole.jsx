@@ -23,7 +23,7 @@ export default function AdminConsole() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Admin Console</h1>
+        <h1 className="page-title">Admin Console</h1>
         <p className="text-sm text-slate-500">Facility-wide monitoring and management for your hospital.</p>
       </div>
 

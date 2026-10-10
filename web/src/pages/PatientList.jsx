@@ -183,18 +183,18 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-1">Complete consultation</h3>
         <p className="text-xs text-slate-500 mb-4">
           #{ticket.queue_number} · {ticket.patient_full_name}
         </p>
         <form onSubmit={submit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Note (optional)</label>
+            <label className="field-label">Note (optional)</label>
             <textarea
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -316,10 +316,10 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Complete & sign"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -420,15 +420,15 @@ function MyConsultationRoom() {
 
   if (!state) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+      <div className="card mb-6">
         <p className="text-sm text-slate-400">Loading your consultation room…</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+    <div className="card mb-6">
+      {error && <div className="alert-error mb-3">{error}</div>}
 
       {!active ? (
         <>

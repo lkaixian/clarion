@@ -12,6 +12,8 @@ import '../providers/auth_provider.dart';
 import '../services/nfc_service.dart';
 import '../services/tag_crypto.dart';
 import '../theme/app_theme.dart';
+import '../widgets/loading_view.dart';
+import '../widgets/common.dart';
 
 enum _ScanMode { qr, nfc, manual }
 
@@ -342,7 +344,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
             if (_loading)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator(color: context.palette.primary)),
+                child: const LoadingView(),
               ),
             if (_result != null) ...[
               const SizedBox(height: 20),
@@ -417,7 +419,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
           borderColor: context.palette.emergency,
           omittedNotice: (omitted['allergies'] ?? 0) > 0 ? l10n.scanResultOmittedAllergies(omitted['allergies']!) : null,
           child: result.allergies.isEmpty
-              ? _EmptyText(l10n.noAllergies)
+              ? EmptyText(l10n.noAllergies)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: result.allergies.map((a) {
@@ -438,7 +440,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
           omittedNotice:
               (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
           child: result.medications.isEmpty
-              ? _EmptyText(l10n.noActiveMedications)
+              ? EmptyText(l10n.noActiveMedications)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: result.medications.map((m) {
@@ -460,7 +462,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
           borderColor: context.palette.border,
           omittedNotice: (omitted['conditions'] ?? 0) > 0 ? l10n.scanResultOmittedConditions(omitted['conditions']!) : null,
           child: result.conditions.isEmpty
-              ? _EmptyText(l10n.noConditions)
+              ? EmptyText(l10n.noConditions)
               : Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -532,7 +534,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     }
     switch (_nfcAvailability) {
       case null:
-        return Center(child: CircularProgressIndicator(color: context.palette.primary));
+        return const LoadingView();
       case NfcAvailability.unsupported:
         return Text(l10n.nfcUnsupportedDevice, style: TextStyle(color: context.palette.textMuted));
       case NfcAvailability.disabled:
@@ -777,16 +779,6 @@ class _ScanBulletLine extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text('•  $text', style: TextStyle(fontSize: 14, color: context.palette.textBody, height: 1.4)),
     );
-  }
-}
-
-class _EmptyText extends StatelessWidget {
-  const _EmptyText(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(fontSize: 13, color: context.palette.textFaint));
   }
 }
 

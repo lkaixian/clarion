@@ -288,7 +288,9 @@ export const updateCondition = (id, conditionId, payload) => client.patch(`/pati
 export const updateMedication = (id, medicationId, payload) => client.patch(`/patients/${id}/medications/${medicationId}`, payload).then((r) => r.data);
 export const updateAllergy = (id, allergyId, payload) => client.patch(`/patients/${id}/allergies/${allergyId}`, payload).then((r) => r.data);
 export const updateEncounter = (id, encounterId, payload) => client.patch(`/patients/${id}/encounters/${encounterId}`, payload).then((r) => r.data);
-export const getAuditLog = (id) => client.get(`/patients/${id}/audit-log`).then((r) => r.data);
+// `days` = lazy window (the record page asks for 7 first, widens on demand).
+export const getAuditLog = (id, days) =>
+  client.get(`/patients/${id}/audit-log`, { params: days ? { days } : {} }).then((r) => r.data);
 
 // Document detail (raw OCR text + AI summary) is staff-only and deliberately
 // left out of GET /patients/{id} (which only returns a lightweight summary
@@ -704,7 +706,6 @@ export const uploadMySignature = (blob) => {
 
 export const deleteMySignature = () => client.delete("/me/signature").then((r) => r.data);
 
-export const getStaffSignatureBlob = (userId) => authedBlobUrl(`/staff/${userId}/signature`);
 
 // --- Bio / internal contact email / profile photo ------------------------
 // Same blob-fetch pattern as the signature helpers above. `bio` is PUBLIC
@@ -737,9 +738,6 @@ export const uploadStaffPhoto = (userId, file) => {
     .post(`/admin/staff/${userId}/photo`, form, { headers: { "Content-Type": "multipart/form-data" } })
     .then((r) => r.data);
 };
-
-export const getAnnotationSignatureBlob = (patientId, annotationId) =>
-  authedBlobUrl(`/patients/${patientId}/annotations/${annotationId}/signature`);
 
 export const getPatientAnnotations = (patientId) =>
   client.get(`/patients/${patientId}/annotations`).then((r) => r.data);

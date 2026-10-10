@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import 'queue_status_screen.dart';
+import '../widgets/loading_view.dart';
 
 enum _CheckinMode { qr, manual }
 
@@ -172,7 +173,7 @@ class _ScanCheckinScreenState extends State<ScanCheckinScreen> {
             if (_loading)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator(color: context.palette.primary)),
+                child: const LoadingView(),
               ),
           ],
         ),

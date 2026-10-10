@@ -11,6 +11,7 @@ import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import 'self_register_manual_required_screen.dart';
+import '../widgets/common.dart';
 
 enum _Step { details, otp, photos, password }
 
@@ -76,7 +77,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    context.snack(message);
   }
 
   Future<void> _startRegistration() async {
@@ -295,11 +296,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _startRegistration,
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.selfRegisterContinueButton),
           ),
         ),
@@ -331,11 +328,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _verifyOtp,
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.selfRegisterVerifyOtpButton),
           ),
         ),
@@ -393,11 +386,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _submitPhotos,
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.selfRegisterSubmitPhotosButton),
           ),
         ),
@@ -445,11 +434,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           child: ElevatedButton(
             onPressed: _loading ? null : _completeRegistration,
             child: _loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : Text(l10n.selfRegisterCompleteButton),
           ),
         ),
