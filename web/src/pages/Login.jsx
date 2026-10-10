@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession } from "../api/client";
 import { landingPathFor } from "../lib/access";
@@ -69,7 +69,12 @@ export default function Login() {
     setError(message);
   }
 
+  // Guards against a double submit (auto-verify on the 6th digit + Enter).
+  const inFlight = useRef(false);
+
   async function run(fn, fallback, onSessionExpired = true) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError("");
     setLoading(true);
     try {
@@ -80,8 +85,11 @@ export default function Login() {
         backToStart("Your sign-in timed out. Please sign in again.");
       } else {
         setError(messageFor(err, fallback));
+        // A wrong code is cleared so the next 6 digits auto-verify again.
+        if (step === "mfa" || step === "enrol") setCode("");
       }
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   }
@@ -102,18 +110,25 @@ export default function Login() {
     }, "Incorrect email/NRIC or password.");
   };
 
-  const submitCode = (e) => {
-    e.preventDefault();
-    run(async () => finish(await mfaVerify(mfaToken, code.trim())), "That code isn't valid. Try again.");
-  };
+  const verifyWith = (value) =>
+    run(async () => finish(await mfaVerify(mfaToken, value.trim())), "That code isn't valid. Try again.");
 
-  const submitEnrol = (e) => {
-    e.preventDefault();
+  const enrolWith = (value) =>
     run(async () => {
-      const data = await mfaEnrolConfirm(mfaToken, code.trim());
+      const data = await mfaEnrolConfirm(mfaToken, value.trim());
       setRecovery({ codes: data.recovery_codes || [], session: data, saved: false });
       setStep("recovery");
     }, "That code didn't match. Check the time on your phone and try again.");
+
+  const submitCode = (e) => { e.preventDefault(); verifyWith(code); };
+  const submitEnrol = (e) => { e.preventDefault(); enrolWith(code); };
+
+  // Exactly six digits = an authenticator code: verify without a button press.
+  // (Recovery codes contain letters and a dash, so they still need Verify.)
+  const onCodeChange = (submit) => (e) => {
+    const v = e.target.value;
+    setCode(v);
+    if (/^\d{6}$/.test(v.trim())) submit(v);
   };
 
   const tabClass = (name) =>
@@ -218,7 +233,7 @@ export default function Login() {
             <Field id="code" label="Code">
               <input
                 id="code" className={`${INPUT} text-center tracking-widest text-lg`} value={code}
-                onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" inputMode="text"
+                onChange={onCodeChange(verifyWith)} autoComplete="one-time-code" inputMode="text"
                 maxLength={11} autoFocus required
               />
             </Field>
@@ -255,7 +270,7 @@ export default function Login() {
             <Field id="code" label="6-digit code">
               <input
                 id="code" className={`${INPUT} text-center tracking-widest text-lg`} value={code}
-                onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric"
+                onChange={onCodeChange(enrolWith)} autoComplete="one-time-code" inputMode="numeric"
                 maxLength={6} required
               />
             </Field>
@@ -284,21 +299,21 @@ export default function Login() {
               >
                 Copy
               </button>
+              {/* Download is the step that unlocks Continue -- copying alone doesn't. */}
               <a
-                className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-center hover:bg-slate-50"
+                className="flex-1 bg-blue-800 hover:bg-blue-900 text-white font-semibold rounded-lg py-2 text-sm text-center"
                 download="clarion-recovery-codes.txt"
                 href={`data:text/plain;charset=utf-8,${encodeURIComponent(recovery.codes.join("\n") + "\n")}`}
+                onClick={() => setRecovery((r) => ({ ...r, saved: true }))}
               >
-                Download
+                Download codes
               </a>
             </div>
-            <label className="flex items-start gap-2 text-sm text-slate-700 mb-4">
-              <input
-                type="checkbox" className="mt-1" checked={recovery.saved}
-                onChange={(e) => setRecovery((r) => ({ ...r, saved: e.target.checked }))}
-              />
-              I have saved these codes.
-            </label>
+            <p className={`text-xs mb-4 ${recovery.saved ? "text-green-700" : "text-slate-500"}`}>
+              {recovery.saved
+                ? "Downloaded. Keep the file somewhere safe, away from this device if you can."
+                : "Download the codes to continue."}
+            </p>
             <button disabled={!recovery.saved} onClick={() => finish(commitSession(recovery.session))} className={BUTTON}>
               Continue
             </button>

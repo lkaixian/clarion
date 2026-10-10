@@ -100,8 +100,10 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch("/downloads/clarion.apk", { method: "HEAD", cache: "no-store" }).then(r => {
       const type = r.headers.get("content-type") || "";
       if (!r.ok || type.includes("text/html")) return; // SPA fallback => not published
-      apkBtn.hidden = false;
-      document.getElementById("apk-pending")?.setAttribute("hidden", "");
+      // Inline display + remove(): don't depend on the [hidden] rule in a
+      // stylesheet a CDN/browser may still hold an older copy of.
+      apkBtn.style.display = "inline-flex";
+      document.getElementById("apk-pending")?.remove();
       const len = Number(r.headers.get("content-length"));
       if (len) document.getElementById("apk-size").textContent = `(${(len / 1048576).toFixed(0)} MB)`;
       document.getElementById("apk-meta").textContent = "Android 6.0 or newer. Free. No account needed to download.";

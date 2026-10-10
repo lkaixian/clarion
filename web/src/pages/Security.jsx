@@ -24,16 +24,23 @@ function deviceLabel(ua) {
 }
 
 function RecoveryCodes({ codes, onDone }) {
+  const [downloaded, setDownloaded] = useState(false);
   return (
     <div className="mt-4">
       <p className="text-sm text-slate-700 mb-2">Save these recovery codes now — they are shown only once. Each works one time.</p>
       <ul className="grid grid-cols-2 gap-2 font-mono text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 select-all">
         {codes.map((c) => <li key={c}>{c}</li>)}
       </ul>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap items-center">
         <button className={BTN2} onClick={() => navigator.clipboard?.writeText(codes.join("\n"))}>Copy</button>
-        <button className={BTN} onClick={onDone}>I have saved them</button>
+        {/* Download is what unlocks the button below -- copying alone doesn't. */}
+        <a className={BTN} download="clarion-recovery-codes.txt" onClick={() => setDownloaded(true)}
+          href={`data:text/plain;charset=utf-8,${encodeURIComponent(codes.join("\n") + "\n")}`}>
+          Download codes
+        </a>
+        <button className={BTN} onClick={onDone} disabled={!downloaded}>I have saved them</button>
       </div>
+      {!downloaded && <p className="text-xs text-slate-500 mt-2">Download the codes to continue.</p>}
     </div>
   );
 }
@@ -56,6 +63,12 @@ function MfaCard() {
     setMsg("");
     try { await fn(); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   }
+
+  const confirmSetup = (value) =>
+    run(async () => {
+      const r = await mfaSetupConfirm(value.trim());
+      setSetup(null); setCode(""); setCodes(r.recovery_codes);
+    });
 
   if (!status) return <section className="bg-white border border-slate-200 rounded-xl p-5">Loading…</section>;
 
@@ -86,13 +99,7 @@ function MfaCard() {
       )}
 
       {setup && (
-        <form className="mt-4" onSubmit={(e) => {
-          e.preventDefault();
-          run(async () => {
-            const r = await mfaSetupConfirm(code.trim());
-            setSetup(null); setCode(""); setCodes(r.recovery_codes);
-          });
-        }}>
+        <form className="mt-4" onSubmit={(e) => { e.preventDefault(); confirmSetup(code); }}>
           <img alt="QR code for your authenticator app" className="w-40 h-40 border border-slate-200 rounded-lg"
             src={`data:image/png;base64,${setup.qr_png_base64}`} />
           <details className="text-xs text-slate-600 my-2">
@@ -101,7 +108,12 @@ function MfaCard() {
           </details>
           <label htmlFor="sec-code" className="block text-sm text-slate-700 mb-1">6-digit code</label>
           <input id="sec-code" className={`${INPUT} w-40 tracking-widest`} value={code} maxLength={6}
-            inputMode="numeric" autoComplete="one-time-code" onChange={(e) => setCode(e.target.value)} />
+            inputMode="numeric" autoComplete="one-time-code"
+            onChange={(e) => {
+              const v = e.target.value;
+              setCode(v);
+              if (/^\d{6}$/.test(v.trim())) confirmSetup(v); // six digits: verify automatically
+            }} />
           <div className="mt-3 flex gap-2">
             <button className={BTN} disabled={busy || code.trim().length !== 6}>Turn on</button>
             <button type="button" className={BTN2} onClick={() => { setSetup(null); setCode(""); }}>Cancel</button>
