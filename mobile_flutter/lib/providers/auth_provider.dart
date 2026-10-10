@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
+import '../services/offline_read_log.dart';
 import '../services/token_storage.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
@@ -18,6 +21,10 @@ class AuthProvider extends ChangeNotifier {
 
   final ApiClient _api;
   final TokenStorage _tokenStorage;
+
+  /// Cached tag data keys + this device's hash-chained offline-read log.
+  /// Keys exist only while a non-patient user is signed in.
+  final OfflineReadLog offlineLog = OfflineReadLog();
 
   static const _seniorPrefKey = 'mb_prefers_senior_mode';
   static const _seniorIsDarkKey = 'mb_senior_is_dark';
@@ -66,10 +73,21 @@ class AuthProvider extends ChangeNotifier {
     if (token != null && userJson != null) {
       user = MBUser.fromJson(userJson);
       status = AuthStatus.authenticated;
+      syncOfflineTagData();
     } else {
       status = AuthStatus.unauthenticated;
     }
     notifyListeners();
+  }
+
+  /// Best-effort, fire-and-forget: refresh the cached tag data keys and
+  /// upload this user's pending offline reads. Staff-side roles only -- the
+  /// backend refuses keys to a patient account, and a forced password
+  /// change has to finish first.
+  void syncOfflineTagData() {
+    final u = user;
+    if (u == null || u.role == 'patient' || u.mustChangePassword) return;
+    unawaited(offlineLog.sync(_api, u.id));
   }
 
   Future<bool> login(String email, String password) async {
@@ -92,6 +110,7 @@ class AuthProvider extends ChangeNotifier {
       await _tokenStorage.saveUser(userJson);
       user = MBUser.fromJson(userJson);
       status = AuthStatus.authenticated;
+      syncOfflineTagData();
       return true;
     } on ApiException catch (e) {
       error = e.message;
@@ -121,6 +140,7 @@ class AuthProvider extends ChangeNotifier {
       if (user != null) {
         user = user!.copyWith(mustChangePassword: false);
         await _tokenStorage.saveUser(user!.toJson());
+        syncOfflineTagData();
       }
       return true;
     } on ApiException catch (e) {
@@ -180,8 +200,15 @@ class AuthProvider extends ChangeNotifier {
     // clearing local storage -- once cleared, the refresh token this call
     // needs is gone. Never blocks/fails the actual sign-out on a network
     // problem; see ApiClient.logout's own doc comment.
+    // Flush this user's queued offline reads first (short cap -- never let a
+    // dead network stall sign-out), then drop the offline keys.
+    final u = user;
+    if (u != null && u.role != 'patient') {
+      await offlineLog.sync(_api, u.id).timeout(const Duration(seconds: 3), onTimeout: () {});
+    }
     await _api.logout();
     await _tokenStorage.clear();
+    await offlineLog.clearKeys();
     user = null;
     status = AuthStatus.unauthenticated;
     notifyListeners();
@@ -200,6 +227,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> forceLogout() async {
     await _api.logout(); // best-effort -- see AuthProvider.logout's doc comment
     await _tokenStorage.clear();
+    await offlineLog.clearKeys();
     user = null;
     status = AuthStatus.unauthenticated;
     sessionExpired = true;

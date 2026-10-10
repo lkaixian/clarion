@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, date, time, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from . import permissions
@@ -1709,6 +1709,10 @@ class NfcRegisterRequest(BaseModel):
     # compact on-tag `tag_text` response the backend fits before
     # truncating. None = a conservative default (see _TAG_TEXT_MAX_BYTES).
     tag_max_bytes: "int | None" = None
+    # What the registering device saw: "ntag21x" (NTAG213/215/216 -- no
+    # tamper-proof read counter), "ntag424" (NTAG 424 DNA -- has one), or
+    # "unknown". Only drives the warning in the response; every type works.
+    tag_type: Literal["ntag21x", "ntag424", "unknown"] = "unknown"
 
     @field_validator("valid_minutes")
     @classmethod
@@ -1737,6 +1741,34 @@ class NfcScanRequest(BaseModel):
     responder_org: Optional[str] = None
 
     _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)
+
+
+class OfflineTagReadEntry(BaseModel):
+    """One offline tag read from the device's hash-chained log. `entry_hash`
+    must equal tag_crypto.read_entry_hash(...) over the other fields."""
+    seq: int = Field(ge=0, le=10**9)
+    read_at: str  # ISO-8601 exactly as hashed on the device
+    nfc_uid: str
+    key_id: int = Field(ge=0, le=10**6)
+    outcome: Literal["decrypted", "failed"]
+    prev_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    entry_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)
+
+    @field_validator("read_at")
+    @classmethod
+    def _check_read_at(cls, v: str) -> str:
+        from datetime import datetime as _dt
+        parsed = _dt.fromisoformat(v.replace("Z", "+00:00"))  # raises -> 422
+        if not 2000 <= parsed.year <= 2100:
+            raise ValueError("read_at out of range")
+        return v
+
+
+class OfflineTagReadsUpload(BaseModel):
+    device_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    entries: List[OfflineTagReadEntry] = Field(min_length=1, max_length=25)
 
 
 # ---------- Reception desk check-in / queue ----------

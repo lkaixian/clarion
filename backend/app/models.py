@@ -2502,3 +2502,38 @@ class Job(Base):
         TZDateTime, nullable=False,
         default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
     )
+
+
+class OfflineTagRead(Base):
+    """One read of an encrypted NFC tag done by a CLARION device with NO
+    network (decrypted on the device with a cached data key -- see
+    app/tag_crypto.py). Uploaded later by that same authenticated staff
+    user via POST /emergency/offline-reads, which is how an offline read
+    becomes attributable and lands in the audit log.
+
+    Rows form a per-(user, device) hash chain (`prev_hash` -> `entry_hash`).
+    It is an UNKEYED hash over fields the device chooses, so it only exposes
+    accidental gaps, replays, and edits to rows already uploaded -- a device
+    owner can delete or rewrite entries (and recompute the hashes) before
+    first upload, and can drop the tail. Everything here (`outcome`,
+    `read_at`, `key_id`) is client-asserted. The future tag-side read counter
+    (NTAG 424 DNA) is what closes the dropped-entry gap. `chain_ok` records
+    whether this row linked correctly at upload time; a False row is kept
+    (losing the record is worse) and surfaced. `read_at` is the device's own
+    clock: informational, not trusted."""
+    __tablename__ = "offline_tag_reads"
+    __table_args__ = (UniqueConstraint("user_id", "device_id", "seq", name="uq_offline_tag_reads_user_device_seq"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id = Column(String(64), nullable=False)
+    seq = Column(Integer, nullable=False)
+    read_at = Column(TZDateTime, nullable=False)
+    received_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="SET NULL"), nullable=True, index=True)
+    nfc_uid_hash = Column(String(64), nullable=False)  # M7: HMAC of the UID, never the raw UID
+    key_id = Column(Integer, nullable=False)
+    outcome = Column(String(16), nullable=False)  # decrypted | failed
+    prev_hash = Column(String(64), nullable=False)
+    entry_hash = Column(String(64), nullable=False)
+    chain_ok = Column(Boolean, nullable=False, default=True)

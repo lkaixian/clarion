@@ -781,6 +781,26 @@ class AppLocalizationsMs extends AppLocalizations {
       'Pemegang kad (bacaan luar talian)';
 
   @override
+  String get nfcBasicTagWarning =>
+      'Jenis tag ini (NTAG213/215/216) berfungsi, tetapi tiada pembilang bacaan kalis ubah: bacaan luar talian tidak dapat disemak untuk entri yang hilang. Gunakan NTAG 424 DNA jika akauntabiliti penting.';
+
+  @override
+  String get scanResultOfflineSignIn =>
+      'Tiada sambungan dan tag ini dilindungi. Log masuk dengan akaun kakitangan/responder CLARION untuk membacanya luar talian, atau gunakan kod QR / carian dalam talian.';
+
+  @override
+  String get scanResultOfflineKeyMissing =>
+      'Tiada sambungan dan peranti ini tidak mempunyai kunci untuk tag ini. Sambung sekali semasa log masuk untuk memuat turunnya, atau gunakan kod QR / carian dalam talian.';
+
+  @override
+  String get scanResultOfflineExpired =>
+      'Kesahan tag ini telah tamat dan tidak boleh dibaca luar talian. Gunakan kod QR atau carian dalam talian, dan minta kad dikeluarkan semula.';
+
+  @override
+  String get scanResultOfflineDamaged =>
+      'Tag ini tidak dapat disahkan (rosak, diubah, atau bukan tag CLARION tulen). Jangan bergantung padanya - gunakan kod QR atau carian dalam talian.';
+
+  @override
   String get writeOfflineTagTooltip =>
       'Tulis Tag Luar Talian (kakitangan sahaja)';
 

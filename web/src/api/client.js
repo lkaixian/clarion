@@ -81,7 +81,6 @@ const UNAUTHENTICATED_AUTH_PATHS = [
   "/auth/request-password-reset-otp",
   "/auth/reset-password-with-otp",
   "/auth/refresh",
-  "/auth/change-password", // a wrong current password is a 401 that must reach the form, not trigger a session refresh
 ];
 
 // Single-flight refresh: if several requests 401 around the same moment
@@ -313,8 +312,8 @@ export const getCurrentCardStatus = (patientId) =>
 // Registration is staff-only; scanning (by a responder's NFC-capable
 // phone) requires no auth, same design as the QR flow.
 export const listNfcCards = (patientId) => client.get(`/emergency/nfc/${patientId}`).then((r) => r.data);
-export const registerNfcCard = (patientId, nfcUid, scope) =>
-  client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope }).then((r) => r.data);
+export const registerNfcCard = (patientId, nfcUid, scope, tagType = "unknown") =>
+  client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope, tag_type: tagType }).then((r) => r.data);
 // Revoke by the grant id (from listNfcCards) -- the raw UID is stored
 // hashed server-side and never returned to the client (Security Audit M7).
 export const revokeNfcCard = (tokenId) => client.post(`/emergency/nfc/revoke/${tokenId}`).then((r) => r.data);

@@ -5,10 +5,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, tag_crypto
 from ..database import get_db
 from ..audit import log_access
 from ..rate_limit import limiter
@@ -604,6 +605,23 @@ def get_current_card_status(
 # is staff-only (done from the web console) — patients cannot self-register
 # a physical card, mirroring how a real hospital would issue one.
 
+def _tag_security(tag_type: str) -> dict:
+    """Every tag type works (the sealed record is plain NDEF); only the
+    NTAG 424 DNA has the tamper-proof read counter that makes a dropped
+    offline-read log detectable. Anything else gets an explicit warning for
+    the web and mobile UIs to show."""
+    has_counter = tag_type == "ntag424"
+    return {
+        "read_counter": has_counter,
+        "warning": None if has_counter else (
+            "This tag has no tamper-proof read counter (NTAG213/215/216 or "
+            "unknown type). It works, but offline reads of it cannot be "
+            "checked for missing entries -- use an NTAG 424 DNA where "
+            "accountability matters."
+        ),
+    }
+
+
 @router.post("/nfc/register")
 def register_nfc_card(
     payload: schemas.NfcRegisterRequest,
@@ -674,12 +692,33 @@ def register_nfc_card(
         patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, max_bytes,
     )
 
+    # tag_blob: the SAME data AES-GCM sealed to this physical tag's UID --
+    # what staff should actually write. tag_text stays as the legacy
+    # plaintext form (readable by any NFC reader; no per-read attribution).
+    tag_blob = None
+    tag_blob_truncated = False
+    # X:<yyyymmdd> = the grant's own expiry, sealed in so an offline reader
+    # refuses a lapsed tag. (A revoked-but-unexpired tag still opens offline:
+    # revocation needs connectivity.)
+    expiry = f"X:{grant.expires_at:%Y%m%d}"
+    budget = tag_crypto.plaintext_budget(max_bytes) - len(expiry) - 1
+    if budget >= 24:
+        blob_plain, tag_blob_truncated = _build_compact_tag_text(
+            patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, budget,
+        )
+        if blob_plain:
+            tag_blob = tag_crypto.seal(f"{expiry}|{blob_plain}", auth.canonical_nfc_uid(payload.nfc_uid))
+
     return {
         "id": grant.id,
         "nfc_uid_last4": grant.nfc_uid_last4,
         "scope": grant.scope,
         "tag_text": tag_text,
         "tag_text_truncated": tag_text_truncated,
+        "tag_blob": tag_blob,
+        "tag_blob_key_id": tag_crypto.current_key_id() if tag_blob else None,
+        "tag_blob_truncated": tag_blob_truncated,
+        "tag_security": _tag_security(payload.tag_type),
         "grant_valid_until": grant.expires_at.isoformat(),
         "revoked": grant.revoked,
     }
@@ -748,6 +787,132 @@ def scan_nfc_card(
     _flag_nfc_scan_anomaly_if_needed(db, uid_hash, patient.id)
 
     return result
+
+
+# ---------- Offline (no-network) reads of encrypted tags ----------
+# A CLARION device decrypts a tag with a cached data key and no server round
+# trip. Both endpoints below are authenticated on purpose: the key only goes
+# to a signed-in user in a role with an emergency/clinical need, and every
+# offline read is uploaded under that user's identity afterwards -- the only
+# way an offline read becomes attributable.
+#
+# What this does NOT give you (see models.OfflineTagRead): the device log is
+# client-asserted. It records reads honestly made; it cannot prove a device
+# did not drop entries. Any key holder can open any sealed tag offline.
+
+_TAG_KEY_ROLES = ("admin", "clinician", "records_officer", "emergency_responder")
+_MAX_OFFLINE_BATCH = 25
+
+
+@router.get("/tag-keys")
+@limiter.limit("20/minute")
+def get_tag_keys(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*_TAG_KEY_ROLES)),
+):
+    """Data keys a device caches so it can open an encrypted tag with no
+    network. Every fetch is audited."""
+    keys = tag_crypto.active_keys()
+    response.headers["Cache-Control"] = "no-store"
+    log_access(db, None, current_user.id, current_user.role, "tag_keys_fetch",
+               detail=f"key_ids={','.join(keys)}", actor_facility=current_user.facility)
+    return {"current_key_id": tag_crypto.current_key_id(), "keys": keys}
+
+
+@router.post("/offline-reads")
+@limiter.limit("30/minute")
+def upload_offline_reads(
+    request: Request,
+    payload: schemas.OfflineTagReadsUpload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*_TAG_KEY_ROLES)),
+):
+    """Ingest a device's hash-chained log of offline tag reads. Idempotent
+    per (user, device, seq) for an identical entry. A *different* entry for an
+    already-stored seq is a `conflict` (never silently dropped): it is audited
+    and reported so the client can re-base under a fresh device id. A bad hash
+    link is stored with chain_ok=False and audited as such."""
+    if len(payload.entries) > _MAX_OFFLINE_BATCH:
+        raise HTTPException(status_code=413, detail=f"At most {_MAX_OFFLINE_BATCH} entries per upload")
+    entries = sorted(payload.entries, key=lambda e: e.seq)
+    stored = duplicates = conflicts = broken = 0
+    prev_cache: dict = {}  # seq -> entry_hash, for this user+device (batch + DB)
+
+    def _prev_hash_for(seq: int):
+        if seq == 0:
+            return tag_crypto.GENESIS_HASH
+        if seq - 1 in prev_cache:
+            return prev_cache[seq - 1]
+        row = (
+            db.query(models.OfflineTagRead.entry_hash)
+            .filter_by(user_id=current_user.id, device_id=payload.device_id, seq=seq - 1)
+            .first()
+        )
+        return row[0] if row else None
+
+    for e in entries:
+        canon_uid = auth.canonical_nfc_uid(e.nfc_uid)
+        existing = (
+            db.query(models.OfflineTagRead)
+            .filter_by(user_id=current_user.id, device_id=payload.device_id, seq=e.seq)
+            .first()
+        )
+        if existing:
+            if existing.entry_hash == e.entry_hash:
+                duplicates += 1
+                prev_cache[e.seq] = existing.entry_hash
+            else:
+                conflicts += 1
+                log_access(
+                    db, None, current_user.id, current_user.role, "offline_read_seq_conflict",
+                    detail=f"device={payload.device_id} seq={e.seq}",
+                    actor_facility=current_user.facility,
+                )
+            continue
+
+        expected = tag_crypto.read_entry_hash(
+            e.prev_hash, e.seq, e.read_at, canon_uid, e.key_id, e.outcome)
+        chain_ok = _prev_hash_for(e.seq) == e.prev_hash and expected == e.entry_hash
+
+        uid_hash = auth.hash_nfc_uid(e.nfc_uid)
+        grant = db.query(models.EmergencyToken).filter(models.EmergencyToken.nfc_uid == uid_hash).first()
+        read_at = datetime.fromisoformat(e.read_at.replace("Z", "+00:00"))
+        if read_at.tzinfo is None:
+            read_at = read_at.replace(tzinfo=timezone.utc)
+        skew_s = int((datetime.now(timezone.utc) - read_at).total_seconds())
+        patient_id = grant.patient_id if grant else None
+
+        # Audit FIRST: a crash between the two writes then leaves a (possibly
+        # duplicated on retry) audit row, never a stored read with no audit.
+        log_access(
+            db, patient_id, current_user.id, current_user.role,
+            "emergency_access_nfc_offline",
+            detail=(f"nfc_hash={uid_hash[:16]} device={payload.device_id} seq={e.seq} "
+                    f"read_at={e.read_at} skew_s={skew_s} outcome={e.outcome} "
+                    f"chain_ok={chain_ok} source=device_asserted"),
+            actor_facility=current_user.facility,
+        )
+        db.add(models.OfflineTagRead(
+            user_id=current_user.id, device_id=payload.device_id, seq=e.seq,
+            read_at=read_at, patient_id=patient_id,
+            nfc_uid_hash=uid_hash, key_id=e.key_id, outcome=e.outcome,
+            prev_hash=e.prev_hash, entry_hash=e.entry_hash, chain_ok=chain_ok,
+        ))
+        try:
+            db.commit()
+        except IntegrityError:
+            # A concurrent upload of the same batch won the race.
+            db.rollback()
+            duplicates += 1
+            prev_cache[e.seq] = e.entry_hash
+            continue
+        prev_cache[e.seq] = e.entry_hash
+        stored += 1
+        broken += 0 if chain_ok else 1
+
+    return {"stored": stored, "duplicates": duplicates, "conflicts": conflicts, "chain_broken": broken}
 
 
 @router.post("/nfc/revoke/{token_id}")

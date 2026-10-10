@@ -63,9 +63,11 @@ class NfcService {
       },
       onDiscovered: (NfcTag tag) async {
         String? uid;
+        var kind = NfcTagKind.unknown;
         final androidTag = NfcTagAndroid.from(tag);
         if (androidTag != null) {
           uid = _bytesToHex(androidTag.id);
+          kind = classifyTech(androidTag.techList);
         }
 
         String? ndefText;
@@ -79,7 +81,7 @@ class NfcService {
 
         await NfcManager.instance.stopSession();
         if (!completer.isCompleted) {
-          completer.complete(NfcReadResult(uid: uid, ndefText: ndefText));
+          completer.complete(NfcReadResult(uid: uid, ndefText: ndefText, kind: kind));
         }
       },
     );
@@ -133,6 +135,16 @@ class NfcService {
       },
     );
     return completer.future;
+  }
+
+  /// NTAG 424 DNA is an ISO 14443-4 card (IsoDep); NTAG213/215/216 are
+  /// Type 2 tags (MifareUltralight) with no tamper-proof read counter.
+  /// Everything else is `unknown`. Both known kinds work with CLARION --
+  /// the kind only drives the "no read counter" warning.
+  static NfcTagKind classifyTech(List<String> techList) {
+    if (techList.any((t) => t.endsWith('.IsoDep'))) return NfcTagKind.ntag424;
+    if (techList.any((t) => t.endsWith('.MifareUltralight'))) return NfcTagKind.ntag21x;
+    return NfcTagKind.unknown;
   }
 
   static Future<void> cancelSession() async {
@@ -204,9 +216,19 @@ class NfcService {
 /// but no text; a UID read failure with a readable NDEF text is unusual
 /// but handled the same way (both fields are simply best-effort).
 class NfcReadResult {
-  const NfcReadResult({this.uid, this.ndefText});
+  const NfcReadResult({this.uid, this.ndefText, this.kind = NfcTagKind.unknown});
   final String? uid;
   final String? ndefText;
+  final NfcTagKind kind;
+}
+
+/// What kind of physical tag was tapped. Only [ntag424] has the tamper-proof
+/// read counter; [ntag21x] (NTAG213/215/216) and [unknown] work but get a
+/// warning, because offline reads of them can't be checked for omissions.
+enum NfcTagKind { ntag21x, ntag424, unknown }
+
+extension NfcTagKindX on NfcTagKind {
+  bool get hasReadCounter => this == NfcTagKind.ntag424;
 }
 
 enum NfcWriteResult {

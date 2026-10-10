@@ -18,7 +18,13 @@ class ApiException implements Exception {
   /// connection error).
   final Map<String, dynamic>? data;
 
-  ApiException(this.message, {this.statusCode, this.data});
+  /// True only when the failure was "no usable network path" (timeout,
+  /// connection error, or a caller-imposed cancel) -- NOT for a bad
+  /// certificate or any real HTTP answer. The offline-tag fallback keys on
+  /// this so a TLS/pinning failure can never be used to force it.
+  final bool isUnreachable;
+
+  ApiException(this.message, {this.statusCode, this.data, this.isUnreachable = false});
 
   /// Shown instead of interpolating a raw/unexpectedly-shaped backend
   /// `detail` value (e.g. a List — either a FastAPI 422 validation-error
@@ -62,12 +68,16 @@ class ApiException implements Exception {
           'The server took too long to respond. Check the API base URL in '
           'Settings and that the backend is reachable.',
           statusCode: status,
+          isUnreachable: true,
         );
+      case DioExceptionType.cancel:
+        return ApiException('The request was cancelled.', statusCode: status, isUnreachable: true);
       case DioExceptionType.connectionError:
         return ApiException(
           'Could not reach the backend. Check the API base URL in Settings '
           '(currently pointing somewhere unreachable) and your network connection.',
           statusCode: status,
+          isUnreachable: true,
         );
       default:
         if (status == 401) {
