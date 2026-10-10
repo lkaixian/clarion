@@ -8,6 +8,7 @@ import 'emergency_scanner_screen.dart';
 import 'forgot_password_screen.dart';
 import 'self_register_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/common.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,9 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final auth = context.read<AuthProvider>();
       if (auth.sessionExpired) {
         auth.acknowledgeSessionExpired();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).sessionExpiredSnackbar)),
-        );
+        context.snack(AppLocalizations.of(context).sessionExpiredSnackbar);
       }
     });
   }
@@ -62,9 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final ok = await auth.login(_identifierController.text.trim(), _passwordController.text);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(auth.error ?? l10n.loginFailedGeneric)),
-      );
+      context.snack(auth.error ?? l10n.loginFailedGeneric);
     }
   }
 
@@ -74,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok) {
       _codeController.clear();
     } else if (mounted && auth.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(auth.error!)));
+      context.snack(auth.error!);
     }
   }
 
@@ -101,9 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ElevatedButton(
           onPressed: auth.isBusy ? null : _handleVerify,
           child: auth.isBusy
-              ? const SizedBox(
-                  height: 20, width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const ButtonSpinner()
               : Text(l10n.mfaVerifyButton),
         ),
       ),
@@ -132,8 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
           IconButton(
             tooltip: l10n.apiSettingsTooltip,
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onPressed: () => context.pushScreen(const SettingsScreen()),
           ),
         ],
       ),
@@ -160,8 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: context.palette.emergency,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                     ),
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const EmergencyScannerScreen())),
+                    onPressed: () => context.pushScreen(const EmergencyScannerScreen()),
                     icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                     label: Text(
                       l10n.scanEmergencyCardButton,
@@ -197,19 +190,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: auth.isBusy ? null : _handleLogin,
                     child: auth.isBusy
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                        ? const ButtonSpinner()
                         : Text(l10n.signIn),
                   ),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                    onPressed: () => context.pushScreen(const ForgotPasswordScreen()),
                     child: Text(l10n.forgotPasswordButton, style: const TextStyle(fontSize: 13)),
                   ),
                 ),
@@ -224,8 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(l10n.selfRegisterLinkPrompt,
                         style: TextStyle(fontSize: 13, color: context.palette.textMuted)),
                     TextButton(
-                      onPressed: () => Navigator.of(context)
-                          .push(MaterialPageRoute(builder: (_) => const SelfRegisterScreen())),
+                      onPressed: () => context.pushScreen(const SelfRegisterScreen()),
                       child: Text(l10n.selfRegisterLinkAction, style: const TextStyle(fontSize: 13)),
                     ),
                   ],

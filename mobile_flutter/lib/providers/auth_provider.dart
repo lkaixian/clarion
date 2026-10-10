@@ -15,9 +15,7 @@ enum AuthStatus { unknown, authenticated, unauthenticated }
 /// the persisted "prefer Senior Citizen Mode" flag used to route straight
 /// into the simplified hub after login.
 class AuthProvider extends ChangeNotifier {
-  AuthProvider({required ApiClient api, required TokenStorage tokenStorage})
-      : _api = api,
-        _tokenStorage = tokenStorage;
+  AuthProvider({required this._api, required this._tokenStorage});
 
   final ApiClient _api;
   final TokenStorage _tokenStorage;

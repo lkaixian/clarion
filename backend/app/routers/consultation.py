@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from .. import models, schemas, auth, mpi_client
+from .. import models, schemas, auth, seal, mpi_client
 from ..database import get_db
 from ..audit import log_access
 from .staff import _get_clock_status
@@ -398,6 +398,8 @@ def complete_consultation_ticket(
         copy_signature_snapshot(current_user, f"encounters/{encounter.id}.png"),
         "signature",
     )
+    db.flush()  # note + row must be visible before sealing
+    seal.seal("encounter", encounter)
     db.add(encounter)
     db.commit()
     db.refresh(ticket)

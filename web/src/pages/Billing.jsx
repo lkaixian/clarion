@@ -125,7 +125,7 @@ export default function Billing() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Billing</h1>
+        <h1 className="page-title">Billing</h1>
         <p className="text-sm text-slate-500">Charge master, invoices, payments, and insurance/panel claims.</p>
       </div>
 
@@ -142,7 +142,7 @@ export default function Billing() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+      <div className="card mb-6">
         <h2 className="font-semibold text-slate-800 mb-3">Patient</h2>
         {patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
@@ -164,7 +164,7 @@ export default function Billing() {
       </div>
 
       {patientId && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+        <div className="card mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-slate-800">Bills</h2>
             {canWriteBills && (
@@ -375,17 +375,17 @@ function NewBillForm({ patientId, onCancel, onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-4 grid gap-3 bg-slate-50">
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Encounter ID (optional)</label>
+        <label className="field-label">Encounter ID (optional)</label>
         <input
           type="text"
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          className="field-input"
           value={encounterId}
           onChange={(e) => setEncounterId(e.target.value.trim())}
           placeholder="Link this bill to a visit, if any"
         />
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">Create Bill</button>
+        <button disabled={busy} className="btn-primary">Create Bill</button>
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
       </div>
     </form>
@@ -461,7 +461,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
   const voidedPayments = bill.payments.filter((p) => p.voided_at);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+    <div className="card mb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="font-semibold text-slate-800">
@@ -684,9 +684,9 @@ function AddItemForm({ bill, onCancel, onSuccess, onError }) {
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-3 grid gap-3 bg-slate-50">
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Source</label>
+          <label className="field-label">Source</label>
           <select
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="field-input"
             value={sourceType}
             onChange={(e) => { setSourceType(e.target.value); setSelectedId(""); }}
           >
@@ -696,8 +696,8 @@ function AddItemForm({ bill, onCancel, onSuccess, onError }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Item</label>
-          <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+          <label className="field-label">Item</label>
+          <select required className="field-input" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
             <option value="">-- select --</option>
             {options.map((o) => (
               <option key={o.id} value={o.id}>{o.label}</option>
@@ -705,12 +705,12 @@ function AddItemForm({ bill, onCancel, onSuccess, onError }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Quantity</label>
-          <input type="number" min="1" step="1" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <label className="field-label">Quantity</label>
+          <input type="number" min="1" step="1" className="field-input" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
         </div>
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">Add Item</button>
+        <button disabled={busy} className="btn-primary">Add Item</button>
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
       </div>
     </form>
@@ -748,12 +748,12 @@ function RecordPaymentForm({ bill, onCancel, onSuccess, onError }) {
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-3 grid gap-3 bg-slate-50">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Amount (RM)</label>
-          <input required type="number" step="0.01" min="0.01" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <label className="field-label">Amount (RM)</label>
+          <input required type="number" step="0.01" min="0.01" className="field-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Method</label>
-          <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={method} onChange={(e) => setMethod(e.target.value)}>
+          <label className="field-label">Method</label>
+          <select className="field-input" value={method} onChange={(e) => setMethod(e.target.value)}>
             <option value="cash">Cash</option>
             <option value="card">Card</option>
             <option value="insurance">Insurance</option>
@@ -764,13 +764,13 @@ function RecordPaymentForm({ bill, onCancel, onSuccess, onError }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Reference No. (optional)</label>
-          <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} />
+          <label className="field-label">Reference No. (optional)</label>
+          <input type="text" className="field-input" value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} />
         </div>
         {(method === "insurance" || method === "panel") && settleableClaims.length > 0 && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Settles Claim (optional)</label>
-            <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={claimId} onChange={(e) => setClaimId(e.target.value)}>
+            <label className="field-label">Settles Claim (optional)</label>
+            <select className="field-input" value={claimId} onChange={(e) => setClaimId(e.target.value)}>
               <option value="">-- none --</option>
               {settleableClaims.map((c) => (
                 <option key={c.id} value={c.id}>{c.payer_name} ({rm(c.claim_amount_cents)})</option>
@@ -780,7 +780,7 @@ function RecordPaymentForm({ bill, onCancel, onSuccess, onError }) {
         )}
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">Record Payment</button>
+        <button disabled={busy} className="btn-primary">Record Payment</button>
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
       </div>
     </form>
@@ -813,21 +813,21 @@ function AddClaimForm({ bill, onCancel, onSuccess, onError }) {
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-3 grid gap-3 bg-slate-50">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Payer (insurer/panel)</label>
-          <input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={payerName} onChange={(e) => setPayerName(e.target.value)} />
+          <label className="field-label">Payer (insurer/panel)</label>
+          <input required type="text" className="field-input" value={payerName} onChange={(e) => setPayerName(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Claim Amount (RM)</label>
-          <input required type="number" step="0.01" min="0.01" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <label className="field-label">Claim Amount (RM)</label>
+          <input required type="number" step="0.01" min="0.01" className="field-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <p className="text-[10px] text-slate-400 mt-1">May cover part of the bill (copay) — the rest stays owed by the patient until this claim settles.</p>
         </div>
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Notes (optional)</label>
-        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={notes} onChange={(e) => setNotes(e.target.value)}></textarea>
+        <label className="field-label">Notes (optional)</label>
+        <textarea rows={2} className="field-input" value={notes} onChange={(e) => setNotes(e.target.value)}></textarea>
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">Create Claim</button>
+        <button disabled={busy} className="btn-primary">Create Claim</button>
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
       </div>
     </form>

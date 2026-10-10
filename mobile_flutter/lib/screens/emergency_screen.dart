@@ -6,6 +6,8 @@ import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import '../widgets/loading_view.dart';
 
 /// Scope keys accepted by the backend's `POST /emergency/issue` endpoint
 /// (see backend/app/schemas.py::EmergencyProfileRequest). Labels are
@@ -124,16 +126,10 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     if (!mounted) return;
     if (ok) {
       final revokedCount = patientState.emergencyCard?.previousCardsRevoked ?? 0;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            revokedCount > 0 ? l10n.cardIssuedWithRevokeSnack(revokedCount) : l10n.cardIssuedSnack,
-          ),
-        ),
-      );
+      context.snack(revokedCount > 0 ? l10n.cardIssuedWithRevokeSnack(revokedCount) : l10n.cardIssuedSnack);
     } else {
       final err = patientState.emergencyError;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? l10n.cardIssueFailedSnack)));
+      context.snack(err ?? l10n.cardIssueFailedSnack);
     }
   }
 
@@ -141,9 +137,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     final l10n = AppLocalizations.of(context);
     final ok = await context.read<PatientProvider>().revokeCurrentCard();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? l10n.cardRevokedSnack : l10n.cardRevokeFailedSnack)),
-      );
+      context.snack(ok ? l10n.cardRevokedSnack : l10n.cardRevokeFailedSnack);
     }
   }
 
@@ -216,7 +210,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
             if (patientState.isIssuingCard)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Center(child: CircularProgressIndicator(color: context.palette.primary)),
+                child: const LoadingView(),
               ),
             if (card != null) _EmergencyCardResult(onRevoke: _revoke),
             const SizedBox(height: 20),

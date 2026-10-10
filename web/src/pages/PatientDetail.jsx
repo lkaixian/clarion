@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
-import Watermark from "../components/Watermark";
 import SignaturePad from "../components/SignaturePad";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
@@ -13,7 +12,7 @@ import {
   digitiseDocument, getDocumentDetail, getDocumentFileBlob, generateDocument,
   getAppointments, createAppointment, updateAppointment,
   rescheduleAppointment, acceptRescheduleRequest, rejectRescheduleRequest,
-  addPatientAnnotation, getAnnotationSignatureBlob, getStaffSignatureBlob,
+  addPatientAnnotation,
   getMySignatureBlob,
 } from "../api/client";
 
@@ -232,18 +231,18 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">
           {mode === "add" ? `Add ${config.label}` : `Edit ${config.label}`}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
           {config.fields.map((f) => (
             <div key={f.key}>
               {mode !== "add" && f.addOnly ? (
                 <>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                  <label className="field-label">{f.label}</label>
                   <p className="text-sm text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5">
                     {String(values[f.key] || "—")}
                     <span className="block text-xs text-slate-400">Set when the record was created — not editable here.</span>
@@ -260,12 +259,12 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                 </label>
               ) : (
                 <>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                  <label className="field-label">
                     {f.label}{f.required && <span className="text-red-600"> *</span>}
                   </label>
                   {f.type === "select" ? (
                     <select
-                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="field-input"
                       value={values[f.key]}
                       onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                     >
@@ -273,7 +272,7 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                     </select>
                   ) : f.type === "textarea" ? (
                     <textarea
-                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="field-input"
                       rows={3}
                       value={values[f.key]}
                       placeholder={f.placeholder}
@@ -281,7 +280,7 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                     />
                   ) : (
                     <input
-                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="field-input"
                       type={f.type}
                       placeholder={f.placeholder}
                       value={values[f.key]}
@@ -303,10 +302,10 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button disabled={saving || screening} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving || screening} className="btn-primary">
               {screening ? "Checking safety..." : saving ? "Saving..." : screenAcknowledged ? "Add anyway" : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -353,9 +352,9 @@ function DocumentModal({ patientId, documentId, onClose }) {
   }, [detail, patientId, documentId]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="modal-backdrop">
       <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+        {error && <div className="alert-error mb-3">{error}</div>}
         {!detail && !error && <p className="text-sm text-slate-400">Loading...</p>}
         {detail && (
           <>
@@ -478,9 +477,9 @@ function GenerateDocumentForm({ patientId, onGenerated }) {
 
   return (
     <form onSubmit={submit} className="space-y-3 mb-4 pb-4 border-b border-slate-100">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+      {error && <div className="alert-error">{error}</div>}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Document type</label>
+        <label className="field-label">Document type</label>
         <select
           className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
           value={docType}
@@ -513,10 +512,10 @@ function GenerateDocumentForm({ patientId, onGenerated }) {
         </div>
       )}
       <div className="flex gap-2">
-        <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <button disabled={saving} className="btn-primary">
           {saving ? "Generating..." : "Generate & sign"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+        <button type="button" onClick={() => setOpen(false)} className="btn-secondary">
           Cancel
         </button>
       </div>
@@ -558,7 +557,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
       {isStaff && (
         <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Document type</label>
+            <label className="field-label">Document type</label>
             <select
               className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
               value={docType}
@@ -568,7 +567,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">File</label>
+            <label className="field-label">File</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -577,12 +576,12 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
               className="text-sm"
             />
           </div>
-          <button disabled={uploading} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+          <button disabled={uploading} className="btn-primary">
             {uploading ? "Uploading & digitising..." : "Upload & Digitise"}
           </button>
         </form>
       )}
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
 
       {documents.length === 0 ? (
         <p className="text-sm text-slate-400">No documents on file yet.</p>
@@ -702,18 +701,18 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="field-label">
               Facility name<span className="text-red-600"> *</span>
             </label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               value={facilityName}
               onChange={(e) => setFacilityName(e.target.value)}
@@ -721,9 +720,9 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Venue</label>
+            <label className="field-label">Venue</label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               placeholder="e.g. Clinic 3B, Level 2"
               value={venue}
@@ -732,11 +731,11 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="field-label">
               Date &amp; time<span className="text-red-600"> *</span>
             </label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
@@ -744,9 +743,9 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+            <label className="field-label">Reason</label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               placeholder="e.g. Follow-up, blood test"
               value={reason}
@@ -765,7 +764,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
             </label>
             {fastingRequired && (
               <div className="mt-2 pl-6">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Fast for how many hours before?</label>
+                <label className="field-label">Fast for how many hours before?</label>
                 <input
                   className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   type="number"
@@ -778,9 +777,9 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Precaution notes</label>
+            <label className="field-label">Precaution notes</label>
             <textarea
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               rows={2}
               placeholder="e.g. bring previous scan results, stop blood thinners 2 days prior"
               value={precautionNotes}
@@ -825,10 +824,10 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -886,22 +885,22 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
         <p className="text-xs text-slate-400 mb-4">
           {appointment.facility_name}{appointment.venue && ` — ${appointment.venue}`} · currently{" "}
           {formatAppointmentTime(appointment.scheduled_at)}
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="field-label">
               New date &amp; time<span className="text-red-600"> *</span>
             </label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
@@ -909,11 +908,11 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="field-label">
               Reason<span className="text-red-600"> *</span>
             </label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               value={reasonCode}
               onChange={(e) => setReasonCode(e.target.value)}
             >
@@ -925,11 +924,11 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
 
           {reasonCode === "other" && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
+              <label className="field-label">
                 Please describe<span className="text-red-600"> *</span>
               </label>
               <textarea
-                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="field-input"
                 rows={2}
                 value={reasonOther}
                 onChange={(e) => setReasonOther(e.target.value)}
@@ -938,10 +937,10 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
           )}
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -1022,7 +1021,7 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
   return (
     <Section
       title="Appointments"
-      action={isStaff && <button onClick={() => setShowAddModal(true)} className="text-xs text-blue-700">+ Add</button>}
+      action={isStaff && <button onClick={() => setShowAddModal(true)} className="btn-add">+ Add</button>}
     >
       {appointments.length === 0 ? (
         <p className="text-sm text-slate-400">No appointments scheduled.</p>
@@ -1180,15 +1179,23 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
   );
 }
 
-function Section({ title, children, action }) {
+const SECTION_ICON = { Conditions: "🩺", Medications: "💊", Allergies: "⚠️", "Visit / Transfer Timeline": "🕒" };
+
+function Section({ title, children, action, count }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-slate-800">{title}</h2>
+    <section className="bg-white border border-slate-200 rounded-xl shadow-sm mb-4 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3">
+        <h2 className="flex items-center gap-2 font-semibold text-slate-800">
+          {SECTION_ICON[title] && <span aria-hidden="true">{SECTION_ICON[title]}</span>}
+          {title}
+          {count > 0 && (
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">{count}</span>
+          )}
+        </h2>
         {action}
       </div>
-      {children}
-    </div>
+      <div className="p-5">{children}</div>
+    </section>
   );
 }
 
@@ -1209,15 +1216,15 @@ const TABS = [
 
 function TabBar({ active, onChange }) {
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">
+    <div className="mb-5 inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1">
       {TABS.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
+          className={`px-4 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition ${
             active === t.key
-              ? "border-blue-800 text-blue-800"
-              : "border-transparent text-slate-500 hover:text-slate-700"
+              ? "bg-white text-blue-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
           }`}
         >
           {t.label}
@@ -1332,58 +1339,26 @@ const SIGN_OFF_KINDS_BY_TYPE = {
   ],
 };
 
-// Tiny "view signature" affordance. `load` is a thunk returning a Promise of
-// an object URL (or null) — called lazily on first open so the blob is only
-// fetched if someone actually wants to see it. The URL is revoked on unmount.
-function SignatureLink({ load, label = "signature" }) {
-  const [open, setOpen] = useState(false);
-  const [url, setUrl] = useState(null);
-  const [failed, setFailed] = useState(false);
-  const urlRef = useRef(null);
-
-  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
-
-  async function toggle() {
-    if (open) { setOpen(false); return; }
-    setOpen(true);
-    if (url || failed) return;
-    try {
-      const u = await load();
-      if (u) { urlRef.current = u; setUrl(u); } else { setFailed(true); }
-    } catch {
-      setFailed(true);
-    }
+// Tamper-seal result from the server (backend/app/seal.py): "valid" means the
+// row still matches what the signer's session sealed; "altered" means it was
+// changed after signing. "unsealed" = created before sealing existed.
+function SealBadge({ status }) {
+  if (status === "valid") {
+    return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200" title="Digitally sealed; unchanged since signing">🔒 sealed</span>;
   }
-
-  return (
-    <span className="relative inline-block align-baseline">
-      <button type="button" onClick={toggle} className="text-blue-700 underline decoration-dotted">
-        {label}
-      </button>
-      {open && (
-        <span className="absolute left-0 top-full z-40 mt-1 block rounded-lg border border-slate-300 bg-white p-2 shadow-lg">
-          {failed ? (
-            <span className="whitespace-nowrap text-xs text-red-600">Signature unavailable</span>
-          ) : url ? (
-            <>
-              <img src={url} alt="signature" className="h-auto w-44 bg-white" />
-              <a href={url} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-blue-700">
-                Open in new tab
-              </a>
-            </>
-          ) : (
-            <span className="whitespace-nowrap text-xs text-slate-400">Loading…</span>
-          )}
-        </span>
-      )}
-    </span>
-  );
+  if (status === "altered") {
+    return <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-300" title="This record no longer matches its seal">✖ altered after signing</span>;
+  }
+  if (status === "unknown_key") {
+    return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200" title="Sealed with a key this server no longer holds">seal key unknown</span>;
+  }
+  return null;
 }
 
 // The signed-off annotations stacked under one clinical-record row — one line
 // each: kind icon, note text, muted attribution, and a signature thumbnail
 // link. Newest-first ordering is whatever the backend returned.
-function AnnotationList({ patientId, annotations }) {
+function AnnotationList({ annotations }) {
   if (!annotations || annotations.length === 0) return null;
   return (
     <div className="mt-1 space-y-1 border-l-2 border-slate-100 pl-2">
@@ -1394,7 +1369,7 @@ function AnnotationList({ patientId, annotations }) {
           <span className="text-slate-400">
             — {a.signed_by_name} ({a.signed_by_role}) · {a.facility_name} · {formatSignedAt(a.created_at)}
           </span>
-          <SignatureLink load={() => getAnnotationSignatureBlob(patientId, a.id)} />
+          <SealBadge status={a.seal_status} />
         </div>
       ))}
     </div>
@@ -1498,17 +1473,17 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-1">Sign off record</h3>
         <p className="text-xs text-slate-400 mb-4">{targetLabel}</p>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Kind</label>
+            <label className="field-label">Kind</label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               value={kind}
               onChange={(e) => setKind(e.target.value)}
             >
@@ -1517,13 +1492,13 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
+            <label className="field-label">
               Note{noteRequired
                 ? <span className="text-red-600"> *</span>
                 : <span className="text-slate-400"> (optional)</span>}
             </label>
             <textarea
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -1554,10 +1529,10 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Signing…" : "Sign off"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -1600,6 +1575,7 @@ export default function PatientDetail() {
   const [emergencyCard, setEmergencyCard] = useState(null);
   const [cardStatus, setCardStatus] = useState(null); // {active, card_reference, scope, grant_valid_until} | null (not loaded yet)
   const [auditLog, setAuditLog] = useState([]);
+  const [auditDays, setAuditDays] = useState(7);
   const [nfcCards, setNfcCards] = useState([]);
   const [appointments, setAppointments] = useState([]);
   // Set once, right after a successful issue/reset call — holds the ONLY
@@ -1641,11 +1617,11 @@ export default function PatientDetail() {
 
   const refresh = useCallback(() => {
     getPatient(id).then(setPatient);
-    getAuditLog(id).then(setAuditLog);
+    getAuditLog(id, auditDays).then(setAuditLog);
     listNfcCards(id).then(setNfcCards);
     getAppointments(id).then(setAppointments);
     refreshCardStatus();
-  }, [id, refreshCardStatus]);
+  }, [id, refreshCardStatus, auditDays]);
 
   // FIX (previously reported: "revoke/replace a card from the app, but the
   // web console doesn't reflect it until I refresh the page"): the web
@@ -1828,10 +1804,30 @@ export default function PatientDetail() {
 
   return (
     <Layout>
-      <Watermark patientId={id} />
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">{patient.full_name}</h1>
-        <p className="text-sm text-slate-500">DOB {patient.date_of_birth} · Blood type {patient.blood_type || "unknown"}</p>
+      <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div
+          aria-hidden="true"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-900 text-xl font-semibold text-white"
+        >
+          {(patient.full_name || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="page-title truncate">{patient.full_name}</h1>
+          <p className="text-sm text-slate-500">DOB {patient.date_of_birth}</p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-medium">
+          <span className="rounded-full bg-red-50 px-3 py-1 text-red-700 ring-1 ring-red-200">
+            Blood type {patient.blood_type || "unknown"}
+          </span>
+          {patient.allergies.length > 0 && (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800 ring-1 ring-amber-200">
+              {patient.allergies.length} {patient.allergies.length === 1 ? "allergy" : "allergies"}
+            </span>
+          )}
+          {patient.conditions.some((c) => c.is_chronic) && (
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-800 ring-1 ring-blue-200">Chronic condition</span>
+          )}
+        </div>
       </div>
 
       {isOwnRecord && missingProfileFields.length > 0 && !editingProfile && (
@@ -1851,14 +1847,14 @@ export default function PatientDetail() {
         <>
           {isOwnRecord && (
             <Section title="My Contact Info" action={
-              !editingProfile && <button onClick={startEditingProfile} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">Edit</button>
+              !editingProfile && <button onClick={startEditingProfile} className="btn-primary">Edit</button>
             }>
               <p className="text-xs text-slate-400 mb-3">
                 Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
               </p>
               {editingProfile ? (
                 <form onSubmit={saveProfile} className="space-y-3">
-                  {profileError && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{profileError}</div>}
+                  {profileError && <div className="alert-error">{profileError}</div>}
                   {[
                     ["email", "Contact email", "email"],
                     ["phone", "Phone number", "tel"],
@@ -1867,9 +1863,9 @@ export default function PatientDetail() {
                     ["emergency_contact_relationship", "Relationship", "text"],
                   ].map(([key, label, type]) => (
                     <div key={key}>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                      <label className="field-label">{label}</label>
                       <input
-                        className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="field-input"
                         type={type}
                         value={profileForm[key]}
                         onChange={(e) => setProfileForm((f) => ({ ...f, [key]: e.target.value }))}
@@ -1877,10 +1873,10 @@ export default function PatientDetail() {
                     </div>
                   ))}
                   <div className="flex gap-2 pt-1">
-                    <button disabled={profileSaving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+                    <button disabled={profileSaving} className="btn-primary">
                       {profileSaving ? "Saving..." : "Save"}
                     </button>
-                    <button type="button" onClick={() => setEditingProfile(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+                    <button type="button" onClick={() => setEditingProfile(false)} className="btn-secondary">
                       Cancel
                     </button>
                   </div>
@@ -1898,11 +1894,11 @@ export default function PatientDetail() {
             </Section>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <Section title="Conditions" action={isStaff && <button onClick={() => openAddRecord("condition")} className="text-xs text-blue-700">+ Add</button>}>
-              {patient.conditions.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+          <div className="grid grid-cols-1 gap-x-4 lg:grid-cols-2">
+            <Section title="Conditions" count={patient.conditions.length} action={isStaff && <button onClick={() => openAddRecord("condition")} className="btn-add">+ Add</button>}>
+              {patient.conditions.length === 0 && <p className="empty-state">None on file.</p>}
               {patient.conditions.map((c) => (
-                <div key={c.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                <div key={c.id} className="record-row">
                   <div className="text-sm text-slate-700">
                     <p>
                       {c.name}{" "}
@@ -1910,14 +1906,14 @@ export default function PatientDetail() {
                       <ConditionStatusBadge condition={c} />
                     </p>
                     {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
-                    <AnnotationList patientId={id} annotations={c.annotations} />
+                    <AnnotationList annotations={c.annotations} />
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <RecordEditControl record={c} onEdit={() => openEditRecord("condition", c)} />
                       <button
                         onClick={() => setSignOff({ targetType: "condition", target: c, targetLabel: c.name })}
-                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                        className="btn-chip"
                       >
                         Sign off…
                       </button>
@@ -1926,10 +1922,10 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Medications" action={isStaff && <button onClick={() => openAddRecord("medication")} className="text-xs text-blue-700">+ Add</button>}>
-              {patient.medications.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+            <Section title="Medications" count={patient.medications.length} action={isStaff && <button onClick={() => openAddRecord("medication")} className="btn-add">+ Add</button>}>
+              {patient.medications.length === 0 && <p className="empty-state">None on file.</p>}
               {patient.medications.map((m) => (
-                <div key={m.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                <div key={m.id} className="record-row">
                   <div className="text-sm text-slate-700">
                     <p>
                       {m.drug_name}{" "}
@@ -1939,14 +1935,14 @@ export default function PatientDetail() {
                       {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
                       {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
                     </p>
-                    <AnnotationList patientId={id} annotations={m.annotations} />
+                    <AnnotationList annotations={m.annotations} />
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <RecordEditControl record={m} onEdit={() => openEditRecord("medication", m)} />
                       <button
                         onClick={() => setSignOff({ targetType: "medication", target: m, targetLabel: m.drug_name })}
-                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                        className="btn-chip"
                       >
                         Sign off…
                       </button>
@@ -1955,21 +1951,21 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Allergies" action={isStaff && <button onClick={() => openAddRecord("allergy")} className="text-xs text-blue-700">+ Add</button>}>
-              {patient.allergies.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+            <Section title="Allergies" count={patient.allergies.length} action={isStaff && <button onClick={() => openAddRecord("allergy")} className="btn-add">+ Add</button>}>
+              {patient.allergies.length === 0 && <p className="empty-state">None on file.</p>}
               {patient.allergies.map((a) => (
-                <div key={a.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                <div key={a.id} className="record-row">
                   <div className="text-sm text-slate-700">
                     <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
                     {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
-                    <AnnotationList patientId={id} annotations={a.annotations} />
+                    <AnnotationList annotations={a.annotations} />
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <RecordEditControl record={a} onEdit={() => openEditRecord("allergy", a)} />
                       <button
                         onClick={() => setSignOff({ targetType: "allergy", target: a, targetLabel: a.substance })}
-                        className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                        className="btn-chip"
                       >
                         Sign off…
                       </button>
@@ -1978,13 +1974,13 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Visit / Transfer Timeline" action={isStaff && <button onClick={() => openAddRecord("encounter")} className="text-xs text-blue-700">+ Add</button>}>
-              {patient.encounters.length === 0 && <p className="text-sm text-slate-400">None on file.</p>}
+            <Section title="Visit / Transfer Timeline" count={patient.encounters.length} action={isStaff && <button onClick={() => openAddRecord("encounter")} className="btn-add">+ Add</button>}>
+              {patient.encounters.length === 0 && <p className="empty-state">None on file.</p>}
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {[...patient.encounters]
                   .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
                   .map((e) => (
-                    <div key={e.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                    <div key={e.id} className="record-row">
                       <div className="text-sm text-slate-700">
                         <p>
                           {e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span>
@@ -1999,12 +1995,10 @@ export default function PatientDetail() {
                           <p className="text-xs text-slate-500 mt-0.5">
                             ✔ Consultation completed — signed by {e.signed_by_name}
                             {e.signed_by_role ? ` (${e.signed_by_role})` : ""}{" "}
-                            {e.signed_by && (
-                              <SignatureLink load={() => getStaffSignatureBlob(e.signed_by)} />
-                            )}
+                            <SealBadge status={e.seal_status} />
                           </p>
                         )}
-                        <AnnotationList patientId={id} annotations={e.annotations} />
+                        <AnnotationList annotations={e.annotations} />
                       </div>
                       {isStaff && (
                         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -2015,7 +2009,7 @@ export default function PatientDetail() {
                               target: e,
                               targetLabel: `${e.facility_name} (${e.encounter_type})`,
                             })}
-                            className="text-xs text-slate-500 hover:text-slate-700 whitespace-nowrap"
+                            className="btn-chip"
                           >
                             Sign off…
                           </button>
@@ -2053,7 +2047,7 @@ export default function PatientDetail() {
         <>
           <Section title="AI Clinical Handover Brief" action={
             isStaff ? (
-              <button onClick={loadBrief} disabled={busy === "brief"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+              <button onClick={loadBrief} disabled={busy === "brief"} className="btn-primary">
                 {busy === "brief" ? "Generating..." : "Generate"}
               </button>
             ) : null
@@ -2068,7 +2062,7 @@ export default function PatientDetail() {
 
           <Section title="Medication Interaction Check" action={
             isStaff ? (
-              <button onClick={loadInteractions} disabled={busy === "interactions"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+              <button onClick={loadInteractions} disabled={busy === "interactions"} className="btn-primary">
                 {busy === "interactions" ? "Checking..." : "Run Check"}
               </button>
             ) : null
@@ -2150,7 +2144,7 @@ export default function PatientDetail() {
 
           {canManageLogins && (
             <Section title="Patient Login Account" action={
-              <button onClick={issueAccount} disabled={busy === "account"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+              <button onClick={issueAccount} disabled={busy === "account"} className="btn-primary">
                 {busy === "account" ? "Working..." : "Issue / Reset Login"}
               </button>
             }>
@@ -2166,7 +2160,7 @@ export default function PatientDetail() {
 
           <Section title="NFC Physical Card (senior citizens / no smartphone)" action={
             isStaff ? (
-              <button onClick={registerNfc} disabled={busy === "nfc"} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">
+              <button onClick={registerNfc} disabled={busy === "nfc"} className="btn-primary">
                 {busy === "nfc" ? "Registering..." : "Register NFC Card"}
               </button>
             ) : null
@@ -2201,7 +2195,22 @@ export default function PatientDetail() {
             )}
           </Section>
 
-          <Section title="Access Audit Log (who viewed this record)">
+          <Section
+            title="Access Audit Log (who viewed this record)"
+            action={
+              <select
+                aria-label="Audit log window"
+                value={auditDays}
+                onChange={(e) => setAuditDays(Number(e.target.value))}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={365}>Last year</option>
+                <option value={2555}>Last 7 years</option>
+              </select>
+            }
+          >
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {auditLog.map((l, i) => (
                 <p key={i} className="text-xs text-slate-500">
@@ -2214,7 +2223,7 @@ export default function PatientDetail() {
       )}
 
       {issuedAccount && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="modal-backdrop">
           <div className="bg-white rounded-xl p-6 max-w-sm w-full">
             <h3 className="font-semibold text-slate-800 mb-1">Temporary login issued</h3>
             <p className="text-xs text-red-700 font-semibold uppercase mb-3">

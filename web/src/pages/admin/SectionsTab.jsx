@@ -40,16 +40,16 @@ function SectionModal({ mode, initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">{mode === "add" ? "Add Section" : "Edit Section"}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Section name<span className="text-red-600"> *</span></label>
+            <label className="field-label">Section name<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               placeholder="e.g. General Registration, O&G, ICU"
               value={name}
@@ -65,10 +65,10 @@ function SectionModal({ mode, initial, onClose, onSaved }) {
           )}
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -99,7 +99,7 @@ export default function SectionsTab() {
   return (
     <Section
       title="Sections"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">+ Add section</button>}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add section</button>}
     >
       <p className="text-sm text-slate-500 mb-4 max-w-2xl">
         Front-desk registration counters for this hospital (e.g. General Registration, O&G, ICU).

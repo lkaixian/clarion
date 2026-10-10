@@ -110,7 +110,7 @@ export default function AccessControlTab() {
         Changes take effect the next time that user signs in.
       </p>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
       {justSaved && !dirty && (
         <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">Access control saved.</div>
       )}
@@ -165,7 +165,7 @@ export default function AccessControlTab() {
         <button
           onClick={save}
           disabled={saving || !dirty}
-          className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+          className="btn-primary"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

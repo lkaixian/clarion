@@ -58,16 +58,16 @@ function WardModal({ mode, initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">{mode === "add" ? "Add Ward" : "Edit Ward"}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Ward name<span className="text-red-600"> *</span></label>
+            <label className="field-label">Ward name<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               value={wardName}
               onChange={(e) => setWardName(e.target.value)}
@@ -75,9 +75,9 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Ward type</label>
+            <label className="field-label">Ward type</label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               value={wardType}
               onChange={(e) => setWardType(e.target.value)}
             >
@@ -86,9 +86,9 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Total beds<span className="text-red-600"> *</span></label>
+            <label className="field-label">Total beds<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="number"
               min="1"
               value={totalBeds}
@@ -98,9 +98,9 @@ function WardModal({ mode, initial, onClose, onSaved }) {
 
           {mode === "add" && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Occupied beds (at creation)</label>
+              <label className="field-label">Occupied beds (at creation)</label>
               <input
-                className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="field-input"
                 type="number"
                 min="0"
                 value={occupiedBeds}
@@ -110,10 +110,10 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           )}
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -166,7 +166,7 @@ function StandaloneWardsTab() {
   return (
     <Section
       title="Ward Capacity"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">+ Add Ward</button>}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Ward</button>}
     >
       {loading ? (
         <p className="text-sm text-slate-400">Loading...</p>
@@ -294,16 +294,16 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">{mode === "add" ? "Add Floor" : "Edit Floor"}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Floor label<span className="text-red-600"> *</span></label>
+            <label className="field-label">Floor label<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               placeholder="e.g. Level 3 Male Medical"
               value={floorLabel}
@@ -312,9 +312,9 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Gender restriction</label>
+            <label className="field-label">Gender restriction</label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               value={gender}
               onChange={(e) => setGender(e.target.value)}
             >
@@ -323,9 +323,9 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Ward count<span className="text-red-600"> *</span></label>
+            <label className="field-label">Ward count<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="number"
               min="1"
               value={wardCount}
@@ -334,9 +334,9 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Beds per ward<span className="text-red-600"> *</span></label>
+            <label className="field-label">Beds per ward<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="number"
               min="1"
               value={bedsPerWard}
@@ -352,10 +352,10 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           )}
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -394,7 +394,7 @@ function FloorsTab() {
   return (
     <Section
       title="Floors"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">+ Add Floor</button>}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Floor</button>}
     >
       {loading ? (
         <p className="text-sm text-slate-400">Loading...</p>

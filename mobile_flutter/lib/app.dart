@@ -17,6 +17,7 @@ import 'screens/senior/senior_home_screen.dart';
 import 'services/api_client.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/update_banner.dart';
 
 class ClarionApp extends StatefulWidget {
   const ClarionApp({
@@ -148,6 +149,11 @@ class _ClarionAppState extends State<ClarionApp> {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) => UpdateBanner(
+              api: widget.apiClient,
+              config: widget.appConfig,
+              child: child ?? const SizedBox.shrink(),
+            ),
             home: FutureBuilder<void>(
               future: _bootstrap,
               builder: (context, snapshot) {

@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/section_card.dart';
 import 'scan_checkin_screen.dart';
+import '../widgets/common.dart';
 
 // No "serving" status -- only waiting|called|done|cancelled are ever set
 // server-side (see backend schemas.VALID_QUEUE_TICKET_STATUSES); a ticket
@@ -260,9 +261,7 @@ class _EmptyQueueState extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ScanCheckinScreen()),
-                ),
+                onPressed: () => context.pushScreen(const ScanCheckinScreen()),
                 icon: const Icon(Icons.qr_code_scanner),
                 label: Text(l10n.scanCheckinButton),
               ),

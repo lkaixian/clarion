@@ -220,36 +220,6 @@ def delete_my_signature(
     return {"status": "ok", "has_signature": False}
 
 
-@router.get("/staff/{user_id}/signature")
-def get_staff_signature(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    """A colleague's saved signature PNG, for rendering "signed by Dr X"
-    thumbnails. Any non-patient role may read it, but ONLY for a staff
-    member at the caller's own facility. Non-leaking scoped-404: not found /
-    different facility / no signature all return the identical 404, so the
-    response never confirms an account exists elsewhere."""
-    if current_user.role == "patient":
-        raise HTTPException(status_code=403, detail="Not available for patient accounts.")
-
-    target = db.query(models.User).filter(models.User.id == user_id).first()
-    if (
-        target is None
-        or not current_user.facility
-        or target.facility != current_user.facility
-        or not target.signature_object_key
-    ):
-        raise HTTPException(status_code=404, detail="Signature not found.")
-
-    return _signature_response(
-        target.signature_object_key,
-        sha256=target.signature_sha256,
-        not_found_detail="Signature not found.",
-    )
-
-
 # ---------- Bio / contact email / profile photo ----------
 # Same "for yourself" posture as the signature endpoints above, plus the
 # matching admin-editing endpoints on routers/admin.py (PATCH
@@ -427,7 +397,7 @@ def get_staff_photo(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     """A colleague's saved profile photo. Same facility-scoped, non-leaking-
-    404 posture as GET /staff/{user_id}/signature above. Patient-facing
+    404 posture as the rest of this file. Patient-facing
     access to a CLINICIAN's photo (the public-booking use case) is a
     separate, deliberately-broader endpoint:
     GET /patients/clinicians/{id}/photo."""

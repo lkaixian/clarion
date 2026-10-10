@@ -121,7 +121,7 @@ export default function WaitingRoomDisplaysTab() {
 
       <form onSubmit={create} className="flex flex-wrap items-end gap-3 mb-4">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Scope</label>
+          <label className="field-label">Scope</label>
           <select
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={section}
@@ -145,12 +145,12 @@ export default function WaitingRoomDisplaysTab() {
             </span>
           </span>
         </label>
-        <button disabled={creating} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <button disabled={creating} className="btn-primary">
           {creating ? "Creating..." : "Create"}
         </button>
       </form>
 
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
       {newUrl && (
         <div className="bg-green-50 border border-green-200 text-green-800 text-sm p-3 rounded mb-3">
           <p className="font-medium mb-1">New display link created</p>

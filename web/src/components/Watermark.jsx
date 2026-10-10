@@ -19,6 +19,11 @@ import { getCurrentUser, refreshCurrentUser } from "../api/client";
 // it under the app's modals (z-50) so dialogs stay readable.
 export default function Watermark({ patientId }) {
   const [viewerName, setViewerName] = useState(() => getCurrentUser()?.full_name || "");
+  const me = getCurrentUser();
+  // Role + short account id so a leaked screenshot pins down one account even
+  // if two staff share a name.
+  const who = [viewerName || "unknown viewer", me?.role, me?.id ? `#${String(me.id).slice(0, 8)}` : null]
+    .filter(Boolean).join(" ");
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +35,7 @@ export default function Watermark({ patientId }) {
 
   const backgroundImage = useMemo(() => {
     const label = [
-      viewerName || "unknown viewer",
+      who,
       patientId ? `patient ${patientId}` : null,
       `viewed ${new Date().toLocaleString()}`,
     ]
@@ -45,12 +50,12 @@ export default function Watermark({ patientId }) {
 
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='540' height='320'>
       <text x='20' y='170' transform='rotate(-28 270 160)'
-        fill='rgba(15,23,42,0.055)' font-size='16'
+        fill='rgba(15,23,42,0.09)' font-size='16'
         font-family='system-ui, -apple-system, Segoe UI, sans-serif'>${safe}</text>
     </svg>`;
 
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-  }, [viewerName, patientId]);
+  }, [who, patientId]);
 
   return (
     <div

@@ -11,7 +11,7 @@ import '../services/api_exception.dart';
 /// Owns the logged-in patient's own record, AI handover brief, the
 /// currently-issued emergency card (if any), and the audit log.
 class PatientProvider extends ChangeNotifier {
-  PatientProvider({required ApiClient api}) : _api = api;
+  PatientProvider({required this._api});
 
   final ApiClient _api;
 

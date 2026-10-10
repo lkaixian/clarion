@@ -9,6 +9,7 @@ import '../emergency_scanner_screen.dart';
 import 'senior_emergency_screen.dart';
 import 'senior_language_screen.dart';
 import 'senior_medications_screen.dart';
+import '../../widgets/common.dart';
 
 /// The Senior Citizen Mode hub — CLARION's differentiation feature.
 ///
@@ -247,16 +248,12 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
                       IconButton(
                         tooltip: l10n.scanSomeoneElsesCardTooltip,
                         icon: Icon(Icons.qr_code_scanner, color: text, size: 30),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const EmergencyScannerScreen()),
-                        ),
+                        onPressed: () => context.pushScreen(const EmergencyScannerScreen()),
                       ),
                       IconButton(
                         tooltip: l10n.seniorLanguageTitle,
                         icon: Icon(Icons.language, color: text, size: 30),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const SeniorLanguageScreen()),
-                        ),
+                        onPressed: () => context.pushScreen(const SeniorLanguageScreen()),
                       ),
                     ],
                   ),
@@ -292,17 +289,13 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
               _BigTile(
                 label: l10n.seniorEmergencyTile,
                 color: emergency,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SeniorEmergencyScreen()),
-                ),
+                onTap: () => context.pushScreen(const SeniorEmergencyScreen()),
               ),
               const SizedBox(height: 20),
               _BigTile(
                 label: l10n.seniorMedsTile,
                 color: safe,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SeniorMedicationsScreen()),
-                ),
+                onTap: () => context.pushScreen(const SeniorMedicationsScreen()),
               ),
               const Spacer(),
             ],

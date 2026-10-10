@@ -433,6 +433,10 @@ class Encounter(Base):
     signature_sha256 = Column(String(64), nullable=True)
     signature_bytes = Column(Integer, nullable=True)
     signature_mime = Column(String(128), nullable=True)
+    # Tamper seal (app/seal.py): Ed25519 over the signed content, see its docstring.
+    seal = Column(String(128), nullable=True)
+    seal_key_id = Column(String(16), nullable=True)
+    sealed_at = Column(TZDateTime, nullable=True)
 
     patient = relationship("Patient", back_populates="encounters")
     consultation_note = relationship("ConsultationNote", back_populates="encounter", uselist=False)
@@ -1729,6 +1733,10 @@ class ClinicalRecordAnnotation(Base):
     signature_sha256 = Column(String(64), nullable=True)
     signature_bytes = Column(Integer, nullable=True)
     signature_mime = Column(String(128), nullable=True)
+    # Tamper seal (app/seal.py): Ed25519 over the signed content, see its docstring.
+    seal = Column(String(128), nullable=True)
+    seal_key_id = Column(String(16), nullable=True)
+    sealed_at = Column(TZDateTime, nullable=True)
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -1883,6 +1891,10 @@ class ServiceResult(Base):
     signature_sha256 = Column(String(64), nullable=True)
     signature_bytes = Column(Integer, nullable=True)
     signature_mime = Column(String(128), nullable=True)
+    # Tamper seal (app/seal.py): Ed25519 over the signed content, see its docstring.
+    seal = Column(String(128), nullable=True)
+    seal_key_id = Column(String(16), nullable=True)
+    sealed_at = Column(TZDateTime, nullable=True)
 
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -2071,6 +2083,10 @@ class DentalChartEntry(Base):
     signature_sha256 = Column(String(64), nullable=True)
     signature_bytes = Column(Integer, nullable=True)
     signature_mime = Column(String(128), nullable=True)
+    # Tamper seal (app/seal.py): Ed25519 over the signed content, see its docstring.
+    seal = Column(String(128), nullable=True)
+    seal_key_id = Column(String(16), nullable=True)
+    sealed_at = Column(TZDateTime, nullable=True)
 
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 

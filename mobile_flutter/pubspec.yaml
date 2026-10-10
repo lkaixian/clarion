@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.3.0+5
+version: 1.4.0+6
 
 environment:
   sdk: ^3.12.1
@@ -49,6 +49,10 @@ dependencies:
   # AES-GCM + SHA-256 for opening encrypted NFC tags offline and
   # hash-chaining the offline-read log (lib/services/tag_crypto.dart).
   cryptography: ^2.7.0
+
+  # Reads this build's own version (pubspec stays the single source of
+  # truth) for the update check against GET /app/version.
+  package_info_plus: ^8.1.0
 
   # Secure storage for the auth token
   flutter_secure_storage: ^9.2.2

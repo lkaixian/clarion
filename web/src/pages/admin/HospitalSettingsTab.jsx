@@ -111,21 +111,21 @@ export default function HospitalSettingsTab() {
   if (!form) {
     return (
       <Section title="Hospital Settings">
-        <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error || "Failed to load hospital settings."}</div>
+        <div className="alert-error">{error || "Failed to load hospital settings."}</div>
       </Section>
     );
   }
 
   return (
     <Section title="Hospital Settings">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
       {justSaved && !dirty && (
         <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">Hospital settings saved.</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Facility name</label>
+          <label className="field-label">Facility name</label>
           <input
             className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg px-3 py-1.5 text-sm"
             type="text"
@@ -136,9 +136,9 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Display name</label>
+          <label className="field-label">Display name</label>
           <input
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             type="text"
             value={form.display_name}
             onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
@@ -146,9 +146,9 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Address</label>
+          <label className="field-label">Address</label>
           <textarea
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             rows={3}
             value={form.address}
             onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -156,9 +156,9 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Contact phone</label>
+          <label className="field-label">Contact phone</label>
           <input
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             type="tel"
             value={form.contact_phone}
             onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
@@ -166,9 +166,9 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Timezone</label>
+          <label className="field-label">Timezone</label>
           <select
-            className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="field-input"
             value={form.timezone}
             onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
           >
@@ -251,7 +251,7 @@ export default function HospitalSettingsTab() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             disabled={saving || !dirty}
-            className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+            className="btn-primary"
           >
             {saving ? "Saving..." : "Save"}
           </button>

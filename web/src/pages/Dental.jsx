@@ -106,7 +106,7 @@ export default function Dental() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Dental Chart</h1>
+        <h1 className="page-title">Dental Chart</h1>
         <p className="text-sm text-slate-500">Record tooth-level findings and treatments, signed per entry.</p>
       </div>
 
@@ -119,7 +119,7 @@ export default function Dental() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+      <div className="card mb-6">
         <h2 className="font-semibold text-slate-800 mb-3">Patient</h2>
         {patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
@@ -158,7 +158,7 @@ export default function Dental() {
 
       {patientId && (
         <>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+          <div className="card mb-6">
             <div className="flex items-center justify-between mb-3 gap-3">
               <h2 className="font-semibold text-slate-800">Tooth Chart (FDI notation)</h2>
               <Link to="/ancillary" className="text-xs text-blue-700 hover:underline whitespace-nowrap">
@@ -191,7 +191,7 @@ export default function Dental() {
             />
           )}
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+          <div className="card mb-6">
             <h2 className="font-semibold text-slate-800 mb-3">Chart History</h2>
             {chartLoading ? (
               <p className="text-sm text-slate-400">Loading history…</p>
@@ -325,10 +325,10 @@ function EntryForm({
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Tooth (FDI)</label>
+          <label className="field-label">Tooth (FDI)</label>
           <select
             required
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="field-input"
             value={toothCode}
             onChange={(e) => onToothCodeChange(e.target.value)}
           >
@@ -339,10 +339,10 @@ function EntryForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Finding</label>
+          <label className="field-label">Finding</label>
           <select
             required
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="field-input"
             value={finding}
             onChange={(e) => setFinding(e.target.value)}
           >
@@ -353,9 +353,9 @@ function EntryForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Treatment</label>
+          <label className="field-label">Treatment</label>
           <select
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="field-input"
             value={treatment}
             onChange={(e) => setTreatment(e.target.value)}
           >
@@ -367,21 +367,21 @@ function EntryForm({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Notes (Optional)</label>
+        <label className="field-label">Notes (Optional)</label>
         <textarea
           rows={2}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          className="field-input"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         ></textarea>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Encounter ID (Optional)</label>
+        <label className="field-label">Encounter ID (Optional)</label>
         <input
           type="text"
           placeholder="Links this entry to a visit -- e.g. for an X-ray referral raised during it"
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          className="field-input"
           value={encounterId}
           onChange={(e) => setEncounterId(e.target.value)}
         />
@@ -411,7 +411,7 @@ function EntryForm({
       </div>
 
       <div className="flex gap-2 mt-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+        <button disabled={busy} className="btn-primary">
           {busy ? "Saving…" : "Record & Sign"}
         </button>
       </div>

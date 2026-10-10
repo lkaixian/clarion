@@ -68,18 +68,18 @@ function AdmitPanel({ wardName, bedNumber, onAdmit, onCancel, busy, error }) {
         value={ic}
         onChange={(e) => setIc(e.target.value)}
         placeholder="Patient IC number e.g. 520314-01-1234"
-        className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="field-input"
         autoFocus
       />
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={busy || !ic.trim()}
-          className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+          className="btn-primary"
         >
           {busy ? "Admitting…" : "Admit"}
         </button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+        <button type="button" onClick={onCancel} className="btn-secondary">
           Cancel
         </button>
       </div>
@@ -138,11 +138,11 @@ function OccupiedPanel({ map, bed, wardName, onDischarge, onMove, onCancel, busy
               type="button"
               disabled={busy || !wardId || !moveBed}
               onClick={() => onMove(adm.id, wardId, Number(moveBed))}
-              className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+              className="btn-primary"
             >
               {busy ? "Moving…" : "Confirm move"}
             </button>
-            <button type="button" onClick={() => setMoving(false)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={() => setMoving(false)} className="btn-secondary">
               Back
             </button>
           </div>
@@ -157,7 +157,7 @@ function OccupiedPanel({ map, bed, wardName, onDischarge, onMove, onCancel, busy
           >
             {busy ? "Working…" : "Discharge"}
           </button>
-          <button type="button" onClick={() => setMoving(true)} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+          <button type="button" onClick={() => setMoving(true)} className="btn-secondary">
             Move
           </button>
           <button type="button" onClick={onCancel} className="text-sm text-slate-500 px-2 py-1.5">

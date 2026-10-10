@@ -170,26 +170,26 @@ function InventoryModal({ mode, initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">{mode === "add" ? "Add Inventory Item" : "Edit Inventory Item"}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
           {INVENTORY_FIELDS.map((f) => (
             <div key={f.key}>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
+              <label className="field-label">
                 {f.label}{f.required && <span className="text-red-600"> *</span>}
               </label>
               {f.type === "textarea" ? (
                 <textarea
-                  className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="field-input"
                   rows={2}
                   value={values[f.key]}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 />
               ) : (
                 <input
-                  className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="field-input"
                   type={f.type}
                   min={f.type === "number" ? 0 : undefined}
                   step={f.step}
@@ -215,10 +215,10 @@ function InventoryModal({ mode, initial, onClose, onSaved }) {
             </span>
           </label>
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -283,11 +283,11 @@ function BudgetPanel() {
 
   return (
     <Section title="Procurement Budget">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-3">{error}</div>}
+      {error && <div className="alert-error mb-3">{error}</div>}
 
       <form onSubmit={save} className="flex flex-wrap items-end gap-3 mb-4">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Allocated (RM)</label>
+          <label className="field-label">Allocated (RM)</label>
           <input
             className="w-40 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="number"
@@ -297,7 +297,7 @@ function BudgetPanel() {
             onChange={(e) => setEditing(e.target.value)}
           />
         </div>
-        <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <button disabled={saving} className="btn-primary">
           {saving ? "Saving..." : "Save"}
         </button>
       </form>

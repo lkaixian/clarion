@@ -156,7 +156,7 @@ export default function Ancillary() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Ancillary Services</h1>
+        <h1 className="page-title">Ancillary Services</h1>
         <p className="text-sm text-slate-500">Manage orders, results, and catalogs for ancillary departments.</p>
       </div>
 
@@ -229,7 +229,7 @@ export default function Ancillary() {
         />
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+      <div className="card mb-6">
         {loading ? (
           <p className="text-sm text-slate-400">Loading worklist…</p>
         ) : error ? (
@@ -347,7 +347,7 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
       <h2 className="font-semibold text-slate-800">New Order</h2>
       
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Patient</label>
+        <label className="field-label">Patient</label>
         {!canBrowsePatients ? (
           // Receptionist has no `patients` page access (GET /patients 403s
           // for that role by design -- see app/permissions.py), so there's
@@ -355,7 +355,7 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
           // patient's id from Reception check-in; paste it directly.
           <input
             type="text" placeholder="Patient ID (from Reception check-in)"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="field-input"
             value={patientId} onChange={e => setPatientId(e.target.value.trim())}
           />
         ) : patientId ? (
@@ -381,8 +381,8 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Catalog Item</label>
-          <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={catalogId} onChange={e => setCatalogId(e.target.value)}>
+          <label className="field-label">Catalog Item</label>
+          <select required className="field-input" value={catalogId} onChange={e => setCatalogId(e.target.value)}>
             <option value="">-- select item --</option>
             {catalogItems.map(item => (
               <option key={item.id} value={item.id}>{item.name} (RM {(item.unit_price_cents / 100).toFixed(2)})</option>
@@ -390,8 +390,8 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Priority</label>
-          <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={priority} onChange={e => setPriority(e.target.value)}>
+          <label className="field-label">Priority</label>
+          <select className="field-input" value={priority} onChange={e => setPriority(e.target.value)}>
             <option value="routine">Routine</option>
             <option value="urgent">Urgent</option>
             <option value="stat">Stat</option>
@@ -401,27 +401,27 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Source</label>
-          <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={source} onChange={e => setSource(e.target.value)}>
+          <label className="field-label">Source</label>
+          <select className="field-input" value={source} onChange={e => setSource(e.target.value)}>
             <option value="frontdesk">Frontdesk</option>
             <option value="physician_order">Physician Order</option>
           </select>
         </div>
         {source === "physician_order" && (
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Encounter ID</label>
-            <input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={encounterId} onChange={e => setEncounterId(e.target.value)} />
+            <label className="field-label">Encounter ID</label>
+            <input required type="text" className="field-input" value={encounterId} onChange={e => setEncounterId(e.target.value)} />
           </div>
         )}
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Clinical Indication</label>
-        <textarea rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={indication} onChange={e => setIndication(e.target.value)}></textarea>
+        <label className="field-label">Clinical Indication</label>
+        <textarea rows={2} className="field-input" value={indication} onChange={e => setIndication(e.target.value)}></textarea>
       </div>
 
       <div className="flex gap-2 mt-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50">Create Order</button>
+        <button disabled={busy} className="btn-primary">Create Order</button>
         <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
       </div>
     </form>
@@ -589,8 +589,8 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="mt-3 bg-white p-4 border border-slate-200 rounded-lg grid gap-3">
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Result Text</label>
-        <textarea rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={resultText} onChange={e => setResultText(e.target.value)}></textarea>
+        <label className="field-label">Result Text</label>
+        <textarea rows={3} className="field-input" value={resultText} onChange={e => setResultText(e.target.value)}></textarea>
       </div>
       <div className="flex gap-4">
         <label className="flex items-center gap-1 text-sm text-amber-800 bg-amber-50 px-2 py-1 rounded">
@@ -601,7 +601,7 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
         </label>
       </div>
       <div className="mt-1 pt-3 border-t border-slate-100">
-        <label className="block text-xs font-medium text-slate-600 mb-1">Attachment (Optional document/scan)</label>
+        <label className="field-label">Attachment (Optional document/scan)</label>
         <input type="file" accept="image/*,application/pdf" className="text-sm" onChange={e => setFile(e.target.files?.[0])} />
       </div>
       <div className="mt-2 text-right">

@@ -321,6 +321,15 @@ flag** — the P2.8 backup pipeline pipes its `--stream` output through
   are shipped off-box. Set the policy (e.g. 7 years online per the tender)
   before go-live; the seals remain the permanent record after a partition
   drop. Do not shorten retention below the tender's clinical-record floor.
+- **Cold storage (copy-only).** `python -m db.archive_audit_logs --verify`
+  (cron, after the seal job) packs every completed day older than 90 days
+  into a gzip JSONL object + manifest under `audit-archive/` in the WORM
+  `clarion-reports-archive` bucket (7-year COMPLIANCE retention, ~8-10x
+  smaller than the table). The manifest pins first/last seq, row count and
+  the chain tip; `app.audit_archive.verify_archived_day` re-hashes the day
+  from storage alone. Nothing is deleted from `audit_logs`: run the partition
+  drop above only for months whose days all pass `--verify`. The patient
+  audit tab loads a 7-day window by default (`?days=`), widening on demand.
 - **Known residuals** (security review 2026-09-08, accepted for now):
   - The triggers cover `UPDATE`/`DELETE` but not `INSERT`. An account with
     `INSERT` on `audit_logs` (i.e. `clarion_app`, or an app-level SQL-i —

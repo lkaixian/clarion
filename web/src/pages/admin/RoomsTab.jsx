@@ -43,16 +43,16 @@ function RoomModal({ mode, initial, onClose, onSaved, sectionNames = [] }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop">
+      <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">{mode === "add" ? "Add Consultation Room" : "Edit Consultation Room"}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Room name<span className="text-red-600"> *</span></label>
+            <label className="field-label">Room name<span className="text-red-600"> *</span></label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               type="text"
               placeholder="e.g. Bilik A"
               value={roomName}
@@ -61,9 +61,9 @@ function RoomModal({ mode, initial, onClose, onSaved, sectionNames = [] }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Department tag (optional)</label>
+            <label className="field-label">Department tag (optional)</label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="field-input"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
             >
@@ -83,10 +83,10 @@ function RoomModal({ mode, initial, onClose, onSaved, sectionNames = [] }) {
           </label>
 
           <div className="flex gap-2 pt-2">
-            <button disabled={saving} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+            <button disabled={saving} className="btn-primary">
               {saving ? "Saving..." : "Save"}
             </button>
-            <button type="button" onClick={onClose} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+            <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
           </div>
@@ -124,7 +124,7 @@ export default function RoomsTab() {
   return (
     <Section
       title="Consultation Rooms"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg">+ Add Room</button>}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Room</button>}
     >
       {loading ? (
         <p className="text-sm text-slate-400">Loading...</p>

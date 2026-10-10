@@ -249,7 +249,7 @@ export default function Pharmacy() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Pharmacy</h1>
+        <h1 className="page-title">Pharmacy</h1>
         <p className="text-sm text-slate-500">
           Stock levels for your facility. Restocking accrues against the procurement budget; the
           catalogue itself is managed by an admin.
@@ -604,7 +604,7 @@ function AddStockForm({ item, busy, onCancel, onSubmit }) {
         </p>
       )}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Quantity to add</label>
+        <label className="field-label">Quantity to add</label>
         <input
           className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           type="number"
@@ -614,7 +614,7 @@ function AddStockForm({ item, busy, onCancel, onSubmit }) {
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Unit cost (RM)</label>
+        <label className="field-label">Unit cost (RM)</label>
         <input
           className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           type="number"
@@ -626,14 +626,14 @@ function AddStockForm({ item, busy, onCancel, onSubmit }) {
       </div>
       <button
         disabled={busy}
-        className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+        className="btn-primary"
       >
         {busy ? "Saving…" : item.auto_approved ? "Add" : "Send proposal"}
       </button>
       <button
         type="button"
         onClick={onCancel}
-        className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg"
+        className="btn-secondary"
       >
         Cancel
       </button>
@@ -695,10 +695,10 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      {err && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{err}</div>}
+      {err && <div className="alert-error">{err}</div>}
       <div className="flex flex-wrap gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Drug name<span className="text-red-600"> *</span></label>
+          <label className="field-label">Drug name<span className="text-red-600"> *</span></label>
           <input
             className="w-52 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={values.proposed_drug_name}
@@ -706,7 +706,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Unit</label>
+          <label className="field-label">Unit</label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="e.g. tablets"
@@ -715,7 +715,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Barcode</label>
+          <label className="field-label">Barcode</label>
           <input
             className="w-40 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={values.proposed_barcode}
@@ -725,7 +725,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
       </div>
       <div className="flex flex-wrap gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Quantity<span className="text-red-600"> *</span></label>
+          <label className="field-label">Quantity<span className="text-red-600"> *</span></label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="number"
@@ -735,7 +735,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Unit cost (RM)</label>
+          <label className="field-label">Unit cost (RM)</label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="number"
@@ -747,7 +747,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
         </div>
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+        <label className="field-label">Reason</label>
         <textarea
           className="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           rows={2}
@@ -756,10 +756,10 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
         />
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+        <button disabled={busy} className="btn-primary">
           {busy ? "Sending…" : "Send proposal"}
         </button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-3 py-1.5 rounded-lg">
+        <button type="button" onClick={onCancel} className="btn-secondary">
           Cancel
         </button>
       </div>
