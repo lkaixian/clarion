@@ -234,11 +234,11 @@ class PatientProvider extends ChangeNotifier {
     _cardPollTimer = null;
   }
 
-  Future<void> loadAuditLog(String patientId) async {
+  Future<void> loadAuditLog(String patientId, {int? days}) async {
     isLoadingAuditLog = true;
     notifyListeners();
     try {
-      auditLog = await _api.getAuditLog(patientId);
+      auditLog = await _api.getAuditLog(patientId, days: days);
     } catch (_) {
       auditLog = [];
     } finally {

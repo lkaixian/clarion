@@ -35,7 +35,7 @@ _FIELDS = {
     "service_result": (
         ("service_request_id", "patient_id", "result_text", "flag_abnormal", "flag_critical",
          "performed_by", "performed_by_name", "performed_by_role", "performed_at", "facility_name",
-         "file_sha256", "signed_by", "signed_by_name", "signed_by_role"), (),
+         "signed_by", "signed_by_name", "signed_by_role"), (),
     ),
     "dental_entry": (
         ("patient_id", "encounter_id", "tooth_code", "finding", "treatment", "notes", "facility_name",
@@ -43,6 +43,11 @@ _FIELDS = {
          "signed_by", "signed_by_name", "signed_by_role"), (),
     ),
 }
+
+
+# Rows created on/after this were sealed at signing, so a missing seal on one
+# means it was stripped, not that it predates sealing.
+SEAL_CUTOVER = datetime(2026, 10, 10, 9, 30, 0)  # naive UTC
 
 
 def _seed() -> str:
@@ -96,6 +101,9 @@ def seal(kind: str, row) -> None:
 def status(kind: str, row) -> str:
     """"valid" | "altered" | "unsealed" (pre-seal row) | "unknown_key"."""
     if not row.seal or not row.sealed_at:
+        made = _norm(getattr(row, "created_at", None) or getattr(row, "started_at", None))
+        if made and row.signed_by and datetime.fromisoformat(made) >= SEAL_CUTOVER:
+            return "altered"  # signed after sealing existed, yet no seal
         return "unsealed"
     if row.seal_key_id != key_id():
         return "unknown_key"

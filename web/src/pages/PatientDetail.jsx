@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
 import SignaturePad from "../components/SignaturePad";
+import SealBadge from "../components/SealBadge";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
   revokeEmergencyCard, getCurrentCardStatus,
@@ -1338,22 +1339,6 @@ const SIGN_OFF_KINDS_BY_TYPE = {
     { value: "note", label: "Note" },
   ],
 };
-
-// Tamper-seal result from the server (backend/app/seal.py): "valid" means the
-// row still matches what the signer's session sealed; "altered" means it was
-// changed after signing. "unsealed" = created before sealing existed.
-function SealBadge({ status }) {
-  if (status === "valid") {
-    return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200" title="Digitally sealed; unchanged since signing">🔒 sealed</span>;
-  }
-  if (status === "altered") {
-    return <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-300" title="This record no longer matches its seal">✖ altered after signing</span>;
-  }
-  if (status === "unknown_key") {
-    return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200" title="Sealed with a key this server no longer holds">seal key unknown</span>;
-  }
-  return null;
-}
 
 // The signed-off annotations stacked under one clinical-record row — one line
 // each: kind icon, note text, muted attribution, and a signature thumbnail

@@ -2573,6 +2573,7 @@ class ServiceResultOut(BaseModel):
     facility_name: Optional[str] = None
     signed_by_name: Optional[str] = None
     signed_by_role: Optional[str] = None
+    seal_status: Optional[str] = None
     # Whether a softcopy attachment exists -- never the raw object key (see
     # GET /ancillary/requests/{id}/result/document to fetch it).
     has_document: bool = False
@@ -2721,6 +2722,7 @@ class DentalChartEntryOut(BaseModel):
     recorded_by_role: Optional[str] = None
     signed_by_name: Optional[str] = None
     signed_by_role: Optional[str] = None
+    seal_status: Optional[str] = None
     created_at: datetime
 
     class Config:

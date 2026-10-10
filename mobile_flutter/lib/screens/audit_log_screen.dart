@@ -213,15 +213,22 @@ class AuditLogScreen extends StatefulWidget {
 }
 
 class _AuditLogScreenState extends State<AuditLogScreen> {
+  // Lazy window: the last 7 days first, widened on demand (the full
+  // history can be years of rows).
+  static const _windows = [(7, '7d'), (30, '30d'), (365, '1y'), (2555, '7y')];
+  int _days = 7;
+
+  void _load() {
+    final patientId = context.read<AuthProvider>().user?.patientId;
+    if (patientId != null) {
+      context.read<PatientProvider>().loadAuditLog(patientId, days: _days);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final patientId = context.read<AuthProvider>().user?.patientId;
-      if (patientId != null) {
-        context.read<PatientProvider>().loadAuditLog(patientId);
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -231,34 +238,57 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.auditLogTitle)),
-      body: patientState.isLoadingAuditLog
-          ? const LoadingView()
-          : patientState.auditLog.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  l10n.noAccessLogged,
-                  style: TextStyle(color: context.palette.textMuted),
-                ),
-              ),
-            )
-          : Column(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Wrap(
+              spacing: 8,
               children: [
-                _LegendBar(l10n: l10n),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    itemCount: patientState.auditLog.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) => _AuditEntryCard(
-                      entry: patientState.auditLog[i],
-                      l10n: l10n,
-                    ),
+                for (final (days, label) in _windows)
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: _days == days,
+                    onSelected: (_) {
+                      setState(() => _days = days);
+                      _load();
+                    },
                   ),
-                ),
               ],
             ),
+          ),
+          Expanded(
+            child: patientState.isLoadingAuditLog
+                ? const LoadingView()
+                : patientState.auditLog.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        l10n.noAccessLogged,
+                        style: TextStyle(color: context.palette.textMuted),
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      _LegendBar(l10n: l10n),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          itemCount: patientState.auditLog.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, i) => _AuditEntryCard(
+                            entry: patientState.auditLog[i],
+                            l10n: l10n,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

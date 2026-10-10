@@ -1896,6 +1896,12 @@ class ServiceResult(Base):
     seal_key_id = Column(String(16), nullable=True)
     sealed_at = Column(TZDateTime, nullable=True)
 
+    @property
+    def seal_status(self) -> str:
+        """valid | altered | unsealed | unknown_key -- see app/seal.py."""
+        from . import seal
+        return seal.status("service_result", self)
+
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     request = relationship("ServiceRequest", back_populates="result")
@@ -2087,6 +2093,12 @@ class DentalChartEntry(Base):
     seal = Column(String(128), nullable=True)
     seal_key_id = Column(String(16), nullable=True)
     sealed_at = Column(TZDateTime, nullable=True)
+
+    @property
+    def seal_status(self) -> str:
+        """valid | altered | unsealed | unknown_key -- see app/seal.py."""
+        from . import seal
+        return seal.status("dental_entry", self)
 
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 

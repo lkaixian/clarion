@@ -508,7 +508,7 @@ def app_version():
     blocking one. Bump CLARION_APP_LATEST_VERSION when a new APK is
     published to /get-app."""
     return {
-        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.6.0"),
+        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.6.1"),
         "min_supported": os.environ.get("CLARION_APP_MIN_VERSION", ""),
         "download_url": os.environ.get("CLARION_APP_DOWNLOAD_URL", "/get-app"),
     }
@@ -558,6 +558,8 @@ def readyz(response: Response):
 
 
 _STATUS_TTL_S = 5.0
+import threading as _threading
+_status_lock = _threading.Lock()
 _status_cache: dict = {"at": 0.0, "body": None}
 
 # Rolling latency history per probe (this process only; ~10 min at the 5 s
@@ -677,6 +679,15 @@ def public_status():
     now = time.monotonic()
     if _status_cache["body"] is not None and now - _status_cache["at"] < _STATUS_TTL_S:
         return _status_cache["body"]
+    with _status_lock:  # single-flight: concurrent callers wait for one probe round
+        now = time.monotonic()
+        if _status_cache["body"] is not None and now - _status_cache["at"] < _STATUS_TTL_S:
+            return _status_cache["body"]
+        return _compute_status()
+
+
+def _compute_status() -> dict:
+    now = time.monotonic()
     t_api = time.perf_counter()
     api_checks = _api_checks()
     api_ms = round((time.perf_counter() - t_api) * 1000)
@@ -730,7 +741,7 @@ def _record_status(components: dict) -> None:
                     break
                 except IntegrityError:
                     db.rollback()
-        db.commit()
+            db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()
     finally:
