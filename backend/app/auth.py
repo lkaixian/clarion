@@ -269,6 +269,7 @@ def client_fingerprint(user_agent: "str | None") -> "str | None":
 
 def issue_refresh_token(
     db: Session, user: "models.User", *, fingerprint: "str | None" = None,
+    ip: "str | None" = None, user_agent: "str | None" = None, mfa_ok: bool = False,
 ) -> tuple[str, "models.RefreshToken"]:
     """Mints a new refresh token for `user`. Returns (plaintext, row) --
     the plaintext is the caller's ONE chance to see it (set it as the
@@ -281,6 +282,9 @@ def issue_refresh_token(
         token_hash=_hash_refresh_token(plaintext),
         expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         client_fingerprint=fingerprint,
+        ip=(ip or None) and ip[:64],
+        user_agent=(user_agent or None) and user_agent[:255],
+        mfa_ok=mfa_ok,
     )
     db.add(row)
     db.commit()
@@ -349,6 +353,7 @@ def _is_concurrent_refresh_race(
 
 def rotate_refresh_token(
     db: Session, raw_token: str, *, presented_fingerprint: "str | None" = None,
+    ip: "str | None" = None, user_agent: "str | None" = None,
 ) -> Optional[tuple["models.User", str]]:
     """The core of POST /auth/refresh: validates `raw_token`, and on
     success ROTATES it (revokes this row, issues a brand new one) rather
@@ -398,7 +403,17 @@ def rotate_refresh_token(
     if user is None:
         return None
 
-    new_plaintext, new_row = issue_refresh_token(db, user, fingerprint=presented_fingerprint)
+    from . import mfa as _mfa  # local import: mfa -> nothing from auth
+    if not row.mfa_ok and _mfa.challenge_kind(user) is not None:
+        # MFA governs this user now but this session never passed it (policy
+        # turned on, or enrolled since). Kill the chain; they sign in again.
+        revoke_all_refresh_tokens_for_user(db, user)
+        return None
+
+    new_plaintext, new_row = issue_refresh_token(
+        db, user, fingerprint=presented_fingerprint,
+        ip=ip or row.ip, user_agent=user_agent or row.user_agent, mfa_ok=row.mfa_ok,
+    )
     row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     row.replaced_by_id = new_row.id
     db.add(row)

@@ -25,11 +25,40 @@ async function sample() {
     object_store: part("object_store"),
     cache: part("cache"),
     local_ai: part("local_ai"),
+    __components: c,
   };
 }
 
+function paintDetails(c) {
+  if (!c) return;
+  document.querySelectorAll("[data-typical]").forEach(e => {
+    const x = c[e.dataset.typical];
+    e.textContent = !x || x.status === "disabled" ? "Not enabled on this node."
+      : x.typical_ms === undefined ? "Gathering a baseline… (needs a few checks)"
+      : `Usually ${x.typical_ms} ms; 95% of recent checks under ${x.p95_ms} ms (last ${x.samples} checks).`;
+  });
+  const list = document.querySelector('[data-checks="api"]');
+  if (list && c.api && c.api.checks) {
+    list.replaceChildren(...c.api.checks.map(ch => {
+      const li = document.createElement("li");
+      const dot = document.createElement("span");
+      dot.className = "dot " + (ch.status === "up" ? "up" : ch.status === "disabled" ? "off" : "down");
+      const name = document.createElement("span");
+      name.textContent = ch.label;
+      const val = document.createElement("b");
+      val.textContent = ch.status === "disabled" ? "Not enabled"
+        : ch.status !== "up" ? "Down"
+        : "Up · " + ch.ms + " ms" + (ch.typical_ms !== undefined ? ` (usually ${ch.typical_ms} ms)` : "");
+      li.append(dot, name, val);
+      return li;
+    }));
+  }
+}
+
 function paint(res) {
+  paintDetails(res.__components);
   for (const [id, v] of Object.entries(res)) {
+    if (id.startsWith("__")) continue;
     document.querySelectorAll(`[data-dot="${id}"]`).forEach(e => (e.className = "dot " + (v === "off" || v === undefined ? "off" : v === null ? "down" : "up")));
     document.querySelectorAll(`[data-val="${id}"]`).forEach(e => (e.textContent = v === undefined ? "Unknown" : v === "off" ? "Not enabled" : v === null ? "Down" : "Up · " + v + " ms"));
   }
@@ -63,6 +92,23 @@ document.addEventListener("DOMContentLoaded", () => {
     items.forEach(el => io.observe(el));
   } else {
     items.forEach(el => el.classList.add("in"));
+  }
+
+  // ---- get-app page: show the APK button only when the file is actually published ----
+  const apkBtn = document.querySelector("[data-apk]");
+  if (apkBtn) {
+    fetch("/downloads/clarion.apk", { method: "HEAD", cache: "no-store" }).then(r => {
+      const type = r.headers.get("content-type") || "";
+      if (!r.ok || type.includes("text/html")) return; // SPA fallback => not published
+      apkBtn.hidden = false;
+      document.getElementById("apk-pending")?.setAttribute("hidden", "");
+      const len = Number(r.headers.get("content-length"));
+      if (len) document.getElementById("apk-size").textContent = `(${(len / 1048576).toFixed(0)} MB)`;
+      document.getElementById("apk-meta").textContent = "Android 6.0 or newer. Free. No account needed to download.";
+      return fetch("/downloads/clarion.apk.sha256", { cache: "no-store" })
+        .then(s => (s.ok ? s.text() : ""))
+        .then(t => { const m = t.match(/[0-9a-f]{64}/i); if (m) document.getElementById("apk-sha").textContent = m[0].toLowerCase(); });
+    }).catch(() => {});
   }
 
   // ---- nav shadow after scrolling ----

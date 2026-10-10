@@ -737,6 +737,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scanResultOfflinePlaceholderName => '持卡人（离线读取）';
 
   @override
+  String get mfaTitle => '两步验证';
+
+  @override
+  String get mfaPrompt => '请输入验证器应用中的 6 位验证码，或输入一个恢复码。';
+
+  @override
+  String get mfaCodeLabel => '验证码';
+
+  @override
+  String get mfaVerifyButton => '验证';
+
+  @override
+  String get mfaCancelButton => '返回登录';
+
+  @override
   String get nfcBasicTagWarning =>
       '此类标签（NTAG213/215/216）可正常使用，但没有防篡改读取计数器：无法检查其离线读取是否有遗漏。需要问责时请使用 NTAG 424 DNA。';
 

@@ -137,3 +137,10 @@ backend/loadtest/results/
 # directly for a load test -- see docs/deployment.md / backend/loadtest/
 # README.md). Compose auto-loads this file; never meant to be shared.
 docker-compose.override.yml
+
+# Operator-only recovery material -- never commit
+.local-secrets/
+
+# Built APK is published by copying it here (see docs/deployment.md "Mobile app download"); never commit binaries
+web/public/downloads/*.apk
+web/public/downloads/*.sha256

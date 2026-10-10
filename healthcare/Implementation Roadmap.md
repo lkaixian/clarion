@@ -345,6 +345,27 @@ race the suite's own direct `run_pending()` calls); nothing in the
 existing HTTP-level tests depended on priming actually completing before
 the response, so this is a test-only change.
 
+### 2026-10-10 (later) — Public-access auth overhaul, status details, app download
+
+- **Auth:** TOTP MFA (`app/mfa.py`, `routers/auth_security.py`) with recovery
+  codes, forced enrolment for `CLARION_MFA_REQUIRED_ROLES` (central default
+  admin/clinician/records_officer), session list/revoke (`/security`),
+  uniform login timing, audited failed/locked sign-ins, new-device and
+  security-change emails. Redesigned two-path login page; mobile app gets the
+  code step. voltagent review: 2 High + 7 Medium fixed (atomic code
+  consumption, re-auth to enrol, refresh tokens can't outlive an MFA policy
+  change via `refresh_tokens.mfa_ok`, chain-wide session revoke, secret blob
+  bound to user, challenge dies on password change, LDAP bind re-auth).
+  Open: first-enrolment takeover window for a required-but-unenrolled account
+  (mitigated by email + audit only).
+- **Status page:** cards expand; API broken into 6 server-side probes; typical
+  / p95 latency baseline per component; what each outage means.
+- **Get the app:** `/get-app` page + APK publishing flow; login/landing link
+  to it.
+- **Ops:** central node rebuilt with the above; demo accounts' known
+  passwords rotated after being printed in a chat transcript;
+  `backend/db/reset_admin_password.py` is the recovery path.
+
 ### 2026-10-10 — Encrypted offline NFC tag + attributable offline reads
 
 **Direction agreed (not built): federated, not shared-DB.** Each hospital

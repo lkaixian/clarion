@@ -172,8 +172,17 @@ export async function login(email, password) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     withCredentials: true, // so the Set-Cookie refresh token is actually accepted
   });
-  localStorage.setItem("mb_token", data.access_token);
-  localStorage.setItem("mb_user", JSON.stringify(data.user));
+  return storeSession(data);
+}
+
+// A login response is either a session ({access_token, user}) or, when a
+// second factor is still needed, a challenge ({mfa_required, mfa_enrol,
+// mfa_token}) with NO token. Only a real session is persisted.
+function storeSession(data) {
+  if (data && data.access_token) {
+    localStorage.setItem("mb_token", data.access_token);
+    localStorage.setItem("mb_user", JSON.stringify(data.user));
+  }
   // `data.refresh_token` is deliberately NEVER read here (or anywhere else
   // in this file) -- it's a native-client-only field (see backend
   // schemas.Token's docstring); the web console's refresh token lives
@@ -181,6 +190,34 @@ export async function login(email, password) {
   // never in JS-reachable storage.
   return data;
 }
+
+// ---- second factor (login-time: authenticated by the challenge token, so
+// these deliberately bypass the shared client's refresh-on-401 interceptor) ----
+const _loginTime = (path, body) =>
+  axios.post(`${API_BASE}${path}`, body, { withCredentials: true }).then((r) => storeSession(r.data));
+
+export const mfaVerify = (mfaToken, code) => _loginTime("/auth/mfa/verify", { mfa_token: mfaToken, code });
+export const mfaEnrolStart = (mfaToken) =>
+  axios.post(`${API_BASE}/auth/mfa/enrol/start`, { mfa_token: mfaToken }, { withCredentials: true }).then((r) => r.data);
+// Resolves with the session PLUS `recovery_codes` (shown exactly once). The
+// session is NOT persisted here -- call commitSession(data) once the user has
+// confirmed they saved the codes, so closing the tab can't leave them signed
+// in with codes they never saw.
+export const mfaEnrolConfirm = (mfaToken, code) =>
+  axios.post(`${API_BASE}/auth/mfa/enrol/confirm`, { mfa_token: mfaToken, code }, { withCredentials: true })
+    .then((r) => r.data);
+export const commitSession = (data) => storeSession(data);
+
+// ---- signed-in security management ----
+export const getMfaStatus = () => client.get("/auth/mfa/status").then((r) => r.data);
+export const mfaSetupStart = (password) => client.post("/auth/mfa/setup/start", { password }).then((r) => r.data);
+export const mfaSetupConfirm = (code) => client.post("/auth/mfa/setup/confirm", { mfa_token: "-", code }).then((r) => r.data);
+export const mfaDisable = (password, code) => client.post("/auth/mfa/disable", { password, code }).then((r) => r.data);
+export const mfaRegenerateRecoveryCodes = (password, code) =>
+  client.post("/auth/mfa/recovery-codes", { password, code }).then((r) => r.data);
+export const getSessions = () => client.get("/auth/sessions").then((r) => r.data);
+export const revokeSession = (id) => client.delete(`/auth/sessions/${id}`).then((r) => r.data);
+export const revokeOtherSessions = () => client.post("/auth/sessions/revoke-others").then((r) => r.data);
 
 // POST /auth/change-password -- also the only call (besides /auth/me) the backend
 // allows while an account is still flagged must_change_password.

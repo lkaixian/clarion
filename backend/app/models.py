@@ -95,6 +95,14 @@ class User(Base):
     login_failed_count = Column(Integer, nullable=False, default=0)
     login_locked_until = Column(TZDateTime, nullable=True)
 
+    # TOTP multi-factor auth (app/mfa.py). The secret is stored AES-GCM
+    # encrypted; `mfa_enabled_at` is NULL while an enrolment is only pending
+    # (secret generated, first code not yet confirmed). `mfa_last_step` is the
+    # last accepted 30 s TOTP step -- a code at or below it is a replay.
+    mfa_secret_enc = Column(Text, nullable=True)
+    mfa_enabled_at = Column(TZDateTime, nullable=True)
+    mfa_last_step = Column(BigInteger, nullable=True)
+
     # Password-reset-via-email-OTP state (POST /auth/request-password-reset-otp
     # and POST /auth/reset-password-with-otp). Only ever the HASH of the
     # 6-digit code is stored, never the plaintext â€” mirrors hashed_password.
@@ -277,8 +285,33 @@ class RefreshToken(Base):
     # graced. NULL for a native client with no UA, or a pre-migration token
     # -- the check is skipped in that case, never fails closed on it.
     client_fingerprint = Column(String(64), nullable=True)
+    # Shown in "Active sessions" so a user can recognise (and revoke) a
+    # device. Informational only -- never an auth factor.
+    ip = Column(String(64), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    # True when this session was minted AFTER the second factor policy was
+    # satisfied (an MFA code, or no MFA applied). auth.rotate_refresh_token
+    # refuses to rotate a not-mfa_ok chain for a user MFA now governs, so
+    # turning the policy on (or a user enrolling) cannot be sidestepped by an
+    # old refresh token.
+    mfa_ok = Column(Boolean, nullable=False, default=False)
 
     user = relationship("User")
+
+
+class MfaRecoveryCode(Base):
+    """One-time MFA recovery code. Only an HMAC of the code is stored."""
+    __tablename__ = "mfa_recovery_codes"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    code_hash = Column(String(64), nullable=False, index=True)
+    used_at = Column(TZDateTime, nullable=True)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+# UserOut(from_attributes) reads this -- True only for a CONFIRMED enrolment.
+User.mfa_enabled = property(lambda self: bool(self.mfa_enabled_at and self.mfa_secret_enc))
 
 
 class Patient(Base):

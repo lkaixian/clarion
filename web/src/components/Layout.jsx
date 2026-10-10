@@ -138,6 +138,7 @@ export default function Layout({ children }) {
           {user && user.role === "patient" && (
             <span className="text-blue-200">{user.full_name} · {user.role}</span>
           )}
+          <Link to="/security" className="text-blue-200 hover:text-white">Security</Link>
           <button
             onClick={() => { logout(); navigate("/login"); }}
             className="bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg"

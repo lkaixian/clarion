@@ -82,7 +82,7 @@ from . import auth, jobs
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation, auth_security
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -383,6 +383,7 @@ async def unhandled_exception_handler(request, exc: Exception):
 # auth_router (login/me), emergency (unauthenticated), staff (clock-in/out
 # -- any staff), or admin (already admin-only).
 app.include_router(auth_router.router)
+app.include_router(auth_security.router)
 app.include_router(
     patients.router,
     dependencies=[Depends(auth.require_page_access("patients"))],
@@ -546,6 +547,26 @@ def readyz(response: Response):
 _STATUS_TTL_S = 5.0
 _status_cache: dict = {"at": 0.0, "body": None}
 
+# Rolling latency history per probe (this process only; ~10 min at the 5 s
+# cache), so the status page can say what "normal" looks like for each part.
+_STATUS_HISTORY_LEN = 120
+_status_history: dict = {}
+
+
+def _with_baseline(name: str, comp: dict) -> dict:
+    """Record an up probe's latency and attach its typical (median) and p95
+    over the recent window. Needs >= 5 samples before it claims a baseline."""
+    from collections import deque
+    hist = _status_history.setdefault(name, deque(maxlen=_STATUS_HISTORY_LEN))
+    if comp.get("status") == "up" and comp.get("ms") is not None:
+        hist.append(comp["ms"])
+    if len(hist) >= 5:
+        vals = sorted(hist)
+        comp["typical_ms"] = vals[len(vals) // 2]
+        comp["p95_ms"] = vals[min(len(vals) - 1, int(len(vals) * 0.95))]
+        comp["samples"] = len(vals)
+    return comp
+
 
 def _timed(check) -> dict:
     t0 = time.perf_counter()
@@ -579,6 +600,61 @@ def _check_local_ai() -> dict:
     return _timed(ping)
 
 
+def _db_probe(fn) -> bool:
+    """Run `fn(db)` on a short-lived session; True unless it raises."""
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        fn(db)
+        return True
+    except Exception:  # noqa: BLE001 -- a failing probe is "down", never a crash
+        return False
+    finally:
+        db.close()
+
+
+def _api_checks() -> list:
+    """The pieces behind "the API", each a cheap read-only probe, so the status
+    page can say WHICH part is unhealthy instead of one general answer. Status
+    + latency only -- no counts, no row data."""
+    from . import models, mpi_client
+
+    def signin(db):
+        db.query(models.User.id).limit(1).first()
+        auth.create_access_token({"sub": "status-probe", "role": "probe"})
+
+    def jobs_ok(db):
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+        if db.query(models.Job.id).filter(models.Job.status == "pending", models.Job.created_at < cutoff).first():
+            raise RuntimeError("jobs backlog")  # work has been waiting > 5 min
+
+    probes = [
+        ("signin", "Sign-in", signin),
+        ("records", "Patient records", lambda db: db.query(models.Patient.id).limit(1).first()),
+        ("emergency", "Emergency card lookup", lambda db: db.query(models.EmergencyToken.id).limit(1).first()),
+        ("queue", "Queue & appointments", lambda db: db.query(models.QueueTicket.id).limit(1).first()),
+        ("jobs", "Background jobs", jobs_ok),
+    ]
+    out = []
+    for cid, label, fn in probes:
+        comp = _with_baseline(f"api.{cid}", _timed(lambda fn=fn: _db_probe(fn)))
+        out.append({"id": cid, "label": label, **comp})
+
+    if mpi_client.enabled():
+        def central() -> bool:
+            try:
+                import httpx
+                return httpx.get(os.environ["MPI_BASE_URL"].rstrip("/") + "/healthz", timeout=1.5).status_code == 200
+            except Exception:  # noqa: BLE001
+                return False
+        comp = _with_baseline("api.federation", _timed(central))
+    else:
+        comp = {"status": "disabled"}
+    out.append({"id": "federation", "label": "Hospital network sync", **comp})
+    return out
+
+
 @app.get("/status", include_in_schema=False)
 def public_status():
     """Public component status for the website's status page. Booleans and
@@ -588,16 +664,19 @@ def public_status():
     now = time.monotonic()
     if _status_cache["body"] is not None and now - _status_cache["at"] < _STATUS_TTL_S:
         return _status_cache["body"]
+    api_checks = _api_checks()
+    api_down = any(c["status"] == "down" for c in api_checks)
     components = {
-        "api": {"status": "up"},
-        "database": _timed(_check_database),
-        "object_store": _timed(_check_object_store),
-        "cache": _check_cache(),
-        "local_ai": _check_local_ai(),
+        # The process answered, so the API is "up"; a failing sub-check makes it "degraded".
+        "api": {"status": "degraded" if api_down else "up", "checks": api_checks},
+        "database": _with_baseline("database", _timed(_check_database)),
+        "object_store": _with_baseline("object_store", _timed(_check_object_store)),
+        "cache": _with_baseline("cache", _check_cache()),
+        "local_ai": _with_baseline("local_ai", _check_local_ai()),
     }
     # Local AI is optional (every AI feature falls back without it), so it never degrades the whole.
-    core = ("database", "object_store", "cache")
-    body = {"status": "ok" if all(components[k]["status"] != "down" for k in core) else "degraded", "components": components}
+    core = ("api", "database", "object_store", "cache")
+    body = {"status": "ok" if all(components[k]["status"] not in ("down", "degraded") for k in core) else "degraded", "components": components}
     _status_cache.update(at=now, body=body)
     return body
 

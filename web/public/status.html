@@ -19,6 +19,7 @@
     <a class="brand" href="/" aria-label="CLARION home"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
     <ul>
       <li><a href="/">Home</a></li>
+      <li><a href="/get-app">Get the app</a></li>
       <li><a href="/status.html" aria-current="page">Status</a></li>
     </ul>
     <a class="btn" href="/login">Sign in</a>
@@ -36,39 +37,57 @@
     <div id="overall" class="banner wait" role="status" aria-live="polite">Checking…</div>
 
     <div class="comp-grid mt">
-      <article class="card comp" data-reveal>
-        <h2>Web console</h2>
-        <div class="svc"><span class="dot up"></span> Pages and app <b>Up</b></div>
-        <p class="about">The site you are looking at, served by the web container.</p>
-      </article>
-      <article class="card comp" data-reveal>
-        <h2>API</h2>
-        <div class="svc"><span class="dot" data-dot="api"></span> Round trip <b data-val="api">Checking…</b></div>
-        <p class="about">Sign-in, patient records, bookings and emergency scan. The time includes the network to your browser.</p>
-      </article>
-      <article class="card comp" data-reveal>
-        <h2>Database</h2>
-        <div class="svc"><span class="dot" data-dot="database"></span> Query time <b data-val="database">Checking…</b></div>
-        <p class="about">Where records, appointments and the audit trail are stored.</p>
-      </article>
-      <article class="card comp" data-reveal>
-        <h2>File storage</h2>
-        <div class="svc"><span class="dot" data-dot="object_store"></span> Access time <b data-val="object_store">Checking…</b></div>
-        <p class="about">Documents, signatures, medicine photos and thumbnails.</p>
-      </article>
-      <article class="card comp" data-reveal>
-        <h2>Cache &amp; rate limiting</h2>
-        <div class="svc"><span class="dot" data-dot="cache"></span> Ping <b data-val="cache">Checking…</b></div>
-        <p class="about">Shared counters that throttle repeated sign-in attempts and heavy callers.</p>
-      </article>
-      <article class="card comp" data-reveal>
-        <h2>Local AI</h2>
-        <div class="svc"><span class="dot" data-dot="local_ai"></span> On-site model <b data-val="local_ai">Checking…</b></div>
-        <p class="about">Optional. Summaries and document reading run on-site; without it the system falls back to simpler built-in methods.</p>
-      </article>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot up"></span><h2>Web console</h2><b>Up</b></span><span class="svc-label muted">Pages and app</span></summary>
+        <div class="more">
+          <p class="about">The site you are looking at, served by the web container. Static files, so it is normally near-instant.</p>
+          <p class="impact"><b>If this is down:</b> the sign-in page and the console will not load.</p>
+        </div>
+      </details>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot" data-dot="api"></span><h2>API</h2><b data-val="api">Checking…</b></span><span class="svc-label muted">Round trip</span></summary>
+        <div class="more">
+          <p class="about">Sign-in, patient records, bookings and emergency scan. The round-trip time includes the network between you and the server.</p>
+        <p class="muted">What the API is made of, checked on the server:</p>
+        <ul class="checks" data-checks="api"><li class="muted">Checking…</li></ul>
+          <p class="impact"><b>If this is down:</b> sign-in, records, bookings and emergency lookup stop working, or the affected feature below does.</p>
+        </div>
+      </details>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot" data-dot="database"></span><h2>Database</h2><b data-val="database">Checking…</b></span><span class="svc-label muted">Query time</span></summary>
+        <div class="more">
+          <p class="about">Where records, appointments and the audit trail are stored.</p>
+        <p class="typical" data-typical="database">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> records cannot be read or saved and nobody can sign in.</p>
+        </div>
+      </details>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot" data-dot="object_store"></span><h2>File storage</h2><b data-val="object_store">Checking…</b></span><span class="svc-label muted">Access time</span></summary>
+        <div class="more">
+          <p class="about">Documents, signatures, medicine photos and thumbnails.</p>
+        <p class="typical" data-typical="object_store">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> documents, signatures and photos cannot be opened or uploaded. Text records keep working.</p>
+        </div>
+      </details>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot" data-dot="cache"></span><h2>Cache &amp; rate limiting</h2><b data-val="cache">Checking…</b></span><span class="svc-label muted">Ping</span></summary>
+        <div class="more">
+          <p class="about">Shared counters that throttle repeated sign-in attempts and heavy callers.</p>
+        <p class="typical" data-typical="cache">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> throttling falls back to a per-server count. Everything still works.</p>
+        </div>
+      </details>
+      <details class="card comp" data-reveal>
+        <summary><span class="svc"><span class="dot" data-dot="local_ai"></span><h2>Local AI</h2><b data-val="local_ai">Checking…</b></span><span class="svc-label muted">On-site model</span></summary>
+        <div class="more">
+          <p class="about">Optional. Summaries and document reading run on-site; without it the system falls back to simpler built-in methods.</p>
+        <p class="typical" data-typical="local_ai">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> summaries and document reading use the simpler built-in methods.</p>
+        </div>
+      </details>
     </div>
 
-    <p class="muted mt"><span data-checked>Checking…</span>. Re-checks every 15 seconds from your own browser. This is not a server-side uptime record.</p>
+    <p class="muted mt"><span data-checked>Checking…</span>. Re-checks every 15 seconds from your own browser. Tap a card for details and what "normal" looks like. This is not a server-side uptime record.</p>
   </div>
 </section>
 </main>

@@ -784,6 +784,22 @@ class AppLocalizationsTa extends AppLocalizations {
       'கார்டு வைத்திருப்பவர் (ஆஃப்லைன் வாசிப்பு)';
 
   @override
+  String get mfaTitle => 'இரு-படி சரிபார்ப்பு';
+
+  @override
+  String get mfaPrompt =>
+      'உங்கள் அங்கீகரிப்பு செயலியின் 6 இலக்கக் குறியீட்டை அல்லது ஒரு மீட்புக் குறியீட்டை உள்ளிடவும்.';
+
+  @override
+  String get mfaCodeLabel => 'குறியீடு';
+
+  @override
+  String get mfaVerifyButton => 'சரிபார்';
+
+  @override
+  String get mfaCancelButton => 'உள்நுழைவுக்குத் திரும்பு';
+
+  @override
   String get nfcBasicTagWarning =>
       'இந்த டேக் வகை (NTAG213/215/216) செயல்படும், ஆனால் சேதப்படுத்த முடியாத வாசிப்பு கவுண்டர் இல்லை: அதன் ஆஃப்லைன் வாசிப்புகளில் விடுபட்டவற்றைச் சரிபார்க்க முடியாது. பொறுப்புக்கூறல் முக்கியமெனில் NTAG 424 DNA பயன்படுத்தவும்.';
 
