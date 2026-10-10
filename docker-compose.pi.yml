@@ -251,10 +251,10 @@ services:
     command: ["uvicorn", "mpi.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]
     working_dir: /app
     environment:
-      MPI_DATABASE_URL: sqlite:////data/mpi.db
+      MPI_DATABASE_URL: sqlite:////app/data/mpi.db
       MPI_ADMIN_TOKEN: ${MPI_ADMIN_TOKEN:-}   # unset = hospital registration disabled
     volumes:
-      - mpi_data:/data
+      - mpi_data:/app/data   # image-owned dir: a fresh named volume inherits its ownership
     expose: ["8100"]
     networks: [app]
     healthcheck:
