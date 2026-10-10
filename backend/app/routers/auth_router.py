@@ -838,7 +838,8 @@ def change_password(
     instead) -- otherwise a user in that state could never call this
     endpoint to clear the flag."""
     if not auth.verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+        # 400, not 401: a 401 means "session expired" to every client (refresh/bounce).
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     _apply_new_password(db, current_user, payload.new_password, must_change=False)
     log_access(db, current_user.patient_id, current_user.id, current_user.role, "change_password",

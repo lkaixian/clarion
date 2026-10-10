@@ -25,16 +25,9 @@
 .dot.off{background:transparent;border:2px solid var(--wait)}
 
 /* ---- buttons, cards, tiles ---- */
-.btn{transition:transform .2s ease,box-shadow .2s ease,background .2s,border-color .2s}
-.btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px #00467c30}
-.btn .ic{transition:transform .2s ease}
-.btn:hover .ic{transform:translateX(4px)}
-.card,.mod{transition:transform .25s ease,box-shadow .25s ease,border-color .25s}
-.card:hover,.mod:hover{transform:translateY(-4px);box-shadow:0 14px 32px #00467c1f;border-color:var(--cyan)}
-.feat .ic{transition:transform .3s ease}
-.feat:hover .ic{transform:rotate(-6deg) scale(1.08)}
-.mod .ic{transition:transform .25s ease}
-.mod:hover .ic{transform:scale(1.2)}
+.btn,.card,.mod{transition:transform .2s ease,box-shadow .2s ease,border-color .2s}
+.btn:hover{transform:translateY(-2px)}
+.card:hover,.mod:hover{transform:translateY(-4px);border-color:var(--cyan)}
 .nav{transition:box-shadow .25s}
 .nav.scrolled{box-shadow:0 4px 20px #00467c1a}
 
@@ -60,7 +53,6 @@
 .comp-grid{display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))}
 .comp .svc b{white-space:nowrap}
 .comp p.about{margin:.4rem 0 0;color:var(--muted);font-size:.9rem}
-.hist i{transition:height .3s ease;align-self:flex-end;min-height:3px}
 .banner{transition:background .3s,color .3s}
 .banner::before{content:"";width:.9rem;height:.9rem;border-radius:50%;background:currentColor;flex:none;animation:ping-b 2s ease-out infinite}
 @keyframes ping-b{0%{box-shadow:0 0 0 0 currentColor}80%,100%{box-shadow:0 0 0 .6rem transparent}}

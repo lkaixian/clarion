@@ -60,3 +60,15 @@ def test_must_change_password_blocks_protected_endpoints_but_not_the_escape_hatc
     db_session.expire_all()  # the change happened in the request's own session
     row = db_session.query(models.User).filter_by(id=user.id).first()
     assert row.must_change_password is False
+
+
+def test_wrong_current_password_is_400_not_401(test_client, make_user, auth_headers):
+    """401 means "session expired" to every client (refresh/bounce to login); a
+    wrong current password must not be confused with it."""
+    user = make_user(role="clinician", facility="Facility A")
+    resp = test_client.post(
+        "/auth/change-password",
+        headers=auth_headers(user),
+        json={"current_password": "definitely-wrong-123", "new_password": "ValidNewPassword789!"},
+    )
+    assert resp.status_code == 400, resp.text

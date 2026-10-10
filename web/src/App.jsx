@@ -47,7 +47,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

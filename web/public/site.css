@@ -79,9 +79,6 @@ h2.t{font-size:clamp(1.6rem,3.5vw,2.2rem);line-height:1.2;color:var(--navy);marg
 /* status page */
 .banner{display:flex;align-items:center;gap:.8rem;border-radius:var(--r);padding:1.1rem 1.3rem;font-weight:700;font-size:1.15rem;background:#e7f6ee;color:#0d6b3e}
 .banner.down{background:#fdeaea;color:#8e1f1f}.banner.warn{background:#fff3da;color:#7a5200}.banner.wait{background:var(--soft);color:var(--muted)}
-.hist{display:flex;gap:2px;height:2.2rem;align-items:stretch;margin-top:.6rem}
-.hist i{flex:1;border-radius:2px;background:var(--wait);min-width:2px}
-.hist i.up{background:var(--ok)}.hist i.down{background:var(--bad)}
 
 /* footer */
 footer{background:var(--navy);color:#cfe3ee;padding:2.5rem 0;font-size:.9rem}
