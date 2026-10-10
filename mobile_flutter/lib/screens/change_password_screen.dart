@@ -5,6 +5,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/password_rules.dart';
 
 /// Forced interstitial shown by `_AuthGate` (see app.dart) instead of
 /// Home/SeniorHome whenever the signed-in account still has
@@ -22,16 +23,13 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -43,7 +41,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
-    if (_currentPasswordController.text.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+    if (newPassword.isEmpty || confirmPassword.isEmpty) {
       context.snack(l10n.allFieldsRequired);
       return;
     }
@@ -51,8 +49,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       context.snack(l10n.passwordsDoNotMatch);
       return;
     }
+    if (!passwordMeetsRules(newPassword)) {
+      context.snack(l10n.passwordRulesNotMet);
+      return;
+    }
 
-    final ok = await auth.changePassword(_currentPasswordController.text, newPassword);
+    final ok = await auth.changePassword(newPassword);
     if (!mounted) return;
     if (ok) {
       context.snack(l10n.passwordChangedSnack);
@@ -99,19 +101,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 ),
                 const SizedBox(height: 24),
                 TextField(
-                  controller: _currentPasswordController,
-                  obscureText: _obscureCurrent,
-                  decoration: InputDecoration(
-                    labelText: l10n.temporaryPasswordLabel,
-                    hintText: l10n.temporaryPasswordLabel,
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscureCurrent ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                      onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
                   controller: _newPasswordController,
                   obscureText: _obscureNew,
                   decoration: InputDecoration(
@@ -123,6 +112,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     ),
                   ),
                 ),
+                PasswordRules(controller: _newPasswordController),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _confirmPasswordController,

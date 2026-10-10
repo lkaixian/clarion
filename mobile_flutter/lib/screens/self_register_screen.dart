@@ -12,6 +12,7 @@ import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import 'self_register_manual_required_screen.dart';
 import '../widgets/common.dart';
+import '../widgets/password_rules.dart';
 
 enum _Step { details, otp, photos, password }
 
@@ -216,6 +217,10 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
       _showSnack(l10n.passwordsDoNotMatch);
       return;
     }
+    if (!passwordMeetsRules(newPassword)) {
+      _showSnack(l10n.passwordRulesNotMet);
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -415,6 +420,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
             ),
           ),
         ),
+        PasswordRules(controller: _newPasswordController),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmPasswordController,

@@ -8,9 +8,10 @@
 <meta name="theme-color" content="#00467c">
 <link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png">
 <link rel="apple-touch-icon" href="/brand/icon-180.png">
-<link rel="stylesheet" href="/site.css?v=3">
-<link rel="stylesheet" href="/motion.css?v=3">
-<script src="/site.js?v=3"></script>
+<link rel="stylesheet" href="/site.css?v=5">
+<link rel="stylesheet" href="/motion.css?v=4">
+<link rel="stylesheet" href="/status.css?v=5">
+<script src="/site.js?v=5"></script>
 </head>
 <body>
 
@@ -26,71 +27,133 @@
   </div>
 </header>
 
-<main>
-<section>
-  <div class="wrap">
-    <div class="head">
-      <span class="eyebrow">System status</span>
-      <h1>Is CLARION up?</h1>
+<main class="st">
+  <div class="st-wrap">
+    <h1 class="st-title">CLARION system status</h1>
+
+    <div id="overall" class="st-banner wait" role="status" aria-live="polite">
+      <span class="st-icon" aria-hidden="true"></span>
+      <div>
+        <strong data-title>Checking…</strong>
+        <span data-sub>Contacting the server.</span>
+      </div>
     </div>
 
-    <div id="overall" class="banner wait" role="status" aria-live="polite">Checking…</div>
+    <div class="st-metrics">
+      <div class="st-metric">
+        <span class="k">Round trip from your device</span>
+        <b data-metric="rtt">&mdash;</b>
+        <span class="muted">Your network, Cloudflare and the tunnel, plus the server. This is what you feel.</span>
+      </div>
+      <div class="st-metric">
+        <span class="k">Server processing</span>
+        <b data-metric="server">&mdash;</b>
+        <span class="muted">How long CLARION itself takes to answer. Excludes the network.</span>
+      </div>
+    </div>
 
-    <div class="comp-grid mt">
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot up"></span><h2>Web console</h2><b>Up</b></span><span class="svc-label muted">Pages and app</span></summary>
-        <div class="more">
-          <p class="about">The site you are looking at, served by the web container. Static files, so it is normally near-instant.</p>
-          <p class="impact"><b>If this is down:</b> the sign-in page and the console will not load.</p>
+    <section class="st-card" aria-labelledby="sys">
+      <div class="st-head">
+        <h2 id="sys">System status</h2>
+        <span class="muted">Uptime over the past 90 days &middot; times shown are server processing time</span>
+      </div>
+
+      <div class="st-comp" data-comp="web">
+        <div class="st-row">
+          <span class="dot up"></span><h3>Web console</h3>
+          <b class="st-state">Up</b>
         </div>
-      </details>
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot" data-dot="api"></span><h2>API</h2><b data-val="api">Checking…</b></span><span class="svc-label muted">Round trip</span></summary>
-        <div class="more">
-          <p class="about">Sign-in, patient records, bookings and emergency scan. The round-trip time includes the network between you and the server.</p>
-        <p class="muted">What the API is made of, checked on the server:</p>
-        <ul class="checks" data-checks="api"><li class="muted">Checking…</li></ul>
-          <p class="impact"><b>If this is down:</b> sign-in, records, bookings and emergency lookup stop working, or the affected feature below does.</p>
+        <p class="about">The site you are looking at, served by the web container. If this is down, the sign-in page and console will not load.</p>
+      </div>
+
+      <div class="st-comp" data-comp="api">
+        <div class="st-row">
+          <span class="dot" data-dot="api"></span><h3>API</h3>
+          <span class="st-pct" data-pct="api"></span>
+          <b class="st-state" data-val="api">Checking…</b>
         </div>
-      </details>
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot" data-dot="database"></span><h2>Database</h2><b data-val="database">Checking…</b></span><span class="svc-label muted">Query time</span></summary>
-        <div class="more">
+        <div class="st-bars" data-bars="api" aria-hidden="true"></div>
+        <details class="st-more">
+          <summary>Details</summary>
+          <p class="about">Sign-in, patient records, bookings and emergency scan. Each check below is timed on the server, so it excludes the network between you and CLARION.</p>
+          <ul class="checks" data-checks="api"><li class="muted">Checking…</li></ul>
+          <p class="impact"><b>If this is down:</b> sign-in, records, bookings and emergency lookup stop working, or the affected feature above does.</p>
+        </details>
+      </div>
+
+      <div class="st-comp" data-comp="database">
+        <div class="st-row">
+          <span class="dot" data-dot="database"></span><h3>Database</h3>
+          <span class="st-pct" data-pct="database"></span>
+          <b class="st-state" data-val="database">Checking…</b>
+        </div>
+        <div class="st-bars" data-bars="database" aria-hidden="true"></div>
+        <details class="st-more">
+          <summary>Details</summary>
           <p class="about">Where records, appointments and the audit trail are stored.</p>
-        <p class="typical" data-typical="database">Gathering a baseline…</p>
+          <p class="typical" data-typical="database">Gathering a baseline…</p>
           <p class="impact"><b>If this is down:</b> records cannot be read or saved and nobody can sign in.</p>
-        </div>
-      </details>
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot" data-dot="object_store"></span><h2>File storage</h2><b data-val="object_store">Checking…</b></span><span class="svc-label muted">Access time</span></summary>
-        <div class="more">
-          <p class="about">Documents, signatures, medicine photos and thumbnails.</p>
-        <p class="typical" data-typical="object_store">Gathering a baseline…</p>
-          <p class="impact"><b>If this is down:</b> documents, signatures and photos cannot be opened or uploaded. Text records keep working.</p>
-        </div>
-      </details>
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot" data-dot="cache"></span><h2>Cache &amp; rate limiting</h2><b data-val="cache">Checking…</b></span><span class="svc-label muted">Ping</span></summary>
-        <div class="more">
-          <p class="about">Shared counters that throttle repeated sign-in attempts and heavy callers.</p>
-        <p class="typical" data-typical="cache">Gathering a baseline…</p>
-          <p class="impact"><b>If this is down:</b> throttling falls back to a per-server count. Everything still works.</p>
-        </div>
-      </details>
-      <details class="card comp" data-reveal>
-        <summary><span class="svc"><span class="dot" data-dot="local_ai"></span><h2>Local AI</h2><b data-val="local_ai">Checking…</b></span><span class="svc-label muted">On-site model</span></summary>
-        <div class="more">
-          <p class="about">Optional. Summaries and document reading run on-site; without it the system falls back to simpler built-in methods.</p>
-        <p class="typical" data-typical="local_ai">Gathering a baseline…</p>
-          <p class="impact"><b>If this is down:</b> summaries and document reading use the simpler built-in methods.</p>
-        </div>
-      </details>
-    </div>
+        </details>
+      </div>
 
-    <p class="muted mt"><span data-checked>Checking…</span>. Re-checks every 15 seconds from your own browser. Tap a card for details and what "normal" looks like. This is not a server-side uptime record.</p>
+      <div class="st-comp" data-comp="object_store">
+        <div class="st-row">
+          <span class="dot" data-dot="object_store"></span><h3>File storage</h3>
+          <span class="st-pct" data-pct="object_store"></span>
+          <b class="st-state" data-val="object_store">Checking…</b>
+        </div>
+        <div class="st-bars" data-bars="object_store" aria-hidden="true"></div>
+        <details class="st-more">
+          <summary>Details</summary>
+          <p class="about">Documents, signatures, medicine photos and thumbnails.</p>
+          <p class="typical" data-typical="object_store">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> documents, signatures and photos cannot be opened or uploaded. Text records keep working.</p>
+        </details>
+      </div>
+
+      <div class="st-comp" data-comp="cache">
+        <div class="st-row">
+          <span class="dot" data-dot="cache"></span><h3>Cache &amp; rate limiting</h3>
+          <span class="st-pct" data-pct="cache"></span>
+          <b class="st-state" data-val="cache">Checking…</b>
+        </div>
+        <div class="st-bars" data-bars="cache" aria-hidden="true"></div>
+        <details class="st-more">
+          <summary>Details</summary>
+          <p class="about">Shared counters that throttle repeated sign-in attempts and heavy callers.</p>
+          <p class="typical" data-typical="cache">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> throttling falls back to a per-server count. Everything still works.</p>
+        </details>
+      </div>
+
+      <div class="st-comp" data-comp="local_ai">
+        <div class="st-row">
+          <span class="dot" data-dot="local_ai"></span><h3>Local AI</h3>
+          <span class="st-pct" data-pct="local_ai"></span>
+          <b class="st-state" data-val="local_ai">Checking…</b>
+        </div>
+        <div class="st-bars" data-bars="local_ai" aria-hidden="true"></div>
+        <details class="st-more">
+          <summary>Details</summary>
+          <p class="about">Optional. Summaries and document reading run on-site; without it the system falls back to simpler built-in methods.</p>
+          <p class="typical" data-typical="local_ai">Gathering a baseline…</p>
+          <p class="impact"><b>If this is down:</b> summaries and document reading use the simpler built-in methods.</p>
+        </details>
+      </div>
+
+      <div class="st-axis"><span>90 days ago</span><span class="st-line"></span><span>Today</span></div>
+    </section>
+
+    <section class="st-card" aria-labelledby="inc">
+      <div class="st-head"><h2 id="inc">Past incidents</h2><span class="muted">Last 90 days</span></div>
+      <ul class="st-incidents" id="incidents"><li class="muted">Loading…</li></ul>
+    </section>
+
+    <p class="muted st-foot"><span data-checked>Checking…</span>. Live checks re-run every 15 seconds in your browser; the bars come from server-side samples taken about once a minute.</p>
   </div>
-</section>
 </main>
+
+<div class="st-tip" id="st-tip" role="tooltip" hidden></div>
 
 <footer>
   <div class="wrap">

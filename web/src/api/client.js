@@ -221,8 +221,35 @@ export const revokeOtherSessions = () => client.post("/auth/sessions/revoke-othe
 
 // POST /auth/change-password -- also the only call (besides /auth/me) the backend
 // allows while an account is still flagged must_change_password.
-export async function changePassword(currentPassword, newPassword) {
-  await client.post("/auth/change-password", { current_password: currentPassword, new_password: newPassword });
+// `currentPassword` is only needed for a voluntary change; the forced
+// first-login change sends just the new password.
+export async function changePassword(newPassword, currentPassword) {
+  await client.post("/auth/change-password", { new_password: newPassword, current_password: currentPassword });
+}
+
+// ---- friendly error text -----------------------------------------------------
+// The API reports lockouts as "...Try again after 2026-10-10T08:25:40Z." (UTC).
+// Show that as local 12-hour time plus how long is left, and flatten FastAPI's
+// 422 array detail ([{msg}, ...]) to text -- rendering the raw array as a React
+// child crashes the page.
+const ISO_UTC = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
+
+export function formatWait(iso) {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return iso;
+  const clock = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const mins = Math.ceil((when.getTime() - Date.now()) / 60000);
+  if (mins <= 0) return clock;
+  return `${clock} (in ${mins <= 1 ? "under a minute" : `${mins} minutes`})`;
+}
+
+export function errorMessage(err, fallback) {
+  if (!err?.response) return "Can't reach the server. Check your connection and try again.";
+  const detail = err.response.data?.detail;
+  const text = typeof detail === "string" ? detail
+    : Array.isArray(detail) ? detail.map((d) => d?.msg).filter(Boolean).join("; ")
+    : "";
+  return text ? text.replace(/Value error, /g, "").replace(ISO_UTC, formatWait) : fallback;
 }
 
 export function logout() {

@@ -130,6 +130,26 @@ class AppLocalizationsTa extends AppLocalizations {
   String get newPasswordLabel => 'புதிய கடவுச்சொல்';
 
   @override
+  String get passwordRulesTitle => 'உங்கள் கடவுச்சொல்லில் இருக்க வேண்டியவை:';
+
+  @override
+  String get passwordRuleLength => 'குறைந்தது 8 எழுத்துகள்';
+
+  @override
+  String get passwordRuleNumber => 'குறைந்தது 1 எண்';
+
+  @override
+  String get passwordRuleUpper => 'குறைந்தது 1 பெரிய எழுத்து';
+
+  @override
+  String get passwordRuleSpecial =>
+      'குறைந்தது 1 சிறப்பு எழுத்து (! @ # \$ * . ?)';
+
+  @override
+  String get passwordRulesNotMet =>
+      'கடவுச்சொல் அனைத்துத் தேவைகளையும் பூர்த்தி செய்யவில்லை.';
+
+  @override
   String get confirmNewPasswordLabel => 'புதிய கடவுச்சொல்லை உறுதிப்படுத்தவும்';
 
   @override
@@ -642,6 +662,9 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get languageLabel => 'மொழி';
+
+  @override
+  String get settingsTitle => 'அமைப்புகள்';
 
   @override
   String get themeLabel => 'தீம்';

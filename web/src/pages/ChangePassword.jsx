@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { changePassword, getCurrentUser, logout } from "../api/client";
+import { changePassword, getCurrentUser, logout, errorMessage } from "../api/client";
+import PasswordRules, { passwordMeetsRules } from "../components/PasswordRules";
 
-const MIN_LENGTH = 12; // matches the backend's MIN_PASSWORD_LENGTH
 
 // Shown right after sign-in when the account must set its own password
 // (every seeded production account, and staff-issued temporary passwords).
 // The backend answers 403 to everything else until this succeeds.
 export default function ChangePassword() {
-  const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -16,7 +15,6 @@ export default function ChangePassword() {
   const navigate = useNavigate();
   const user = getCurrentUser();
   const fields = [
-    ["current", "Current (temporary) password", current, setCurrent, "current-password"],
     ["new", "New password", next, setNext, "new-password"],
     ["confirm", "Confirm new password", confirm, setConfirm, "new-password"],
   ];
@@ -24,20 +22,16 @@ export default function ChangePassword() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (next.length < MIN_LENGTH) return setError(`New password must be at least ${MIN_LENGTH} characters.`);
+    if (!passwordMeetsRules(next)) return setError("Your new password does not meet all the requirements.");
     if (next !== confirm) return setError("The two new passwords do not match.");
     setLoading(true);
     try {
-      await changePassword(current, next);
+      await changePassword(next);
       // The backend revokes every session on a password change, so sign in again.
       logout();
       navigate("/login", { state: { resetSuccess: true } });
     } catch (err) {
-      const detail = err?.response?.data?.detail;
-      // FastAPI sends a string for app errors and an array of {msg} for 422 validation.
-      setError(typeof detail === "string" ? detail
-        : Array.isArray(detail) ? detail.map((d) => d.msg).join("; ")
-        : "Could not change the password. Please try again.");
+      setError(errorMessage(err, "Could not change the password. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -58,11 +52,11 @@ export default function ChangePassword() {
             <label htmlFor={id} className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
             <input id={id} type="password" autoComplete={auto} value={value} onChange={(e) => set(e.target.value)}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            {id === "new" && <p className="text-xs text-slate-400 mt-1">At least {MIN_LENGTH} characters.</p>}
+            {id === "new" && <PasswordRules value={next} />}
           </div>
         ))}
 
-        <button disabled={loading || !current || !next || !confirm}
+        <button disabled={loading || !passwordMeetsRules(next) || !confirm}
           className="w-full bg-blue-800 hover:bg-blue-900 text-white font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
           {loading ? "Saving..." : "Change password"}
         </button>

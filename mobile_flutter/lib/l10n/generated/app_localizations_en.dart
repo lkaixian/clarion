@@ -127,6 +127,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newPasswordLabel => 'New password';
 
   @override
+  String get passwordRulesTitle => 'Your password needs:';
+
+  @override
+  String get passwordRuleLength => 'At least 8 characters';
+
+  @override
+  String get passwordRuleNumber => 'At least 1 number';
+
+  @override
+  String get passwordRuleUpper => 'At least 1 capital letter';
+
+  @override
+  String get passwordRuleSpecial =>
+      'At least 1 special character (! @ # \$ * . ?)';
+
+  @override
+  String get passwordRulesNotMet =>
+      'Password does not meet all the requirements.';
+
+  @override
   String get confirmNewPasswordLabel => 'Confirm new password';
 
   @override
@@ -635,6 +655,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageLabel => 'Language';
+
+  @override
+  String get settingsTitle => 'Settings';
 
   @override
   String get themeLabel => 'Theme';

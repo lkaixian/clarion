@@ -129,6 +129,26 @@ class AppLocalizationsMs extends AppLocalizations {
   String get newPasswordLabel => 'Kata laluan baharu';
 
   @override
+  String get passwordRulesTitle => 'Kata laluan anda mesti mempunyai:';
+
+  @override
+  String get passwordRuleLength => 'Sekurang-kurangnya 8 aksara';
+
+  @override
+  String get passwordRuleNumber => 'Sekurang-kurangnya 1 nombor';
+
+  @override
+  String get passwordRuleUpper => 'Sekurang-kurangnya 1 huruf besar';
+
+  @override
+  String get passwordRuleSpecial =>
+      'Sekurang-kurangnya 1 aksara khas (! @ # \$ * . ?)';
+
+  @override
+  String get passwordRulesNotMet =>
+      'Kata laluan tidak memenuhi semua keperluan.';
+
+  @override
   String get confirmNewPasswordLabel => 'Sahkan kata laluan baharu';
 
   @override
@@ -639,6 +659,9 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get languageLabel => 'Bahasa';
+
+  @override
+  String get settingsTitle => 'Tetapan';
 
   @override
   String get themeLabel => 'Tema';

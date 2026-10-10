@@ -34,7 +34,10 @@ def _aware_utc(dt: datetime) -> datetime:
 # _WEAK_PASSWORD_DENYLIST, not composition rules -- a stronger, better-
 # evidenced mechanism aimed at the same underlying concern (guessable
 # passwords), not a literal complexity checkbox.
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 8
+# Only these count as the required special character. Keep in step with
+# web/src/components/PasswordRules.jsx and mobile widgets/password_rules.dart.
+PASSWORD_SPECIALS = "!@#$*.?"
 
 # A small, deliberately non-exhaustive denylist of passwords that are weak
 # regardless of length/composition (top-of-list common passwords, and this
@@ -56,9 +59,24 @@ _WEAK_PASSWORD_DENYLIST = frozenset({
 })
 
 
-def _validate_password_length(value: str) -> str:
+def password_rule_failures(value: str) -> "list[str]":
+    """Human-readable list of the policy rules `value` does not meet."""
+    out = []
     if len(value) < MIN_PASSWORD_LENGTH:
-        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long.")
+        out.append(f"at least {MIN_PASSWORD_LENGTH} characters")
+    if not any(c.isdigit() for c in value):
+        out.append("1 number")
+    if not any(c.isupper() for c in value):
+        out.append("1 capital letter")
+    if not any(c in PASSWORD_SPECIALS for c in value):
+        out.append("1 special character (" + " ".join(PASSWORD_SPECIALS) + ")")
+    return out
+
+
+def _validate_password_length(value: str) -> str:
+    failures = password_rule_failures(value)
+    if failures:
+        raise ValueError("Password needs: " + ", ".join(failures) + ".")
     if value.lower() in _WEAK_PASSWORD_DENYLIST:
         raise ValueError("This password is too common/predictable. Choose a different one.")
     return value
@@ -311,7 +329,10 @@ class SelfRegisterCompleteRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    # Optional ONLY for the forced first-login change (must_change_password):
+    # the session was just authenticated with the temporary password. A
+    # voluntary change still has to supply it (enforced in the router).
+    current_password: str | None = None
     new_password: str
 
     @field_validator("new_password")

@@ -297,14 +297,14 @@ class ApiClient {
   /// "must change password" flow after a staff-issued temp password and
   /// (in principle) any future voluntary password change from Settings.
   Future<void> changePassword({
-    required String currentPassword,
+    String? currentPassword,
     required String newPassword,
   }) {
     return _guard(() async {
       await _dio.post<Map<String, dynamic>>(
         '/auth/change-password',
         data: {
-          'current_password': currentPassword,
+          'current_password': ?currentPassword,
           'new_password': newPassword,
         },
       );

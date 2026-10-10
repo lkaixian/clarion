@@ -119,6 +119,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get newPasswordLabel => '新密码';
 
   @override
+  String get passwordRulesTitle => '您的密码必须包含：';
+
+  @override
+  String get passwordRuleLength => '至少 8 个字符';
+
+  @override
+  String get passwordRuleNumber => '至少 1 个数字';
+
+  @override
+  String get passwordRuleUpper => '至少 1 个大写字母';
+
+  @override
+  String get passwordRuleSpecial => '至少 1 个特殊字符（! @ # \$ * . ?）';
+
+  @override
+  String get passwordRulesNotMet => '密码未满足所有要求。';
+
+  @override
   String get confirmNewPasswordLabel => '确认新密码';
 
   @override
@@ -603,6 +621,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageLabel => '语言';
+
+  @override
+  String get settingsTitle => '设置';
 
   @override
   String get themeLabel => '主题';
