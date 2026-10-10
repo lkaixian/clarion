@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -14,7 +16,10 @@ import 'screens/change_password_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/senior/senior_home_screen.dart';
+import 'screens/emergency_scanner_screen.dart';
 import 'services/api_client.dart';
+import 'services/launch_tag.dart';
+import 'services/nfc_service.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/update_banner.dart';
@@ -66,12 +71,32 @@ class _ClarionAppState extends State<ClarionApp> {
   // matter how deep the user had navigated.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AuthStatus? _lastAuthStatus;
+  NfcReadResult? _pendingTag;
 
   @override
   void initState() {
     super.initState();
     _bootstrap = _init();
     widget.authProvider.addListener(_onAuthChanged);
+    LaunchTag.listen((tag) {
+      _pendingTag = tag;
+      _openPendingTag();
+    });
+  }
+
+  /// A CLARION card launched/woke the app: once signed in (and not stuck on
+  /// the forced password change) jump straight to the emergency lookup.
+  /// Signed out -> held until sign-in completes, then this runs again.
+  void _openPendingTag() {
+    final tag = _pendingTag;
+    final auth = widget.authProvider;
+    if (tag == null || auth.status != AuthStatus.authenticated || auth.mustChangePassword) return;
+    _pendingTag = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigatorKey.currentState?.push(MaterialPageRoute<void>(
+        builder: (_) => EmergencyScannerScreen(initialTag: tag),
+      ));
+    });
   }
 
   @override
@@ -85,6 +110,10 @@ class _ClarionAppState extends State<ClarionApp> {
     final previousStatus = _lastAuthStatus;
     final wasAuthenticated = previousStatus == AuthStatus.authenticated;
     _lastAuthStatus = status;
+    if (status == AuthStatus.authenticated) {
+      // After the popUntil-first-route frame callbacks below.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingTag());
+    }
     if (wasAuthenticated && status == AuthStatus.unauthenticated) {
       // Defer to the next frame: this listener can fire mid-build (e.g.
       // from the async `forceLogout()` continuation), and `Navigator`
@@ -116,7 +145,11 @@ class _ClarionAppState extends State<ClarionApp> {
     _lastAuthStatus = widget.authProvider.status;
     // Local-notification plumbing (timezone data, plugin init) — cheap and
     // side-effect-free if reminders end up unused this session.
-    await NotificationService.instance.init();
+    // Card-launch first, notification plumbing off the first-paint path: an
+    // emergency tap should not wait on timezone/plugin setup.
+    _pendingTag = await LaunchTag.take();
+    _openPendingTag();
+    unawaited(NotificationService.instance.init());
   }
 
   @override

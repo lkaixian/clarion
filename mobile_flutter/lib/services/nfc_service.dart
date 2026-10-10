@@ -117,7 +117,9 @@ class NfcService {
         }
 
         final record = _buildTextRecord(text, languageCode);
-        final message = NdefMessage(records: [record]);
+        // Marker FIRST: Android dispatches on the first record, so this is
+        // what launches CLARION from a locked phone (see MainActivity.kt).
+        final message = NdefMessage(records: [_buildLaunchMarker(), record]);
         if (message.byteLength > ndef.maxSize) {
           await NfcManager.instance.stopSession();
           if (!completer.isCompleted) completer.complete(NfcWriteResult.tooLarge);
@@ -189,6 +191,15 @@ class NfcService {
       payload: payload,
     );
   }
+
+  /// MIME record `application/vnd.clarion` -- the launch trigger. 1-byte
+  /// payload; ~26 bytes on the tag.
+  static NdefRecord _buildLaunchMarker() => NdefRecord(
+        typeNameFormat: TypeNameFormat.media,
+        type: Uint8List.fromList(utf8.encode('application/vnd.clarion')),
+        identifier: Uint8List(0),
+        payload: Uint8List.fromList([1]),
+      );
 
   /// Inverse of [_buildTextRecord] -- the first well-formed Text record
   /// found in [message], or `null` if there isn't one.

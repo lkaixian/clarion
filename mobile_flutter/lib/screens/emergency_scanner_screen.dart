@@ -29,7 +29,11 @@ enum _ScanMode { qr, nfc, manual }
 /// - **Type Manually**: text entry fallback for either a QR card
 ///   reference or an NFC UID, if the camera/NFC hardware isn't usable.
 class EmergencyScannerScreen extends StatefulWidget {
-  const EmergencyScannerScreen({super.key});
+  const EmergencyScannerScreen({super.key, this.initialTag});
+
+  /// A card tapped while locked / app closed (see services/launch_tag.dart):
+  /// skips the tap step and goes straight to the lookup.
+  final NfcReadResult? initialTag;
 
   @override
   State<EmergencyScannerScreen> createState() => _EmergencyScannerScreenState();
@@ -68,6 +72,14 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     // Online now? Top up the cached tag keys and flush any queued offline
     // reads before the user is (maybe) in a dead zone.
     context.read<AuthProvider>().syncOfflineTagData();
+    final tag = widget.initialTag;
+    if (tag != null) {
+      _mode = _ScanMode.nfc;
+      _tagKind = tag.kind;
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _lookup(nfcUid: tag.uid, offlineNdefText: tag.ndefText));
+      return;
+    }
     _startModeResources();
   }
 
