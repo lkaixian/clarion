@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -571,21 +572,56 @@ class ApiClient {
   /// `POST /emergency/nfc/scan` — no auth required. Used by the NFC-tap
   /// responder scanner (physical card, e.g. for a senior citizen without a
   /// smartphone).
+  ///
+  /// [timeout] caps the WHOLE request (connect + response). The tap-to-read
+  /// flow passes a short one when the tag itself carries offline data, so a
+  /// dead network falls back to the on-tag record in ~1.5 s instead of the
+  /// client's default 12 s. A cancelled call surfaces as an [ApiException]
+  /// with `statusCode == null`, exactly like any other no-response failure.
   Future<Map<String, dynamic>> scanNfcCard({
     required String nfcUid,
     String? responderName,
     String? responderOrg,
+    Duration? timeout,
   }) {
     return _guard(() async {
+      final cancel = CancelToken();
+      final timer = timeout == null ? null : Timer(timeout, () => cancel.cancel('scan timeout'));
+      try {
+        final response = await _dio.post<Map<String, dynamic>>(
+          '/emergency/nfc/scan',
+          data: {
+            'nfc_uid': nfcUid,
+            if (responderName != null && responderName.isNotEmpty) 'responder_name': responderName,
+            if (responderOrg != null && responderOrg.isNotEmpty) 'responder_org': responderOrg,
+          },
+          cancelToken: cancel,
+        );
+        return response.data!;
+      } finally {
+        timer?.cancel();
+      }
+    });
+  }
+
+  /// `GET /emergency/tag-keys` -- staff only. `{key_id: base64 key}` the
+  /// device caches to open encrypted NFC tags with no network.
+  Future<Map<String, String>> getTagKeys() {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>('/emergency/tag-keys');
+      return (response.data!['keys'] as Map<String, dynamic>).cast<String, String>();
+    });
+  }
+
+  /// `POST /emergency/offline-reads` -- uploads this user's hash-chained log
+  /// of reads done with no network (see OfflineReadLog).
+  Future<Map<String, dynamic>> uploadOfflineReads(String deviceId, List<Map<String, dynamic>> entries) {
+    return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/emergency/nfc/scan',
-        data: {
-          'nfc_uid': nfcUid,
-          if (responderName != null && responderName.isNotEmpty) 'responder_name': responderName,
-          if (responderOrg != null && responderOrg.isNotEmpty) 'responder_org': responderOrg,
-        },
+        '/emergency/offline-reads',
+        data: {'device_id': deviceId, 'entries': entries},
       );
-      return response.data!;
+      return response.data ?? const <String, dynamic>{};
     });
   }
 

@@ -46,6 +46,10 @@ dependencies:
   # every request) — still a small, dependency-light package.
   dio: ^5.7.0
 
+  # AES-GCM + SHA-256 for opening encrypted NFC tags offline and
+  # hash-chaining the offline-read log (lib/services/tag_crypto.dart).
+  cryptography: ^2.7.0
+
   # Secure storage for the auth token
   flutter_secure_storage: ^9.2.2
 

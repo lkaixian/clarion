@@ -1434,6 +1434,36 @@ abstract class AppLocalizations {
   /// **'Card holder (offline read)'**
   String get scanResultOfflinePlaceholderName;
 
+  /// No description provided for @nfcBasicTagWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This tag type (NTAG213/215/216) works, but has no tamper-proof read counter: offline reads of it can\'t be checked for missing entries. Use an NTAG 424 DNA where accountability matters.'**
+  String get nfcBasicTagWarning;
+
+  /// No description provided for @scanResultOfflineSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection, and this tag is protected. Sign in with a CLARION staff or responder account to read it offline, or use the QR code / online lookup.'**
+  String get scanResultOfflineSignIn;
+
+  /// No description provided for @scanResultOfflineKeyMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection, and this device doesn\'t have the key for this tag. Connect once while signed in to download it, or use the QR code / online lookup.'**
+  String get scanResultOfflineKeyMissing;
+
+  /// No description provided for @scanResultOfflineExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This tag\'s validity has lapsed and it can\'t be read offline. Use the QR code or online lookup, and have the card re-issued.'**
+  String get scanResultOfflineExpired;
+
+  /// No description provided for @scanResultOfflineDamaged.
+  ///
+  /// In en, this message translates to:
+  /// **'This tag could not be verified (damaged, altered, or not a genuine CLARION tag). Do not rely on it - use the QR code or online lookup.'**
+  String get scanResultOfflineDamaged;
+
   /// No description provided for @writeOfflineTagTooltip.
   ///
   /// In en, this message translates to:

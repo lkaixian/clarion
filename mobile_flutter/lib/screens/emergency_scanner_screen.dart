@@ -8,7 +8,9 @@ import '../l10n/generated/app_localizations.dart';
 import '../models/emergency_scan_result.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
+import '../providers/auth_provider.dart';
 import '../services/nfc_service.dart';
+import '../services/tag_crypto.dart';
 import '../theme/app_theme.dart';
 
 enum _ScanMode { qr, nfc, manual }
@@ -32,6 +34,9 @@ class EmergencyScannerScreen extends StatefulWidget {
 }
 
 class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
+  /// How long the online lookup gets before the tag's own record is used.
+  static const _offlineFallbackTimeout = Duration(milliseconds: 1500);
+
   _ScanMode _mode = _ScanMode.qr;
 
   final _refController = TextEditingController();
@@ -44,6 +49,8 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
 
   NfcAvailability? _nfcAvailability;
   bool _nfcSessionActive = false;
+  // Kind of the last tapped tag; drives the "no read counter" warning.
+  NfcTagKind? _tagKind;
 
   bool _loading = false;
   String? _error;
@@ -56,6 +63,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
   @override
   void initState() {
     super.initState();
+    // Online now? Top up the cached tag keys and flush any queued offline
+    // reads before the user is (maybe) in a dead zone.
+    context.read<AuthProvider>().syncOfflineTagData();
     _startModeResources();
   }
 
@@ -103,7 +113,10 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     // call fails.
     final read = await NfcService.readTagOnce();
     if (!mounted) return;
-    setState(() => _nfcSessionActive = false);
+    setState(() {
+      _nfcSessionActive = false;
+      _tagKind = read.uid != null ? read.kind : null;
+    });
     if (read.uid != null) {
       await _lookup(nfcUid: read.uid, offlineNdefText: read.ndefText);
     }
@@ -115,6 +128,7 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       _mode = mode;
       _result = null;
       _error = null;
+      _tagKind = null;
       _resultIsOffline = false;
     });
     _startModeResources();
@@ -138,6 +152,58 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     }
   }
 
+  /// "The server can't be used right now": no network path (timeout /
+  /// connection error / our own 1.5 s cap) or the edge/limiter answering for
+  /// a down or overloaded backend. NEVER a 401/403/404 (a real answer, e.g. a
+  /// revoked card) and never a TLS failure.
+  static bool _isOutage(ApiException e) =>
+      e.isUnreachable || const {429, 502, 503, 504}.contains(e.statusCode);
+
+  /// Decrypts the tag's own record on this device (sealed `C1.` blobs) or
+  /// passes a legacy plaintext one through, and logs the read to the
+  /// hash-chained offline log so it can be attributed on the next sync.
+  /// Requires a signed-in user: an offline read nobody can be held to is
+  /// refused, not served. The failed attempt is logged too.
+  Future<({String? text, _OfflineFailure? failure})> _openOfflineTag(String ndefText, String uid) async {
+    final auth = context.read<AuthProvider>();
+    final log = auth.offlineLog;
+    final userId = auth.user?.id;
+    if (userId == null) return (text: null, failure: _OfflineFailure.needsSignIn);
+
+    String? plain;
+    _OfflineFailure? failure;
+    var keyId = 0;
+    if (TagCrypto.looksSealed(ndefText)) {
+      keyId = TagCrypto.keyIdOf(ndefText) ?? 0;
+      final keys = await log.readKeys();
+      plain = await TagCrypto.open(ndefText, uid, keys);
+      if (plain == null) {
+        failure = keys.containsKey('$keyId') ? _OfflineFailure.damaged : _OfflineFailure.keyMissing;
+      }
+    } else {
+      plain = ndefText; // legacy plaintext tag
+    }
+    if (plain != null && _isLapsed(plain)) {
+      plain = null;
+      failure = _OfflineFailure.expired;
+    }
+    await log.append(
+      userId: userId, uid: uid, keyId: keyId,
+      outcome: plain == null ? 'failed' : 'decrypted',
+    );
+    // Online now? Flush the new entry straight away (no-op when offline).
+    auth.syncOfflineTagData();
+    return (text: plain, failure: failure);
+  }
+
+  /// A sealed record carries `X:<yyyymmdd>` -- the grant's own expiry.
+  static bool _isLapsed(String plain) {
+    final m = RegExp(r'(?:^|\|)X:(\d{4})(\d{2})(\d{2})(?:\||$)').firstMatch(plain);
+    if (m == null) return false;
+    final exp = DateTime.utc(int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!), 23, 59, 59);
+    return DateTime.now().toUtc().isAfter(exp);
+  }
+
   Future<void> _lookup({String? cardReference, String? nfcUid, String? offlineNdefText}) async {
     setState(() {
       _loading = true;
@@ -157,6 +223,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
               nfcUid: nfcUid!,
               responderName: _nameController.text.trim(),
               responderOrg: _orgController.text.trim(),
+              // The tag carries its own record: don't make a responder wait
+              // out the client's 12 s default when the network is down.
+              timeout: offlineNdefText != null ? _offlineFallbackTimeout : null,
             );
       if (!mounted) return;
       setState(() => _result = EmergencyScanResult.fromJson(raw));
@@ -169,15 +238,26 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       // itself is appropriate: a real 404 ("not registered") is an
       // authoritative answer from a server that IS reachable, and must
       // not be silently overridden by stale on-tag data.
-      if (e.statusCode == null && offlineNdefText != null) {
+      if (_isOutage(e) && offlineNdefText != null) {
         final l10n = AppLocalizations.of(context);
+        final opened = await _openOfflineTag(offlineNdefText, nfcUid ?? '');
+        if (!mounted) return;
         setState(() {
-          _result = EmergencyScanResult.fromCompactTagText(
-            offlineNdefText,
-            placeholderName: l10n.scanResultOfflinePlaceholderName,
-          );
-          _resultIsOffline = true;
-          _error = null;
+          if (opened.text == null) {
+            _error = switch (opened.failure!) {
+              _OfflineFailure.needsSignIn => l10n.scanResultOfflineSignIn,
+              _OfflineFailure.keyMissing => l10n.scanResultOfflineKeyMissing,
+              _OfflineFailure.expired => l10n.scanResultOfflineExpired,
+              _OfflineFailure.damaged => l10n.scanResultOfflineDamaged,
+            };
+          } else {
+            _result = EmergencyScanResult.fromCompactTagText(
+              opened.text!,
+              placeholderName: l10n.scanResultOfflinePlaceholderName,
+            );
+            _resultIsOffline = true;
+            _error = null;
+          }
         });
       } else {
         setState(() => _error = e.message);
@@ -232,6 +312,28 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
             if (_mode == _ScanMode.qr) _buildQrMode(l10n),
             if (_mode == _ScanMode.nfc) _buildNfcMode(l10n),
             if (_mode == _ScanMode.manual) _buildManualMode(l10n),
+            if (_mode == _ScanMode.nfc && _tagKind != null && !_tagKind!.hasReadCounter)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade800),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(l10n.nfcBasicTagWarning,
+                          style: TextStyle(fontSize: 12, color: context.palette.textBody)),
+                    ),
+                  ],
+                ),
+              ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
@@ -687,3 +789,7 @@ class _EmptyText extends StatelessWidget {
     return Text(text, style: TextStyle(fontSize: 13, color: context.palette.textFaint));
   }
 }
+
+/// Why a tag couldn't be read without the server -- picks the responder-facing
+/// message so each case says what to do next.
+enum _OfflineFailure { needsSignIn, keyMissing, expired, damaged }

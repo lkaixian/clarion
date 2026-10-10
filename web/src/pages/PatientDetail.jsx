@@ -1713,9 +1713,13 @@ export default function PatientDetail() {
       "allergies, medications, conditions, blood_type"
     );
     const scope = (scopeInput || "").split(",").map((s) => s.trim()).filter(Boolean);
+    // Every tag type works; only an NTAG 424 DNA has the tamper-proof read
+    // counter, so anything else gets a warning in the prompt below.
+    const tagType = window.confirm("Is this an NTAG 424 DNA tag?\n\nOK = yes. Cancel = NTAG213/215/216 or not sure (still works, with a warning).")
+      ? "ntag424" : "ntag21x";
     setBusy("nfc");
     try {
-      const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"]);
+      const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"], tagType);
       refresh();
       // tag_text is the compact fallback meant to be written DIRECTLY onto
       // the physical tag's own NDEF memory (readable with zero network —
@@ -1724,15 +1728,24 @@ export default function PatientDetail() {
       // call can't write it itself (no browser API does generic NDEF write
       // on desktop), so hand it to staff to carry to a phone running the
       // CLARION app's "Write Offline Tag" screen (same physical card).
-      if (result?.tag_text) {
-        const note = result.tag_text_truncated
+      // Prefer the encrypted blob (opens only on a signed-in CLARION device,
+      // every offline read is attributed); plaintext tag_text is the legacy
+      // fallback for a tag too small to hold a sealed record.
+      const toWrite = result?.tag_blob || result?.tag_text;
+      if (toWrite) {
+        const kind = result.tag_blob
+          ? " This is ENCRYPTED: only a signed-in CLARION staff device can read it offline."
+          : " This is plaintext (the tag is too small for an encrypted record).";
+        const truncated = result.tag_blob ? result.tag_blob_truncated : result.tag_text_truncated;
+        const note = truncated
           ? "\n\n(truncated to fit the tag — not everything critical fit)"
           : "";
+        const securityWarning = result.tag_security?.warning ? "\n\n⚠ " + result.tag_security.warning : "";
         prompt(
           "Card registered. To make this card readable with NO network at all, copy this " +
           "text and write it to the SAME physical card from a phone: open the CLARION app, " +
-          "tap the NFC icon in the top bar (\"Write Offline Tag\" — staff only), paste, and tap." + note,
-          result.tag_text,
+          "tap the NFC icon in the top bar (\"Write Offline Tag\" — staff only), paste, and tap." + kind + note + securityWarning,
+          toWrite,
         );
       }
     } catch (e) {

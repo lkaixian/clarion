@@ -79,6 +79,18 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
               l10n.writeOfflineTagDesc,
               style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
             ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(l10n.nfcBasicTagWarning,
+                      style: TextStyle(fontSize: 12, color: context.palette.textMuted, height: 1.4)),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             if (!NfcService.isSupportedPlatform)
               Text(l10n.nfcUnsupportedPlatform, style: TextStyle(color: context.palette.textMuted))

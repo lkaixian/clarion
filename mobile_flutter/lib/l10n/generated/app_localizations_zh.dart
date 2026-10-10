@@ -737,6 +737,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scanResultOfflinePlaceholderName => '持卡人（离线读取）';
 
   @override
+  String get nfcBasicTagWarning =>
+      '此类标签（NTAG213/215/216）可正常使用，但没有防篡改读取计数器：无法检查其离线读取是否有遗漏。需要问责时请使用 NTAG 424 DNA。';
+
+  @override
+  String get scanResultOfflineSignIn =>
+      '无网络连接，且此标签受保护。请使用 CLARION 员工或急救人员账户登录以离线读取，或使用二维码/在线查询。';
+
+  @override
+  String get scanResultOfflineKeyMissing =>
+      '无网络连接，且本设备没有此标签的密钥。请在登录状态下联网一次以下载密钥，或使用二维码/在线查询。';
+
+  @override
+  String get scanResultOfflineExpired => '此标签已过期，无法离线读取。请使用二维码或在线查询，并重新签发卡片。';
+
+  @override
+  String get scanResultOfflineDamaged =>
+      '无法验证此标签（已损坏、被篡改，或不是正版 CLARION 标签）。请勿依赖它，请使用二维码或在线查询。';
+
+  @override
   String get writeOfflineTagTooltip => '写入离线标签（仅限工作人员）';
 
   @override
