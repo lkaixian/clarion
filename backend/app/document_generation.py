@@ -124,7 +124,8 @@ def render_document(
     signer_name: str,
     signer_role: Optional[str],
     signed_at: datetime,
-    signature_png: Optional[bytes],
+    signature_png: Optional[bytes] = None,
+    seal_code: Optional[str] = None,
 ) -> tuple[bytes, str]:
     """Render one signed A4 PDF page. Returns (pdf_bytes, plain_text) -- the
     plain_text is stored as ClinicalDocument.raw_text, the same field an
@@ -176,6 +177,9 @@ def render_document(
     c.drawString(_MARGIN, sig_y, signer_name + (f" ({signer_role})" if signer_role else ""))
     sig_y -= 5 * mm
     c.drawString(_MARGIN, sig_y, f"Signed: {signed_at.strftime('%Y-%m-%d %H:%M')} UTC")
+    if seal_code:
+        sig_y -= 5 * mm
+        c.drawString(_MARGIN, sig_y, f"Digital seal: {seal_code}")
 
     c.showPage()
     c.save()

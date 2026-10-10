@@ -517,9 +517,14 @@ class ApiClient {
     });
   }
 
-  Future<List<AuditLogEntry>> getAuditLog(String patientId) {
+  /// `days` limits the window (server default: everything); the audit
+  /// screen asks for 7 days first and widens on demand.
+  Future<List<AuditLogEntry>> getAuditLog(String patientId, {int? days}) {
     return _guard(() async {
-      final response = await _dio.get<List<dynamic>>('/patients/$patientId/audit-log');
+      final response = await _dio.get<List<dynamic>>(
+        '/patients/$patientId/audit-log',
+        queryParameters: {'days': ?days},
+      );
       return (response.data ?? [])
           .map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>))
           .toList();

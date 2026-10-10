@@ -16,7 +16,6 @@ from ..audit import log_access
 from ..ai.nric_ocr import dob_from_ic_number
 from ..storage import (
     BUCKET_DOCUMENTS,
-    BUCKET_SIGNATURES,
     ObjectNotFound,
     ObjectStoreError,
     apply_object_meta,
@@ -913,6 +912,12 @@ def update_encounter(
     if not encounter:
         raise HTTPException(status_code=404, detail="Encounter not found")
 
+    if encounter.signed_by or encounter.seal:
+        raise HTTPException(
+            status_code=409,
+            detail="This encounter is signed and sealed; add a signed correction instead of editing it.",
+        )
+
     _guard_cross_facility_amend(db, patient_id, encounter, current_user, "encounter")
 
     submitted_fields = payload.model_dump(exclude_unset=True)
@@ -1320,15 +1325,6 @@ def get_visit_summary_pdf(
         "treatment_plan": note.treatment_plan if note else None,
     }
 
-    signature_png = None
-    if encounter.signature_object_key:
-        try:
-            signature_png = get_object_store().get_checked(
-                BUCKET_SIGNATURES, encounter.signature_object_key, encounter.signature_sha256
-            )
-        except ObjectStoreError:
-            pass  # render without the image rather than failing the whole download
-
     signed_at = encounter.started_at if isinstance(encounter.started_at, datetime) else datetime.now(timezone.utc)
     pdf_bytes, _plain_text = render_document(
         "visit_summary", patient, fields,
@@ -1336,7 +1332,7 @@ def get_visit_summary_pdf(
         signer_name=encounter.signed_by_name or "-",
         signer_role=encounter.signed_by_role,
         signed_at=signed_at,
-        signature_png=signature_png,
+        seal_code=(encounter.seal or "")[:24] or None,
     )
 
     log_access(
@@ -1381,14 +1377,6 @@ def generate_document(
     if payload.signature_b64 and not current_user.signature_object_key:
         save_signature_from_b64(db, current_user, payload.signature_b64)
 
-    signature_png = None
-    try:
-        signature_png = get_object_store().get_checked(
-            BUCKET_SIGNATURES, current_user.signature_object_key, current_user.signature_sha256
-        )
-    except ObjectStoreError:
-        pass  # rendered without the image rather than blocking issuance over a storage hiccup
-
     now = datetime.now(timezone.utc)
     fields = payload.model_dump(exclude={"doc_type", "signature_b64"}, exclude_none=True)
     pdf_bytes, plain_text = render_document(
@@ -1397,7 +1385,6 @@ def generate_document(
         signer_name=current_user.full_name,
         signer_role=current_user.role,
         signed_at=now,
-        signature_png=signature_png,
     )
 
     safe_name = sanitize_filename(f"{payload.doc_type}_{now.date().isoformat()}.pdf", fallback="document.pdf")

@@ -895,7 +895,9 @@ def reset_password_with_otp(request: Request, payload: schemas.PasswordResetWith
 
 
 @router.post("/change-password")
+@limiter.limit("10/minute")  # a stolen token must not be able to guess the current password
 def change_password(
+    request: Request,
     payload: schemas.ChangePasswordRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user_allow_pending_change),
@@ -914,6 +916,9 @@ def change_password(
     ):
         # 400, not 401: a 401 means "session expired" to every client (refresh/bounce).
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    if auth.verify_password(payload.new_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Choose a password different from your current one.")
 
     _apply_new_password(db, current_user, payload.new_password, must_change=False)
     log_access(db, current_user.patient_id, current_user.id, current_user.role, "change_password",

@@ -46,6 +46,14 @@ def archive_day(db, d: date, store=None) -> Optional[dict]:
     )
     if not rows:
         return None
+    # Refuse to archive unverifiable days: rows must be seq-contiguous and
+    # re-hash to their stored row_hash (a day straddling midnight can have a
+    # seq gap -- retry once the neighbouring day is complete, WORM is write-once).
+    prev = rows[0].prev_hash
+    for i, r in enumerate(rows):
+        if (i and r.seq != rows[i - 1].seq + 1) or compute_row_hash(r, prev) != r.row_hash:
+            raise RuntimeError(f"audit day {d} is not a clean chain segment at seq {r.seq}; not archived")
+        prev = r.row_hash
     obj_key, man_key = _keys(d)
     lines = [
         json.dumps({**{c: getattr(r, c) for c in _COLS}, "ts": canonical_ts(r.timestamp)},

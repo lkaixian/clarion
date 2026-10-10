@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app import auth, models  # noqa: E402
 from app.audit import log_access  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
-from app.schemas import MIN_PASSWORD_LENGTH  # noqa: E402
+from app.schemas import password_rule_failures  # noqa: E402
 
 
 def main() -> int:
@@ -36,8 +36,9 @@ def main() -> int:
 
     if args.password_from_env:
         password = os.environ.get(args.password_from_env, "")
-        if len(password) < MIN_PASSWORD_LENGTH:
-            print(f"error: ${args.password_from_env} must be at least {MIN_PASSWORD_LENGTH} characters", file=sys.stderr)
+        problems = password_rule_failures(password)
+        if problems:
+            print(f"error: ${args.password_from_env} needs: " + ", ".join(problems), file=sys.stderr)
             return 2
         generated = False
     else:

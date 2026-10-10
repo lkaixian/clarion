@@ -194,8 +194,12 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       if (plain == null) {
         failure = keys.containsKey('$keyId') ? _OfflineFailure.damaged : _OfflineFailure.keyMissing;
       }
+    } else if (widget.initialTag != null) {
+      // Launched from a card tap: anything can claim to be a CLARION card, so
+      // only a sealed (authenticated) blob is ever shown on this path.
+      failure = _OfflineFailure.damaged;
     } else {
-      plain = ndefText; // legacy plaintext tag
+      plain = ndefText; // legacy plaintext tag, deliberate in-app tap
     }
     if (plain != null && _isLapsed(plain)) {
       plain = null;

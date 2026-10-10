@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import SealBadge from "../components/SealBadge";
 import DicomViewer from "../components/DicomViewer";
 import {
   getCurrentUser,
@@ -536,7 +537,7 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
             <span className="text-xs font-semibold text-slate-700">Result</span>
             {req.result.flag_abnormal && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">Abnormal</span>}
             {req.result.flag_critical && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase">Critical</span>}
-            <span className="text-xs text-slate-500 ml-auto">Signed by {req.result.signed_by_name} at {formatDateTime(req.result.performed_at)}</span>
+            <span className="text-xs text-slate-500 ml-auto">Signed by {req.result.signed_by_name} at {formatDateTime(req.result.performed_at)} <SealBadge status={req.result.seal_status} /></span>
           </div>
           {req.result.result_text && <p className="text-sm text-slate-700 mb-2 whitespace-pre-wrap">{req.result.result_text}</p>}
           {req.result.has_document && (

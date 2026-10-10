@@ -47,3 +47,19 @@ def test_unsealed_legacy_row_is_not_reported_valid(db_session):
     enc = models.Encounter(patient_id="p", facility_name="f", encounter_type="visit")
     enc.id = "e1"
     assert seal.status("encounter", enc) == "unsealed"
+
+
+def test_stripped_seal_on_a_new_signed_row_is_altered(test_client, db_session, make_user, auth_headers):
+    clinician, patient, enc_id = _sealed_encounter(test_client, db_session, make_user, auth_headers)
+    enc = db_session.get(models.Encounter, enc_id)
+    enc.seal = None
+    enc.sealed_at = None
+    db_session.commit()
+    assert _status(test_client, auth_headers(clinician), patient.id, enc_id) == "altered"
+
+
+def test_signed_encounter_cannot_be_patched(test_client, db_session, make_user, auth_headers):
+    clinician, patient, enc_id = _sealed_encounter(test_client, db_session, make_user, auth_headers)
+    r = test_client.patch(f"/patients/{patient.id}/encounters/{enc_id}",
+                          headers=auth_headers(clinician), json={"notes": "edited"})
+    assert r.status_code == 409

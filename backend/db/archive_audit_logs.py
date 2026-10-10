@@ -32,11 +32,15 @@ def main() -> int:
         d = first[0].date()
         done = bad = 0
         while d < cutoff.date():
-            if archive_day(db, d) is not None:
-                done += 1
-                if args.verify and not verify_archived_day(d)[0]:
-                    bad += 1
-                    print(f"VERIFY FAILED {d}")
+            try:
+                if archive_day(db, d) is not None:
+                    done += 1
+                    if args.verify and not verify_archived_day(d)[0]:
+                        bad += 1
+                        print(f"VERIFY FAILED {d}")
+            except RuntimeError as exc:  # one bad day must not stop the rest
+                bad += 1
+                print(f"SKIPPED {d}: {exc}")
             d += timedelta(days=1)
         print(f"archived/confirmed {done} day(s), {bad} verify failure(s)")
         return 1 if bad else 0

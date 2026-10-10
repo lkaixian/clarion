@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import SignaturePad from "../components/SignaturePad";
+import SealBadge from "../components/SealBadge";
 import {
   getCurrentUser,
   refreshCurrentUser,
@@ -435,7 +436,8 @@ function ChartHistoryRow({ entry }) {
         <p className="text-xs text-slate-400 mb-1">Linked to encounter {entry.encounter_id}</p>
       )}
       <p className="text-xs text-slate-500">
-        Signed by {entry.signed_by_name || entry.recorded_by_name} at {formatDateTime(entry.created_at)}
+        Signed by {entry.signed_by_name || entry.recorded_by_name} at {formatDateTime(entry.created_at)}{" "}
+        <SealBadge status={entry.seal_status} />
       </p>
     </div>
   );

@@ -29,3 +29,10 @@ def test_voluntary_change_still_requires_current_password(test_client, make_user
     wrong = test_client.post("/auth/change-password", headers=h,
                              json={"current_password": "nope", "new_password": "Brand-new-Pass42!"})
     assert wrong.status_code == 400
+
+
+def test_new_password_must_differ_from_current(test_client, make_user, auth_headers):
+    user = make_user("clinician")  # fixture password: "TestPass123!"
+    r = test_client.post("/auth/change-password", headers=auth_headers(user),
+                         json={"current_password": "TestPass123!", "new_password": "TestPass123!"})
+    assert r.status_code == 400
