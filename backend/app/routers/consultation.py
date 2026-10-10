@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, mpi_client
 from ..database import get_db
 from ..audit import log_access
 from .staff import _get_clock_status
@@ -402,6 +402,10 @@ def complete_consultation_ticket(
     db.commit()
     db.refresh(ticket)
     db.refresh(encounter)
+
+    # Publish a signed pointer to the central MPI (no-op unless configured;
+    # queued, so a central outage can never fail a sign-off).
+    mpi_client.enqueue_publish(db, encounter.id)
 
     log_access(
         db, ticket.patient_id, current_user.id, current_user.role, "consultation_complete",

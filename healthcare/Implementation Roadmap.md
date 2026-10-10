@@ -345,6 +345,77 @@ race the suite's own direct `run_pending()` calls); nothing in the
 existing HTTP-level tests depended on priming actually completing before
 the response, so this is a test-only change.
 
+### 2026-10-10 — Encrypted offline NFC tag + attributable offline reads
+
+**Direction agreed (not built): federated, not shared-DB.** Each hospital
+keeps its own records and DB; a small central **MPI / record locator**
+holds only `HMAC(pepper, NRIC)` -> last 3 `{facility, visit_ref,
+content_hash, signature}` pointers, and a hospital that needs another's
+record asks the origin directly (no write-back into the origin's record;
+foreign records stay read-only). Needs per-hospital Ed25519 keys so a
+fetched record verifies against the signed pointer hash -- today's audit
+chain is keyed with each node's own `SECRET_KEY` and cannot be verified
+across hospitals. `docker-compose.spoke.yml` + the MariaDB/MinIO additions
+to `docker-compose.pi.yml` implement the *shared-DB* alternative (one
+central DB, hospitals as stateless spokes; verified locally) and are
+superseded by this direction -- keep or revert when the MPI starts.
+
+**Built: step 1 of the NFC plan.**
+- `backend/app/tag_crypto.py`: the on-tag record is now an AES-256-GCM
+  blob `C1.<key_id>.<b64url(nonce||ct||tag)>`, key = HKDF per `key_id`
+  from `CLARION_TAG_KEY_SECRET` (falls back to `SECRET_KEY`), AAD binds it
+  to the tag UID, an `X:<yyyymmdd>` grant expiry is sealed inside.
+  `register_nfc_card` returns `tag_blob` (+ legacy `tag_text`).
+- `GET /emergency/tag-keys` (admin/clinician/records_officer/
+  emergency_responder only, `no-store`, audited) -> a device caches the
+  keys at login; they expire on the device after 72 h without a sync and
+  are cleared on logout or a 401/403.
+- `POST /emergency/offline-reads`: devices upload a per-(user, device)
+  hash-chained log of offline reads; each becomes an
+  `emergency_access_nfc_offline` audit row attributed to the uploader.
+  NEW `offline_tag_reads` table (Alembic `0453b0d9d053`). Same seq with a
+  different hash = `conflict` (audited, client re-bases under a new device
+  id), never a silent drop.
+- Flutter: 1500 ms cap on the online NFC scan, fallback only on
+  unreachable / 429 / 502 / 503 / 504 (never 401/403/404 or TLS errors);
+  signed-in user required; four distinct failure messages (4 languages).
+
+**Built next (same day): federation + backward compat.**
+- `backend/mpi/` central MPI (FastAPI, own SQLite, `docker-compose.pi.yml`
+  `mpi` service, Caddy `/mpi/*`): hospital registry, newest-3 pointers per
+  (patient key, facility), Ed25519 request + pointer signatures with nonce,
+  audience and replay cache, lookup audit table.
+- Hospital side: `app/mpi_client.py` (patient key, signed publish job via
+  the jobs queue, lookup, verified fetch, optional `CLARION_PEER_KEYS`
+  pinning), `routers/federation.py` (staff other-visits / fetch; peer
+  visit route keyed by patient key + visit ref, signed-off visits only).
+  Hook: `complete_consultation_ticket` enqueues the publish. 10 new tests.
+- voltagent security review: 11 findings. Fixed: ring poisoning (per-facility
+  prune + future-date bound), canonical signed `visited_at` string, audience
+  binding, https-only endpoints + pinned endpoints, key pinning, signed-off-
+  only + patient-key-bound peer fetch, error classification in the publish
+  job, token length/admin audit/admin route blocked at the edge, input
+  hardening. **Not fixed (product/architecture decisions):** a registered
+  hospital can still read a patient's recent visits by NRIC (needs a
+  consent/presence proof), the shared pepper is brute-forceable if leaked
+  (needs an OPRF/keyed service), Redis-backed replay cache.
+- NTAG213/215/216 backward compatibility: every tag type registers and
+  reads; web (register prompt) and mobile (scanner + write screen) show a
+  "no tamper-proof read counter" warning; `tag_type` + `tag_security` on
+  `POST /emergency/nfc/register`. 596 backend tests pass.
+
+**Honest limits** (also in the code): the chain is an unkeyed hash over
+device-chosen fields, so a device owner can drop or rewrite entries before
+first upload; any key holder can open any sealed tag offline; a revoked but
+unexpired tag still opens offline. Closing the dropped-entry gap needs the
+NTAG 424 DNA tamper-proof read counter (phase 2 -- needs ISO 7816 native
+commands + desktop provisioning via the PC/SC bridge, and diversified
+per-tag keys). NTAG213 tags keep working but have no counter.
+
+**voltagent security-auditor** reviewed it and found 14 items (4 High); all
+actioned except per-user rate limiting (the limiter is per-IP app-wide).
+587 backend tests pass, `check_schema` PASS, `flutter analyze` clean.
+
 ### 2026-09-15/16 — Offline NFC emergency tag: true zero-network fallback
 
 User question after the P5.3 review: "if the entire network is outage,

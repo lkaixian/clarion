@@ -1183,6 +1183,74 @@ tapped tag's real NDEF capacity (`NdefAndroid.maxSize` -- NTAG213=144B,
 NTAG215=504B, NTAG216=888B); the backend default (128B) is conservative
 enough to fit the smallest common tag without it.
 
+### Encrypted tags (v2) -- what changed operationally
+
+`register_nfc_card` now also returns `tag_blob`: the same critical data
+sealed with AES-256-GCM to that tag's UID. Staff should write **`tag_blob`**
+(the web prompt offers it first); `tag_text` plaintext is only for a tag too
+small to hold a sealed record.
+
+| Setting | Meaning |
+|---|---|
+| `CLARION_TAG_KEY_SECRET` | Master secret the data keys are derived from. **Set it in production**; if unset the key falls back to `SECRET_KEY`, and rotating `SECRET_KEY` would then make every tag in the field unreadable. |
+| `CLARION_TAG_KEY_ID` | Current key id (default 1). Bump to rotate; re-write tags afterwards. |
+| `CLARION_TAG_MIN_KEY_ID` | Oldest key id still handed to devices (default = current). Raising it is the only revocation lever for old keys; a device that already cached one is unaffected until its 72 h cache lapses. |
+
+Behaviour you should expect:
+- A sealed tag opens offline only on a CLARION device with a signed-in
+  admin / clinician / records_officer / emergency_responder account that
+  fetched the key within the last 72 h. A generic phone sees ciphertext.
+- The scanner tries the server for 1.5 s, then falls back to the tag only
+  when the server is genuinely unreachable (timeout / no connection / 429 /
+  502 / 503 / 504). A real 404 for a revoked card is never overridden.
+- Offline reads are logged on the device and uploaded on the next
+  connection (`POST /emergency/offline-reads`); they appear in the audit log
+  as `emergency_access_nfc_offline` with `source=device_asserted`. Treat them
+  as honest-but-unverifiable until the NTAG 424 DNA read counter lands.
+- Any key holder can open any sealed tag; a revoked-but-unexpired tag still
+  opens offline.
+
+---
+
+## Federation: central MPI + hospital nodes
+
+Each hospital keeps its own database. The central node runs `mpi`
+(`backend/mpi`, compose service in `docker-compose.pi.yml`, routed at
+`/mpi/*`): it holds hospital public keys and, per patient, the newest 3 visit
+pointers per hospital keyed by an opaque `HMAC(pepper, NRIC)`. No PHI, no
+NRICs, and the pepper never reaches it.
+
+**Central**
+- `MPI_ADMIN_TOKEN` (>= 24 chars; shorter = registration disabled). Register
+  a hospital from the central host, not over the internet (`/mpi/admin/*` is
+  blocked at the edge):
+  `docker compose -f docker-compose.pi.yml exec mpi python -c "..."` or a
+  curl to `http://mpi:8100/admin/facilities` from inside the network.
+- Run ONE `mpi` worker (its replay cache is process-local).
+
+**Each hospital** (`.env.docker`)
+
+| Variable | Meaning |
+|---|---|
+| `MPI_BASE_URL` | Central URL incl. `/mpi`, e.g. `https://central.example/mpi` |
+| `CLARION_FACILITY_ID` | This hospital's id as registered at central |
+| `CLARION_FACILITY_PRIVATE_KEY` | base64 Ed25519 seed; generate with `python -c "from mpi.sigs import generate_keypair; print(generate_keypair())"` and register the public half |
+| `CLARION_MPI_PEPPER` | Shared among hospitals ONLY. Bump `CLARION_MPI_KEY_VERSION` to rotate (then re-publish). |
+| `CLARION_FACILITY_NAME` | The `Encounter.facility_name` this hospital's records carry (default = id) |
+| `CLARION_PEER_KEYS` | **Recommended.** Path/JSON `{"hosp-b": {"public_key": "...", "endpoint": "https://..."}}`. When set it is authoritative: a compromised central cannot swap a peer's key or redirect fetches. Unset = trust central's registry. |
+
+Flow: sign-off -> queued pointer publish -> any hospital:
+`GET /federation/patients/{id}/other-visits`, then
+`GET /federation/patients/{id}/visits/{facility}/{visit_ref}` (fetched from
+the origin, verified against the origin's signed content hash, returned for
+display -- never written into the local tables).
+
+**Known residual risks** (see the 2026-10-10 roadmap entry): any registered
+hospital that knows an NRIC and the pepper can read that patient's recent
+signed visits (audit trail only; a consent/presence proof is a product
+decision); the 10-digit NRIC space makes the pepper a weak privacy boundary
+if it leaks; without `CLARION_PEER_KEYS`, central is the key directory.
+
 ---
 
 ## University SMP/SMS/e-klinik-panel/Registrar eligibility check -- MOCK

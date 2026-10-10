@@ -125,6 +125,10 @@
 	# handle/handle_path blocks in the order written (unlike bare
 	# directives, which it's free to reorder). /healthz stays reachable --
 	# a public liveness probe is harmless and often useful.
+	# /api/status is deliberately NOT blocked: the public status page
+	# (web/public/site.js) polls it. It returns only up/down + latency per
+	# component -- accepted exposure; narrow it in main.py:public_status if
+	# per-component detail ever becomes sensitive.
 	@backend_diag path /api/metrics /api/readyz /api/docs* /api/redoc* /api/openapi.json
 	handle @backend_diag {
 		respond 404
@@ -141,6 +145,21 @@
 		reverse_proxy backend:8000 {
 			header_up X-Forwarded-Proto https
 		}
+	}
+
+	# Central MPI / record locator (backend/mpi). Only meaningful on the
+	# central node; elsewhere the `mpi` host simply doesn't resolve and this
+	# path 502s. Every route except /mpi/healthz needs an Ed25519-signed
+	# request (hospitals) or the MPI_ADMIN_TOKEN bearer (/mpi/admin/*).
+	@mpi_admin path /mpi/admin/*
+	handle @mpi_admin {
+		respond 404
+	}
+	handle_path /mpi/* {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy mpi:8100
 	}
 
 	# Everything else: the static SPA container. Compress only here -- keep

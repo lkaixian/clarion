@@ -82,7 +82,7 @@ from . import auth, jobs
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -388,6 +388,9 @@ app.include_router(
     dependencies=[Depends(auth.require_page_access("patients"))],
 )
 app.include_router(emergency.router)
+# Federation gates itself per route: staff routes need the patients page, the
+# peer route is authenticated by an Ed25519 signature instead of a user.
+app.include_router(federation.router)
 app.include_router(
     ai_router.router,
     # AI tools are clinical -- same gate as the patient record itself.

@@ -1,0 +1,137 @@
+# CLARION hospital node ("Hospital A") -- a spoke of the central node.
+#
+# Runs only the stateless tier (edge proxy + web + backend + redis). All data
+# lives on the central node (docker-compose.pi.yml): the backend talks to its
+# MariaDB and MinIO over a private link, so every hospital sees one dataset and
+# facility scoping in the app (user.facility) keeps each site's rows its own.
+#
+#   browser -> proxy (Caddy) -> backend --(private link)--> central MariaDB + MinIO
+#
+# One-time setup
+#   1. Private link between this host and central (Tailscale / WireGuard).
+#      Central's CENTRAL_BIND_IP is its address on that link; set the same
+#      value here as CENTRAL_HOST. Never use a public address -- the DB and S3
+#      ports are not meant to be reachable from the internet.
+#   2. .env.docker on this host needs, copied from central so they MATCH:
+#        SECRET_KEY, OTP_HMAC_KEY, MARIADB_APP_PASSWORD, MINIO_BACKEND_PASSWORD
+#      plus  CENTRAL_HOST=<central's private-link address>
+#   3. docker compose -f docker-compose.spoke.yml --env-file .env.docker up -d --build
+#
+# Do not run seed.py here -- central already holds the data. This node never
+# migrates: if central's schema is behind the code, the backend refuses to
+# start (upgrade central first).
+#
+# Stop the standalone docker-compose.yml stack on this host first (same ports).
+
+name: clarion-spoke
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-env-file: &env-file
+  env_file:
+    - path: ./.env.docker
+      required: false
+
+services:
+  proxy:
+    <<: [*restart, *env-file]
+    image: caddy:2.8-alpine
+    environment:
+      CLARION_SITE_ADDRESS: ${CLARION_SITE_ADDRESS:-localhost}
+      CLARION_TLS_DIRECTIVE: ${CLARION_TLS_DIRECTIVE:-tls internal}
+      CLARION_CSP_CONNECT_EXTRA: ${CLARION_CSP_CONNECT_EXTRA:-}
+      CLARION_HSTS: ${CLARION_HSTS:-max-age=300}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./proxy/certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+    networks:
+      app:
+        ipv4_address: 172.30.0.2   # the one hop the backend trusts X-Forwarded-* from
+    depends_on:
+      web:
+        condition: service_started
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  backend:
+    <<: [*restart, *env-file]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: clarion/backend:local
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: mysql+pymysql://clarion_app:${MARIADB_APP_PASSWORD:?same as central}@${CENTRAL_HOST:?set CENTRAL_HOST to central's private-link address}:${CENTRAL_DB_PORT:-3306}/${MARIADB_DATABASE:-clarion}?charset=utf8mb4
+      CLARION_STORAGE_BACKEND: minio
+      MINIO_ENDPOINT: ${CENTRAL_HOST}:9000
+      MINIO_ACCESS_KEY: clarion-backend
+      MINIO_SECRET_KEY: ${MINIO_BACKEND_PASSWORD:?same as central}
+      MINIO_SECURE: "false"   # the private link (WireGuard) is the encryption
+      REDIS_URL: redis://redis:6379/0
+      LOG_FORMAT: json
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      FORWARDED_ALLOW_IPS: 172.30.0.2
+      CLARION_DISABLE_LOCAL_AI: ${CLARION_DISABLE_LOCAL_AI:-1}
+    expose: ["8000"]
+    networks: [app]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  web:
+    <<: *restart
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: clarion/web:local
+    environment:
+      API_BASE: /api
+    expose: ["8080"]
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  redis:
+    <<: *restart
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          ip_range: 172.30.0.128/25
+
+volumes:
+  caddy_data:
+  redis_data:
