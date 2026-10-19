@@ -390,3 +390,29 @@ def test_a_hospital_can_retract_only_its_own_pointers_for_a_patient(central):
     assert [p["facility_id"] for p in left] == ["hosp-w-b"]
     assert _signed(central, "hosp-w-a", seed_a, "DELETE", f"/patients/{pkey}").json() == {"removed": 0}
     assert central.delete(f"/patients/{pkey}").status_code == 401  # unsigned
+
+
+class _FakeRedis:
+    def __init__(self, store, fail=False):
+        self.store, self.fail = store, fail
+
+    def set(self, name, value, nx=False, ex=None):
+        if self.fail:
+            raise ConnectionError("down")
+        if nx and name in self.store:
+            return None
+        self.store[name] = value
+        return True
+
+
+def test_replay_cache_is_shared_through_redis_and_degrades_to_local():
+    shared = {}
+    a, b = sigs.ReplayCache(), sigs.ReplayCache()
+    a._redis, b._redis = _FakeRedis(shared), _FakeRedis(shared)
+    assert a.first_time(("f", "sig"), 1000.0) is True
+    assert b.first_time(("f", "sig"), 1000.0) is False  # a second worker sees the replay
+
+    down = sigs.ReplayCache()
+    down._redis = _FakeRedis({}, fail=True)
+    assert down.first_time(("f", "s2"), 1000.0) is True
+    assert down.first_time(("f", "s2"), 1000.0) is False  # local memory still catches it

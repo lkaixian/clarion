@@ -116,3 +116,12 @@ def test_a_queued_withdrawal_does_nothing_if_consent_was_granted_again(db_sessio
     monkeypatch.setattr(mpi_client, "_call", lambda *a, **k: calls.append(a))
     mpi_client._withdraw_job({"patient_id": p.id})
     assert calls == []
+
+
+def test_a_spouse_link_is_not_a_guardian_link(test_client, make_user, auth_headers, db_session):
+    young = (datetime.now(timezone.utc) - timedelta(days=365 * 17)).strftime("%Y-%m-%d")
+    partner, parent, minor = _guardian(db_session, make_user, young)
+    link = db_session.query(models.PatientDependant).filter_by(patient_id=parent.id).first()
+    link.relation_code = "spouse"
+    db_session.commit()
+    assert _post(test_client, auth_headers(partner), minor.id).status_code == 403

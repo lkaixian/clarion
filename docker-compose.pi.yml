@@ -109,7 +109,8 @@ services:
       # The public node: these roles must enrol an authenticator app (TOTP) at
       # first sign-in. Anyone who enrols is challenged regardless of role.
       CLARION_MFA_REQUIRED_ROLES: ${CLARION_MFA_REQUIRED_ROLES:-admin,clinician,records_officer}
-      CLARION_APP_LATEST_VERSION: ${CLARION_APP_LATEST_VERSION:-1.6.1}
+      CLARION_APP_LATEST_VERSION: ${CLARION_APP_LATEST_VERSION:-1.7.1}
+      CLARION_PUBLIC_URL: ${CLARION_PUBLIC_URL:-https://clarion.larmkx.com}
       CLARION_APP_MIN_VERSION: ${CLARION_APP_MIN_VERSION:-}
       CLARION_DISABLE_LOCAL_AI: "1"   # no Ollama on the Pi; AI falls back to deterministic paths
       # Trust X-Forwarded-* from exactly the proxy and cloudflared hops. gunicorn takes plain IPs
@@ -258,6 +259,7 @@ services:
     environment:
       MPI_DATABASE_URL: sqlite:////app/data/mpi.db
       MPI_ADMIN_TOKEN: ${MPI_ADMIN_TOKEN:-}   # unset = hospital registration disabled
+      REDIS_URL: redis://redis:6379/0         # shared replay cache (falls back to process memory if Redis is down)
     volumes:
       - mpi_data:/app/data   # image-owned dir: a fresh named volume inherits its ownership
     expose: ["8100"]
