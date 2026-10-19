@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../models/bill.dart';
@@ -295,6 +296,14 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
             FilledButton(onPressed: _busy ? null : () => _finish('succeeded'), child: Text(l10n.payApprove)),
             const SizedBox(height: 8),
             OutlinedButton(onPressed: _busy ? null : () => _finish('failed'), child: Text(l10n.payDecline)),
+            const SizedBox(height: 8),
+          ],
+          if (!intent.simulated && intent.checkoutUrl != null) ...[
+            FilledButton(
+              key: const Key('pay-securely'),
+              onPressed: () => launchUrl(Uri.parse(intent.checkoutUrl!), mode: LaunchMode.externalApplication),
+              child: Text(l10n.paySecurely),
+            ),
             const SizedBox(height: 8),
           ],
           TextButton(onPressed: _busy ? null : _cancel, child: Text(l10n.payCancel)),

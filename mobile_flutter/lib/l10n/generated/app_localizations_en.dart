@@ -1292,6 +1292,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get payCancel => 'Cancel payment';
 
   @override
+  String get paySecurely => 'Pay securely';
+
+  @override
   String payDeclined(String reason) {
     return '$reason You have not been charged.';
   }

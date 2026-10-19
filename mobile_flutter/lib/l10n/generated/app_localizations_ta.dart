@@ -1310,6 +1310,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get payCancel => 'கட்டணத்தை ரத்து செய்யவும்';
 
   @override
+  String get paySecurely => 'பாதுகாப்பாகப் பணம் செலுத்துங்கள்';
+
+  @override
   String payDeclined(String reason) {
     return '$reason உங்களிடம் கட்டணம் வசூலிக்கப்படவில்லை.';
   }

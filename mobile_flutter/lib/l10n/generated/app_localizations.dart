@@ -2334,6 +2334,12 @@ abstract class AppLocalizations {
   /// **'Cancel payment'**
   String get payCancel;
 
+  /// No description provided for @paySecurely.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay securely'**
+  String get paySecurely;
+
   /// No description provided for @payDeclined.
   ///
   /// In en, this message translates to:

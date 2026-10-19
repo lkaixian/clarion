@@ -440,6 +440,7 @@
   "payApprove": "Approve payment",
   "payDecline": "Decline payment",
   "payCancel": "Cancel payment",
+  "paySecurely": "Pay securely",
   "payDeclined": "{reason} You have not been charged.",
   "@payDeclined": {"placeholders": {"reason": {"type": "String"}}},
   "receiptTitle": "Receipt {number}",

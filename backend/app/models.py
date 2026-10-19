@@ -2330,6 +2330,7 @@ class PaymentIntent(Base):
     amount_cents = Column(Integer, nullable=False)
     provider = Column(String(32), nullable=False)
     provider_ref = Column(String(128), nullable=True, unique=True)
+    checkout_url = Column(Text, nullable=True)  # hosted payment page (Stripe); None for the mock
     status = Column(String(16), nullable=False, default="pending", index=True)
     idempotency_key = Column(String(64), nullable=True)
     failure_reason = Column(Text, nullable=True)

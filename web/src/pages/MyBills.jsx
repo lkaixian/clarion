@@ -163,6 +163,9 @@ function Checkout({ bill, onDone, onCancel }) {
                 </button>
               </>
             )}
+            {intent.checkout_url && !intent.simulated && (
+              <a className="btn-primary" href={intent.checkout_url}>{tr("Pay securely")}</a>
+            )}
             <button type="button" className="btn-secondary" disabled={busy} onClick={cancel}>{tr("Cancel payment")}</button>
           </div>
         </div>
@@ -234,6 +237,19 @@ export default function MyBills() {
   }, []);
   useEffect(load, [load]);
 
+  // The payment page sends the patient back with ?paid=<id> or ?cancelled=<id>. The money is
+  // booked by the gateway's webhook, so after "paid" the list is refreshed once more shortly.
+  const returned = new URLSearchParams(window.location.search);
+  const paidBack = returned.get("paid");
+  const cancelledBack = returned.get("cancelled");
+  useEffect(() => {
+    if (cancelledBack) cancelPaymentIntent(cancelledBack).catch(() => { /* already closed */ }).finally(() => load());
+    if (!paidBack) return undefined;
+    const timer = setTimeout(() => load(), 4000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function openReceipt(id) {
     try { setReceipt(await getReceipt(id)); } catch (e) { setError(errorMessage(e, "Could not load the receipt.")); }
   }
@@ -242,6 +258,8 @@ export default function MyBills() {
     <Layout>
       <div className="mx-auto max-w-3xl space-y-5">
         <h1 className="page-title">{tr("My bills")}</h1>
+        {paidBack && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{tr("Thank you. We are confirming your payment; it will appear in your history in a moment.")}</p>}
+        {cancelledBack && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{tr("Payment cancelled. You have not been charged.")}</p>}
         {error && <p className="alert-error" role="alert">{error}</p>}
         {!error && bills === null && <p className="empty-state">{tr("Loading...")}</p>}
         {receipt && <Receipt receipt={receipt} onClose={() => setReceipt(null)} />}

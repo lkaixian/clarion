@@ -649,5 +649,8 @@
  "⚠ Pending first login": "⚠ Menunggu log masuk pertama",
  "✕ Close": "✕ Tutup",
  "✖ altered after signing": "✖ diubah selepas ditandatangani",
- "🔒 sealed": "🔒 dimeterai"
+ "🔒 sealed": "🔒 dimeterai",
+ "Pay securely": "Bayar dengan selamat",
+ "Thank you. We are confirming your payment; it will appear in your history in a moment.": "Terima kasih. Kami sedang mengesahkan pembayaran anda; ia akan muncul dalam sejarah sebentar lagi.",
+ "Payment cancelled. You have not been charged.": "Pembayaran dibatalkan. Anda tidak dikenakan sebarang caj."
 }
