@@ -305,7 +305,7 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
           {mode === "add" ? `Add ${config.label}` : `Edit ${config.label}`}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="alert-error">{error}</div>}
+          {error && <div role="alert" className="alert-error">{error}</div>}
           {config.fields.map((f) => (
             <div key={f.key}>
               {mode !== "add" && f.addOnly ? (
@@ -313,7 +313,7 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                   <label className="field-label">{f.label}</label>
                   <p className="text-sm text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5">
                     {String(values[f.key] || "—")}
-                    <span className="block text-xs text-slate-400">Set when the record was created — not editable here.</span>
+                    <span className="block text-xs text-slate-500">Set when the record was created — not editable here.</span>
                   </p>
                 </>
               ) : f.type === "checkbox" ? (
@@ -436,14 +436,14 @@ function DocumentModal({ patientId, documentId, onClose }) {
   return (
     <div className="modal-backdrop">
       <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        {error && <div className="alert-error mb-3">{error}</div>}
-        {!detail && !error && <p className="text-sm text-slate-400">Loading...</p>}
+        {error && <div role="alert" className="alert-error mb-3">{error}</div>}
+        {!detail && !error && <p className="text-sm text-slate-500">Loading...</p>}
         {detail && (
           <>
             <h3 className="font-semibold text-slate-800 mb-1">
               {DOC_TYPE_LABELS[detail.doc_type] || GENERATED_DOC_TYPE_LABELS[detail.doc_type] || detail.doc_type}
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-slate-500 mb-4">
               {detail.original_filename || "unnamed file"} · {detail.uploaded_by_facility || "unknown facility"} · {detail.uploaded_at}
               {detail.signed_by_name && <> · Signed by {detail.signed_by_name} at {detail.signed_at}</>}
             </p>
@@ -466,10 +466,10 @@ function DocumentModal({ patientId, documentId, onClose }) {
               ) : fileError ? (
                 <p className="text-sm text-red-600 mb-4">{fileError}</p>
               ) : (
-                <p className="text-sm text-slate-400 mb-4">Loading original file...</p>
+                <p className="text-sm text-slate-500 mb-4">Loading original file...</p>
               )
             ) : (
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-500 mb-4">
                 Original file not available for this document (only the extracted text below was kept).
               </p>
             )}
@@ -559,7 +559,7 @@ function GenerateDocumentForm({ patientId, onGenerated }) {
 
   return (
     <form onSubmit={submit} className="space-y-3 mb-4 pb-4 border-b border-slate-100">
-      {error && <div className="alert-error">{error}</div>}
+      {error && <div role="alert" className="alert-error">{error}</div>}
       <div>
         <label className="field-label">Document type</label>
         <select
@@ -588,7 +588,7 @@ function GenerateDocumentForm({ patientId, onGenerated }) {
       {!hasSignature && (
         <div>
           <SignaturePad onChange={setSigDataUrl} />
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             You have no saved signature — draw one (also saved to your profile).
           </p>
         </div>
@@ -663,10 +663,10 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
           </button>
         </form>
       )}
-      {error && <div className="alert-error mb-3">{error}</div>}
+      {error && <div role="alert" className="alert-error mb-3">{error}</div>}
 
       {documents.length === 0 ? (
-        <p className="text-sm text-slate-400">No documents on file yet.</p>
+        <p className="text-sm text-slate-500">No documents on file yet.</p>
       ) : (
         <div className="space-y-2">
           {documents.map((d) => (
@@ -680,7 +680,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
                 <p className="text-sm text-slate-700">
                   {DOC_TYPE_LABELS[d.doc_type] || GENERATED_DOC_TYPE_LABELS[d.doc_type] || d.doc_type}
                 </p>
-                <p className="text-xs text-slate-400">{d.original_filename || "unnamed"} · {d.uploaded_by_facility || "unknown facility"} · {d.uploaded_at}</p>
+                <p className="text-xs text-slate-500">{d.original_filename || "unnamed"} · {d.uploaded_by_facility || "unknown facility"} · {d.uploaded_at}</p>
               </div>
               {isStaff && <span className="text-xs text-blue-700 whitespace-nowrap">View →</span>}
             </button>
@@ -688,7 +688,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
         </div>
       )}
       {!isStaff && documents.length > 0 && (
-        <p className="text-xs text-slate-400 mt-2">Ask your clinic to review document contents with you.</p>
+        <p className="text-xs text-slate-500 mt-2">Ask your clinic to review document contents with you.</p>
       )}
 
       {viewingId && (
@@ -787,7 +787,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
       <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="alert-error">{error}</div>}
+          {error && <div role="alert" className="alert-error">{error}</div>}
 
           <div>
             <label className="field-label">
@@ -880,7 +880,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
             </button>
             {showAdvanced && (
               <div className="mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   Extra reminders on top of the default schedule (hours before the appointment).
                 </p>
                 {extraReminders.map((v, idx) => (
@@ -892,7 +892,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
                       value={v}
                       onChange={(e) => updateReminderField(idx, e.target.value)}
                     />
-                    <span className="text-xs text-slate-400">hours before</span>
+                    <span className="text-xs text-slate-500">hours before</span>
                     <button type="button" onClick={() => removeReminderField(idx)} className="text-xs text-red-700">
                       Remove
                     </button>
@@ -970,12 +970,12 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
     <div className="modal-backdrop">
       <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-500 mb-4">
           {appointment.facility_name}{appointment.venue && ` — ${appointment.venue}`} · currently{" "}
           {formatAppointmentTime(appointment.scheduled_at)}
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="alert-error">{error}</div>}
+          {error && <div role="alert" className="alert-error">{error}</div>}
 
           <div>
             <label className="field-label">
@@ -1106,7 +1106,7 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
       action={isStaff && <button onClick={() => setShowAddModal(true)} className="btn-add">+ Add</button>}
     >
       {appointments.length === 0 ? (
-        <p className="text-sm text-slate-400">No appointments scheduled.</p>
+        <p className="text-sm text-slate-500">No appointments scheduled.</p>
       ) : (
         <div className="space-y-2">
           {appointments.map((a) => {
@@ -1129,9 +1129,9 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                     <p className={cancelled ? "line-through" : ""}>
                       {a.facility_name}{a.venue && ` — ${a.venue}`}
                     </p>
-                    <p className="text-xs text-slate-400">{formatAppointmentTime(a.scheduled_at)}</p>
+                    <p className="text-xs text-slate-500">{formatAppointmentTime(a.scheduled_at)}</p>
                     {a.previous_scheduled_at && (
-                      <p className="text-xs text-slate-400 italic">
+                      <p className="text-xs text-slate-500 italic">
                         Previously: {formatAppointmentTime(a.previous_scheduled_at)}
                         {a.reschedule_reason_code && ` — ${STAFF_RESCHEDULE_REASON_LABELS[a.reschedule_reason_code] || a.reschedule_reason_code}`}
                         {a.reschedule_reason_other && `: ${a.reschedule_reason_other}`}
@@ -1177,14 +1177,14 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                     <button
                       type="button"
                       onClick={() => setExpandedReminders((s) => ({ ...s, [a.id]: !s[a.id] }))}
-                      className="text-xs text-slate-400 hover:text-slate-600"
+                      className="text-xs text-slate-500 hover:text-slate-600"
                     >
                       {expandedReminders[a.id]
                         ? "Hide reminders"
                         : `${a.reminders.length} reminder${a.reminders.length === 1 ? "" : "s"} scheduled`}
                     </button>
                     {expandedReminders[a.id] && (
-                      <ul className="mt-1 pl-3 text-xs text-slate-400 list-disc list-inside">
+                      <ul className="mt-1 pl-3 text-xs text-slate-500 list-disc list-inside">
                         {a.reminders.map((r, idx) => (
                           <li key={idx}>{r.label} — {formatAppointmentTime(r.fires_at)}</li>
                         ))}
@@ -1305,6 +1305,7 @@ function TabBar({ active, onChange, isStaff }) {
       {TABS.filter((t) => isStaff || !t.staffOnly).map((t) => (
         <button
           key={t.key}
+          aria-pressed={active === t.key}
           onClick={() => onChange(t.key)}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition ${
             active === t.key
@@ -1366,7 +1367,7 @@ function RecordEditControl({ record, onEdit }) {
     const facility = record.authored_by_facility || "another facility";
     return (
       <span
-        className="inline-flex items-start gap-1 text-xs text-slate-400 max-w-[9rem] shrink-0 leading-tight"
+        className="inline-flex items-start gap-1 text-xs text-slate-500 max-w-[9rem] shrink-0 leading-tight"
         title={`This record can only be edited by ${facility} while the patient is checked in there. Add a new entry to amend it.`}
       >
         <svg viewBox="0 0 24 24" className="w-3 h-3 mt-px shrink-0" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -1435,7 +1436,7 @@ function AnnotationList({ annotations }) {
         <div key={a.id} className="flex flex-wrap items-baseline gap-x-1 text-xs text-slate-600">
           <span aria-hidden="true">{ANNOTATION_KIND_ICON[a.kind] || "•"}</span>
           {a.note && <span className="text-slate-700">{a.note}</span>}
-          <span className="text-slate-400">
+          <span className="text-slate-500">
             — {a.signed_by_name} ({roleLabel(a.signed_by_role)}) · {a.facility_name} · {formatSignedAt(a.created_at)}
           </span>
           <SealBadge status={a.seal_status} />
@@ -1454,13 +1455,13 @@ function ConditionStatusBadge({ condition }) {
   if (effective !== raw) {
     return (
       <span className="text-xs">
-        <span className="text-slate-400 line-through">{raw}</span>
-        <span className="text-slate-400"> → </span>
+        <span className="text-slate-500 line-through">{raw}</span>
+        <span className="text-slate-500"> → </span>
         <span className="font-medium text-green-700">{effective}</span>
       </span>
     );
   }
-  return <span className="text-xs text-slate-400">{effective}</span>;
+  return <span className="text-xs text-slate-500">{effective}</span>;
 }
 
 // Medication active/inactive badge. effective_active === false while the raw
@@ -1469,7 +1470,7 @@ function MedicationStatusBadge({ medication }) {
   if (medication.effective_active === false && medication.active === true) {
     return <span className="text-xs font-medium text-amber-700">(Discontinued — signed off)</span>;
   }
-  if (!medication.active) return <span className="text-xs text-slate-400">(inactive)</span>;
+  if (!medication.active) return <span className="text-xs text-slate-500">(inactive)</span>;
   return null;
 }
 
@@ -1545,9 +1546,9 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
     <div className="modal-backdrop">
       <div className="modal-panel">
         <h3 className="font-semibold text-slate-800 mb-1">Sign off record</h3>
-        <p className="text-xs text-slate-400 mb-4">{targetLabel}</p>
+        <p className="text-xs text-slate-500 mb-4">{targetLabel}</p>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {error && <div className="alert-error">{error}</div>}
+          {error && <div role="alert" className="alert-error">{error}</div>}
 
           <div>
             <label className="field-label">Kind</label>
@@ -1564,7 +1565,7 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
             <label className="field-label">
               Note{noteRequired
                 ? <span className="text-red-600"> *</span>
-                : <span className="text-slate-400"> (optional)</span>}
+                : <span className="text-slate-500"> (optional)</span>}
             </label>
             <textarea
               className="field-input"
@@ -1585,7 +1586,7 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
                   style={{ width: 240, height: 94, objectFit: "contain" }}
                 />
               ) : (
-                <p className="text-xs text-slate-400">Loading your signature…</p>
+                <p className="text-xs text-slate-500">Loading your signature…</p>
               )
             ) : (
               <>
@@ -1864,7 +1865,7 @@ export default function PatientDetail() {
     refresh();
   }
 
-  if (!patient) return <Layout><p className="text-slate-400">Loading...</p></Layout>;
+  if (!patient) return <Layout><p className="text-slate-500">Loading...</p></Layout>;
 
   return (
     <Layout>
@@ -1913,12 +1914,12 @@ export default function PatientDetail() {
             <Section title="My Contact Info" action={
               !editingProfile && <button onClick={startEditingProfile} className="btn-primary">Edit</button>
             }>
-              <p className="text-xs text-slate-400 mb-3">
+              <p className="text-xs text-slate-500 mb-3">
                 Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
               </p>
               {editingProfile ? (
                 <form onSubmit={saveProfile} className="space-y-3">
-                  {profileError && <div className="alert-error">{profileError}</div>}
+                  {profileError && <div role="alert" className="alert-error">{profileError}</div>}
                   {[
                     ["email", "Contact email", "email"],
                     ["phone", "Phone number", "tel"],
@@ -1947,11 +1948,11 @@ export default function PatientDetail() {
                 </form>
               ) : (
                 <div className="text-sm text-slate-700 space-y-1">
-                  <p>Email: {patient.email || <span className="text-slate-400">not set</span>}</p>
-                  <p>Phone: {patient.phone || <span className="text-slate-400">not set</span>}</p>
+                  <p>Email: {patient.email || <span className="text-slate-500">not set</span>}</p>
+                  <p>Phone: {patient.phone || <span className="text-slate-500">not set</span>}</p>
                   <p>Emergency contact: {patient.emergency_contact_name
                     ? `${patient.emergency_contact_name} (${patient.emergency_contact_relationship || "relationship not set"}) — ${patient.emergency_contact_phone || "no phone on file"}`
-                    : <span className="text-slate-400">not set</span>}
+                    : <span className="text-slate-500">not set</span>}
                   </p>
                 </div>
               )}
@@ -1969,7 +1970,7 @@ export default function PatientDetail() {
                       {c.is_chronic && <span className="text-xs text-amber-600">(chronic)</span>}{" "}
                       <ConditionStatusBadge condition={c} />
                     </p>
-                    {c.diagnosed_at && <p className="text-xs text-slate-400">Diagnosed {c.diagnosed_at}</p>}
+                    {c.diagnosed_at && <p className="text-xs text-slate-500">Diagnosed {c.diagnosed_at}</p>}
                     <AnnotationList annotations={c.annotations} />
                   </div>
                   {isStaff && (
@@ -1996,7 +1997,7 @@ export default function PatientDetail() {
                       <CatalogueTag code={m.drug_code} />{" "}
                       <MedicationStatusBadge medication={m} />
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {[m.dosage, m.frequency].filter(Boolean).join(" · ") || "no dosage/frequency on file"}
                       {m.prescribed_by_facility && ` — ${m.prescribed_by_facility}`}
                     </p>
@@ -2022,7 +2023,7 @@ export default function PatientDetail() {
                 <div key={a.id} className="record-row">
                   <div className="text-sm text-slate-700">
                     <p>{a.substance} <span className="text-xs text-red-600">({a.severity})</span></p>
-                    {a.reaction && <p className="text-xs text-slate-400">Reaction: {a.reaction}</p>}
+                    {a.reaction && <p className="text-xs text-slate-500">Reaction: {a.reaction}</p>}
                     <AnnotationList annotations={a.annotations} />
                   </div>
                   {isStaff && (
@@ -2048,9 +2049,9 @@ export default function PatientDetail() {
                     <div key={e.id} className="record-row">
                       <div className="text-sm text-slate-700">
                         <p>
-                          {e.facility_name} <span className="text-xs text-slate-400">({e.encounter_type})</span>
+                          {e.facility_name} <span className="text-xs text-slate-500">({e.encounter_type})</span>
                         </p>
-                        <p className="text-xs text-slate-400">{e.started_at}</p>
+                        <p className="text-xs text-slate-500">{e.started_at}</p>
                         {e.reason && <p className="text-xs text-slate-600 mt-0.5">Reason: {e.reason}</p>}
                         {e.notes && <p className="text-xs text-slate-500 mt-0.5">Notes: {e.notes}</p>}
                         {/* Signed consultation-complete (from the clinician's
@@ -2138,9 +2139,9 @@ export default function PatientDetail() {
             {/* GET /ai/summary/{id} is staff-only on the backend (admin/records_officer/clinician) —
                 a patient viewer would get a 403 clicking Generate, so the button is hidden above and
                 this note is shown instead of a dead-end action. */}
-            {!isStaff ? <p className="text-sm text-slate-400">Available to clinical staff.</p>
+            {!isStaff ? <p className="text-sm text-slate-500">Available to clinical staff.</p>
               : brief ? <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">{brief}</pre>
-              : <p className="text-sm text-slate-400">Generate a 30-second orientation brief for a receiving clinician.</p>}
+              : <p className="text-sm text-slate-500">Generate a 30-second orientation brief for a receiving clinician.</p>}
           </Section>
 
           <Section title="Medication Interaction Check" action={
@@ -2151,7 +2152,7 @@ export default function PatientDetail() {
             ) : null
           }>
             {!isStaff ? (
-              <p className="text-sm text-slate-400">Available to clinical staff.</p>
+              <p className="text-sm text-slate-500">Available to clinical staff.</p>
             ) : interactions ? (
               <div className="space-y-2">
                 {interactions.interactions.length === 0 && interactions.cross_facility_duplicates.length === 0 && (
@@ -2167,7 +2168,7 @@ export default function PatientDetail() {
                   <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">{d}</div>
                 ))}
               </div>
-            ) : <p className="text-sm text-slate-400">Check for dangerous combinations across all prescribing facilities.</p>}
+            ) : <p className="text-sm text-slate-500">Check for dangerous combinations across all prescribing facilities.</p>}
           </Section>
         </>
       )}
@@ -2200,8 +2201,8 @@ export default function PatientDetail() {
                     </p>
                   )}
                   <p>Card reference: <code className="bg-slate-100 px-1 rounded">{emergencyCard.card_reference}</code></p>
-                  <p className="text-xs text-slate-400 mt-1">Scope: {emergencyCard.scope.join(", ")}</p>
-                  <p className="text-xs text-slate-400">Print this for a physical senior-citizen card.</p>
+                  <p className="text-xs text-slate-500 mt-1">Scope: {emergencyCard.scope.join(", ")}</p>
+                  <p className="text-xs text-slate-500">Print this for a physical senior-citizen card.</p>
                 </div>
               </div>
             ) : cardStatus?.active ? (
@@ -2213,15 +2214,15 @@ export default function PatientDetail() {
                 />
                 <div className="text-sm text-slate-600">
                   <p>Card reference: <code className="bg-slate-100 px-1 rounded">{cardStatus.card_reference}</code></p>
-                  <p className="text-xs text-slate-400 mt-1">Scope: {cardStatus.scope.join(", ")}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 mt-1">Scope: {cardStatus.scope.join(", ")}</p>
+                  <p className="text-xs text-slate-500">
                     Issued from elsewhere (e.g. the patient's phone). Click "Issue Card" to generate a
                     new one you can view/print here (this will automatically revoke the one above).
                   </p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
+              <p className="text-sm text-slate-500">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
             )}
           </Section>
 
@@ -2231,7 +2232,7 @@ export default function PatientDetail() {
                 {busy === "account" ? "Working..." : "Issue / Reset Login"}
               </button>
             }>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 NRIC alone isn't secret in Malaysia, so a web or app sign-up stays pending (no access)
                 until it is verified by an IC photo scan, the email already on this record, or you.
                 Verify identity in person, then approve a pending sign-up below, or issue a one-time
@@ -2249,14 +2250,14 @@ export default function PatientDetail() {
               </button>
             ) : null
           }>
-            <p className="text-xs text-slate-400 mb-2">
+            <p className="text-xs text-slate-500 mb-2">
               For patients who cannot use the mobile app: tap a blank NFC card/sticker against a
               reader to get its UID, register it here against this patient, then hand the physical
               card to them. A responder taps it against any NFC-capable phone — no login, no app
               install required on the responder's side (same trust model as the QR flow).
             </p>
             {nfcCards.length === 0 ? (
-              <p className="text-sm text-slate-400">No NFC card registered for this patient yet.</p>
+              <p className="text-sm text-slate-500">No NFC card registered for this patient yet.</p>
             ) : (
               <div className="space-y-2">
                 {nfcCards.map((n) => (
@@ -2271,7 +2272,7 @@ export default function PatientDetail() {
                       {n.tag_stale && !n.revoked && (
                         <span className="ml-2 text-xs font-semibold text-amber-700">⚠ Card is out of date: register it again to rewrite it</span>
                       )}
-                      <p className="text-xs text-slate-400 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
                     </div>
                     {!n.revoked && isStaff && (
                       <button onClick={() => revokeNfc(n)} className="text-xs text-red-700">Revoke</button>
@@ -2320,7 +2321,7 @@ export default function PatientDetail() {
               <p>NRIC: <code className="bg-slate-100 px-1 rounded">{issuedAccount.national_id || "—"}</code></p>
               <p>Temporary password: <code className="bg-slate-100 px-1 rounded font-bold">{issuedAccount.temporary_password}</code></p>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-slate-500 mb-4">
               The patient will be required to set their own password the first time they sign in.
             </p>
             <button

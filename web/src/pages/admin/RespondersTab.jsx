@@ -81,13 +81,13 @@ export default function RespondersTab() {
         </div>
       )}
 
-      {rows && rows.length === 0 && <p className="text-sm text-slate-400">No responder accounts yet.</p>}
+      {rows && rows.length === 0 && <p className="text-sm text-slate-500">No responder accounts yet.</p>}
       <div className="space-y-2">
         {(rows || []).map((r) => (
           <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2">
             <div className="text-sm text-slate-700 min-w-0">
               <p className="font-medium">{r.full_name} <span className="text-xs text-slate-500">· {state(r)}</span></p>
-              <p className="text-xs text-slate-400">{r.email} · ends {new Date(r.access_expires_at).toLocaleString()}</p>
+              <p className="text-xs text-slate-500">{r.email} · ends {new Date(r.access_expires_at).toLocaleString()}</p>
             </div>
             <div className="flex gap-2">
               <button type="button" disabled={busy}
