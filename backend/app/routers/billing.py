@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, payment_providers
 from ..database import get_db
 from ..audit import log_access
 from .. import charge_master_import as cm_import
@@ -77,9 +77,11 @@ def cancel_open_intents(db: Session, bill_id: str) -> None:
     """A counter payment or deposit changes what is due, so any online attempt opened
     for the old amount is closed (the patient starts a fresh one). Caller commits.
     A gateway success that still arrives later is booked anyway (see settle_intent)."""
-    db.query(models.PaymentIntent).filter(
-        models.PaymentIntent.bill_id == bill_id, models.PaymentIntent.status == "pending"
-    ).update({"status": "cancelled", "completed_at": datetime.now(timezone.utc)}, synchronize_session=False)
+    pending = db.query(models.PaymentIntent).filter(
+        models.PaymentIntent.bill_id == bill_id, models.PaymentIntent.status == "pending").all()
+    for i in pending:
+        i.status, i.completed_at = "cancelled", datetime.now(timezone.utc)
+        payment_providers.expire_open_session(i)  # the gateway page must stop taking money too
 
 
 def _bill_or_404(db: Session, bill_id: str, current_user: models.User) -> models.Bill:

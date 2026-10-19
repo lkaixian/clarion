@@ -649,5 +649,8 @@
  "⚠ Pending first login": "⚠ முதல் உள்நுழைவு நிலுவை",
  "✕ Close": "✕ மூடு",
  "✖ altered after signing": "✖ கையொப்பத்திற்குப் பின் மாற்றப்பட்டது",
- "🔒 sealed": "🔒 முத்திரையிடப்பட்டது"
+ "🔒 sealed": "🔒 முத்திரையிடப்பட்டது",
+ "Pay securely": "பாதுகாப்பாகப் பணம் செலுத்துங்கள்",
+ "Thank you. We are confirming your payment; it will appear in your history in a moment.": "நன்றி. உங்கள் கட்டணத்தை உறுதிசெய்கிறோம்; சிறிது நேரத்தில் உங்கள் வரலாற்றில் தோன்றும்.",
+ "Payment cancelled. You have not been charged.": "கட்டணம் ரத்து செய்யப்பட்டது. உங்களிடம் கட்டணம் வசூலிக்கப்படவில்லை."
 }

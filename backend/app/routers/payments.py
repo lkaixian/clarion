@@ -15,6 +15,7 @@ Two routers, kept apart because their gates differ:
 Bill arithmetic is never duplicated here: it comes from billing._serialize_bill.
 """
 import json
+import os
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -127,14 +128,24 @@ def _apply_event(db: Session, body: bytes, signature: Optional[str]) -> dict:
         ref, status, amount = event["provider_ref"], event["status"], int(event["amount_cents"])
     except (ValueError, KeyError, TypeError):
         raise HTTPException(status_code=400, detail="Malformed event")
+    return _settle_event(db, ref, status, amount, event.get("reason"))
+
+
+def _settle_event(db: Session, ref: str, status: str, amount: int, reason: Optional[str]) -> dict:
+    """Shared by every provider's webhook once its signature has been checked."""
     if status not in ("succeeded", "failed"):
         raise HTTPException(status_code=400, detail="Unsupported status")
     intent = db.query(models.PaymentIntent).filter(models.PaymentIntent.provider_ref == ref).first()
     if intent is None:
         raise HTTPException(status_code=404, detail="Unknown payment reference")
-    if amount != intent.amount_cents:
+    if status == "succeeded" and amount != intent.amount_cents:
+        logger.error("payment amount mismatch: ref=%s paid=%s expected=%s", ref, amount, intent.amount_cents)
+        patient_id = db.query(models.Bill.patient_id).filter(models.Bill.id == intent.bill_id).scalar()
+        log_access(db, patient_id, "system", None, "payment_amount_mismatch",
+                   detail=f"intent_id={intent.id} paid_cents={amount} expected_cents={intent.amount_cents}",
+                   actor_facility=intent.facility_name)
         raise HTTPException(status_code=409, detail="Amount does not match the payment attempt")
-    done = settle_intent(db, intent, status, event.get("reason"))
+    done = settle_intent(db, intent, status, reason)
     return {"status": done.status}
 
 
@@ -155,7 +166,7 @@ def _intent_out(i: models.PaymentIntent) -> dict:
         "id": i.id, "bill_id": i.bill_id, "amount_cents": i.amount_cents, "status": i.status,
         "provider": i.provider, "provider_ref": i.provider_ref, "expires_at": i.expires_at,
         "failure_reason": i.failure_reason, "payment_id": i.payment_id,
-        "simulated": i.provider == "mock",
+        "simulated": i.provider == "mock", "checkout_url": i.checkout_url,
     }
 
 
@@ -241,8 +252,14 @@ def create_intent(
     now = _now()
     open_intents = db.query(models.PaymentIntent).filter_by(bill_id=bill.id, status="pending").all()
     for i in open_intents:
-        if _aware(i.expires_at) <= now:
+        if i.provider_ref is None:
+            # An attempt whose gateway call never finished: give it a minute, then treat it as dead.
+            if (now - _aware(i.created_at)).total_seconds() < 60:
+                raise HTTPException(status_code=409, detail="A payment for this bill is just starting. Try again in a moment.")
+            i.status, i.failure_reason, i.completed_at = "failed", "The payment page was never created", now
+        elif _aware(i.expires_at) <= now:
             i.status = "expired"
+            providers.expire_open_session(i)
         elif i.amount_cents != amount:
             raise HTTPException(status_code=409, detail="A payment for this bill is already in progress")
         else:
@@ -260,7 +277,8 @@ def create_intent(
     db.add(intent)
     db.commit()  # the open attempt is visible (and the bill lock released) before any gateway call
     try:
-        intent.provider_ref = provider.create(amount, bill.id)["provider_ref"]
+        created = provider.create(amount, bill.id, intent.id)
+        intent.provider_ref, intent.checkout_url = created["provider_ref"], created.get("checkout_url")
     except providers.ProviderError as exc:
         intent.status, intent.failure_reason, intent.completed_at = "failed", str(exc)[:500], _now()
         db.commit()
@@ -281,9 +299,15 @@ def cancel_intent(intent_id: str, db: Session = Depends(get_db), user: models.Us
     i = _own_intent(db, user, intent_id)
     if i.status != "pending":
         raise HTTPException(status_code=409, detail=f"This payment is already {i.status}")
-    i.status = "cancelled"
-    i.completed_at = _now()
+    # Compare-and-set: a webhook that settled it a moment ago must not be overwritten.
+    won = db.query(models.PaymentIntent).filter(
+        models.PaymentIntent.id == i.id, models.PaymentIntent.status == "pending"
+    ).update({"status": "cancelled", "completed_at": _now()}, synchronize_session=False)
     db.commit()
+    db.refresh(i)
+    if won != 1:
+        raise HTTPException(status_code=409, detail=f"This payment is already {i.status}")
+    providers.expire_open_session(i)
     return _intent_out(i)
 
 
@@ -309,6 +333,15 @@ def simulate_outcome(
 @patient_router.post("/webhook/{provider}")
 @limiter.limit("240/minute")
 async def webhook(request: Request, provider: str, db: Session = Depends(get_db)):
+    if provider == "stripe" and os.environ.get("PAYMENTS_PROVIDER") == "stripe":
+        body = await request.body()
+        try:
+            event = providers.stripe_event(body, request.headers.get("stripe-signature", ""))
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(status_code=400, detail="Bad signature")
+        if event is None:
+            return {"status": "ignored"}   # authentic, but not an event we act on
+        return _settle_event(db, event["provider_ref"], event["status"], event["amount_cents"], event.get("reason"))
     if provider != "mock" or not providers.mock_allowed():
         raise HTTPException(status_code=404, detail="Unknown provider")
     return _apply_event(db, await request.body(), request.headers.get("x-signature"))
@@ -628,8 +661,11 @@ def approve_refund(
     if r.amount_cents > _refundable_left(db, payment, exclude_id=r.id):
         raise HTTPException(status_code=409, detail="The payment no longer has this much left to refund")
     if payment.method == "online":
+        # Refund through the gateway that took the money, whatever this node is configured for now.
+        paid_via = db.query(models.PaymentIntent.provider).filter(models.PaymentIntent.payment_id == payment.id).scalar()
+        paid_via = paid_via or ("stripe" if str(payment.reference_no).startswith("cs_") else "mock")
         try:
-            r.provider_ref = providers.get_provider().refund(payment.reference_no, r.amount_cents)
+            r.provider_ref = providers.get_provider(paid_via).refund(payment.reference_no, r.amount_cents, r.id)
         except providers.ProviderError as exc:
             raise HTTPException(status_code=502, detail=f"Gateway refused the refund: {exc}")
     r.status, r.decided_by, r.decided_by_name = "approved", user.id, user.full_name

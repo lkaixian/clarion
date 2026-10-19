@@ -33,6 +33,7 @@ class PaymentIntent {
     required this.simulated,
     this.paymentId,
     this.failureReason,
+    this.checkoutUrl,
   });
   final String id;
   final int amountCents;
@@ -40,6 +41,7 @@ class PaymentIntent {
   final bool simulated;
   final String? paymentId;
   final String? failureReason;
+  final String? checkoutUrl; // hosted payment page (real gateway); null for the simulated one
 
   factory PaymentIntent.fromJson(Map<String, dynamic> j) => PaymentIntent(
         id: j['id'] as String,
@@ -48,6 +50,7 @@ class PaymentIntent {
         simulated: j['simulated'] as bool? ?? false,
         paymentId: j['payment_id'] as String?,
         failureReason: j['failure_reason'] as String?,
+        checkoutUrl: j['checkout_url'] as String?,
       );
 }
 

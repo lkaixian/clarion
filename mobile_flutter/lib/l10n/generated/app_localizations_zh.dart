@@ -1230,6 +1230,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get payCancel => '取消付款';
 
   @override
+  String get paySecurely => '安全付款';
+
+  @override
   String payDeclined(String reason) {
     return '$reason 您未被扣款。';
   }

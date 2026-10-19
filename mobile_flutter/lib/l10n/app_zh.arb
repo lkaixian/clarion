@@ -410,6 +410,7 @@
   "payApprove": "批准付款",
   "payDecline": "拒绝付款",
   "payCancel": "取消付款",
+  "paySecurely": "安全付款",
   "payDeclined": "{reason} 您未被扣款。",
   "receiptTitle": "收据 {number}",
   "receiptVoided": "此笔付款已作废。",

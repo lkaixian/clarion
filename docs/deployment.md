@@ -1475,3 +1475,24 @@ confirm these tags resolve (they were chosen from memory) and replace them with
 | CSP blocks something in the console (check DevTools) | Add the origin to `CLARION_CSP_CONNECT_EXTRA` (network calls) or adjust `proxy/Caddyfile`. The NFC bridge needs `http://localhost:8770` there. |
 | `backend` crash-loops: `setup_event_loop ... replaced by get_loop_factory` | `uvicorn-worker` older than 0.4.0 against uvicorn >= 0.36. `requirements.txt` pins 0.4.0 -- rebuild the image. |
 | Need the MinIO console during a demo | Uncomment the `ports:` block under `minio` in `docker-compose.yml`. |
+
+---
+
+## Online payments with Stripe
+
+`PAYMENTS_PROVIDER=stripe` sends a patient who taps **Pay now** to a Stripe Checkout page (amount in MYR, cards, and FPX where your Stripe Malaysia account has it enabled). Nothing is booked on the redirect back: the bill is credited only when Stripe's signed webhook says the session was paid, through the same `settle_intent` compare-and-set the demo gateway uses, so a replayed or duplicated event cannot pay a bill twice.
+
+Setup:
+
+1. In the Stripe dashboard create a **webhook endpoint** `https://<your-host>/api/payments/webhook/stripe` for the events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and `checkout.session.expired`. Copy its signing secret.
+2. Set `PAYMENTS_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `PAYMENTS_RETURN_URL` (the public web origin) in the backend environment. Until all four are set, **Pay now** returns "Online payments are not configured".
+3. Run the migration (`alembic upgrade head`; it adds `payment_intents.checkout_url`).
+4. Test with a `sk_test_` key and Stripe's test cards before going live. The Stripe CLI (`stripe listen --forward-to .../api/payments/webhook/stripe`) delivers real signed test events.
+
+Behaviour worth knowing:
+
+- Checkout sessions last 31 minutes; the patient's attempt is `pending` until paid, expired or cancelled. A cancelled return (`?cancelled=`) closes the attempt so the bill can be paid again.
+- The webhook checks the signature (HMAC-SHA256 over `<timestamp>.<body>`, 5-minute tolerance), that the currency is MYR and that the amount equals the attempt. A mismatch is refused (409) and nothing is booked.
+- Refunds (two-person approval, as before) call Stripe's refund API for the original payment. A refund Stripe rejects stays unapproved and the error is shown.
+- The mock gateway is unaffected and is still refused on any node that is not a demo.
+- Not covered: disputes/chargebacks, partial captures, payouts reconciliation against Stripe's balance report, and the mobile app returning automatically after payment (it opens the page in the browser; the patient returns to the app and refreshes).

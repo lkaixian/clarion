@@ -649,5 +649,8 @@
  "⚠ Pending first login": "⚠ 待首次登录",
  "✕ Close": "✕ 关闭",
  "✖ altered after signing": "✖ 签署后已被更改",
- "🔒 sealed": "🔒 已封存"
+ "🔒 sealed": "🔒 已封存",
+ "Pay securely": "安全付款",
+ "Thank you. We are confirming your payment; it will appear in your history in a moment.": "谢谢。我们正在确认您的付款，稍后将显示在付款记录中。",
+ "Payment cancelled. You have not been charged.": "付款已取消。您未被收费。"
 }

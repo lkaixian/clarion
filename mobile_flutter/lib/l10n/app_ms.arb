@@ -410,6 +410,7 @@
   "payApprove": "Luluskan bayaran",
   "payDecline": "Tolak bayaran",
   "payCancel": "Batalkan bayaran",
+  "paySecurely": "Bayar dengan selamat",
   "payDeclined": "{reason} Anda tidak dicaj.",
   "receiptTitle": "Resit {number}",
   "receiptVoided": "Bayaran ini telah dibatalkan.",
