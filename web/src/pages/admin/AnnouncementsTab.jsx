@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listAnnouncements, createAnnouncement, deleteAnnouncement } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Announcements (P3.10) ----------
 // Health-campaign / clinic notices the mobile app polls for and shows
@@ -59,7 +60,7 @@ export default function AnnouncementsTab() {
   const now = new Date();
 
   return (
-    <Section title="Announcements">
+    <Section title={tr("Announcements")}>
       <p className="text-sm text-slate-500 mb-4 max-w-2xl">
         Health-campaign / clinic notices shown in the patient mobile app (real-time alerts,
 ). Scoped to this facility's patients only.
@@ -68,16 +69,16 @@ export default function AnnouncementsTab() {
       <form onSubmit={handleSubmit} className="space-y-3 max-w-lg mb-6 border border-slate-200 rounded-lg p-3">
         {error && <div className="alert-error">{error}</div>}
         <div>
-          <label className="field-label">Title<span className="text-red-600"> *</span></label>
+          <label className="field-label">{tr("Title")}<span className="text-red-600"> *</span></label>
           <input
             className="field-input"
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            placeholder="e.g. Flu vaccination drive"
+            placeholder={tr("e.g. Flu vaccination drive")}
           />
         </div>
         <div>
-          <label className="field-label">Message<span className="text-red-600"> *</span></label>
+          <label className="field-label">{tr("Message")}<span className="text-red-600"> *</span></label>
           <textarea
             className="field-input"
             rows={3}
@@ -93,7 +94,7 @@ export default function AnnouncementsTab() {
             value={form.expires_at}
             onChange={(e) => setForm((f) => ({ ...f, expires_at: e.target.value }))}
           />
-          <p className="text-xs text-slate-400 mt-1">Left blank, the announcement never expires on its own — remove it manually.</p>
+          <p className="text-xs text-slate-400 mt-1">{tr("Left blank, the announcement never expires on its own — remove it manually.")}</p>
         </div>
         <button disabled={saving} className="btn-primary">
           {saving ? "Publishing..." : "Publish"}
@@ -101,9 +102,9 @@ export default function AnnouncementsTab() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-400">No announcements yet.</p>
+        <p className="text-sm text-slate-400">{tr("No announcements yet.")}</p>
       ) : (
         <div className="space-y-2">
           {rows.map((row) => {
@@ -114,7 +115,7 @@ export default function AnnouncementsTab() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-slate-800">
                       {row.title}
-                      {expired && <span className="ml-2 text-xs uppercase text-slate-500">Expired</span>}
+                      {expired && <span className="ml-2 text-xs uppercase text-slate-500">{tr("Expired")}</span>}
                     </p>
                     <p className="text-sm text-slate-600 mt-0.5">{row.body}</p>
                     <p className="text-xs text-slate-400 mt-1">
@@ -122,7 +123,7 @@ export default function AnnouncementsTab() {
                       {row.expires_at ? ` · expires ${formatDateTime(row.expires_at)}` : ""}
                     </p>
                   </div>
-                  <button onClick={() => handleDelete(row)} className="text-xs text-red-700 shrink-0">Delete</button>
+                  <button onClick={() => handleDelete(row)} className="text-xs text-red-700 shrink-0">{tr("Delete")}</button>
                 </div>
               </div>
             );

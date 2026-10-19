@@ -21,6 +21,7 @@ import {
   getMySignatureBlob,
 } from "../api/client";
 import { formatDateTime } from "../lib/format";
+import { tr } from "../lib/i18n";
 
 // Deliberately a plain, clearly-labeled grid grouped by FDI quadrant -- not
 // an anatomically mirrored dentist's-eye-view layout. Labeling correctness
@@ -107,8 +108,8 @@ export default function Dental() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Dental Chart</h1>
-        <p className="text-sm text-slate-500">Record tooth-level findings and treatments, signed per entry.</p>
+        <h1 className="page-title">{tr("Dental Chart")}</h1>
+        <p className="text-sm text-slate-500">{tr("Record tooth-level findings and treatments, signed per entry.")}</p>
       </div>
 
       {notice && (
@@ -121,23 +122,23 @@ export default function Dental() {
       )}
 
       <div className="card mb-6">
-        <h2 className="font-semibold text-slate-800 mb-3">Patient</h2>
+        <h2 className="font-semibold text-slate-800 mb-3">{tr("Patient")}</h2>
         {patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
             <span>{selectedPatient?.full_name || patientId}</span>
-            <button onClick={handleChangePatient} className="text-blue-700 hover:underline">Change</button>
+            <button onClick={handleChangePatient} className="text-blue-700 hover:underline">{tr("Change")}</button>
           </div>
         ) : (
           <div>
             <input
               type="text"
-              placeholder="Search by name or NRIC..."
+              placeholder={tr("Search by name or NRIC...")}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-1"
               value={patientSearch}
               onChange={(e) => setPatientSearch(e.target.value)}
             />
             {!patientsLoaded ? (
-              <p className="text-xs text-slate-400 mt-1">Loading patients…</p>
+              <p className="text-xs text-slate-400 mt-1">{tr("Loading patients…")}</p>
             ) : patientSearch && filteredPatients.length > 0 ? (
               <ul className="border border-slate-200 rounded-lg divide-y max-h-40 overflow-y-auto">
                 {filteredPatients.map((p) => (
@@ -151,7 +152,7 @@ export default function Dental() {
                 ))}
               </ul>
             ) : patientSearch ? (
-              <p className="text-xs text-slate-400 mt-1">No matching patients.</p>
+              <p className="text-xs text-slate-400 mt-1">{tr("No matching patients.")}</p>
             ) : null}
           </div>
         )}
@@ -161,13 +162,13 @@ export default function Dental() {
         <>
           <div className="card mb-6">
             <div className="flex items-center justify-between mb-3 gap-3">
-              <h2 className="font-semibold text-slate-800">Tooth Chart (FDI notation)</h2>
+              <h2 className="font-semibold text-slate-800">{tr("Tooth Chart (FDI notation)")}</h2>
               <Link to="/ancillary" className="text-xs text-blue-700 hover:underline whitespace-nowrap">
                 Need an X-ray? Refer via the Ancillary module
               </Link>
             </div>
             {!optionsLoaded ? (
-              <p className="text-sm text-slate-400">Loading chart options…</p>
+              <p className="text-sm text-slate-400">{tr("Loading chart options…")}</p>
             ) : (
               <ToothChart
                 toothCodes={options.tooth_codes}
@@ -193,13 +194,13 @@ export default function Dental() {
           )}
 
           <div className="card mb-6">
-            <h2 className="font-semibold text-slate-800 mb-3">Chart History</h2>
+            <h2 className="font-semibold text-slate-800 mb-3">{tr("Chart History")}</h2>
             {chartLoading ? (
-              <p className="text-sm text-slate-400">Loading history…</p>
+              <p className="text-sm text-slate-400">{tr("Loading history…")}</p>
             ) : chartError ? (
               <p className="text-sm text-red-600">{chartError}</p>
             ) : chart.length === 0 ? (
-              <p className="text-sm text-slate-400">No dental chart entries recorded yet.</p>
+              <p className="text-sm text-slate-400">{tr("No dental chart entries recorded yet.")}</p>
             ) : (
               <div className="space-y-2">
                 {chart.map((entry) => (
@@ -246,7 +247,7 @@ function ToothChart({ toothCodes, selected, withEntries, onSelect }) {
           </div>
         ))}
       </div>
-      <p className="text-xs text-slate-400 mt-3">Highlighted teeth have at least one recorded chart entry. Click a tooth to pre-fill it below.</p>
+      <p className="text-xs text-slate-400 mt-3">{tr("Highlighted teeth have at least one recorded chart entry. Click a tooth to pre-fill it below.")}</p>
     </div>
   );
 }
@@ -322,7 +323,7 @@ function EntryForm({
 
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-xl p-5 mb-6 grid gap-3">
-      <h2 className="font-semibold text-slate-800">Record Entry</h2>
+      <h2 className="font-semibold text-slate-800">{tr("Record Entry")}</h2>
 
       <div className="grid grid-cols-3 gap-3">
         <div>
@@ -333,28 +334,28 @@ function EntryForm({
             value={toothCode}
             onChange={(e) => onToothCodeChange(e.target.value)}
           >
-            <option value="">-- select tooth --</option>
+            <option value="">{tr("-- select tooth --")}</option>
             {options.tooth_codes.map((code) => (
               <option key={code} value={code}>{code}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="field-label">Finding</label>
+          <label className="field-label">{tr("Finding")}</label>
           <select
             required
             className="field-input"
             value={finding}
             onChange={(e) => setFinding(e.target.value)}
           >
-            <option value="">-- select finding --</option>
+            <option value="">{tr("-- select finding --")}</option>
             {options.findings.map((f) => (
               <option key={f} value={f}>{f}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className="field-label">Treatment</label>
+          <label className="field-label">{tr("Treatment")}</label>
           <select
             className="field-input"
             value={treatment}
@@ -378,10 +379,10 @@ function EntryForm({
       </div>
 
       <div>
-        <label className="field-label">Encounter ID (Optional)</label>
+        <label className="field-label">{tr("Encounter ID (Optional)")}</label>
         <input
           type="text"
-          placeholder="Links this entry to a visit -- e.g. for an X-ray referral raised during it"
+          placeholder={tr("Links this entry to a visit -- e.g. for an X-ray referral raised during it")}
           className="field-input"
           value={encounterId}
           onChange={(e) => setEncounterId(e.target.value)}
@@ -394,12 +395,12 @@ function EntryForm({
           savedSigUrl ? (
             <img
               src={savedSigUrl}
-              alt="Your signature"
+              alt={tr("Your signature")}
               className="border border-slate-200 rounded-lg bg-white"
               style={{ width: 240, height: 94, objectFit: "contain" }}
             />
           ) : (
-            <p className="text-xs text-slate-400">Loading your signature…</p>
+            <p className="text-xs text-slate-400">{tr("Loading your signature…")}</p>
           )
         ) : (
           <>

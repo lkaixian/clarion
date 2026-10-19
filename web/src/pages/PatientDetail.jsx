@@ -24,6 +24,7 @@ import {
   getMySignatureBlob,
   listDrugs,
 } from "../api/client";
+import { tr } from "../lib/i18n";
 
 const PROFILE_FIELD_LABELS = {
   email: "Contact email",
@@ -313,7 +314,7 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                   <label className="field-label">{f.label}</label>
                   <p className="text-sm text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5">
                     {String(values[f.key] || "—")}
-                    <span className="block text-xs text-slate-500">Set when the record was created — not editable here.</span>
+                    <span className="block text-xs text-slate-500">{tr("Set when the record was created — not editable here.")}</span>
                   </p>
                 </>
               ) : f.type === "checkbox" ? (
@@ -375,12 +376,12 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
           ))}
           {screenResult && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 space-y-1">
-              <p className="font-semibold">Safety check found possible issues:</p>
+              <p className="font-semibold">{tr("Safety check found possible issues:")}</p>
               {screenResult.allergy_conflicts.map((c, idx) => <p key={`a${idx}`}>⚠ {c}</p>)}
               {screenResult.drug_interactions.map((d, idx) => (
                 <p key={`d${idx}`}>⚠ {d.drug_a} + {d.drug_b}: {d.explanation}</p>
               ))}
-              <p className="text-xs text-red-600">Review before proceeding — click Add Medication again to confirm and save anyway.</p>
+              <p className="text-xs text-red-600">{tr("Review before proceeding — click Add Medication again to confirm and save anyway.")}</p>
             </div>
           )}
           <div className="flex gap-2 pt-2">
@@ -435,9 +436,9 @@ function DocumentModal({ patientId, documentId, onClose }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Details">
+      <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label={tr("Details")}>
         {error && <div role="alert" className="alert-error mb-3">{error}</div>}
-        {!detail && !error && <p className="text-sm text-slate-500">Loading...</p>}
+        {!detail && !error && <p className="text-sm text-slate-500">{tr("Loading...")}</p>}
         {detail && (
           <>
             <h3 className="font-semibold text-slate-800 mb-1">
@@ -466,7 +467,7 @@ function DocumentModal({ patientId, documentId, onClose }) {
               ) : fileError ? (
                 <p className="text-sm text-red-600 mb-4">{fileError}</p>
               ) : (
-                <p className="text-sm text-slate-500 mb-4">Loading original file...</p>
+                <p className="text-sm text-slate-500 mb-4">{tr("Loading original file...")}</p>
               )
             ) : (
               <p className="text-xs text-slate-500 mb-4">
@@ -476,7 +477,7 @@ function DocumentModal({ patientId, documentId, onClose }) {
 
             {detail.ai_summary && (
               <div className="mb-3">
-                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">AI Summary</h4>
+                <h4 className="text-xs font-semibold text-slate-600 uppercase mb-1">{tr("AI Summary")}</h4>
                 <p className="text-sm text-slate-700 whitespace-pre-wrap">{detail.ai_summary}</p>
               </div>
             )}
@@ -561,7 +562,7 @@ function GenerateDocumentForm({ patientId, onGenerated }) {
     <form onSubmit={submit} className="space-y-3 mb-4 pb-4 border-b border-slate-100">
       {error && <div role="alert" className="alert-error">{error}</div>}
       <div>
-        <label className="field-label">Document type</label>
+        <label className="field-label">{tr("Document type")}</label>
         <select
           className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
           value={docType}
@@ -634,12 +635,12 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
   }
 
   return (
-    <Section title="Documents (scans, prescriptions, lab reports, X-rays)">
+    <Section title={tr("Documents (scans, prescriptions, lab reports, X-rays)")}>
       {isStaff && <GenerateDocumentForm patientId={patientId} onGenerated={onUploaded} />}
       {isStaff && (
         <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
-            <label className="field-label">Document type</label>
+            <label className="field-label">{tr("Document type")}</label>
             <select
               className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
               value={docType}
@@ -649,7 +650,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
             </select>
           </div>
           <div>
-            <label className="field-label">File</label>
+            <label className="field-label">{tr("File")}</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -666,7 +667,7 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
       {error && <div role="alert" className="alert-error mb-3">{error}</div>}
 
       {documents.length === 0 ? (
-        <p className="text-sm text-slate-500">No documents on file yet.</p>
+        <p className="text-sm text-slate-500">{tr("No documents on file yet.")}</p>
       ) : (
         <div className="space-y-2">
           {documents.map((d) => (
@@ -682,13 +683,13 @@ function DocumentsSection({ patientId, documents, isStaff, onUploaded }) {
                 </p>
                 <p className="text-xs text-slate-500">{d.original_filename || "unnamed"} · {d.uploaded_by_facility || "unknown facility"} · {d.uploaded_at}</p>
               </div>
-              {isStaff && <span className="text-xs text-blue-700 whitespace-nowrap">View →</span>}
+              {isStaff && <span className="text-xs text-blue-700 whitespace-nowrap">{tr("View →")}</span>}
             </button>
           ))}
         </div>
       )}
       {!isStaff && documents.length > 0 && (
-        <p className="text-xs text-slate-500 mt-2">Ask your clinic to review document contents with you.</p>
+        <p className="text-xs text-slate-500 mt-2">{tr("Ask your clinic to review document contents with you.")}</p>
       )}
 
       {viewingId && (
@@ -785,7 +786,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-3">
-        <h3 id="dlg-patientdetail-3" className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
+        <h3 id="dlg-patientdetail-3" className="font-semibold text-slate-800 mb-4">{tr("Add Appointment")}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && <div role="alert" className="alert-error">{error}</div>}
 
@@ -802,11 +803,11 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Venue</label>
+            <label className="field-label">{tr("Venue")}</label>
             <input
               className="field-input"
               type="text"
-              placeholder="e.g. Clinic 3B, Level 2"
+              placeholder={tr("e.g. Clinic 3B, Level 2")}
               value={venue}
               onChange={(e) => setVenue(e.target.value)}
             />
@@ -825,11 +826,11 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Reason</label>
+            <label className="field-label">{tr("Reason")}</label>
             <input
               className="field-input"
               type="text"
-              placeholder="e.g. Follow-up, blood test"
+              placeholder={tr("e.g. Follow-up, blood test")}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
@@ -846,7 +847,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
             </label>
             {fastingRequired && (
               <div className="mt-2 pl-6">
-                <label className="field-label">Fast for how many hours before?</label>
+                <label className="field-label">{tr("Fast for how many hours before?")}</label>
                 <input
                   className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   type="number"
@@ -859,11 +860,11 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Precaution notes</label>
+            <label className="field-label">{tr("Precaution notes")}</label>
             <textarea
               className="field-input"
               rows={2}
-              placeholder="e.g. bring previous scan results, stop blood thinners 2 days prior"
+              placeholder={tr("e.g. bring previous scan results, stop blood thinners 2 days prior")}
               value={precautionNotes}
               onChange={(e) => setPrecautionNotes(e.target.value)}
             />
@@ -892,7 +893,7 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
                       value={v}
                       onChange={(e) => updateReminderField(idx, e.target.value)}
                     />
-                    <span className="text-xs text-slate-500">hours before</span>
+                    <span className="text-xs text-slate-500">{tr("hours before")}</span>
                     <button type="button" onClick={() => removeReminderField(idx)} className="text-xs text-red-700">
                       Remove
                     </button>
@@ -969,7 +970,7 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-4">
-        <h3 id="dlg-patientdetail-4" className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
+        <h3 id="dlg-patientdetail-4" className="font-semibold text-slate-800 mb-1">{tr("Reschedule Appointment")}</h3>
         <p className="text-xs text-slate-500 mb-4">
           {appointment.facility_name}{appointment.venue && ` — ${appointment.venue}`} · currently{" "}
           {formatAppointmentTime(appointment.scheduled_at)}
@@ -1102,11 +1103,11 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
 
   return (
     <Section
-      title="Appointments"
-      action={isStaff && <button onClick={() => setShowAddModal(true)} className="btn-add">+ Add</button>}
+      title={tr("Appointments")}
+      action={isStaff && <button onClick={() => setShowAddModal(true)} className="btn-add">{tr("+ Add")}</button>}
     >
       {appointments.length === 0 ? (
-        <p className="text-sm text-slate-500">No appointments scheduled.</p>
+        <p className="text-sm text-slate-500">{tr("No appointments scheduled.")}</p>
       ) : (
         <div className="space-y-2">
           {appointments.map((a) => {
@@ -1124,7 +1125,7 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-sm text-slate-700">
                     {cancelled && (
-                      <p className="text-xs font-semibold text-red-700 uppercase mb-0.5">Cancelled</p>
+                      <p className="text-xs font-semibold text-red-700 uppercase mb-0.5">{tr("Cancelled")}</p>
                     )}
                     <p className={cancelled ? "line-through" : ""}>
                       {a.facility_name}{a.venue && ` — ${a.venue}`}
@@ -1199,7 +1200,7 @@ function AppointmentsSection({ patientId, appointments, isStaff, onChanged }) {
                 {a.latest_reschedule_request && (
                   <div className="mt-2 pt-2 border-t border-slate-200">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-slate-600">Patient requested reschedule</span>
+                      <span className="text-xs font-medium text-slate-600">{tr("Patient requested reschedule")}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${RESCHEDULE_REQUEST_STATUS_BADGE_CLASSES[a.latest_reschedule_request.status] || "bg-slate-100 text-slate-600"}`}>
                         {a.latest_reschedule_request.status}
                       </span>
@@ -1379,7 +1380,7 @@ function RecordEditControl({ record, onEdit, label }) {
     );
   }
   return (
-    <button onClick={onEdit} aria-label={label ? `Edit ${label}` : "Edit"} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>
+    <button onClick={onEdit} aria-label={label ? `Edit ${label}` : "Edit"} className="text-xs text-blue-700 whitespace-nowrap">{tr("Edit")}</button>
   );
 }
 
@@ -1468,7 +1469,7 @@ function ConditionStatusBadge({ condition }) {
 // `active` column is still true means someone signed it off as discontinued.
 function MedicationStatusBadge({ medication }) {
   if (medication.effective_active === false && medication.active === true) {
-    return <span className="text-xs font-medium text-amber-700">(Discontinued — signed off)</span>;
+    return <span className="text-xs font-medium text-amber-700">{tr("(Discontinued — signed off)")}</span>;
   }
   if (!medication.active) return <span className="text-xs text-slate-500">(inactive)</span>;
   return null;
@@ -1545,13 +1546,13 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
   return (
     <div className="modal-backdrop">
       <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-5">
-        <h3 id="dlg-patientdetail-5" className="font-semibold text-slate-800 mb-1">Sign off record</h3>
+        <h3 id="dlg-patientdetail-5" className="font-semibold text-slate-800 mb-1">{tr("Sign off record")}</h3>
         <p className="text-xs text-slate-500 mb-4">{targetLabel}</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && <div role="alert" className="alert-error">{error}</div>}
 
           <div>
-            <label className="field-label">Kind</label>
+            <label className="field-label">{tr("Kind")}</label>
             <select
               className="field-input"
               value={kind}
@@ -1581,12 +1582,12 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
               savedSigUrl ? (
                 <img
                   src={savedSigUrl}
-                  alt="Your signature"
+                  alt={tr("Your signature")}
                   className="border border-slate-200 rounded-lg bg-white"
                   style={{ width: 240, height: 94, objectFit: "contain" }}
                 />
               ) : (
-                <p className="text-xs text-slate-500">Loading your signature…</p>
+                <p className="text-xs text-slate-500">{tr("Loading your signature…")}</p>
               )
             ) : (
               <>
@@ -1865,7 +1866,7 @@ export default function PatientDetail() {
     refresh();
   }
 
-  if (!patient) return <Layout><p className="text-slate-500">Loading...</p></Layout>;
+  if (!patient) return <Layout><p className="text-slate-500">{tr("Loading...")}</p></Layout>;
 
   return (
     <Layout>
@@ -1890,7 +1891,7 @@ export default function PatientDetail() {
             </span>
           )}
           {patient.conditions.some((c) => c.is_chronic) && (
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-800 ring-1 ring-blue-200">Chronic condition</span>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-800 ring-1 ring-blue-200">{tr("Chronic condition")}</span>
           )}
         </div>
       </div>
@@ -1911,8 +1912,8 @@ export default function PatientDetail() {
       {activeTab === "overview" && (
         <>
           {isOwnRecord && (
-            <Section title="My Contact Info" action={
-              !editingProfile && <button onClick={startEditingProfile} className="btn-primary">Edit</button>
+            <Section title={tr("My Contact Info")} action={
+              !editingProfile && <button onClick={startEditingProfile} className="btn-primary">{tr("Edit")}</button>
             }>
               <p className="text-xs text-slate-500 mb-3">
                 Name, date of birth, and NRIC can't be changed here — contact your clinic if any of those are wrong.
@@ -1948,11 +1949,11 @@ export default function PatientDetail() {
                 </form>
               ) : (
                 <div className="text-sm text-slate-700 space-y-1">
-                  <p>Email: {patient.email || <span className="text-slate-500">not set</span>}</p>
-                  <p>Phone: {patient.phone || <span className="text-slate-500">not set</span>}</p>
+                  <p>Email: {patient.email || <span className="text-slate-500">{tr("not set")}</span>}</p>
+                  <p>Phone: {patient.phone || <span className="text-slate-500">{tr("not set")}</span>}</p>
                   <p>Emergency contact: {patient.emergency_contact_name
                     ? `${patient.emergency_contact_name} (${patient.emergency_contact_relationship || "relationship not set"}) — ${patient.emergency_contact_phone || "no phone on file"}`
-                    : <span className="text-slate-500">not set</span>}
+                    : <span className="text-slate-500">{tr("not set")}</span>}
                   </p>
                 </div>
               )}
@@ -1960,8 +1961,8 @@ export default function PatientDetail() {
           )}
 
           <div className="grid grid-cols-1 gap-x-4 lg:grid-cols-2">
-            <Section title="Conditions" count={patient.conditions.length} action={isStaff && <button onClick={() => openAddRecord("condition")} className="btn-add">+ Add</button>}>
-              {patient.conditions.length === 0 && <p className="empty-state">None on file.</p>}
+            <Section title={tr("Conditions")} count={patient.conditions.length} action={isStaff && <button onClick={() => openAddRecord("condition")} className="btn-add">{tr("+ Add")}</button>}>
+              {patient.conditions.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               {patient.conditions.map((c) => (
                 <div key={c.id} className="record-row">
                   <div className="text-sm text-slate-700">
@@ -1988,8 +1989,8 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Medications" count={patient.medications.length} action={isStaff && <button onClick={() => openAddRecord("medication")} className="btn-add">+ Add</button>}>
-              {patient.medications.length === 0 && <p className="empty-state">None on file.</p>}
+            <Section title={tr("Medications")} count={patient.medications.length} action={isStaff && <button onClick={() => openAddRecord("medication")} className="btn-add">{tr("+ Add")}</button>}>
+              {patient.medications.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               {patient.medications.map((m) => (
                 <div key={m.id} className="record-row">
                   <div className="text-sm text-slate-700">
@@ -2019,8 +2020,8 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Allergies" count={patient.allergies.length} action={isStaff && <button onClick={() => openAddRecord("allergy")} className="btn-add">+ Add</button>}>
-              {patient.allergies.length === 0 && <p className="empty-state">None on file.</p>}
+            <Section title={tr("Allergies")} count={patient.allergies.length} action={isStaff && <button onClick={() => openAddRecord("allergy")} className="btn-add">{tr("+ Add")}</button>}>
+              {patient.allergies.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               {patient.allergies.map((a) => (
                 <div key={a.id} className="record-row">
                   <div className="text-sm text-slate-700">
@@ -2043,8 +2044,8 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title="Visit / Transfer Timeline" count={patient.encounters.length} action={isStaff && <button onClick={() => openAddRecord("encounter")} className="btn-add">+ Add</button>}>
-              {patient.encounters.length === 0 && <p className="empty-state">None on file.</p>}
+            <Section title={tr("Visit / Transfer Timeline")} count={patient.encounters.length} action={isStaff && <button onClick={() => openAddRecord("encounter")} className="btn-add">{tr("+ Add")}</button>}>
+              {patient.encounters.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {[...patient.encounters]
                   .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
@@ -2106,18 +2107,18 @@ export default function PatientDetail() {
 
       {isStaff && activeTab === "orders" && (
         <>
-          <Section title="Orders"><PatientOrders patientId={id} /></Section>
-          <Section title="Forms"><PatientForms patientId={id} /></Section>
+          <Section title={tr("Orders")}><PatientOrders patientId={id} /></Section>
+          <Section title={tr("Forms")}><PatientForms patientId={id} /></Section>
         </>
       )}
 
       {isStaff && activeTab === "registry" && (
         <>
-        <Section title="Demographics, sponsor and dependants">
+        <Section title={tr("Demographics, sponsor and dependants")}>
           <PatientDemographics patientId={id} demographics={patient.demographics} onChanged={refresh} />
         </Section>
         {["admin", "records_officer", "clinician"].includes(currentUser?.role) && (
-          <Section title="Sharing with other facilities"><SharingConsent patientId={id} /></Section>
+          <Section title={tr("Sharing with other facilities")}><SharingConsent patientId={id} /></Section>
         )}
         </>
       )}
@@ -2133,7 +2134,7 @@ export default function PatientDetail() {
 
       {activeTab === "ai" && (
         <>
-          <Section title="AI Clinical Handover Brief" action={
+          <Section title={tr("AI Clinical Handover Brief")} action={
             isStaff ? (
               <button onClick={loadBrief} disabled={busy === "brief"} className="btn-primary">
                 {busy === "brief" ? "Generating..." : "Generate"}
@@ -2143,12 +2144,12 @@ export default function PatientDetail() {
             {/* GET /ai/summary/{id} is staff-only on the backend (admin/records_officer/clinician) —
                 a patient viewer would get a 403 clicking Generate, so the button is hidden above and
                 this note is shown instead of a dead-end action. */}
-            {!isStaff ? <p className="text-sm text-slate-500">Available to clinical staff.</p>
+            {!isStaff ? <p className="text-sm text-slate-500">{tr("Available to clinical staff.")}</p>
               : brief ? <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">{brief}</pre>
-              : <p className="text-sm text-slate-500">Generate a 30-second orientation brief for a receiving clinician.</p>}
+              : <p className="text-sm text-slate-500">{tr("Generate a 30-second orientation brief for a receiving clinician.")}</p>}
           </Section>
 
-          <Section title="Medication Interaction Check" action={
+          <Section title={tr("Medication Interaction Check")} action={
             isStaff ? (
               <button onClick={loadInteractions} disabled={busy === "interactions"} className="btn-primary">
                 {busy === "interactions" ? "Checking..." : "Run Check"}
@@ -2156,11 +2157,11 @@ export default function PatientDetail() {
             ) : null
           }>
             {!isStaff ? (
-              <p className="text-sm text-slate-500">Available to clinical staff.</p>
+              <p className="text-sm text-slate-500">{tr("Available to clinical staff.")}</p>
             ) : interactions ? (
               <div className="space-y-2">
                 {interactions.interactions.length === 0 && interactions.cross_facility_duplicates.length === 0 && (
-                  <p className="text-sm text-green-700">No interactions or duplicates found.</p>
+                  <p className="text-sm text-green-700">{tr("No interactions or duplicates found.")}</p>
                 )}
                 {interactions.interactions.map((i, idx) => (
                   <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
@@ -2172,14 +2173,14 @@ export default function PatientDetail() {
                   <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">{d}</div>
                 ))}
               </div>
-            ) : <p className="text-sm text-slate-500">Check for dangerous combinations across all prescribing facilities.</p>}
+            ) : <p className="text-sm text-slate-500">{tr("Check for dangerous combinations across all prescribing facilities.")}</p>}
           </Section>
         </>
       )}
 
       {activeTab === "access" && (
         <>
-          <Section title="Emergency Access Card / QR" action={
+          <Section title={tr("Emergency Access Card / QR")} action={
             <div className="flex gap-2">
               {emergencyCard && !emergencyCard.revoked && (
                 <button onClick={revokeCard} disabled={busy === "card"} className="text-sm border border-red-700 text-red-700 px-3 py-1.5 rounded-lg">
@@ -2195,7 +2196,7 @@ export default function PatientDetail() {
               <div className="flex items-center gap-4">
                 <img
                   src={emergencyCard.qr_code_base64}
-                  alt="Emergency QR"
+                  alt={tr("Emergency QR")}
                   className={`w-32 h-32 border rounded-lg ${emergencyCard.revoked ? "opacity-30" : ""}`}
                 />
                 <div className="text-sm text-slate-600">
@@ -2204,20 +2205,20 @@ export default function PatientDetail() {
                       Revoked — this QR code no longer works
                     </p>
                   )}
-                  <p>Card reference: <code className="bg-slate-100 px-1 rounded">{emergencyCard.card_reference}</code></p>
+                  <p>{tr("Card reference:")} <code className="bg-slate-100 px-1 rounded">{emergencyCard.card_reference}</code></p>
                   <p className="text-xs text-slate-500 mt-1">Scope: {emergencyCard.scope.join(", ")}</p>
-                  <p className="text-xs text-slate-500">Print this for a physical senior-citizen card.</p>
+                  <p className="text-xs text-slate-500">{tr("Print this for a physical senior-citizen card.")}</p>
                 </div>
               </div>
             ) : cardStatus?.active ? (
               <div className="flex items-center gap-4">
                 <img
                   src={cardStatus.qr_code_base64}
-                  alt="Emergency QR"
+                  alt={tr("Emergency QR")}
                   className="w-32 h-32 border rounded-lg"
                 />
                 <div className="text-sm text-slate-600">
-                  <p>Card reference: <code className="bg-slate-100 px-1 rounded">{cardStatus.card_reference}</code></p>
+                  <p>{tr("Card reference:")} <code className="bg-slate-100 px-1 rounded">{cardStatus.card_reference}</code></p>
                   <p className="text-xs text-slate-500 mt-1">Scope: {cardStatus.scope.join(", ")}</p>
                   <p className="text-xs text-slate-500">
                     Issued from elsewhere (e.g. the patient's phone). Click "Issue Card" to generate a
@@ -2226,12 +2227,12 @@ export default function PatientDetail() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Generates a scoped QR — scanning it (no login required) returns only critical fields.</p>
+              <p className="text-sm text-slate-500">{tr("Generates a scoped QR — scanning it (no login required) returns only critical fields.")}</p>
             )}
           </Section>
 
           {canManageLogins && (
-            <Section title="Patient Login Account" action={
+            <Section title={tr("Patient Login Account")} action={
               <button onClick={issueAccount} disabled={busy === "account"} className="btn-primary">
                 {busy === "account" ? "Working..." : "Issue / Reset Login"}
               </button>
@@ -2247,7 +2248,7 @@ export default function PatientDetail() {
             </Section>
           )}
 
-          <Section title="NFC Physical Card (senior citizens / no smartphone)" action={
+          <Section title={tr("NFC Physical Card (senior citizens / no smartphone)")} action={
             isStaff ? (
               <button onClick={registerNfc} disabled={busy === "nfc"} className="btn-primary">
                 {busy === "nfc" ? "Registering..." : "Register NFC Card"}
@@ -2261,7 +2262,7 @@ export default function PatientDetail() {
               install required on the responder's side (same trust model as the QR flow).
             </p>
             {nfcCards.length === 0 ? (
-              <p className="text-sm text-slate-500">No NFC card registered for this patient yet.</p>
+              <p className="text-sm text-slate-500">{tr("No NFC card registered for this patient yet.")}</p>
             ) : (
               <div className="space-y-2">
                 {nfcCards.map((n) => (
@@ -2274,12 +2275,12 @@ export default function PatientDetail() {
                         {n.revoked ? "REVOKED" : "active"}
                       </span>
                       {n.tag_stale && !n.revoked && (
-                        <span className="ml-2 text-xs font-semibold text-amber-700">⚠ Card is out of date: register it again to rewrite it</span>
+                        <span className="ml-2 text-xs font-semibold text-amber-700">{tr("⚠ Card is out of date: register it again to rewrite it")}</span>
                       )}
                       <p className="text-xs text-slate-500 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
                     </div>
                     {!n.revoked && isStaff && (
-                      <button onClick={() => revokeNfc(n)} className="text-xs text-red-700">Revoke</button>
+                      <button onClick={() => revokeNfc(n)} className="text-xs text-red-700">{tr("Revoke")}</button>
                     )}
                   </div>
                 ))}
@@ -2288,18 +2289,18 @@ export default function PatientDetail() {
           </Section>
 
           <Section
-            title="Access Audit Log (who viewed this record)"
+            title={tr("Access Audit Log (who viewed this record)")}
             action={
               <select
-                aria-label="Audit log window"
+                aria-label={tr("Audit log window")}
                 value={auditDays}
                 onChange={(e) => setAuditDays(Number(e.target.value))}
                 className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
               >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={365}>Last year</option>
-                <option value={2555}>Last 7 years</option>
+                <option value={7}>{tr("Last 7 days")}</option>
+                <option value={30}>{tr("Last 30 days")}</option>
+                <option value={365}>{tr("Last year")}</option>
+                <option value={2555}>{tr("Last 7 years")}</option>
               </select>
             }
           >
@@ -2317,13 +2318,13 @@ export default function PatientDetail() {
       {issuedAccount && (
         <div className="modal-backdrop">
           <div className="bg-white rounded-xl p-6 max-w-sm w-full" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-6">
-            <h3 id="dlg-patientdetail-6" className="font-semibold text-slate-800 mb-1">Temporary login issued</h3>
+            <h3 id="dlg-patientdetail-6" className="font-semibold text-slate-800 mb-1">{tr("Temporary login issued")}</h3>
             <p className="text-xs text-red-700 font-semibold uppercase mb-3">
               Shown once — write it down or hand it to the patient now
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 text-sm space-y-1">
-              <p>NRIC: <code className="bg-slate-100 px-1 rounded">{issuedAccount.national_id || "—"}</code></p>
-              <p>Temporary password: <code className="bg-slate-100 px-1 rounded font-bold">{issuedAccount.temporary_password}</code></p>
+              <p>{tr("NRIC:")} <code className="bg-slate-100 px-1 rounded">{issuedAccount.national_id || "—"}</code></p>
+              <p>{tr("Temporary password:")} <code className="bg-slate-100 px-1 rounded font-bold">{issuedAccount.temporary_password}</code></p>
             </div>
             <p className="text-xs text-slate-500 mb-4">
               The patient will be required to set their own password the first time they sign in.

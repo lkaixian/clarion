@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { tr } from "./lib/i18n";
 
 export default class ErrorBoundary extends Component {
   state = { error: null };
@@ -15,8 +16,8 @@ export default class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-          <h1>Something went wrong</h1>
-          <p>Reload the page. If this keeps happening, contact IT support.</p>
+          <h1>{tr("Something went wrong")}</h1>
+          <p>{tr("Reload the page. If this keeps happening, contact IT support.")}</p>
         </div>
       );
     }

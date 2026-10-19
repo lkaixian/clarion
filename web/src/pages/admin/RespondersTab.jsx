@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createResponder, listResponders, revokeResponder, updateResponderExpiry } from "../../api/client";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 const DAY = 24 * 60 * 60 * 1000;
 // The server caps the window (CLARION_RESPONDER_MAX_DAYS, default 90) and
@@ -50,7 +51,7 @@ export default function RespondersTab() {
   };
 
   return (
-    <Section title="Community responders">
+    <Section title={tr("Community responders")}>
       <p className="text-xs text-slate-500 mb-3">
         Guards and volunteers get a login that can scan emergency cards and nothing else. It ends on the expiry
         date you set, or at once if you revoke it. Every scan is recorded under their name.
@@ -69,19 +70,19 @@ export default function RespondersTab() {
           <input required type="datetime-local" value={form.expires} onChange={(e) => setForm({ ...form, expires: e.target.value })}
             className="block border border-slate-300 rounded-lg px-2 py-1 text-sm" />
         </label>
-        <button type="submit" disabled={busy} className="btn-primary text-sm">Create responder</button>
+        <button type="submit" disabled={busy} className="btn-primary text-sm">{tr("Create responder")}</button>
       </form>
       {error && <p className="text-xs text-red-600 mb-2" role="alert">{error}</p>}
 
       {issued && (
         <div className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 text-xs text-amber-900 mb-3 space-y-1" role="status">
-          <p>Temporary password for <b>{issued.email}</b> (shown once, give it to them in person):</p>
+          <p>{tr("Temporary password for")} <b>{issued.email}</b> {tr("(shown once, give it to them in person):")}</p>
           <p className="font-mono text-sm break-all select-all">{issued.temporary_password}</p>
-          <button type="button" onClick={() => setIssued(null)} className="underline">Done, hide it</button>
+          <button type="button" onClick={() => setIssued(null)} className="underline">{tr("Done, hide it")}</button>
         </div>
       )}
 
-      {rows && rows.length === 0 && <p className="text-sm text-slate-500">No responder accounts yet.</p>}
+      {rows && rows.length === 0 && <p className="text-sm text-slate-500">{tr("No responder accounts yet.")}</p>}
       <div className="space-y-2">
         {(rows || []).map((r) => (
           <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2">

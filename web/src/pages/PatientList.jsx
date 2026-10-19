@@ -9,6 +9,7 @@ import {
   checkCampusEligibility,
 } from "../api/client";
 import SignaturePad from "../components/SignaturePad";
+import { tr } from "../lib/i18n";
 
 // Re-poll the clinician's own consultation worklist on this cadence — same
 // constant convention as Reception.jsx's QUEUE_BOARD_POLL_MS.
@@ -185,7 +186,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientlist-1">
-        <h3 id="dlg-patientlist-1" className="font-semibold text-slate-800 mb-1">Complete consultation</h3>
+        <h3 id="dlg-patientlist-1" className="font-semibold text-slate-800 mb-1">{tr("Complete consultation")}</h3>
         <p className="text-xs text-slate-500 mb-4">
           #{ticket.queue_number} · {ticket.patient_full_name}
         </p>
@@ -271,7 +272,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
                 {cdsHint.hint ? (
                   <p className="whitespace-pre-line">{cdsHint.hint}</p>
                 ) : (
-                  <p className="text-slate-500">No AI hint available (local model not running).</p>
+                  <p className="text-slate-500">{tr("No AI hint available (local model not running).")}</p>
                 )}
                 {cdsHint.allergy_conflicts.map((c, i) => (
                   <p key={i} className="text-red-700 font-medium">⚠ {c}</p>
@@ -297,7 +298,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
                 value={referralId}
                 onChange={(e) => setReferralId(e.target.value)}
               >
-                <option value="">— none —</option>
+                <option value="">{tr("— none —")}</option>
                 {referralOptions.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.module} · {r.catalog_item_name}
@@ -422,7 +423,7 @@ function MyConsultationRoom() {
   if (!state) {
     return (
       <div className="card mb-6">
-        <p className="text-sm text-slate-500">Loading your consultation room…</p>
+        <p className="text-sm text-slate-500">{tr("Loading your consultation room…")}</p>
       </div>
     );
   }
@@ -433,7 +434,7 @@ function MyConsultationRoom() {
 
       {!active ? (
         <>
-          <h2 className="font-semibold text-slate-800 mb-1">Start your consultation session</h2>
+          <h2 className="font-semibold text-slate-800 mb-1">{tr("Start your consultation session")}</h2>
           <p className="text-xs text-slate-500 mb-3">
             Pick a room to clock in and claim it. Your waiting list appears once you start.
           </p>
@@ -443,7 +444,7 @@ function MyConsultationRoom() {
               value={roomId}
               onChange={(e) => setRoomId(e.target.value)}
             >
-              <option value="">Select a room…</option>
+              <option value="">{tr("Select a room…")}</option>
               {rooms.map((r) => {
                 const held = !!r.claim;
                 return (
@@ -482,7 +483,7 @@ function MyConsultationRoom() {
           </div>
 
           {state.tickets.length === 0 ? (
-            <p className="text-sm text-slate-500">No patients in the queue yet.</p>
+            <p className="text-sm text-slate-500">{tr("No patients in the queue yet.")}</p>
           ) : (
             <div className="space-y-2">
               {state.tickets.map((t) => {
@@ -662,7 +663,7 @@ export default function PatientList() {
         <div className="flex items-center gap-3">
           <input
             type="text"
-            aria-label="Search patients by name or NRIC" placeholder="Search by name or NRIC..."
+            aria-label={tr("Search patients by name or NRIC")} placeholder={tr("Search by name or NRIC...")}
             className="border rounded-lg px-3 py-2 text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -695,8 +696,8 @@ export default function PatientList() {
               type="text"
               required
               autoFocus
-              aria-label="Reason for searching across all facilities"
-              placeholder="Reason for looking across all facilities (logged to this patient's audit trail)…"
+              aria-label={tr("Reason for searching across all facilities")}
+              placeholder={tr("Reason for looking across all facilities (logged to this patient's audit trail)…")}
               className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm flex-1"
               value={breakGlassReason}
               onChange={(e) => setBreakGlassReason(e.target.value)}
@@ -723,7 +724,7 @@ export default function PatientList() {
         <form id="new-patient-form" onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-xl p-5 mb-6 grid grid-cols-2 gap-4">
           {error && <div role="alert" className="bg-red-50 text-red-700 text-sm p-2 rounded col-span-2">{error}</div>}
           <div className="col-span-2 flex gap-2">
-            <input required aria-label="NRIC" placeholder="NRIC (e.g. 520314-01-1234)" className="border rounded-lg px-3 py-2 flex-1"
+            <input required aria-label={tr("NRIC")} placeholder={tr("NRIC (e.g. 520314-01-1234)")} className="border rounded-lg px-3 py-2 flex-1"
               value={form.national_id}
               onChange={(e) => { setForm({ ...form, national_id: e.target.value }); setEligibility(null); }} />
             <button type="button" onClick={runEligibilityCheck}
@@ -746,24 +747,24 @@ export default function PatientList() {
                 <>The University registry unavailable — {eligibility.detail || "try again, or proceed without it"}.</>
               ) : eligibility.eligible ? (
                 <>✓ Eligible via {eligibility.source} ({eligibility.category}, {eligibility.faculty_or_department}) — {eligibility.full_name}
-                  <span className="ml-1 text-xs opacity-70">(mock campus registry — demo)</span></>
+                  <span className="ml-1 text-xs opacity-70">{tr("(mock campus registry — demo)")}</span></>
               ) : (
                 <>Not found / not eligible in the University registry — {eligibility.detail || `status: ${eligibility.status || "unknown"}`}
-                  <span className="ml-1 text-xs opacity-70">(mock campus registry — demo)</span></>
+                  <span className="ml-1 text-xs opacity-70">{tr("(mock campus registry — demo)")}</span></>
               )}
             </div>
           )}
-          <input required aria-label="Full name" placeholder="Full name" className="border rounded-lg px-3 py-2 col-span-2"
+          <input required aria-label={tr("Full name")} placeholder={tr("Full name")} className="border rounded-lg px-3 py-2 col-span-2"
             value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           {derivedDob ? (
             <div className="border rounded-lg px-3 py-2 text-sm text-slate-600 bg-slate-50 flex items-center">
-              DOB {derivedDob} <span className="text-xs text-slate-500 ml-1">(auto-detected from NRIC)</span>
+              DOB {derivedDob} <span className="text-xs text-slate-500 ml-1">{tr("(auto-detected from NRIC)")}</span>
             </div>
           ) : (
-            <input aria-label="Date of birth" placeholder="Date of birth (YYYY-MM-DD)" className="border rounded-lg px-3 py-2"
+            <input aria-label={tr("Date of birth")} placeholder={tr("Date of birth (YYYY-MM-DD)")} className="border rounded-lg px-3 py-2"
               value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
           )}
-          <input aria-label="Blood type" placeholder="Blood type (e.g. O+)" className="border rounded-lg px-3 py-2"
+          <input aria-label={tr("Blood type")} placeholder={tr("Blood type (e.g. O+)")} className="border rounded-lg px-3 py-2"
             value={form.blood_type} onChange={(e) => setForm({ ...form, blood_type: e.target.value })} />
           <label className="flex items-center gap-2 col-span-2 text-sm text-slate-600">
             <input type="checkbox" checked={form.senior_citizen_mode}
@@ -775,16 +776,16 @@ export default function PatientList() {
               onChange={(e) => setForm({ ...form, share_across_facilities: e.target.checked })} />
             The patient agrees other CLARION facilities may see their visit history (ask first)
           </label>
-          <button className="bg-blue-800 text-white rounded-lg py-2 col-span-2 font-medium">Create</button>
+          <button className="bg-blue-800 text-white rounded-lg py-2 col-span-2 font-medium">{tr("Create")}</button>
         </form>
       )}
 
       {loading ? (
-        <p className="text-slate-500">Loading...</p>
+        <p className="text-slate-500">{tr("Loading...")}</p>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y">
           {patients.length === 0 ? (
-            <p className="p-5 text-slate-500 text-sm">No patients yet — create one above.</p>
+            <p className="p-5 text-slate-500 text-sm">{tr("No patients yet — create one above.")}</p>
           ) : filteredPatients.length === 0 ? (
             // Distinct from the "zero patients in the system" state above —
             // this means the search just didn't match anything, not that
@@ -800,7 +801,7 @@ export default function PatientList() {
                 </p>
               </div>
               {p.senior_citizen_mode && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Senior mode</span>
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">{tr("Senior mode")}</span>
               )}
             </Link>
           ))}

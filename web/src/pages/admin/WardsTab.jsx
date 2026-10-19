@@ -6,6 +6,7 @@ import {
 import WardMap from "../../components/WardMap";
 import { Section } from "./_shared";
 import { occupancyColor, occupancyTextColor } from "./occupancy";
+import { tr } from "../../lib/i18n";
 
 // ---------- Ward capacity ----------
 const WARD_TYPE_OPTIONS = ["general", "icu", "pediatric", "maternity", "emergency", "other"];
@@ -65,7 +66,7 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="field-label">Ward name<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Ward name")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="text"
@@ -75,7 +76,7 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Ward type</label>
+            <label className="field-label">{tr("Ward type")}</label>
             <select
               className="field-input"
               value={wardType}
@@ -86,7 +87,7 @@ function WardModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Total beds<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Total beds")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="number"
@@ -98,7 +99,7 @@ function WardModal({ mode, initial, onClose, onSaved }) {
 
           {mode === "add" && (
             <div>
-              <label className="field-label">Occupied beds (at creation)</label>
+              <label className="field-label">{tr("Occupied beds (at creation)")}</label>
               <input
                 className="field-input"
                 type="number"
@@ -165,13 +166,13 @@ function StandaloneWardsTab() {
 
   return (
     <Section
-      title="Ward Capacity"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Ward</button>}
+      title={tr("Ward Capacity")}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">{tr("+ Add Ward")}</button>}
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : wards.length === 0 ? (
-        <p className="text-sm text-slate-400">No wards on file yet — add one above.</p>
+        <p className="text-sm text-slate-400">{tr("No wards on file yet — add one above.")}</p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {wards.map((w) => (
@@ -202,7 +203,7 @@ function StandaloneWardsTab() {
                     onClick={() => adjustOccupied(w, -1)}
                     disabled={busyId === w.id || w.occupied_beds <= 0}
                     className="w-6 h-6 text-sm border border-slate-300 rounded disabled:opacity-30"
-                    title="Discharge one bed"
+                    title={tr("Discharge one bed")}
                   >
                     −
                   </button>
@@ -211,14 +212,14 @@ function StandaloneWardsTab() {
                     onClick={() => adjustOccupied(w, 1)}
                     disabled={busyId === w.id || w.occupied_beds >= w.total_beds}
                     className="w-6 h-6 text-sm border border-slate-300 rounded disabled:opacity-30"
-                    title="Admit one bed"
+                    title={tr("Admit one bed")}
                   >
                     +
                   </button>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setModal({ mode: "edit", initial: w })} className="text-xs text-blue-700">Edit</button>
-                  <button onClick={() => handleDelete(w)} className="text-xs text-red-700">Delete</button>
+                  <button onClick={() => setModal({ mode: "edit", initial: w })} className="text-xs text-blue-700">{tr("Edit")}</button>
+                  <button onClick={() => handleDelete(w)} className="text-xs text-red-700">{tr("Delete")}</button>
                 </div>
               </div>
             </div>
@@ -301,18 +302,18 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="field-label">Floor label<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Floor label")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="text"
-              placeholder="e.g. Level 3 Male Medical"
+              placeholder={tr("e.g. Level 3 Male Medical")}
               value={floorLabel}
               onChange={(e) => setFloorLabel(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="field-label">Gender restriction</label>
+            <label className="field-label">{tr("Gender restriction")}</label>
             <select
               className="field-input"
               value={gender}
@@ -323,7 +324,7 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Ward count<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Ward count")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="number"
@@ -334,7 +335,7 @@ function FloorModal({ mode, initial, onClose, onSaved }) {
           </div>
 
           <div>
-            <label className="field-label">Beds per ward<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Beds per ward")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="number"
@@ -393,13 +394,13 @@ function FloorsTab() {
 
   return (
     <Section
-      title="Floors"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Floor</button>}
+      title={tr("Floors")}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">{tr("+ Add Floor")}</button>}
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : floors.length === 0 ? (
-        <p className="text-sm text-slate-400">No floors yet — add one above (e.g. Level 3 Male Medical).</p>
+        <p className="text-sm text-slate-400">{tr("No floors yet — add one above (e.g. Level 3 Male Medical).")}</p>
       ) : (
         <div className="space-y-2">
           {floors.map((f) => {
@@ -416,8 +417,8 @@ function FloorsTab() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <button onClick={() => setModal({ mode: "edit", initial: f })} className="text-xs text-blue-700">Edit</button>
-                    <button onClick={() => handleDelete(f)} disabled={busyId === f.id} className="text-xs text-red-700 disabled:opacity-40">Delete</button>
+                    <button onClick={() => setModal({ mode: "edit", initial: f })} className="text-xs text-blue-700">{tr("Edit")}</button>
+                    <button onClick={() => handleDelete(f)} disabled={busyId === f.id} className="text-xs text-red-700 disabled:opacity-40">{tr("Delete")}</button>
                   </div>
                 </div>
               </div>
@@ -476,12 +477,12 @@ export default function WardsTab() {
         </>
       )}
       {view === "heatmap" && (
-        <Section title="Occupancy heat map">
+        <Section title={tr("Occupancy heat map")}>
           <WardMap mode="heatmap" />
         </Section>
       )}
       {view === "full" && (
-        <Section title="Bed board">
+        <Section title={tr("Bed board")}>
           <WardMap />
         </Section>
       )}

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { App, AppOptions, ViewConfig } from "dwv";
 import { getDicomStudy, dicomInstanceFileUrl } from "../api/client";
+import { tr } from "../lib/i18n";
 
 const TOOLS = [
   { key: "WindowLevel", label: "Window/Level" },
@@ -100,7 +101,7 @@ export default function DicomViewer({ requestId, onClose }) {
               </button>
             ))}
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-800 text-sm px-2">✕ Close</button>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-800 text-sm px-2">{tr("✕ Close")}</button>
         </div>
 
         <div className="relative flex-1 bg-black">
@@ -109,7 +110,7 @@ export default function DicomViewer({ requestId, onClose }) {
               fill the parent (dwv reads clientWidth/clientHeight on load). */}
           <div id="dwv-layer-group" ref={containerRef} className="absolute inset-0" />
           {status === "loading" && (
-            <p className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">Loading imaging…</p>
+            <p className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">{tr("Loading imaging…")}</p>
           )}
           {status === "error" && (
             <p className="absolute inset-0 flex items-center justify-center text-sm text-red-300 px-6 text-center">{error}</p>

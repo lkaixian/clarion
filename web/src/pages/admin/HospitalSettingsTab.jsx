@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getHospitalSettings, updateHospitalSettings } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Hospital Settings ----------
 // Facility profile (display name / address / contact / timezone) plus the
@@ -106,37 +107,37 @@ export default function HospitalSettingsTab() {
   }
 
   if (loading) {
-    return <Section title="Hospital Settings"><p className="text-sm text-slate-400">Loading...</p></Section>;
+    return <Section title={tr("Hospital Settings")}><p className="text-sm text-slate-400">{tr("Loading...")}</p></Section>;
   }
   if (!form) {
     return (
-      <Section title="Hospital Settings">
+      <Section title={tr("Hospital Settings")}>
         <div className="alert-error">{error || "Failed to load hospital settings."}</div>
       </Section>
     );
   }
 
   return (
-    <Section title="Hospital Settings">
+    <Section title={tr("Hospital Settings")}>
       {error && <div className="alert-error mb-3">{error}</div>}
       {justSaved && !dirty && (
-        <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">Hospital settings saved.</div>
+        <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">{tr("Hospital settings saved.")}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="field-label">Facility name</label>
+          <label className="field-label">{tr("Facility name")}</label>
           <input
             className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg px-3 py-1.5 text-sm"
             type="text"
             value={settings.facility_name || ""}
             disabled
           />
-          <p className="text-xs text-slate-400 mt-1">The registered facility name can't be changed here.</p>
+          <p className="text-xs text-slate-400 mt-1">{tr("The registered facility name can't be changed here.")}</p>
         </div>
 
         <div>
-          <label className="field-label">Display name</label>
+          <label className="field-label">{tr("Display name")}</label>
           <input
             className="field-input"
             type="text"
@@ -146,7 +147,7 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="field-label">Address</label>
+          <label className="field-label">{tr("Address")}</label>
           <textarea
             className="field-input"
             rows={3}
@@ -156,7 +157,7 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="field-label">Contact phone</label>
+          <label className="field-label">{tr("Contact phone")}</label>
           <input
             className="field-input"
             type="tel"
@@ -166,7 +167,7 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div>
-          <label className="field-label">Timezone</label>
+          <label className="field-label">{tr("Timezone")}</label>
           <select
             className="field-input"
             value={form.timezone}
@@ -182,10 +183,10 @@ export default function HospitalSettingsTab() {
         </div>
 
         <div className="border border-slate-200 rounded-lg p-3">
-          <p className="text-xs font-medium text-slate-600 mb-2">Calling-system TV branding</p>
+          <p className="text-xs font-medium text-slate-600 mb-2">{tr("Calling-system TV branding")}</p>
           <div className="flex items-center gap-4">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Accent color</label>
+              <label className="block text-xs text-slate-500 mb-1">{tr("Accent color")}</label>
               <input
                 type="color"
                 className="h-8 w-14 border border-slate-300 rounded cursor-pointer"
@@ -194,10 +195,10 @@ export default function HospitalSettingsTab() {
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs text-slate-500 mb-1">Logo</label>
+              <label className="block text-xs text-slate-500 mb-1">{tr("Logo")}</label>
               <div className="flex items-center gap-3">
                 {form.logo_data_url && (
-                  <img src={form.logo_data_url} alt="Logo preview" className="h-10 w-10 object-contain border border-slate-200 rounded" />
+                  <img src={form.logo_data_url} alt={tr("Logo preview")} className="h-10 w-10 object-contain border border-slate-200 rounded" />
                 )}
                 <input
                   type="file"
@@ -238,7 +239,7 @@ export default function HospitalSettingsTab() {
               onChange={(e) => setForm((f) => ({ ...f, records_shared_publicly: e.target.checked }))}
             />
             <span>
-              <span className="font-medium">Share records with other hospitals in the network</span>
+              <span className="font-medium">{tr("Share records with other hospitals in the network")}</span>
               <span className="block text-xs text-slate-500 mt-0.5">
                 When on, hospitals across the CLARION network can view clinical records your facility
                 authored (they still can't edit them). When off, only your facility — and emergency

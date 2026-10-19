@@ -10,6 +10,7 @@ import {
 } from "../api/client";
 import WardMap from "../components/WardMap";
 import { formatTime } from "../lib/format";
+import { tr } from "../lib/i18n";
 
 // How often to re-poll today's queue board — same "short enough to feel
 // responsive in a demo, long enough not to hammer the backend" reasoning,
@@ -260,10 +261,10 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
   }
 
   return (
-    <Section title="Check in a walk-in patient">
+    <Section title={tr("Check in a walk-in patient")}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Identify patient by</label>
+          <label className="block text-xs font-medium text-slate-500 mb-1">{tr("Identify patient by")}</label>
           <div className="flex flex-wrap gap-2 mb-2">
             {IDENTIFIER_MODES.map((opt) => (
               <button
@@ -286,7 +287,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder="e.g. 520314-01-1234"
+              placeholder={tr("e.g. 520314-01-1234")}
               className="field-input"
               autoFocus
             />
@@ -297,7 +298,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder="Patient's internal ID (fallback)"
+              placeholder={tr("Patient's internal ID (fallback)")}
               className="field-input"
             />
           )}
@@ -346,7 +347,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
                 type="text"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                placeholder="NFC UID (auto-fills on tap, or type it)"
+                placeholder={tr("NFC UID (auto-fills on tap, or type it)")}
                 className="field-input"
               />
               {nfc.lastScan?.scanned_at && (
@@ -368,7 +369,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
                 value={lockedSection}
                 readOnly
                 className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded-lg px-3 py-2 text-sm"
-                title="Check-ins at your counter always go to this section"
+                title={tr("Check-ins at your counter always go to this section")}
               />
             ) : (
               <select
@@ -376,7 +377,7 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
                 onChange={(e) => setDepartment(e.target.value)}
                 className="field-input"
               >
-                <option value="">— none —</option>
+                <option value="">{tr("— none —")}</option>
                 {departmentOptions.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
@@ -384,12 +385,12 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Reason for visit (optional)</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">{tr("Reason for visit (optional)")}</label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Fever and cough"
+              placeholder={tr("e.g. Fever and cough")}
               className="field-input"
             />
           </div>
@@ -510,14 +511,14 @@ function SelfCheckinQrSection({ departmentOptions, lockedSection }) {
   }
 
   return (
-    <Section title="Self Check-in QR">
+    <Section title={tr("Self Check-in QR")}>
       {error && <div className="alert-error mb-3">{error}</div>}
 
       {station ? (
         <div className="flex items-start gap-4">
           <img
             src={station.qr_base64}
-            alt="Self check-in QR"
+            alt={tr("Self check-in QR")}
             className="border border-slate-200 rounded-lg"
             style={{ width: 220, height: 220 }}
           />
@@ -565,7 +566,7 @@ function SelfCheckinQrSection({ departmentOptions, lockedSection }) {
                   value={lockedSection}
                   readOnly
                   className="border border-slate-200 bg-slate-50 text-slate-500 rounded-lg px-3 py-2 text-sm"
-                  title="This station is for your counter"
+                  title={tr("This station is for your counter")}
                 />
               ) : (
                 <select
@@ -573,7 +574,7 @@ function SelfCheckinQrSection({ departmentOptions, lockedSection }) {
                   onChange={(e) => setDepartment(e.target.value)}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
                 >
-                  <option value="">— none —</option>
+                  <option value="">{tr("— none —")}</option>
                   {departmentOptions.map((d) => (
                     <option key={d} value={d}>{d}</option>
                   ))}
@@ -597,7 +598,7 @@ function SelfCheckinQrSection({ departmentOptions, lockedSection }) {
 function NowServingStrip({ board }) {
   return (
     <div className="bg-blue-900 text-white rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
-      <span className="text-xs uppercase tracking-wide text-blue-200">Now Serving</span>
+      <span className="text-xs uppercase tracking-wide text-blue-200">{tr("Now Serving")}</span>
       <span className="text-2xl font-bold">{board?.now_serving ?? "—"}</span>
       <span className="text-xs text-blue-200">{board?.waiting_count ?? 0} waiting</span>
     </div>
@@ -606,18 +607,18 @@ function NowServingStrip({ board }) {
 
 function QueueBoard({ board, rooms, onAssignRoom, onCall, onComplete, onCancel, busyTicketId, sectionLabel }) {
   return (
-    <Section title="Today's queue">
+    <Section title={tr("Today's queue")}>
       {sectionLabel && (
         <p className="text-xs text-slate-500 mb-3">Showing the {sectionLabel} queue</p>
       )}
       <div className="text-center bg-blue-900 text-white rounded-xl py-6 mb-4">
-        <p className="text-sm uppercase tracking-wide text-blue-200">Now Serving</p>
+        <p className="text-sm uppercase tracking-wide text-blue-200">{tr("Now Serving")}</p>
         <p className="text-5xl font-bold">{board?.now_serving ?? "—"}</p>
         <p className="text-xs text-blue-200 mt-1">{board?.waiting_count ?? 0} waiting</p>
       </div>
 
       {(!board || board.tickets.length === 0) && (
-        <p className="text-sm text-slate-400">No tickets checked in yet today.</p>
+        <p className="text-sm text-slate-400">{tr("No tickets checked in yet today.")}</p>
       )}
 
       <div className="space-y-2">
@@ -636,7 +637,7 @@ function QueueBoard({ board, rooms, onAssignRoom, onCall, onComplete, onCancel, 
                 {ticket.reason ? ` · ${ticket.reason}` : ""}
               </p>
               <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                <span>Room:</span>
+                <span>{tr("Room:")}</span>
                 {rooms && rooms.length > 0 ? (
                   <select
                     value={ticket.room_id || ""}
@@ -756,7 +757,7 @@ function MyRoomTab() {
   }
 
   if (state === null) {
-    return <Section title="Consultation Rooms"><p className="text-sm text-slate-400">Loading…</p></Section>;
+    return <Section title={tr("Consultation Rooms")}><p className="text-sm text-slate-400">{tr("Loading…")}</p></Section>;
   }
 
   // Not in a room yet (or not clocked in at all): show every consultation
@@ -766,7 +767,7 @@ function MyRoomTab() {
   // needs a clock-in (that's a clinician sitting down to see patients).
   if (!state.room) {
     return (
-      <Section title="Consultation Rooms">
+      <Section title={tr("Consultation Rooms")}>
         {error && <div className="alert-error mb-3">{error}</div>}
         {canClaimRoom ? (
           !state.clocked_in && (
@@ -780,7 +781,7 @@ function MyRoomTab() {
           </p>
         )}
         {rooms.length === 0 ? (
-          <p className="text-sm text-slate-400">No consultation rooms configured for this facility yet.</p>
+          <p className="text-sm text-slate-400">{tr("No consultation rooms configured for this facility yet.")}</p>
         ) : (
           <div className="space-y-2">
             {rooms.map((r) => {
@@ -829,7 +830,7 @@ function MyRoomTab() {
       </div>
 
       {state.tickets.length === 0 ? (
-        <p className="text-sm text-slate-400">No patients routed to this room yet today.</p>
+        <p className="text-sm text-slate-400">{tr("No patients routed to this room yet today.")}</p>
       ) : (
         <div className="space-y-2">
           {state.tickets.map((ticket) => (

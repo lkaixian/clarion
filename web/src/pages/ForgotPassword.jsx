@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { requestPasswordResetOtp, resetPasswordWithOtp, errorMessage } from "../api/client";
 import PasswordRules, { passwordMeetsRules } from "../components/PasswordRules";
+import { tr } from "../lib/i18n";
 
 // Two-step self-service reset: NRIC only (no date of birth — DOB is
 // guessable/knowable PII, same weakness NRIC itself has, so it was dropped
@@ -68,7 +69,7 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-sm border border-slate-200">
-        <h1 className="text-2xl font-bold text-blue-900 mb-1">Reset Password</h1>
+        <h1 className="text-2xl font-bold text-blue-900 mb-1">{tr("Reset Password")}</h1>
         <p className="text-sm text-slate-500 mb-6">
           {step === 1
             ? "Patients only. Enter your NRIC — with or without dashes."
@@ -80,12 +81,12 @@ export default function ForgotPassword() {
 
         {step === 1 ? (
           <form onSubmit={handleRequestCode}>
-            <label className="block text-sm font-medium text-slate-700 mb-1">NRIC</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr("NRIC")}</label>
             <input
               className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={nationalId}
               onChange={(e) => setNationalId(e.target.value)}
-              placeholder="e.g. 520314-01-1234 or 520314011234"
+              placeholder={tr("e.g. 520314-01-1234 or 520314011234")}
               autoComplete="off"
             />
             <button
@@ -97,16 +98,16 @@ export default function ForgotPassword() {
           </form>
         ) : (
           <form onSubmit={handleResetPassword}>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Verification code</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr("Verification code")}</label>
             <input
               className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={otpCode}
               onChange={(e) => setOtpCode(e.target.value)}
               inputMode="numeric"
-              placeholder="6-digit code"
+              placeholder={tr("6-digit code")}
               autoComplete="one-time-code"
             />
-            <label className="block text-sm font-medium text-slate-700 mb-1">New password</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr("New password")}</label>
             <input
               className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={newPassword}
@@ -115,7 +116,7 @@ export default function ForgotPassword() {
               autoComplete="new-password"
             />
             <PasswordRules value={newPassword} />
-            <label className="block text-sm font-medium text-slate-700 mb-1 mt-3">Confirm new password</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1 mt-3">{tr("Confirm new password")}</label>
             <input
               className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={confirmPassword}
@@ -123,7 +124,7 @@ export default function ForgotPassword() {
               type="password"
               autoComplete="new-password"
             />
-            <p className="text-xs text-slate-400 mb-4">At least 8 characters.</p>
+            <p className="text-xs text-slate-400 mb-4">{tr("At least 8 characters.")}</p>
             <button
               disabled={loading}
               className="w-full bg-blue-800 hover:bg-blue-900 text-white font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
@@ -141,7 +142,7 @@ export default function ForgotPassword() {
         )}
 
         <p className="text-xs text-slate-400 mt-6 text-center">
-          <Link to="/login" className="text-blue-700 hover:underline">Back to sign in</Link>
+          <Link to="/login" className="text-blue-700 hover:underline">{tr("Back to sign in")}</Link>
         </p>
       </div>
     </div>

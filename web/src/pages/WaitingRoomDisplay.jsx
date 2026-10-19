@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicDisplay } from "../api/client";
 import { formatTime } from "../lib/format";
+import { tr } from "../lib/i18n";
 
 // Public lobby big-screen. Own dark full-screen styling — deliberately NOT
 // wrapped in <Layout> (no nav, no auth, no max-width container). Polls the
@@ -111,7 +112,7 @@ export default function WaitingRoomDisplay() {
   if (revoked && !dataRef.current) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-8">
-        <p className="text-2xl text-slate-300">This display link is no longer active.</p>
+        <p className="text-2xl text-slate-300">{tr("This display link is no longer active.")}</p>
       </div>
     );
   }
@@ -119,7 +120,7 @@ export default function WaitingRoomDisplay() {
   if (!data) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-8">
-        <p className="text-2xl text-slate-400">Loading…</p>
+        <p className="text-2xl text-slate-400">{tr("Loading…")}</p>
       </div>
     );
   }
@@ -162,14 +163,14 @@ export default function WaitingRoomDisplay() {
         </div>
         <div className="text-right">
           <p className="text-3xl font-mono tabular-nums">{now.toLocaleTimeString()}</p>
-          {revoked && <p className="text-xs text-amber-400 mt-1">Link revoked — showing last board</p>}
+          {revoked && <p className="text-xs text-amber-400 mt-1">{tr("Link revoked — showing last board")}</p>}
         </div>
       </header>
 
       <section className="mb-10">
-        <h2 className="text-2xl font-semibold tracking-widest text-slate-400 mb-4">NOW SERVING</h2>
+        <h2 className="text-2xl font-semibold tracking-widest text-slate-400 mb-4">{tr("NOW SERVING")}</h2>
         {nowServing.length === 0 ? (
-          <p className="text-xl text-slate-500">No one is being called right now.</p>
+          <p className="text-xl text-slate-500">{tr("No one is being called right now.")}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {nowServing.map((s, i) => (
@@ -184,9 +185,9 @@ export default function WaitingRoomDisplay() {
       </section>
 
       <section>
-        <h2 className="text-2xl font-semibold tracking-widest text-slate-400 mb-4">WAITING</h2>
+        <h2 className="text-2xl font-semibold tracking-widest text-slate-400 mb-4">{tr("WAITING")}</h2>
         {upNext.length === 0 ? (
-          <p className="text-xl text-slate-500">No one waiting.</p>
+          <p className="text-xl text-slate-500">{tr("No one waiting.")}</p>
         ) : (
           <div className="divide-y divide-slate-800">
             {upNext.map((u, i) => (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getAdminAppointments } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Appointments (read-only monitoring) ----------
 // Deliberately no create/edit/cancel here — appointments are still made
@@ -23,7 +24,7 @@ export default function AppointmentsTab() {
 
   return (
     <Section
-      title="Facility Appointments"
+      title={tr("Facility Appointments")}
       action={
         <label className="flex items-center gap-2 text-xs text-slate-600">
           <input type="checkbox" checked={includeAll} onChange={(e) => setIncludeAll(e.target.checked)} />
@@ -32,7 +33,7 @@ export default function AppointmentsTab() {
       }
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : appointments.length === 0 ? (
         <p className="text-sm text-slate-400">
           {includeAll ? "No appointments on file for this facility." : "No upcoming appointments scheduled."}
@@ -52,9 +53,9 @@ export default function AppointmentsTab() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-sm text-slate-700">
-                    {cancelled && <p className="text-xs font-semibold text-red-700 uppercase mb-0.5">Cancelled</p>}
+                    {cancelled && <p className="text-xs font-semibold text-red-700 uppercase mb-0.5">{tr("Cancelled")}</p>}
                     {a.status === "completed" && (
-                      <p className="text-xs font-semibold text-slate-500 uppercase mb-0.5">Completed</p>
+                      <p className="text-xs font-semibold text-slate-500 uppercase mb-0.5">{tr("Completed")}</p>
                     )}
                     <p className={cancelled ? "line-through" : ""}>
                       {a.patient_name} — {a.venue || a.facility_name}

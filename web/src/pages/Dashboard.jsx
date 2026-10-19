@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import { getDashboardSummary, getDashboardFlowForecast } from "../api/client";
+import { tr } from "../lib/i18n";
 
 const REFRESH_MS = 60_000;
 
@@ -72,10 +73,10 @@ export default function Dashboard() {
     <Layout>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="page-title">Dashboard</h1>
+          <h1 className="page-title">{tr("Dashboard")}</h1>
           <p className="text-sm text-slate-500">Live operational snapshot for your facility{summary ? ` -- ${summary.date}` : ""}.</p>
         </div>
-        <button onClick={refresh} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Refresh</button>
+        <button onClick={refresh} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">{tr("Refresh")}</button>
       </div>
 
       {error && (
@@ -88,20 +89,20 @@ export default function Dashboard() {
       {summary && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <StatTile label="Patients in queue" value={summary.patients_in_queue} />
-            <StatTile label="Attended today" value={summary.patients_attended_today} />
-            <StatTile label="Physicians on duty" value={`${summary.physicians_on_duty} / ${summary.physicians_total}`} />
-            <StatTile label="Avg wait (min)" value={summary.avg_wait_minutes ?? "-"} sub={summary.avg_wait_minutes === null ? "No one called yet today" : undefined} />
+            <StatTile label={tr("Patients in queue")} value={summary.patients_in_queue} />
+            <StatTile label={tr("Attended today")} value={summary.patients_attended_today} />
+            <StatTile label={tr("Physicians on duty")} value={`${summary.physicians_on_duty} / ${summary.physicians_total}`} />
+            <StatTile label={tr("Avg wait (min)")} value={summary.avg_wait_minutes ?? "-"} sub={summary.avg_wait_minutes === null ? "No one called yet today" : undefined} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
             <div className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-4 flex flex-col items-center justify-center text-center">
-              <div className="text-xs font-semibold text-slate-500 mb-1">Operational health score</div>
+              <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Operational health score")}</div>
               <div className={`text-5xl font-bold ${scoreColor(summary.health_score)}`}>{summary.health_score}</div>
-              <div className="text-xs text-slate-400 mt-1">out of 100</div>
+              <div className="text-xs text-slate-400 mt-1">{tr("out of 100")}</div>
             </div>
             <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-              <div className="text-xs font-semibold text-slate-500 mb-1">Breakdown</div>
+              <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Breakdown")}</div>
               {Object.entries(summary.health_score_breakdown).map(([key, score]) => (
                 <BreakdownBar key={key} label={BREAKDOWN_LABELS[key] || key} score={score} />
               ))}
@@ -113,19 +114,19 @@ export default function Dashboard() {
       {forecast && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-500 mb-2">Today's clinic load</div>
+            <div className="text-xs font-semibold text-slate-500 mb-2">{tr("Today's clinic load")}</div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><div className="text-slate-400 text-xs">Checked in so far</div><div className="font-semibold text-slate-800">{forecast.today_so_far}</div></div>
-              <div><div className="text-slate-400 text-xs">Forecast total</div><div className="font-semibold text-slate-800">{forecast.today_forecast_total}</div></div>
-              <div><div className="text-slate-400 text-xs">Forecast remaining</div><div className="font-semibold text-slate-800">{forecast.today_forecast_remaining}</div></div>
-              <div><div className="text-slate-400 text-xs">Scheduled appointments</div><div className="font-semibold text-slate-800">{forecast.today_scheduled_appointments}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Checked in so far")}</div><div className="font-semibold text-slate-800">{forecast.today_so_far}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Forecast total")}</div><div className="font-semibold text-slate-800">{forecast.today_forecast_total}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Forecast remaining")}</div><div className="font-semibold text-slate-800">{forecast.today_forecast_remaining}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Scheduled appointments")}</div><div className="font-semibold text-slate-800">{forecast.today_scheduled_appointments}</div></div>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-500 mb-2">Tomorrow's forecast</div>
+            <div className="text-xs font-semibold text-slate-500 mb-2">{tr("Tomorrow's forecast")}</div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><div className="text-slate-400 text-xs">Forecast total</div><div className="font-semibold text-slate-800">{forecast.tomorrow_forecast_total}</div></div>
-              <div><div className="text-slate-400 text-xs">Scheduled appointments</div><div className="font-semibold text-slate-800">{forecast.tomorrow_scheduled_appointments}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Forecast total")}</div><div className="font-semibold text-slate-800">{forecast.tomorrow_forecast_total}</div></div>
+              <div><div className="text-slate-400 text-xs">{tr("Scheduled appointments")}</div><div className="font-semibold text-slate-800">{forecast.tomorrow_scheduled_appointments}</div></div>
             </div>
             <p className="text-xs text-slate-400 mt-3">
               Forecast from the same weekday's last {forecast.weeks_of_history_used} weeks of visit history, plus already-booked appointments.

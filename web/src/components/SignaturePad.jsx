@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { dataUrlToPngBlob } from "../lib/image";
+import { tr } from "../lib/i18n";
 
 // CSS layout size of the pad. The backing <canvas> store is scaled up by
 // devicePixelRatio (below) so strokes stay crisp on HiDPI screens.
@@ -130,7 +131,7 @@ const SignaturePad = forwardRef(function SignaturePad(
         >
           Clear
         </button>
-        {showHint && <span className="text-xs text-slate-400">Draw your signature above</span>}
+        {showHint && <span className="text-xs text-slate-400">{tr("Draw your signature above")}</span>}
       </div>
     </div>
   );

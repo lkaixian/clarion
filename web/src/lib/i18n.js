@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from "react";
+import ms from "./lang/ms.json";
+import zh from "./lang/zh.json";
+import ta from "./lang/ta.json";
 
-// Tiny translation layer: the English text IS the key, so a string with no
+// Translation layer: the English text IS the key, so a string with no
 // entry here simply shows in English and nothing breaks. Add a language by
-// adding a block to DICT and an entry to LANGUAGES. Only the sign-in screen
-// and the side navigation are translated so far; wrap further strings in t().
+// adding a block to DICT and an entry to LANGUAGES. The screen text lives in lang/*.json
+// (keys = the English text found in tr("...") calls). Text that is built from
+// variables is not covered and stays English.
 export const LANGUAGES = [
   ["en", "English"],
   ["ms", "Bahasa Melayu"],
@@ -11,7 +15,7 @@ export const LANGUAGES = [
   ["ta", "தமிழ்"],
 ];
 
-const DICT = {
+const HAND = {
   ms: {
     "Language": "Bahasa",
     "Skip to main content": "Langkau ke kandungan utama",
@@ -59,6 +63,12 @@ const DICT = {
   },
 };
 
+// Generated screen-wide strings first, hand-written entries win on a clash.
+const GENERATED = { ms, zh, ta };
+const DICT = Object.fromEntries(
+  Object.keys(GENERATED).map((code) => [code, { ...GENERATED[code], ...HAND[code] }]),
+);
+
 const KEY = "clarion_lang";
 const listeners = new Set();
 
@@ -84,6 +94,10 @@ export function setLang(code) {
 export function translate(text, lang = current) {
   return DICT[lang]?.[text] ?? text;
 }
+
+// Plain (hook-free) lookup for use anywhere in JSX. The app root remounts when the
+// language changes, so every tr() call re-evaluates.
+export const tr = (text) => translate(text);
 
 // Components that call this re-render when the language changes.
 export function useLang() {
