@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import Register from "./pages/Register";
 import PatientList from "./pages/PatientList";
 import PatientDetail from "./pages/PatientDetail";
 import Profile from "./pages/Profile";
@@ -15,8 +16,16 @@ import Dashboard from "./pages/Dashboard";
 import WaitingRoomDisplay from "./pages/WaitingRoomDisplay";
 import ChangePassword from "./pages/ChangePassword";
 import Security from "./pages/Security";
+import Inbox from "./pages/Inbox";
+import Catalogue from "./pages/Catalogue";
+import MyBills from "./pages/MyBills";
+import Cashier from "./pages/Cashier";
+import Orders from "./pages/Orders";
+import Purchasing from "./pages/Purchasing";
+import FormsAdmin from "./pages/FormsAdmin";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
+import { useLang } from "./lib/i18n";
 
 function Protected({ children }) {
   return getCurrentUser() ? children : <Navigate to="/login" />;
@@ -44,15 +53,35 @@ function RequirePage({ page, children }) {
   return <Navigate to={landingPathFor(user)} />;
 }
 
+// Not a configurable page (any staff role may read the catalogue); patients are bounced.
+function RequireStaff({ children }) {
+  const user = getCurrentUser();
+  if (!user) return <Navigate to="/login" />;
+  if (user.role === "patient" || user.role === "emergency_responder") return <Navigate to={landingPathFor(user)} />;
+  return children;
+}
+
+// Patient accounts only: staff have no "my bills" (they use Billing / Cashier).
+function RequirePatient({ children }) {
+  const user = getCurrentUser();
+  if (!user) return <Navigate to="/login" />;
+  if (user.role !== "patient") return <Navigate to={landingPathFor(user)} />;
+  return children;
+}
+
 export default function App() {
+  // Remount on a language change so every tr() call re-evaluates.
+  const { lang } = useLang();
   return (
-    <BrowserRouter>
+    <BrowserRouter key={lang}>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<Protected><ChangePassword /></Protected>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/security" element={<Protected><Security /></Protected>} />
+        <Route path="/inbox" element={<Protected><Inbox /></Protected>} />
         {/* Public big-screen waiting-room board — no auth, deliberately
             OUTSIDE <Protected>: a lobby TV has no logged-in user. The page
             itself calls the unauthenticated /display/{token} endpoint. */}
@@ -65,6 +94,12 @@ export default function App() {
         <Route path="/patients/:id" element={<Protected><PatientDetail /></Protected>} />
         {/* Any authenticated staff member — a signature isn't a console
             "page", so it's guarded by <Protected> only, no RequirePage. */}
+        <Route path="/catalogue" element={<Protected><RequireStaff><Catalogue /></RequireStaff></Protected>} />
+        <Route path="/my-bills" element={<Protected><RequirePatient><MyBills /></RequirePatient></Protected>} />
+        <Route path="/cashier" element={<Protected><RequirePage page="billing"><Cashier /></RequirePage></Protected>} />
+        <Route path="/orders" element={<Protected><RequireStaff><Orders /></RequireStaff></Protected>} />
+        <Route path="/purchasing" element={<Protected><RequirePage page="pharmacy"><Purchasing /></RequirePage></Protected>} />
+        <Route path="/forms" element={<Protected><RequirePage page="admin"><FormsAdmin /></RequirePage></Protected>} />
         <Route path="/profile" element={<Protected><Profile /></Protected>} />
         <Route path="/admin" element={<Protected><RequirePage page="admin"><AdminConsole /></RequirePage></Protected>} />
         <Route path="/reception" element={<Protected><RequirePage page="reception"><Reception /></RequirePage></Protected>} />

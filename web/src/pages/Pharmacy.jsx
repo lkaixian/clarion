@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
+import DrugHints, { CatalogueTag } from "../components/DrugHints";
 import {
   getPharmacyInventory,
   getLowStockInventory,
@@ -13,6 +14,7 @@ import {
 } from "../api/client";
 import { formatDateTime } from "../lib/format";
 import { validateImageFile } from "../lib/upload";
+import { tr } from "../lib/i18n";
 
 // pending=amber, approved=green, rejected=slate — reuses the same
 // "amber = needs attention / green = good / slate = closed" vocabulary the
@@ -249,7 +251,7 @@ export default function Pharmacy() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Pharmacy</h1>
+        <h1 className="page-title">{tr("Pharmacy")}</h1>
         <p className="text-sm text-slate-500">
           Stock levels for your facility. Restocking accrues against the procurement budget; the
           catalogue itself is managed by an admin.
@@ -262,7 +264,7 @@ export default function Pharmacy() {
         <div className="flex items-center gap-2">
           <input
             type="text"
-            placeholder="Search by drug name or scan a barcode…"
+            placeholder={tr("Search by drug name or scan a barcode…")}
             className="border rounded-lg px-3 py-2 text-sm flex-1"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -316,14 +318,14 @@ export default function Pharmacy() {
 
       {showProposeForm && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
-          <h2 className="font-semibold text-slate-800 mb-3">Propose a new medicine</h2>
+          <h2 className="font-semibold text-slate-800 mb-3">{tr("Propose a new medicine")}</h2>
           <ProposeNewMedicineForm onSubmit={submitProposal} onCancel={() => setShowProposeForm(false)} />
         </div>
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <p className="text-sm text-slate-400">{tr("Loading…")}</p>
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : items.length === 0 ? (
@@ -348,13 +350,14 @@ export default function Pharmacy() {
                     <div className="text-sm text-slate-700 min-w-0">
                       <p className="font-medium">
                         {item.drug_name}
+                        <CatalogueTag code={item.drug_code} />
                         {item.auto_approved && (
                           <span className="ml-2 text-xs font-semibold text-green-700 bg-green-100 rounded px-1.5 py-0.5">
                             Auto-approved
                           </span>
                         )}
                         {item.is_low_stock && (
-                          <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">⚠ Low stock</span>
+                          <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">{tr("⚠ Low stock")}</span>
                         )}
                       </p>
                       <p className="text-xs text-slate-400">
@@ -375,7 +378,7 @@ export default function Pharmacy() {
                         onClick={() => step(item, -1)}
                         disabled={busyId === item.id || item.quantity_on_hand <= 0}
                         className="w-6 h-6 text-sm border border-slate-300 rounded disabled:opacity-30"
-                        title="Dispense 1"
+                        title={tr("Dispense 1")}
                       >
                         −
                       </button>
@@ -408,7 +411,7 @@ export default function Pharmacy() {
                       Add stock…
                     </button>
                     {item.pending_delete_request ? (
-                      <span className="text-xs text-slate-400 whitespace-nowrap">Deletion requested</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">{tr("Deletion requested")}</span>
                     ) : (
                       <button
                         onClick={() => requestDeletion(item)}
@@ -442,16 +445,16 @@ export default function Pharmacy() {
           onClick={toggleProposals}
           className="w-full flex items-center justify-between text-left"
         >
-          <span className="font-semibold text-slate-800">My proposals</span>
+          <span className="font-semibold text-slate-800">{tr("My proposals")}</span>
           <span className="text-xs text-slate-400">{proposalsOpen ? "Hide" : "Show"}</span>
         </button>
 
         {proposalsOpen && (
           <div className="mt-3">
             {proposalsLoading ? (
-              <p className="text-sm text-slate-400">Loading…</p>
+              <p className="text-sm text-slate-400">{tr("Loading…")}</p>
             ) : proposals.length === 0 ? (
-              <p className="text-sm text-slate-400">You haven't sent any proposals yet.</p>
+              <p className="text-sm text-slate-400">{tr("You haven't sent any proposals yet.")}</p>
             ) : (
               <div className="space-y-4">
                 {PROPOSAL_STATUS_ORDER.filter((s) => proposals.some((p) => p.status === s)).map((status) => (
@@ -467,7 +470,7 @@ export default function Pharmacy() {
                                 <p className="font-medium">
                                   {p.proposed_drug_name}
                                   {p.is_new_item && (
-                                    <span className="ml-2 text-xs font-normal text-slate-400">(new medicine)</span>
+                                    <span className="ml-2 text-xs font-normal text-slate-400">{tr("(new medicine)")}</span>
                                   )}
                                 </p>
                                 <p className="text-xs text-slate-400">
@@ -604,7 +607,7 @@ function AddStockForm({ item, busy, onCancel, onSubmit }) {
         </p>
       )}
       <div>
-        <label className="field-label">Quantity to add</label>
+        <label className="field-label">{tr("Quantity to add")}</label>
         <input
           className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           type="number"
@@ -614,7 +617,7 @@ function AddStockForm({ item, busy, onCancel, onSubmit }) {
         />
       </div>
       <div>
-        <label className="field-label">Unit cost (RM)</label>
+        <label className="field-label">{tr("Unit cost (RM)")}</label>
         <input
           className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           type="number"
@@ -698,24 +701,27 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
       {err && <div className="alert-error">{err}</div>}
       <div className="flex flex-wrap gap-3">
         <div>
-          <label className="field-label">Drug name<span className="text-red-600"> *</span></label>
+          <label className="field-label">{tr("Drug name")}<span className="text-red-600"> *</span></label>
           <input
             className="w-52 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={values.proposed_drug_name}
+            list="proposal-drug-hints"
+            autoComplete="off"
             onChange={(e) => set("proposed_drug_name", e.target.value)}
           />
+          <DrugHints id="proposal-drug-hints" query={values.proposed_drug_name} />
         </div>
         <div>
-          <label className="field-label">Unit</label>
+          <label className="field-label">{tr("Unit")}</label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g. tablets"
+            placeholder={tr("e.g. tablets")}
             value={values.proposed_unit}
             onChange={(e) => set("proposed_unit", e.target.value)}
           />
         </div>
         <div>
-          <label className="field-label">Barcode</label>
+          <label className="field-label">{tr("Barcode")}</label>
           <input
             className="w-40 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={values.proposed_barcode}
@@ -725,7 +731,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
       </div>
       <div className="flex flex-wrap gap-3">
         <div>
-          <label className="field-label">Quantity<span className="text-red-600"> *</span></label>
+          <label className="field-label">{tr("Quantity")}<span className="text-red-600"> *</span></label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="number"
@@ -735,7 +741,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
           />
         </div>
         <div>
-          <label className="field-label">Unit cost (RM)</label>
+          <label className="field-label">{tr("Unit cost (RM)")}</label>
           <input
             className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             type="number"
@@ -747,7 +753,7 @@ function ProposeNewMedicineForm({ onSubmit, onCancel }) {
         </div>
       </div>
       <div>
-        <label className="field-label">Reason</label>
+        <label className="field-label">{tr("Reason")}</label>
         <textarea
           className="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           rows={2}
