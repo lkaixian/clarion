@@ -1,3 +1,10 @@
+/// Parses a server timestamp to local time; a value with no zone is UTC.
+DateTime? parseServerTime(String raw) {
+  if (raw.isEmpty) return null;
+  final hasZone = RegExp(r'(Z|[+-]\d\d:?\d\d)$').hasMatch(raw);
+  return DateTime.tryParse(hasZone ? raw : '${raw}Z')?.toLocal();
+}
+
 /// Mirrors an entry from `GET /patients/{id}/audit-log`.
 class AuditLogEntry {
   final String actor;
@@ -22,6 +29,8 @@ class AuditLogEntry {
   /// the actor later moves facilities). Also nullable/omitted for
   /// system/emergency-responder rows.
   final String? actorFacility;
+
+  DateTime? get time => parseServerTime(timestamp);
 
   const AuditLogEntry({
     required this.actor,

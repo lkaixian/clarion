@@ -1,65 +1,166 @@
-/// P3.10: patient self-service appointment booking + P3.10
-///: clinic-published announcements. Mirrors
-/// `GET /patients/appointment-slots`, `GET /patients/booking-options` and
-/// `GET /patients/announcements` — see backend/app/schemas.py's
-/// AppointmentSlotOut / BookingOptionsOut / AnnouncementOut for the exact
-/// server-side shapes these are parsed from.
+/// Online booking v2 (category -> hospital -> date/time -> person -> confirm)
+/// plus clinic-published announcements. Mirrors the `/booking/*` endpoints
+/// and `GET /patients/announcements`; every parser tolerates missing fields.
 library;
 
-/// One bookable slot returned by `GET /patients/appointment-slots`.
-class AppointmentSlot {
-  final DateTime scheduledAt;
-  final String? clinicianId;
-  final String? clinicianName;
+/// Wall-clock time of an ISO-8601 string with an offset, exactly as the
+/// hospital's own clock shows it (offset dropped, not converted). Slots are
+/// serialised in the facility's timezone, so this shows "9:30 AM" at the
+/// hospital even when the phone is set to another timezone.
+DateTime wallClock(String iso) {
+  final s = iso.length >= 19 ? iso.substring(0, 19) : iso;
+  return DateTime.parse(s);
+}
 
-  const AppointmentSlot({
-    required this.scheduledAt,
-    this.clinicianId,
-    this.clinicianName,
-  });
+/// "2.4" for 2.43 km, "12" for 12.04 km; null when unknown.
+String? distanceKmLabel(double? km) {
+  if (km == null || km.isNaN || km < 0) return null;
+  final s = km < 10 ? km.toStringAsFixed(1) : km.toStringAsFixed(0);
+  return s;
+}
 
-  factory AppointmentSlot.fromJson(Map<String, dynamic> json) => AppointmentSlot(
-        scheduledAt: DateTime.parse(json['scheduled_at'] as String),
-        clinicianId: json['clinician_id'] as String?,
-        clinicianName: json['clinician_name'] as String?,
+/// Request body for `POST /booking/appointments`. `scheduledAt` is the
+/// slot's own `start` string, passed through untouched (the server only
+/// accepts a currently offered slot start).
+Map<String, dynamic> buildBookingBody({
+  required String facilityName,
+  required String category,
+  required String scheduledAt,
+  String? profileId,
+  String? reason,
+}) {
+  final trimmed = reason?.trim() ?? '';
+  return {
+    'facility_name': facilityName,
+    'category': category,
+    'scheduled_at': scheduledAt,
+    'profile_id': profileId,
+    if (trimmed.isNotEmpty) 'reason': trimmed,
+  };
+}
+
+/// First date with at least one open slot, or null when none.
+AvailabilityDay? firstOpenDay(List<AvailabilityDay> days) {
+  for (final d in days) {
+    if (d.openSlots > 0) return d;
+  }
+  return null;
+}
+
+const bookingRelationships = ['child', 'parent', 'spouse', 'sibling', 'relative', 'other'];
+
+class BookingCategory {
+  final String code;
+  final String label;
+  const BookingCategory({required this.code, required this.label});
+
+  factory BookingCategory.fromJson(Map<String, dynamic> json) => BookingCategory(
+        code: json['code'] as String? ?? '',
+        label: json['label'] as String? ?? '',
       );
 }
 
-/// One clinician a patient can pick from when self-booking.
-class BookingClinician {
+class BookingFacility {
+  final String facilityName;
+  final String displayName;
+  final String? address;
+  final String? contactPhone;
+  final double? distanceKm;
+
+  /// ISO-8601 with offset, or null when nothing is open soon.
+  final String? nextAvailableAt;
+
+  const BookingFacility({
+    required this.facilityName,
+    required this.displayName,
+    this.address,
+    this.contactPhone,
+    this.distanceKm,
+    this.nextAvailableAt,
+  });
+
+  factory BookingFacility.fromJson(Map<String, dynamic> json) {
+    final name = json['facility_name'] as String? ?? '';
+    final display = json['display_name'] as String?;
+    return BookingFacility(
+      facilityName: name,
+      displayName: display != null && display.trim().isNotEmpty ? display : name,
+      address: json['address'] as String?,
+      contactPhone: json['contact_phone'] as String?,
+      distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      nextAvailableAt: json['next_available_at'] as String?,
+    );
+  }
+}
+
+class AvailabilityDay {
+  final String date; // YYYY-MM-DD
+  final int openSlots;
+  const AvailabilityDay({required this.date, required this.openSlots});
+
+  DateTime get day => DateTime.parse(date);
+
+  factory AvailabilityDay.fromJson(Map<String, dynamic> json) => AvailabilityDay(
+        date: json['date'] as String? ?? '',
+        openSlots: (json['open_slots'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class FacilityAvailability {
+  final int slotMinutes;
+  final int capacity;
+  final List<AvailabilityDay> days;
+  const FacilityAvailability({required this.slotMinutes, required this.capacity, required this.days});
+
+  factory FacilityAvailability.fromJson(Map<String, dynamic> json) => FacilityAvailability(
+        slotMinutes: (json['slot_minutes'] as num?)?.toInt() ?? 0,
+        capacity: (json['capacity'] as num?)?.toInt() ?? 1,
+        days: (json['days'] as List<dynamic>? ?? [])
+            .map((e) => AvailabilityDay.fromJson(e as Map<String, dynamic>))
+            .where((d) => d.date.isNotEmpty)
+            .toList(),
+      );
+}
+
+class BookingSlot {
+  /// Verbatim ISO string from the server; this is what gets booked.
+  final String start;
+  final String end;
+  final int remaining;
+  const BookingSlot({required this.start, required this.end, required this.remaining});
+
+  bool get isFull => remaining <= 0;
+  DateTime get startWall => wallClock(start);
+
+  factory BookingSlot.fromJson(Map<String, dynamic> json) => BookingSlot(
+        start: json['start'] as String? ?? '',
+        end: json['end'] as String? ?? '',
+        remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// A saved person (child, parent...) the account holder can book for.
+class BookingProfile {
   final String id;
   final String fullName;
-  final String? department;
+  final String relationship;
+  final String? dateOfBirth; // YYYY-MM-DD
+  final String? nationalId;
 
-  const BookingClinician({
+  const BookingProfile({
     required this.id,
     required this.fullName,
-    this.department,
+    required this.relationship,
+    this.dateOfBirth,
+    this.nationalId,
   });
 
-  factory BookingClinician.fromJson(Map<String, dynamic> json) => BookingClinician(
+  factory BookingProfile.fromJson(Map<String, dynamic> json) => BookingProfile(
         id: json['id'] as String? ?? '',
         fullName: json['full_name'] as String? ?? '',
-        department: json['department'] as String?,
-      );
-}
-
-/// The department + clinician pickers for one facility, from
-/// `GET /patients/booking-options`.
-class BookingOptions {
-  final List<String> departments;
-  final List<BookingClinician> clinicians;
-
-  const BookingOptions({
-    required this.departments,
-    required this.clinicians,
-  });
-
-  factory BookingOptions.fromJson(Map<String, dynamic> json) => BookingOptions(
-        departments: (json['departments'] as List<dynamic>? ?? []).map((e) => e as String).toList(),
-        clinicians: (json['clinicians'] as List<dynamic>? ?? [])
-            .map((e) => BookingClinician.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        relationship: json['relationship'] as String? ?? 'other',
+        dateOfBirth: json['date_of_birth'] as String?,
+        nationalId: json['national_id'] as String?,
       );
 }
 

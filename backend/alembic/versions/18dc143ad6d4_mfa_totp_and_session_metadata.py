@@ -58,9 +58,6 @@ def downgrade() -> None:
         batch_op.drop_column('user_agent')
         batch_op.drop_column('ip')
 
-    with op.batch_alter_table('mfa_recovery_codes', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_mfa_recovery_codes_user_id'))
-        batch_op.drop_index(batch_op.f('ix_mfa_recovery_codes_code_hash'))
-
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table('mfa_recovery_codes')
     # ### end Alembic commands ###

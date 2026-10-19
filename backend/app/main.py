@@ -82,7 +82,7 @@ from . import auth, jobs
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
-from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation, auth_security
+from .routers import auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, registration_claims, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation, auth_security, notifications, reference, catalogue, payments, registry, orders, purchasing, forms, booking
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -413,6 +413,7 @@ app.include_router(staff.router)
 # Self-service patient registration (NRIC-OCR identity verification, see
 # routers/self_registration.py's module docstring).
 app.include_router(self_registration.router)
+app.include_router(registration_claims.router)
 # Reception desk check-in + queue number system.
 app.include_router(
     reception.router,
@@ -493,6 +494,28 @@ app.include_router(
 # routers/campus_registry_mock.py's module docstring). Deliberately NOT
 # page-gated -- see that router's own docstring for why.
 app.include_router(campus_registry_mock.router)
+# In-app inbox: every signed-in user sees only their own rows, so no page gate.
+app.include_router(notifications.router)
+app.include_router(reference.router)
+app.include_router(catalogue.router)
+# HIS-dataset features. Registry (demographics, sponsors, dependants) and forms/orders carry their
+# own role gates and facility scoping (see each module's docstring); purchasing is pharmacy-side.
+app.include_router(registry.router)
+app.include_router(orders.router)
+app.include_router(forms.router)
+# Online booking v2: signed-in users (patient app) + facility admin; role checks are inline.
+app.include_router(booking.router)
+app.include_router(
+    purchasing.router,
+    dependencies=[Depends(auth.require_page_access("pharmacy"))],
+)
+# Payments: patient self-service (patient accounts only, no page gate) and the
+# cashier side (same "billing" page gate as the billing router).
+app.include_router(payments.patient_router)
+app.include_router(
+    payments.staff_router,
+    dependencies=[Depends(auth.require_page_access("billing"))],
+)
 
 
 @app.get("/")
@@ -508,7 +531,7 @@ def app_version():
     blocking one. Bump CLARION_APP_LATEST_VERSION when a new APK is
     published to /get-app."""
     return {
-        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.6.1"),
+        "latest": os.environ.get("CLARION_APP_LATEST_VERSION", "1.7.1"),
         "min_supported": os.environ.get("CLARION_APP_MIN_VERSION", ""),
         "download_url": os.environ.get("CLARION_APP_DOWNLOAD_URL", "/get-app"),
     }
@@ -727,7 +750,10 @@ def _record_status(components: dict) -> None:
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     db = SessionLocal()
     try:
-        for name, comp in components.items():
+        flat = dict(components)
+        for c in components["api"].get("checks", []):  # per-check bars on the status page
+            flat[f"api.{c['id']}"] = c
+        for name, comp in flat.items():
             if comp.get("status") == "disabled":
                 continue
             bad = 1 if comp.get("status") in ("down", "degraded") else 0

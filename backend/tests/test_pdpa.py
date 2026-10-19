@@ -15,6 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app import models
+from conftest import drop_patient
 from app.retention import run_retention_scan
 
 
@@ -49,7 +50,7 @@ def test_consent_ledger_is_append_only_newest_wins(test_client, make_user, auth_
         assert bad.status_code == 400
     finally:
         db_session.query(models.ConsentRecord).filter_by(patient_id=p.id).delete()
-        db_session.query(models.Patient).filter_by(id=p.id).delete()
+        drop_patient(db_session, p.id)
         db_session.commit()
 
 
@@ -62,7 +63,7 @@ def test_patient_cannot_touch_another_patients_consent(test_client, make_user, a
                              headers=H)
         assert r.status_code == 403
     finally:
-        db_session.query(models.Patient).filter_by(id=p.id).delete()
+        drop_patient(db_session, p.id)
         db_session.commit()
 
 
@@ -127,7 +128,7 @@ def test_dsr_workflow_and_export(test_client, make_user, auth_headers, db_sessio
             db_session.query(models.DataSubjectRequest).filter_by(id=did).delete()
         db_session.query(models.ConsentRecord).filter_by(patient_id=p.id).delete()
         db_session.query(models.Encounter).filter_by(id=enc.id).delete()
-        db_session.query(models.Patient).filter_by(id=p.id).delete()
+        drop_patient(db_session, p.id)
         db_session.commit()
 
 
@@ -142,7 +143,7 @@ def test_export_rejects_a_non_access_request(test_client, make_user, auth_header
     finally:
         for did in made:
             db_session.query(models.DataSubjectRequest).filter_by(id=did).delete()
-        db_session.query(models.Patient).filter_by(id=p.id).delete()
+        drop_patient(db_session, p.id)
         db_session.commit()
 
 

@@ -320,6 +320,31 @@ def photo_response(key: Optional[str], *, sha256: Optional[str], not_found_detai
     )
 
 
+@router.get("/me/hospital")
+def get_my_hospital(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """The caller's own hospital name + logo for the app shell. Read-only (no
+    create-on-read, unlike GET /admin/hospital-settings, which is admin-only)
+    and strictly the caller's own facility. Name falls back to the facility
+    name until an admin sets a display name; the logo is the one the admin
+    uploaded in Hospital Settings (P3.9), nothing new is stored."""
+    empty = {"name": None, "logo_data_url": None, "brand_primary_color": None}
+    if current_user.role == "patient" or not current_user.facility:
+        return empty
+    row = (
+        db.query(models.HospitalSetting)
+        .filter(models.HospitalSetting.facility_name == current_user.facility)
+        .first()
+    )
+    return {
+        "name": (row.display_name if row and row.display_name else current_user.facility),
+        "logo_data_url": row.logo_data_url if row else None,
+        "brand_primary_color": row.brand_primary_color if row else None,
+    }
+
+
 @router.put("/me/profile")
 def update_my_profile(
     payload: schemas.MyProfileUpdate,

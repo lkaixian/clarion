@@ -24,8 +24,8 @@
 .st-state{font-weight:600;font-variant-numeric:tabular-nums;font-size:.9rem}
 .st-pct:empty+.st-state,.st-row>.st-state:nth-child(3){margin-left:auto}
 
-.st-bars{display:flex;gap:2px;height:2.1rem;margin-top:.7rem}
-.st-bars i{flex:1 1 0;min-width:2px;border-radius:2px;background:#d6e2ea;cursor:default;transition:transform .1s}
+.st-bars{display:flex;gap:1px;height:2.1rem;margin-top:.7rem;width:100%;min-width:0;overflow:hidden}
+.st-bars i{flex:1 1 0;min-width:0;border-radius:2px;background:#d6e2ea;cursor:default;transition:transform .1s}
 .st-bars i.ok{background:var(--ok)}.st-bars i.part{background:#f2a900}.st-bars i.out{background:var(--bad)}
 .st-bars i:hover,.st-bars i:focus{transform:scaleY(1.12);outline:0}
 .st-axis{display:flex;align-items:center;gap:.75rem;color:var(--muted);font-size:.8rem;margin-top:.9rem}
@@ -48,7 +48,10 @@
 
 .st-tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:#fff;border-radius:8px;padding:.5rem .7rem;font-size:.8rem;line-height:1.35;box-shadow:0 8px 24px #0004;white-space:nowrap}
 .st-tip b{display:block}
-@media(max-width:34rem){.st-bars{height:1.7rem}.st-row{flex-wrap:wrap}}
+@media(max-width:34rem){.st-bars{height:1.7rem}.st-row{flex-wrap:wrap}.st-card{padding:1rem}}
+/* per-check bars inside the API details */
+.checks li{flex-wrap:wrap}
+.checks .st-bars{flex:0 0 100%;height:1.2rem;margin-top:.2rem}
 
 /* round trip vs server processing */
 .st-metrics{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));margin-bottom:1.5rem}
@@ -56,3 +59,11 @@
 .st-metric .k{font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--teal)}
 .st-metric b{font-size:1.8rem;color:var(--navy);font-variant-numeric:tabular-nums}
 .st-metric .muted{font-size:.82rem}
+
+/* upgrade in progress / scheduled upgrade */
+.st-banner.maint{border-left-color:#2f6fed}
+.st-banner.maint .st-icon{background:#2f6fed}
+.st-banner.maint .st-icon::after{content:"BB";border:0;transform:none;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:1.2rem}
+.dot.maint{background:#2f6fed}
+.st-bars i.maint{background:#2f6fed}
+.checks li .st-pct{margin-left:auto}.checks li .st-pct+b{margin-left:0}

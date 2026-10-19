@@ -18,6 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app import models
+from conftest import drop_patient
 from app.data_quality import (
     RULES, _FINDING_RULE_TO_KEY,
     run_scan,
@@ -446,11 +447,12 @@ def test_admin_list_is_facility_scoped_with_break_glass(test_client, make_user, 
         assert other_facility_alert.id in allf and dup_alert.id in allf
     finally:
         for aid in cleanup:
-            for m in (models.DataQualityAlert, models.Encounter, models.Patient):
+            for m in (models.DataQualityAlert, models.Encounter):
                 row = db_session.query(m).filter_by(id=aid).first()
                 if row is not None:
                     db_session.delete(row)
         db_session.commit()
+        drop_patient(db_session, pb.id)
 
 
 def test_admin_acknowledge_resolve_is_facility_scoped(test_client, make_user, auth_headers, db_session):
@@ -484,8 +486,9 @@ def test_admin_acknowledge_resolve_is_facility_scoped(test_client, make_user, au
         assert r.status_code == 200 and r.json()["acknowledged"] is True
     finally:
         for aid in cleanup:
-            for m in (models.DataQualityAlert, models.Encounter, models.Patient):
+            for m in (models.DataQualityAlert, models.Encounter):
                 row = db_session.query(m).filter_by(id=aid).first()
                 if row is not None:
                     db_session.delete(row)
         db_session.commit()
+        drop_patient(db_session, pb.id)

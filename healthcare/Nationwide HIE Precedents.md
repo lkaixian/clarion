@@ -41,4 +41,4 @@ tiering: discharge → demote; upcoming appointment (HL7 SIU) → overnight pref
 cold→hot; chronic/oncology → keep warm. DICOM prefetching driven by scheduling events.
 
 Detail: `scratchpad/agy-research-full.md` Part 2 Topic G + the Gemini thread
-(`gemin-text.txt` in the repo root). See [[Sources]].
+(`docs/source/gemin-text.txt`). See [[Sources]].

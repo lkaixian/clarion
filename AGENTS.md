@@ -619,6 +619,46 @@ FK `ondelete` uniformity (DBA review S3) → do it when a Patient delete/merge p
 is built; SSL `connect_args` / account `REQUIRE SSL` → with the TLS work
 (P1.9/P2.7); wire `db/check_schema.py` into real CI at P2.11.
 
+**2026-10-12/13 -- HIS dataset import, catalogue, payments** (not in the P0-P5 roadmap; record is
+`../notes.md` at the workspace root). `his_open_1.sql` -> `reference_codes` (generic lookup table, 51 kinds) +
+typed `drugs`/`drug_prescriptions`/`drug_diseases`/`products`/`product_uoms`/`fee_schedules`/`product_price_tiers`
+(generator `backend/db/gen_reference_data.py`, JSON under `backend/app/his_data/` + `reference_data*.json`,
+migrations `0f1a7c3d9b52`..`2c3d5e7f9a11`). API `/reference*`, `/drugs*`, `/products*`, `/fee-schedules`,
+`/price-tiers` (staff only); web `/catalogue`; medication form suggests drug names. **Payments**
+(`backend/app/payment_providers.py`, `routers/payments.py`, migration `3d4e6f8a0b22`): patient online payment
+through a MOCK gateway (refused unless `APP_ENV=demo` / `PAYMENTS_ALLOW_MOCK=1`; signed webhook is the real-provider
+seam), cashier day close / ageing / refunds (different admin approves) / deposits; web `/my-bills`, `/cashier`;
+Flutter `MyBillsScreen`. **Money invariants to keep:** a succeeded intent becomes one Payment via a compare-and-set
+(`settle_intent`); money decisions serialise on a row with `payments._lock` (SELECT FOR UPDATE is a no-op on SQLite);
+staff cannot record method `online`/`deposit`; online payments are refunded, never voided. Real gateway, PDF
+receipts, Tamil strings for the new screen: not done. Tests: backend 698, web 41, Flutter 18, browser E2E
+`web/e2e/payments.e2e.mjs` (25 checks). Verified on MariaDB 11.4 (see notes.md for the one old-migration
+downgrade failure found).
+
+**2026-10-13 -- receipts (PDF, email) and HIS dataset features** (record: `../notes.md`, one-page status: `../progress.md`).
+`app/receipt_pdf.py` + `GET /payments/receipts/{id}/pdf` and `POST .../email` (recipient = patient email on file only).
+New tables in migration `5f6a8b0c2d44`: `sponsors` (per facility), `patient_dependants`, `bed_movements`, `clinical_orders`
+(CPOE, `routers/orders.py`), `suppliers` / `purchase_orders` / `purchase_order_lines` (`routers/purchasing.py`), `clinical_forms` /
+`form_responses` (`routers/forms.py`), plus coded demographic columns on `patients` (`app/demographics.py`,
+`routers/registry.py`). **Rules to keep:** (1) orders and form responses must never become entries in
+`clinical_access._FACILITY_RELATIONSHIP_SOURCES` (one order for a foreign patient would unlock their record);
+(2) a drug order is completed by the pharmacist, not by a clinician or its own orderer; (3) a pharmacist drafts a purchase order,
+an admin places it, receipt is a per-line compare-and-set and the PO status write is conditional;
+(4) `inventory._apply_restock` uses SQL arithmetic, keep it that way; (5) numbers from clients go through
+`allow_inf_nan=False` / `math.isfinite`; (6) write non-ASCII text (zh/ta strings) with the file tools, not the shell.
+Tests: backend `test_his_features.py`, `test_receipt_pdf.py`; web `pages/HisFeatures.test.jsx`. Whole suite verified on MariaDB 11.4.
+Not built: coded demographics on the New Patient form, bed-history UI, Flutter screens for the staff features, pricing and stock
+decrement on dispense, real payment gateway.
+
+**2026-10-13 (later) -- UI follow-ups, cashier PDF, form builder, parent search; two items left half-done** (detail: `../progress.md`).
+Done: sidebar keeps scroll; signature picture upload (PNG/JPEG/WebP -> PNG client side); `components/SearchSelect.jsx` type-ahead for
+billing items; cashier close over `days` (1..186) + `/billing/reconciliation/pdf`, print hides the sidebar; form builder GUI with live preview
+(`components/FormFieldInput.jsx` is shared with the patient form screen); `/reference?q=` and `/drugs`/`/products` `?q=` also match
+parent/category names. **Half-done, do not assume present:** (1) charge master Excel import: only `app/charge_master_import.py`
+(parser/template) exists, no endpoints, UI or tests; (2) drug catalogue linking: only `app/catalogue_link.py` exists, no `drug_code`
+columns, migration or wiring. Preview note: browser login needs `CORS_ALLOWED_ORIGINS=http://localhost:5173`; a listener on
+localhost:8000 makes `test_campus_registry` unreachable-case fail.
+
 ## The one thing to never regress
 
 the tender forbids third-party AI cloud APIs. Keep all inference local.

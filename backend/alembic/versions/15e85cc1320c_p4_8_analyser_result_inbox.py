@@ -53,7 +53,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("analyser_result_inbox", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_analyser_result_inbox_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_analyser_result_inbox_service_request_id"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("analyser_result_inbox")

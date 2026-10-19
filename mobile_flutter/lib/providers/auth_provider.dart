@@ -93,10 +93,66 @@ class AuthProvider extends ChangeNotifier {
   String? mfaToken;
   bool get awaitingMfa => mfaToken != null;
 
-  void cancelMfa() {
+  /// What the code step may offer. `mfaAuthenticatorOk` is false when the
+  /// account has no authenticator yet (the email code is then the only way).
+  bool mfaAuthenticatorOk = true;
+  bool mfaEmailAvailable = false;
+  String? mfaEmailHint;
+
+  /// True once a code was emailed: the next [verifyMfa] checks that code.
+  bool mfaEmailSent = false;
+
+  /// The last submitted code was refused (as opposed to a network/lockout
+  /// problem): the screen shows the "codes change every 30 seconds" hint.
+  bool codeRejected = false;
+
+  void _resetMfa() {
     mfaToken = null;
+    mfaAuthenticatorOk = true;
+    mfaEmailAvailable = false;
+    mfaEmailHint = null;
+    mfaEmailSent = false;
+    codeRejected = false;
+  }
+
+  void cancelMfa() {
+    _resetMfa();
     error = null;
     notifyListeners();
+  }
+
+  /// Back to the authenticator-app code box after asking for an email code.
+  void useAuthenticator() {
+    mfaEmailSent = false;
+    codeRejected = false;
+    error = null;
+    notifyListeners();
+  }
+
+  /// Emails a sign-in code for the pending challenge.
+  Future<bool> sendMfaEmail() async {
+    final token = mfaToken;
+    if (token == null || isBusy) return false;
+    isBusy = true;
+    error = null;
+    codeRejected = false;
+    notifyListeners();
+    try {
+      final data = await _api.sendMfaEmailCode(token);
+      mfaEmailHint = (data['email_hint'] as String?) ?? mfaEmailHint;
+      mfaEmailSent = true;
+      return true;
+    } on ApiException catch (e) {
+      error = e.message;
+      if (e.statusCode == 401) _resetMfa();
+      return false;
+    } catch (_) {
+      error = 'Could not send the code. Check your connection and try again.';
+      return false;
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
   }
 
   /// Second step: exchange the challenge token + a TOTP/recovery code for a
@@ -107,15 +163,22 @@ class AuthProvider extends ChangeNotifier {
     if (token == null) return false;
     isBusy = true;
     error = null;
+    codeRejected = false;
     notifyListeners();
     try {
-      final data = await _api.verifyMfa(token, code);
+      final data = mfaEmailSent
+          ? await _api.verifyMfaEmail(token, code)
+          : await _api.verifyMfa(token, code);
       await _adoptSession(data);
-      mfaToken = null;
+      _resetMfa();
       return true;
     } on ApiException catch (e) {
       error = e.message;
-      if (e.statusCode == 401 && e.message.toLowerCase().contains('start again')) mfaToken = null;
+      if (e.statusCode == 401 && e.message.toLowerCase().contains('start again')) {
+        _resetMfa();
+      } else {
+        codeRejected = e.statusCode == 401;
+      }
       return false;
     } catch (e) {
       error = 'Unexpected error: $e';
@@ -143,35 +206,29 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> login(String email, String password) async {
     isBusy = true;
     error = null;
-    mfaToken = null;
+    _resetMfa();
     notifyListeners();
     try {
       final data = await _api.login(email, password);
       if (data['mfa_required'] == true) {
-        if (data['mfa_enrol'] == true) {
-          // Enrolment (QR + recovery codes) lives in the web console.
+        final enrol = data['mfa_enrol'] == true;
+        final emailOk = data['email_available'] == true;
+        if (enrol && !emailOk) {
+          // Authenticator enrolment (QR + recovery codes) lives in the web console.
           error = 'Your role requires two-step verification. Set it up in the '
               'CLARION web console first, then sign in here.';
           return false;
         }
         mfaToken = data['mfa_token'] as String?;
+        mfaAuthenticatorOk = !enrol;
+        mfaEmailAvailable = emailOk;
+        mfaEmailHint = data['email_hint'] as String?;
         return false;
       }
-      final token = data['access_token'] as String;
-      final userJson = data['user'] as Map<String, dynamic>;
-      await _tokenStorage.saveToken(token);
       // P2.5 (Security Audit M4): native clients get the refresh token as a
       // plain JSON field (the web console's equivalent is an HttpOnly
-      // cookie instead -- see schemas.Token's docstring); stored in the OS
-      // keychain via TokenStorage, same as the access token.
-      final refreshToken = data['refresh_token'] as String?;
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        await _tokenStorage.saveRefreshToken(refreshToken);
-      }
-      await _tokenStorage.saveUser(userJson);
-      user = MBUser.fromJson(userJson);
-      status = AuthStatus.authenticated;
-      syncOfflineTagData();
+      // cookie), stored in the OS keychain like the access token.
+      await _adoptSession(data);
       return true;
     } on ApiException catch (e) {
       error = e.message;

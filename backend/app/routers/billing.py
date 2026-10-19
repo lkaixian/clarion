@@ -29,13 +29,15 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
+from .. import charge_master_import as cm_import
+from ._uploads import enforce_upload_size
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -64,10 +66,20 @@ def _load_bill_with_relations(db: Session, bill_id: str) -> Optional[models.Bill
             selectinload(models.Bill.items),
             selectinload(models.Bill.payments),
             selectinload(models.Bill.claims),
+            selectinload(models.Bill.refunds),
         )
         .filter(models.Bill.id == bill_id)
         .first()
     )
+
+
+def cancel_open_intents(db: Session, bill_id: str) -> None:
+    """A counter payment or deposit changes what is due, so any online attempt opened
+    for the old amount is closed (the patient starts a fresh one). Caller commits.
+    A gateway success that still arrives later is booked anyway (see settle_intent)."""
+    db.query(models.PaymentIntent).filter(
+        models.PaymentIntent.bill_id == bill_id, models.PaymentIntent.status == "pending"
+    ).update({"status": "cancelled", "completed_at": datetime.now(timezone.utc)}, synchronize_session=False)
 
 
 def _bill_or_404(db: Session, bill_id: str, current_user: models.User) -> models.Bill:
@@ -98,13 +110,15 @@ def _serialize_bill(bill: models.Bill) -> schemas.BillOut:
     out.patient_full_name = bill.patient.full_name if bill.patient else None
 
     total_cents = sum(i.amount_cents for i in bill.items if not i.voided_at)
-    paid_cents = sum(p.amount_cents for p in bill.payments if not p.voided_at)
+    refunded_cents = sum(r.amount_cents for r in bill.refunds if r.status == "approved")
+    paid_cents = sum(p.amount_cents for p in bill.payments if not p.voided_at) - refunded_cents
     claimed_pending_cents = sum(c.claim_amount_cents for c in bill.claims if c.status in ("submitted", "approved"))
     amount_due_cents = max(0, total_cents - paid_cents)
     patient_due_cents = max(0, amount_due_cents - claimed_pending_cents)
 
     out.total_cents = total_cents
     out.paid_cents = paid_cents
+    out.refunded_cents = refunded_cents
     out.claimed_pending_cents = claimed_pending_cents
     out.amount_due_cents = amount_due_cents
     out.patient_due_cents = patient_due_cents
@@ -287,6 +301,76 @@ def create_charge_master_item(
         actor_facility=current_user.facility,
     )
     return item
+
+
+@router.get("/charge-master/import-template")
+def charge_master_import_template(
+    current_user: models.User = Depends(auth.require_roles("admin", "records_officer")),
+):
+    return Response(
+        cm_import.template_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="charge-master-template.xlsx"'},
+    )
+
+
+@router.post("/charge-master/import")
+def import_charge_master(
+    file: UploadFile = File(...),
+    dry_run: bool = Query(default=True),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin", "records_officer")),
+):
+    """Append-only, all-or-nothing Excel import into the caller's OWN facility (a global item
+    still goes through the single-item POST, which keeps that admin-only decision explicit).
+    `dry_run` defaults to true so a stray call previews instead of writing. Row problems come
+    back in `errors` with HTTP 200 and nothing is written."""
+    if not current_user.facility:
+        raise HTTPException(status_code=400, detail="Your account has no facility assigned.")
+    enforce_upload_size(file, cm_import.MAX_BYTES, "Workbook")
+    raw = file.file.read(cm_import.MAX_BYTES + 1)
+    try:
+        rows, errors = cm_import.parse_workbook(raw, schemas.CHARGE_MASTER_CATEGORIES)
+    except cm_import.ImportFileError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    existing = [
+        {"category": i.category, "code": i.code, "name": i.name}
+        for i in db.query(models.ChargeMasterItem).filter(
+            (models.ChargeMasterItem.facility_name.is_(None))
+            | (models.ChargeMasterItem.facility_name == current_user.facility)
+        )
+    ]
+    new, dups = cm_import.split_new_and_duplicates(rows, existing)
+    committed = bool(new) and not errors and not dry_run
+    if committed:
+        db.add_all(
+            models.ChargeMasterItem(
+                category=r["category"], code=r["code"], name=r["name"],
+                unit_price_cents=r["unit_price_cents"], active=r["active"],
+                facility_name=current_user.facility,
+            )
+            for r in new
+        )
+        db.commit()
+        log_access(
+            db, None, current_user.id, current_user.role, "charge_master_imported",
+            detail=f"added={len(new)} skipped={len(dups)} file={file.filename!r}",
+            actor_facility=current_user.facility,
+        )
+    return {
+        "dry_run": dry_run,
+        "committed": committed,
+        "would_add": len(new),
+        "added": len(new) if committed else 0,
+        "skipped_duplicates": len(dups),
+        "error_count": len(errors),
+        "errors": errors[:cm_import.MAX_ERRORS],
+        "preview": [
+            {k: r[k] for k in ("row", "category", "code", "name", "unit_price_cents", "active")}
+            for r in new[:20]
+        ],
+    }
 
 
 @router.patch("/charge-master/{item_id}", response_model=schemas.ChargeMasterItemOut)
@@ -565,6 +649,7 @@ def record_payment(
         facility_name=current_user.facility,
     )
     db.add(payment)
+    cancel_open_intents(db, bill.id)
     # A claim this payment settles moves to 'paid' -- Design decision 6
     # ("a claim moving to paid is expected to be settled via a Payment...").
     if claim is not None and claim.status in ("submitted", "approved"):
@@ -593,6 +678,16 @@ def void_payment(
     bill = _bill_or_404(db, payment.bill_id, current_user)
     if payment.voided_at:
         raise HTTPException(status_code=400, detail="Payment is already voided")
+    if payment.method == "online":
+        # Money really moved at the gateway: it goes back through the approved
+        # refund flow (which also tells the gateway), never a silent void.
+        raise HTTPException(status_code=400, detail="An online payment must be refunded, not voided")
+    if payment.method == "deposit":
+        # Return the money to the deposit it came from (reference_no = deposit id).
+        # SQL-side arithmetic, not read-modify-write: a parallel apply must not be lost.
+        D = models.Deposit
+        db.query(D).filter(D.id == payment.reference_no).update(
+            {D.applied_cents: D.applied_cents - payment.amount_cents}, synchronize_session=False)
 
     payment.voided_at = datetime.now(timezone.utc)
     payment.voided_by = current_user.id

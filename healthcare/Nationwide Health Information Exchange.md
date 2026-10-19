@@ -9,7 +9,7 @@ tags: [research, hie, national, fhir, dicom, architecture, vision]
 
 The bigger-vision design — a national-scale Malaysian health data exchange that CLARION
 could grow into. **Out of scope for the University competition build**; captured here as
-direction. Source: the Gemini thread (`gemin-text.txt` in the repo root); precedents
+direction. Source: the Gemini thread (`docs/source/gemin-text.txt`); precedents
 validated in [[Nationwide HIE Precedents]].
 
 ## The core argument

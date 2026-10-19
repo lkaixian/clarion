@@ -44,7 +44,8 @@ def test_forced_enrolment_then_verify_flow(test_client, make_user):
     # Same TOTP step as enrolment consumed -> replay rejected.
     replay = mfa.code_at(secret, mfa.current_step())
     r = test_client.post("/auth/mfa/verify", json={"mfa_token": ch["mfa_token"], "code": replay})
-    assert r.status_code == 401
+    assert r.status_code in (401, 429)  # burnt code, or the account lockout fired first
+    assert "access_token" not in r.json()
 
     # Next step is acceptable (inside the +/-1 window).
     nxt = mfa.code_at(secret, mfa.current_step() + 1)
@@ -77,7 +78,8 @@ def test_challenge_token_is_not_an_access_token(test_client, make_user):
     u = make_user(role="clinician", facility="F")
     ch = _login(test_client, u).json()
     r = test_client.get("/auth/me", headers={"Authorization": f"Bearer {ch['mfa_token']}"})
-    assert r.status_code == 401
+    assert r.status_code in (401, 429)  # burnt code, or the account lockout fired first
+    assert "access_token" not in r.json()
 
 
 def test_challenge_token_tampering_and_expiry():
@@ -147,7 +149,8 @@ def test_admin_can_reset_a_users_mfa(test_client, make_user, auth_headers, db_se
     victim = make_user(role="clinician", facility="F")
     _enrol(test_client, victim)
     admin = make_user(role="admin", facility="F")
-    r = test_client.post(f"/auth/mfa/reset/{victim.id}", headers=auth_headers(admin))
+    r = test_client.post(f"/auth/mfa/reset/{victim.id}", headers=auth_headers(admin),
+                         json={"password": admin.plaintext_password, "code": ""})
     assert r.status_code == 200
     db_session.expire_all()
     row = db_session.query(models.User).filter_by(id=victim.id).first()
@@ -172,7 +175,8 @@ def test_password_change_invalidates_an_inflight_challenge(test_client, make_use
     row.password_changed_at = datetime.now(timezone.utc)
     db_session.commit()
     r = test_client.post("/auth/mfa/enrol/start", json={"mfa_token": ch["mfa_token"]})
-    assert r.status_code == 401
+    assert r.status_code in (401, 429)  # burnt code, or the account lockout fired first
+    assert "access_token" not in r.json()
 
 
 def test_refresh_from_before_mfa_policy_is_not_honoured(test_client, make_user, monkeypatch):
@@ -204,3 +208,55 @@ def test_revoke_others_without_knowing_the_current_session_is_refused(test_clien
     h = auth_headers(u)
     test_client.cookies.clear()
     assert test_client.post("/auth/sessions/revoke-others", headers=h).status_code == 400
+
+
+# ---- email second factor ------------------------------------------------------
+
+def _capture_email(monkeypatch):
+    sent = []
+    from app.routers import auth_security
+    monkeypatch.setattr(auth_security, "send_mfa_email_code",
+                        lambda to, name, code: sent.append((to, code)) or True)
+    return sent
+
+
+def test_email_code_completes_login_once(test_client, make_user, monkeypatch):
+    sent = _capture_email(monkeypatch)
+    u = make_user(role="clinician", facility="F")
+    ch = _login(test_client, u).json()
+    assert ch["email_available"] and ch["email_hint"].startswith(u.email[0] + "***@")
+
+    r = test_client.post("/auth/mfa/email/send", json={"mfa_token": ch["mfa_token"]})
+    assert r.status_code == 200 and sent[0][0] == u.email
+    code = sent[0][1]
+    bad = test_client.post("/auth/mfa/email/verify", json={"mfa_token": ch["mfa_token"], "code": "000000"})
+    assert bad.status_code == 401
+    ok = test_client.post("/auth/mfa/email/verify", json={"mfa_token": ch["mfa_token"], "code": code})
+    assert ok.status_code == 200 and ok.json()["access_token"]
+    again = test_client.post("/auth/mfa/email/verify", json={"mfa_token": ch["mfa_token"], "code": code})
+    assert again.status_code == 401  # single use
+
+
+def test_email_code_not_offered_to_excluded_role(test_client, make_user, monkeypatch):
+    sent = _capture_email(monkeypatch)
+    monkeypatch.setenv("CLARION_MFA_REQUIRED_ROLES", "clinician,admin")
+    admin = make_user(role="admin", facility="F")
+    ch = _login(test_client, admin).json()
+    assert ch["email_available"] is False
+    assert test_client.post("/auth/mfa/email/send", json={"mfa_token": ch["mfa_token"]}).status_code == 400
+    assert test_client.post("/auth/mfa/email/verify",
+                            json={"mfa_token": ch["mfa_token"], "code": "123456"}).status_code == 400
+    assert sent == []
+
+
+def test_email_code_expires_and_wrong_codes_burn_it(test_client, make_user, monkeypatch, db_session):
+    sent = _capture_email(monkeypatch)
+    u = make_user(role="clinician", facility="F")
+    ch = _login(test_client, u).json()
+    test_client.post("/auth/mfa/email/send", json={"mfa_token": ch["mfa_token"]})
+    code = sent[0][1]
+    for _ in range(5):  # OTP_MAX_VERIFY_ATTEMPTS wrong tries invalidate the code
+        test_client.post("/auth/mfa/email/verify", json={"mfa_token": ch["mfa_token"], "code": "111111"})
+    r = test_client.post("/auth/mfa/email/verify", json={"mfa_token": ch["mfa_token"], "code": code})
+    assert r.status_code in (401, 429)  # burnt code, or the account lockout fired first
+    assert "access_token" not in r.json()

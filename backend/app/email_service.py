@@ -53,7 +53,8 @@ def _mailtrap_config() -> Optional[dict]:
     }
 
 
-def _send(to_email: str, subject: str, text_body: str, html_body: str, category: str, who: str) -> bool:
+def _send(to_email: str, subject: str, text_body: str, html_body: str, category: str, who: str,
+          attachments: Optional[list] = None) -> bool:
     """One Mailtrap send. True only on a confirmed 2xx; False in every other
     case (not configured, network failure, non-2xx). `who` is the public
     function's name, only used to make the log lines attributable."""
@@ -73,6 +74,7 @@ def _send(to_email: str, subject: str, text_body: str, html_body: str, category:
                 "text": text_body,
                 "html": html_body,
                 "category": category,
+                **({"attachments": attachments} if attachments else {}),
             },
             timeout=_REQUEST_TIMEOUT_SECONDS,
         )
@@ -170,3 +172,54 @@ def send_security_notice_email(to_email: str, name: str, what: str) -> bool:
     )
     return _send(to_email, "CLARION account security change", text_body, html_body,
                  "security-notice", "send_security_notice_email")
+
+
+def send_account_created_notice(to_email: str, name: str, lock_url: str) -> bool:
+    """Tells the record's owner that an account was just created for them, with a one-tap lock."""
+    text_body = (
+        f"Hello {name},\n\nA CLARION account was just created for your health record.\n\n"
+        "If this was you, no action is needed.\n"
+        f"If it was NOT you, lock the account now: {lock_url}\n\n"
+        "You can unlock it later by choosing Forgot password in the app.\n\n-- CLARION"
+    )
+    html_body = (
+        f"<p>Hello {html.escape(name)},</p>"
+        "<p>A CLARION account was just created for your health record.</p>"
+        "<p>If this was you, no action is needed.</p>"
+        f'<p>If it was <strong>not</strong> you, <a href="{html.escape(lock_url)}">lock the account now</a>.</p>'
+        "<p>You can unlock it later by choosing Forgot password in the app.</p><p>-- CLARION</p>"
+    )
+    return _send(to_email, "A CLARION account was created for you", text_body, html_body,
+                 "account-created", "send_account_created_notice")
+
+
+def send_mfa_email_code(to_email: str, name: str, code: str) -> bool:
+    """Sign-in code for the email second factor. Best effort; the caller reports a failure."""
+    text_body = (
+        f"Hello {name},\n\nYour CLARION sign-in code is: {code}\n\n"
+        "It expires in 10 minutes and works once. If you did not try to sign in, "
+        "change your password.\n\n-- CLARION"
+    )
+    html_body = (
+        f"<p>Hello {html.escape(name)},</p>"
+        f"<p>Your CLARION sign-in code is: <strong>{html.escape(code)}</strong></p>"
+        "<p>It expires in 10 minutes and works once. If you did not try to sign in, "
+        "change your password.</p><p>-- CLARION</p>"
+    )
+    return _send(to_email, "Your CLARION sign-in code", text_body, html_body,
+                 "mfa-email", "send_mfa_email_code")
+
+
+def send_receipt_email(to_email: str, name: str, receipt_no: str, summary: str, pdf: bytes) -> bool:
+    """Payment receipt with the PDF attached. Best effort, never raises."""
+    import base64
+    text_body = f"Hello {name},\n\nYour receipt {receipt_no} is attached.\n\n{summary}\n\n-- CLARION"
+    html_body = (
+        f"<p>Hello {html.escape(name)},</p><p>Your receipt <strong>{html.escape(receipt_no)}</strong> is attached.</p>"
+        f"<p>{html.escape(summary)}</p><p>-- CLARION</p>"
+    )
+    return _send(
+        to_email, f"Your CLARION receipt {receipt_no}", text_body, html_body, "receipt", "send_receipt_email",
+        attachments=[{"content": base64.b64encode(pdf).decode("ascii"), "filename": f"receipt-{receipt_no}.pdf",
+                      "type": "application/pdf", "disposition": "attachment"}],
+    )

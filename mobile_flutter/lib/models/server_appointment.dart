@@ -123,6 +123,15 @@ class ServerAppointment {
   /// [RescheduleRequestInfo].
   final RescheduleRequestInfo? latestRescheduleRequest;
 
+  /// Online booking v2 fields; all null/false on appointments staff created.
+  /// `selfBooked` is true when the patient booked it from the app (and so
+  /// may cancel it there); `bookingCategory` is a `/booking/categories` code.
+  final bool selfBooked;
+  final String? bookingCategory;
+  final String? attendeeName;
+  final String? attendeeRelationship;
+  final String? facilityDisplayName;
+
   const ServerAppointment({
     required this.id,
     required this.patientId,
@@ -139,6 +148,11 @@ class ServerAppointment {
     this.rescheduleReasonCode,
     this.rescheduleReasonOther,
     this.latestRescheduleRequest,
+    this.selfBooked = false,
+    this.bookingCategory,
+    this.attendeeName,
+    this.attendeeRelationship,
+    this.facilityDisplayName,
   });
 
   factory ServerAppointment.fromJson(Map<String, dynamic> json) => ServerAppointment(
@@ -162,5 +176,10 @@ class ServerAppointment {
         latestRescheduleRequest: json['latest_reschedule_request'] != null
             ? RescheduleRequestInfo.fromJson(json['latest_reschedule_request'] as Map<String, dynamic>)
             : null,
+        selfBooked: json['self_booked'] as bool? ?? false,
+        bookingCategory: json['booking_category'] as String?,
+        attendeeName: json['attendee_name'] as String?,
+        attendeeRelationship: json['attendee_relationship'] as String?,
+        facilityDisplayName: (json['facility_display_name'] ?? json['display_name']) as String?,
       );
 }

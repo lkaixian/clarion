@@ -172,28 +172,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("payments", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_payments_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_payments_bill_id"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("payments")
 
-    with op.batch_alter_table("claims", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_claims_status"))
-        batch_op.drop_index(batch_op.f("ix_claims_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_claims_bill_id"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("claims")
 
-    with op.batch_alter_table("bill_items", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_bill_items_bill_id"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("bill_items")
 
-    with op.batch_alter_table("bills", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_bills_status"))
-        batch_op.drop_index(batch_op.f("ix_bills_patient_id"))
-        batch_op.drop_index(batch_op.f("ix_bills_facility_name"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("bills")
 
-    with op.batch_alter_table("charge_master_items", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_charge_master_items_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_charge_master_items_category"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("charge_master_items")

@@ -49,6 +49,13 @@ android {
         versionName = flutter.versionName
     }
 
+    // Published builds are ARM64 only; plugin AARs (ML Kit) would otherwise ship every ABI.
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/x86_64/**", "lib/armeabi-v7a/**", "lib/x86/**")
+        }
+    }
+
     signingConfigs {
         if (hasKeystoreProperties) {
             create("release") {

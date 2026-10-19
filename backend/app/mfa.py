@@ -53,6 +53,35 @@ def required_roles() -> set:
     return {r.strip() for r in os.environ.get("CLARION_MFA_REQUIRED_ROLES", "").split(",") if r.strip()}
 
 
+# Email code as a second factor. Weaker than an authenticator (anyone with the mailbox has it),
+# so it is opt-in per role and off for admin / records_officer by default.
+_DEFAULT_EMAIL_ROLES = "patient,clinician,pharmacist,receptionist,emergency_responder"
+
+
+def email_roles() -> set:
+    raw = os.environ.get("CLARION_MFA_EMAIL_ROLES", _DEFAULT_EMAIL_ROLES)
+    return {r.strip() for r in raw.split(",") if r.strip()}
+
+
+def email_target(db, user) -> Optional[str]:
+    """Where an emailed code goes: the linked patient's own address, else the login email.
+    None when the role may not use the email factor or no usable address exists."""
+    if user.role not in email_roles():
+        return None
+    from . import models  # local import: mfa.py is loaded before models in some entry points
+    addr = None
+    if getattr(user, "patient_id", None):
+        p = db.query(models.Patient.email).filter(models.Patient.id == user.patient_id).first()
+        addr = p[0] if p else None
+    addr = (addr or user.email or "").strip()
+    return addr if "@" in addr else None
+
+
+def mask_email(addr: str) -> str:
+    local, _, domain = addr.partition("@")
+    return f"{local[:1]}***@{domain}"
+
+
 def is_enrolled(user) -> bool:
     return bool(getattr(user, "mfa_enabled_at", None) and getattr(user, "mfa_secret_enc", None))
 

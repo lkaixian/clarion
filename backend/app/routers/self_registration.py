@@ -41,16 +41,19 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
-from ..email_service import send_self_registration_otp_email
+from ..email_service import send_account_created_notice, send_self_registration_otp_email
+from .. import account_lock
+from .. import claims
 from ..nric import normalize_nric
 from ..rate_limit import limiter
-from ..ai.nric_ocr import extract_nric_fields, dob_from_ic_number
+from ..ai.nric_ocr import extract_nric_fields, dob_from_ic_number, name_on_card
 from .auth_router import _resolve_patient_by_nric, _with_missing_profile_fields
 
 logger = logging.getLogger("clarion.self_registration")
@@ -233,8 +236,7 @@ def _get_or_reserve_attempt(db: Session, patient: models.Patient, email: str) ->
     # applies a Column(default=...) at flush/INSERT time, so reading this
     # attribute on an unflushed new instance would otherwise be None, and
     # `None >= auth.OTP_MAX_REQUESTS_PER_WINDOW` below would raise.
-    attempt = existing or models.SelfRegistrationAttempt(patient_id=patient.id, otp_request_count=0)
-    attempt.email = email
+    attempt = existing or models.SelfRegistrationAttempt(patient_id=patient.id, otp_request_count=0, email=email)
     db.add(attempt)
     return attempt
 
@@ -260,6 +262,19 @@ def _begin_new_otp_round(attempt: models.SelfRegistrationAttempt) -> None:
     attempt.last_ocr_failure_reason = None
 
 
+def _photo_check_on() -> bool:
+    """NRIC photo OCR needs a local model/Tesseract. Off by default: identity is then proven
+    by a one-time code sent to the email ALREADY ON FILE for the patient (name + NRIC alone
+    are not secret, so the caller must never choose where the code goes in that mode)."""
+    return os.environ.get("SELF_REGISTER_PHOTO_CHECK", "off").strip().lower() in ("on", "1", "true")
+
+
+@router.get("/config")
+def self_registration_config():
+    """Public. Tells the app which steps to show."""
+    return {"photo_check": _photo_check_on()}
+
+
 @router.post("/start")
 @limiter.limit("10/minute")  # per-IP, ON TOP OF the persisted OTP
 # request-window counter below (Security Audit M2 -- that counter is
@@ -270,14 +285,8 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
     """Public, unauthenticated. Step 1 of self-service registration."""
     patient = _resolve_patient_by_nric(db, payload.national_id)
     if not patient:
-        raise HTTPException(
-            status_code=404,
-            detail="No matching patient record was found. Please visit a registration counter to be added to the system first.",
-        )
-
-    existing_user = db.query(models.User).filter(models.User.patient_id == patient.id).first()
-    if existing_user:
-        raise HTTPException(status_code=409, detail=_ACCOUNT_EXISTS_ERROR)
+        # Same answer as a name/date mismatch, so an NRIC alone reveals nothing.
+        raise HTTPException(status_code=400, detail=_START_MISMATCH_ERROR)
 
     # Enumeration-safety tradeoff, deliberate and DIFFERENT from the
     # password-reset flow's anonymization: a 400 here confirms "a record
@@ -310,7 +319,32 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
     if not (name_ok and dob_ok):
         raise HTTPException(status_code=400, detail=_START_MISMATCH_ERROR)
 
-    attempt = _get_or_reserve_attempt(db, patient, payload.email)
+    existing_user = db.query(models.User).filter(models.User.patient_id == patient.id).first()
+    if existing_user:
+        raise HTTPException(status_code=409, detail=_ACCOUNT_EXISTS_ERROR)
+
+    if _photo_check_on():
+        target_email = payload.email
+        if not target_email:
+            raise HTTPException(status_code=400, detail="Enter your email address.")
+        if claims.email_flagged(db, target_email):
+            raise HTTPException(status_code=403, detail="This email address has been flagged and can't be used to register.")
+    else:
+        target_email = patient.email
+        if not target_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Your record has no email address on file. Ask the registration counter "
+                       "to add one, or have staff issue your account.",
+            )
+
+    attempt = _get_or_reserve_attempt(db, patient, target_email)
+    _now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if (attempt is not None and attempt.status in ("otp_verified", "pending_photo", "photo_verified")
+            and attempt.photo_verification_deadline and _now < attempt.photo_verification_deadline):
+        # Someone with only the NRIC and name must not be able to reset the real owner's last step.
+        return {"status": "ok", "next_step": "verify_otp",
+                "detail": "If your details matched a registered patient, a verification code was sent to the email provided."}
 
     if attempt is not None:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -337,6 +371,7 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
             )
 
         attempt.otp_request_count = (attempt.otp_request_count or 0) + 1
+        attempt.email = target_email  # only now: a refused or rate-limited call changes nothing
         _begin_new_otp_round(attempt)
 
         otp_code = auth.generate_otp_code()
@@ -349,7 +384,7 @@ def start_self_registration(request: Request, payload: schemas.SelfRegisterStart
         # returns False) if Mailtrap isn't configured or the call fails --
         # deliberately NOT branching the response on its return value, same
         # discipline as request_password_reset_otp.
-        send_self_registration_otp_email(payload.email, otp_code, patient.full_name)
+        send_self_registration_otp_email(target_email, otp_code, patient.full_name)
         log_access(db, patient.id, "system", None, "self_register_otp_requested")
     # else: existing row was flagged_manual_review -- deliberate no-op, see
     # _get_or_reserve_attempt's docstring. No log_access call here (nothing
@@ -411,8 +446,12 @@ def verify_self_registration_otp(request: Request, payload: schemas.SelfRegister
         db.commit()
         raise HTTPException(status_code=400, detail=_VERIFY_OTP_GENERIC_ERROR)
 
+    if not _photo_check_on() and (attempt.email or "").strip().lower() != (patient.email or "").strip().lower():
+        # The code went somewhere other than the address on file (e.g. requested while the
+        # photo check was on): it proves nothing about the record's owner.
+        raise HTTPException(status_code=400, detail=_VERIFY_OTP_GENERIC_ERROR)
     attempt.otp_verified = True
-    attempt.status = "pending_photo"
+    attempt.status = "pending_photo" if _photo_check_on() else "otp_verified"
     attempt.photo_verification_deadline = now + timedelta(minutes=PHOTO_VERIFICATION_WINDOW_MINUTES)
     attempt.otp_code_hash = None
     attempt.otp_expires_at = None
@@ -422,11 +461,16 @@ def verify_self_registration_otp(request: Request, payload: schemas.SelfRegister
 
     log_access(db, patient.id, "system", None, "self_register_otp_verified")
 
+    completion_token = account_lock.make_completion_token(patient.id)
+    if not _photo_check_on():
+        return {"status": "ok", "detail": "Code verified. Choose a password.", "next_step": "complete",
+                "completion_token": completion_token}
     return {
         "status": "ok",
         "detail": "Code verified. Please photograph the front and back of your NRIC.",
         "next_step": "verify_photos",
         "photo_attempts_remaining": PHOTO_VERIFY_MAX_ATTEMPTS,
+        "completion_token": completion_token,
     }
 
 
@@ -467,13 +511,16 @@ def _evaluate_photo_verification(front_result: dict, back_result: dict, patient:
         return False, "The ID number doesn't match our records.", "ic_number_mismatch"
 
     front_name = front_result.get("name")
-    if not front_name:
-        return False, (
-            "We couldn't clearly read the name on the front photo. "
-            "Please retake in good lighting with the whole card visible."
-        ), "name_extraction_failed"
-
-    if not _names_reasonably_match(front_name, patient.full_name):
+    # The name already on the record is known, so also accept it appearing anywhere in the
+    # card's OCR text (letters only; some engines drop spaces). Still needs the IC to match.
+    name_ok = bool(front_name) and _names_reasonably_match(front_name, patient.full_name)
+    name_ok = name_ok or name_on_card(patient.full_name, front_result.get("raw_text"))
+    if not name_ok:
+        if not front_name and not front_result.get("raw_text"):
+            return False, (
+                "We couldn't clearly read the name on the front photo. "
+                "Please retake in good lighting with the whole card visible."
+            ), "name_extraction_failed"
         return False, "The name doesn't match our records.", "name_mismatch"
 
     ic_dob = dob_from_ic_number(front_ic)
@@ -691,7 +738,13 @@ def complete_self_registration(request: Request, payload: schemas.SelfRegisterCo
         if patient else None
     )
 
-    if not attempt or attempt.status != "photo_verified":
+    if patient is not None and not account_lock.completion_token_ok(payload.completion_token or "", patient.id):
+        # Not the person who proved the emailed code (or the 30 minutes ran out).
+        raise HTTPException(status_code=400, detail=_RESTART_REQUIRED_ERROR)
+    want_status = "photo_verified" if _photo_check_on() else "otp_verified"
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if (not attempt or attempt.status != want_status or not attempt.photo_verification_deadline
+            or now >= attempt.photo_verification_deadline):
         raise HTTPException(
             status_code=400,
             detail="Identity verification is required before completing registration. Please restart from the beginning if needed.",
@@ -704,6 +757,17 @@ def complete_self_registration(request: Request, payload: schemas.SelfRegisterCo
     existing_user = db.query(models.User).filter(models.User.patient_id == patient.id).first()
     if existing_user:
         raise HTTPException(status_code=409, detail=_ACCOUNT_EXISTS_ERROR)
+
+    # Consume the verified state first: only one /complete can win it.
+    won = (
+        db.query(models.SelfRegistrationAttempt)
+        .filter(models.SelfRegistrationAttempt.id == attempt.id,
+                models.SelfRegistrationAttempt.status == want_status)
+        .update({"status": "completed"}, synchronize_session=False)
+    )
+    if won != 1:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=_RESTART_REQUIRED_ERROR)
 
     user = models.User(
         # Patients authenticate via NRIC (see auth_router._resolve_login_user),
@@ -718,6 +782,7 @@ def complete_self_registration(request: Request, payload: schemas.SelfRegisterCo
         # They just chose this password themselves (unlike a staff-issued
         # temp password) -- no forced change-on-first-login needed.
         must_change_password=False,
+        self_registered_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(user)
 
@@ -725,12 +790,27 @@ def complete_self_registration(request: Request, payload: schemas.SelfRegisterCo
         patient.email = attempt.email
         db.add(patient)
 
-    attempt.status = "completed"
-    db.add(attempt)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # lost a race with a staff-issued account for the same patient
+        raise HTTPException(status_code=409, detail=_ACCOUNT_EXISTS_ERROR)
     db.refresh(user)
+    claims.reject_other_claims(db, patient, keep_claim_id=None, winner_email=attempt.email)
 
     log_access(db, patient.id, actor="self_registration", actor_role="patient", action="self_register_completed")
+    # Tell the owner, at the address on the record, with a one-tap lock. Best effort.
+    sent = False
+    link = account_lock.lock_url(user)
+    if patient.email and link:
+        try:
+            sent = bool(send_account_created_notice(patient.email, patient.full_name, link))
+        except Exception:  # noqa: BLE001 -- a notice must never break registration
+            logger.exception("account-created notice failed")
+    if not sent:
+        log_access(db, patient.id, actor="self_registration", actor_role="patient",
+                   action="account_created_notice_not_sent",
+                   detail="no email on file, CLARION_PUBLIC_URL unset, or the send failed")
 
     token = auth.create_access_token(
         {"sub": user.id, "role": user.role},

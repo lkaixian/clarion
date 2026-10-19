@@ -28,6 +28,7 @@ import atexit  # noqa: E402
 import uuid  # noqa: E402
 
 import pytest  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import auth as auth_module  # noqa: E402
@@ -95,6 +96,17 @@ def db_session():
         session.close()
 
 
+def drop_patient(db, patient_id):
+    """Best-effort cleanup. MariaDB refuses to delete a patient that audit_logs
+    still points at (append-only by design); SQLite does not enforce the FK. The
+    test DB is throwaway, so leaving the row is harmless."""
+    try:
+        db.query(models.Patient).filter_by(id=patient_id).delete()
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+
+
 @pytest.fixture
 def make_user(db_session):
     """Factory fixture: `make_user(role="clinician")` -> a persisted
@@ -132,9 +144,15 @@ def make_user(db_session):
 
     for user in created:
         row = db_session.query(models.User).filter_by(id=user.id).first()
-        if row is not None:
+        if row is None:
+            continue
+        try:
             db_session.delete(row)
-    db_session.commit()
+            db_session.commit()
+        except IntegrityError:
+            # MariaDB enforces FKs from rows the test created (bills, payments...) to this
+            # user; SQLite does not. The DB is throwaway, so leaving the user is harmless.
+            db_session.rollback()
 
 
 def _facility(label="Facility"):

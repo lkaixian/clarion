@@ -1,0 +1,87 @@
+CLARION - WHAT IS NOT DONE YET
+Written 2026-10-10, after commits e7a796a and fd76914.
+"Untested" means I wrote or configured it but never ran it for real.
+
+==============================================================
+1. CLOUDFLARE TUNNEL / PUBLIC SITE
+==============================================================
+- Origin TLS is still unverified. The public hostname works, but "No TLS Verify" is
+  on. To turn verification on: in the dashboard set CA Pool to
+  /etc/cloudflared/caddy-root.crt, keep Origin Server Name = clarion.larmkx.com,
+  switch No TLS Verify off. The cert is mounted already. UNTESTED (the dashboard may
+  not offer a CA Pool field). If caddy_data is ever deleted, copy the new root.crt out
+  again: docker cp clarion-pi-proxy-1:/data/caddy/pki/authorities/local/root.crt proxy/certs/caddy-root.crt
+- Cloudflare Access (login gate in front of the site) is NOT set up. Right now anyone
+  with the URL can reach the login page.
+- Spoofed X-Forwarded-For through the real tunnel was never tested (the rate limiter
+  should ignore it; checked by reading code only).
+- HSTS is max-age=300 (short on purpose). Raise it only when the domain is final.
+- The seeded temporary passwords were pasted into a chat session. Sign in as each
+  account once (you are forced to change it) so those passwords stop working.
+
+==============================================================
+2. RASPBERRY PI
+==============================================================
+- The stack has only run on x86 Docker Desktop (Windows). Never built or run on the
+  Pi (ARM64). Whether every Python package builds on ARM64 is unknown. Expect a slow
+  first build (10-20 min). Use a 64-bit OS.
+- No backup for the Pi stack. Data is SQLite plus files on Docker volumes
+  (clarion_db). The backup/restore service exists only in the main compose file.
+- Local AI is switched off on this node (no Ollama). AI features use fallbacks.
+- Local testing used a scratchpad override (port 9443), which is not in the repo.
+
+==============================================================
+3. EMAIL (MAILTRAP)
+==============================================================
+- Never sent a real message. Only tested with a mocked HTTP call. The endpoint URLs
+  (send.api.mailtrap.io, sandbox.api.mailtrap.io) were written from memory: check them
+  against Mailtrap's docs.
+- Real delivery needs a sender on a domain verified in Mailtrap. Not done.
+- Old MAILGUN_* values are still in backend/.env and .env.docker (unused now). Delete.
+
+==============================================================
+4. WEBSITE
+==============================================================
+- Not reviewed by a security or accessibility reviewer. Contrast, keyboard use and
+  screen-reader behaviour were not checked. The page is light theme only.
+- Status page history lives in the visitor's browser only. No server-side uptime record.
+- /status is public and shows which components are up or down (accepted trade-off).
+- After a patient signs in, the console logs one 403 from a call the patient role is
+  not allowed to make. The page still works. Cause not tracked down.
+- The tour has 3 screenshots from seeded data. The dashboard was empty (all zeros) so
+  it was left out. Backfill script exists: backend/backfill_richer_demo_data.py.
+- The main docker-compose.yml stack now also shows the landing page at "/" (nginx
+  change) and the login is at /login. Behaviour change, not specifically tested there.
+
+==============================================================
+5. WEB APP / MOBILE APP
+==============================================================
+- ESLint will not start (config migration error), so the new/changed web files were
+  only checked by "npm run build". No tests for the new ChangePassword screen. The web
+  and Flutter test suites were not run.
+- Mobile default URL is now https://clarion.larmkx.com/api. flutter analyze is clean,
+  but the app was not built or run on a device. The Settings help text (translations)
+  still talks about 10.0.2.2 and LAN IPs.
+
+==============================================================
+6. HOSPITAL NODES / MESH / SCALE (DESIGN ONLY)
+==============================================================
+- Nothing is built for hospital nodes (e.g. Hospital Main Campus) joining the central
+  node. Design is in docs/scaling-central.md. Missing: node identity, ingest and feed
+  API endpoints, cursors and idempotency, de-duplication, access rules, a sync load test.
+- No load test with a real capacity number (the earlier P5.2 test produced none).
+- Not done: homepage on a CDN, load-balanced API replicas, MariaDB for several nodes.
+- Supabase was deliberately NOT used (Postgres conflicts with the tender's MariaDB
+  requirement; hosted data conflicts with the on-prem rules).
+
+==============================================================
+7. TESTS AND REPO HOUSEKEEPING
+==============================================================
+- 3 tests in tests/test_security_analytics.py fail, also on a clean checkout (time of
+  day). Not fixed.
+- tests/test_campus_registry.py::test_endpoint_degrades_gracefully_when_registry_unreachable
+  fails if anything is listening on 127.0.0.1:8000 (e.g. a local dev backend).
+- Docs not updated: docs/deployment.md, AGENTS.md status table, the roadmap changelog.
+- Left uncommitted (not mine to commit): .claude/worktrees/..., your edit to
+  healthcare/Security & Stability Test Suite.md, .agents/, qa/, clarion-architecture.png.
+- Nothing has been pushed to a remote.

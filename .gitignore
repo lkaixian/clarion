@@ -116,7 +116,7 @@ Desktop.ini
 .claude/
 
 # Scratch / working notes, not part of the deliverable
-gemin-text.txt
+/docs/source/gemin-text.txt
 
 # Obsidian / Claudian editor state for the healthcare/ knowledge vault -- the
 # .md notes ARE tracked, but the per-machine workspace layout, app settings,

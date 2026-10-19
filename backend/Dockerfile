@@ -34,6 +34,11 @@ COPY requirements.txt ./
 # built-in `uvicorn.workers` module, so the CMD uses `uvicorn_worker.UvicornWorker`).
 RUN pip install --no-cache-dir -r requirements.txt
 
+# NRIC OCR (ai/nric_ocr.py): RapidOCR = PaddleOCR models on ONNX Runtime, CPU, models inside the
+# wheel. Installed --no-deps so it takes opencv-python-headless (no libGL in the slim image)
+# instead of opencv-python; onnxruntime/numpy/Pillow/PyYAML already come from requirements.txt.
+RUN pip install --no-cache-dir opencv-python-headless==4.10.0.84 pyclipper==1.3.0.post6 shapely==2.0.7 six tqdm     && pip install --no-cache-dir --no-deps rapidocr-onnxruntime==1.4.4
+
 # ---------------------------------------------------------------------------
 # Stage 2 -- runtime
 # ---------------------------------------------------------------------------

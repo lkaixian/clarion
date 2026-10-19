@@ -8,8 +8,7 @@ import '../providers/queue_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/section_card.dart';
-import 'scan_checkin_screen.dart';
-import '../widgets/common.dart';
+import '../widgets/record_widgets.dart';
 
 // No "serving" status -- only waiting|called|done|cancelled are ever set
 // server-side (see backend schemas.VALID_QUEUE_TICKET_STATUSES); a ticket
@@ -30,7 +29,13 @@ String _statusLabel(AppLocalizations l10n, String status) {
 }
 
 class QueueStatusScreen extends StatefulWidget {
-  const QueueStatusScreen({super.key});
+  const QueueStatusScreen({super.key, this.active = true, this.onScan});
+
+  /// False while another shell tab is showing: polling pauses.
+  final bool active;
+
+  /// Opens the scan hub from the "no ticket" state; hidden when null.
+  final VoidCallback? onScan;
 
   @override
   State<QueueStatusScreen> createState() => _QueueStatusScreenState();
@@ -51,12 +56,23 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final patientId = context.read<AuthProvider>().user?.patientId;
-      if (patientId != null) {
-        context.read<QueueProvider>().startPolling(patientId);
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncPolling());
+  }
+
+  @override
+  void didUpdateWidget(QueueStatusScreen old) {
+    super.didUpdateWidget(old);
+    if (old.active != widget.active) _syncPolling();
+  }
+
+  void _syncPolling() {
+    if (!mounted) return;
+    if (!widget.active) {
+      _queueProvider?.stopPolling();
+      return;
+    }
+    final patientId = context.read<AuthProvider>().user?.patientId;
+    if (patientId != null) context.read<QueueProvider>().startPolling(patientId);
   }
 
   @override
@@ -76,10 +92,7 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
       body: Builder(
         builder: (context) {
           if (patientId == null) {
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(child: Text(l10n.noPatientRecord)),
-            );
+            return const NoRecordNotice();
           }
           if (queueState.isLoading && !queueState.status.active && queueState.error == null) {
             return const LoadingView();
@@ -110,7 +123,7 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
           }
 
           if (!queueState.status.active) {
-            return _EmptyQueueState(l10n: l10n);
+            return _EmptyQueueState(l10n: l10n, onScan: widget.onScan);
           }
 
           final QueueTicket ticket = queueState.status.ticket!;
@@ -229,8 +242,9 @@ class _DetailLine extends StatelessWidget {
 }
 
 class _EmptyQueueState extends StatelessWidget {
-  const _EmptyQueueState({required this.l10n});
+  const _EmptyQueueState({required this.l10n, this.onScan});
   final AppLocalizations l10n;
+  final VoidCallback? onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -253,19 +267,17 @@ class _EmptyQueueState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(color: context.palette.textMuted, fontSize: 13),
             ),
-            const SizedBox(height: 20),
-            // FIX for "this state is a dead end": previously offered no way
-            // forward at all -- a patient landing here (e.g. from Home)
-            // with no active ticket had nothing to actually do. Opens the
-            // same self-check-in flow reachable from Home.
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => context.pushScreen(const ScanCheckinScreen()),
-                icon: const Icon(Icons.qr_code_scanner),
-                label: Text(l10n.scanCheckinButton),
+            if (onScan != null) ...[
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onScan,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: Text(l10n.scanCheckinButton),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

@@ -24,7 +24,6 @@ match exactly what baseline migration 5e6a60dfe274 already created them as.
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.

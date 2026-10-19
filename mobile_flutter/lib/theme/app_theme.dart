@@ -146,6 +146,12 @@ extension PaletteX on BuildContext {
   PaletteData get palette => Theme.of(this).brightness == Brightness.dark
       ? _darkPalette
       : _lightPalette;
+
+  /// Text/icon colour for content sitting on a solid primary or emergency
+  /// fill: white on the light palette, the dark background on the dark one
+  /// (white on the lighter dark-mode blue/red is under 4.5:1).
+  Color get onFill =>
+      Theme.of(this).brightness == Brightness.dark ? _darkPalette.background : Colors.white;
 }
 
 /// High-contrast palette used exclusively by Senior Citizen Mode screens.
@@ -181,6 +187,11 @@ class SeniorColorsLight {
 }
 
 const _radius = 12.0;
+
+/// Buttons are start-aligned everywhere: the icon sits at the start, always the same size,
+/// and the label follows it, so a column of buttons reads as one aligned list.
+const AlignmentGeometry _buttonAlignment = AlignmentDirectional.centerStart;
+const double _buttonIconSize = 24;
 
 /// One builder for both brightnesses — every component theme is derived from
 /// the resolved [PaletteData], so light/dark can never drift structurally
@@ -244,10 +255,18 @@ ThemeData _buildTheme(PaletteData p, Brightness brightness) {
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         shape: shape,
         textStyle: buttonText,
+        alignment: _buttonAlignment,
+        iconSize: _buttonIconSize,
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(minimumSize: minSize, shape: shape, textStyle: buttonText),
+      style: FilledButton.styleFrom(
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: buttonText,
+        alignment: _buttonAlignment,
+        iconSize: _buttonIconSize,
+      ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
@@ -256,10 +275,17 @@ ThemeData _buildTheme(PaletteData p, Brightness brightness) {
         minimumSize: minSize,
         shape: shape,
         textStyle: buttonText,
+        alignment: _buttonAlignment,
+        iconSize: _buttonIconSize,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(minimumSize: const Size(48, 48), shape: shape),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: shape,
+        alignment: _buttonAlignment,
+        iconSize: _buttonIconSize,
+      ),
     ),
     cardTheme: CardThemeData(
       color: p.surface,

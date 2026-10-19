@@ -13,6 +13,11 @@ written to the audit log.
 
     --password-from-env VAR   use $VAR instead of generating one (still
                               forced to change at next sign-in)
+    --reset-mfa               ALSO clear the account's authenticator and
+                              recovery codes (lost phone + codes). The next
+                              sign-in enrols a new authenticator.
+    --mfa-only                clear the authenticator only; leave the password
+                              as it is (the user still knows it)
 """
 import argparse
 import os
@@ -32,9 +37,19 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("email")
     ap.add_argument("--password-from-env", metavar="VAR")
+    ap.add_argument("--reset-mfa", action="store_true")
+    ap.add_argument("--mfa-only", action="store_true")
     args = ap.parse_args()
+    mfa_only = args.mfa_only
+    clear_mfa = args.reset_mfa or mfa_only
+    if mfa_only and (args.reset_mfa or args.password_from_env):
+        print("error: --mfa-only leaves the password alone; don't combine it with "
+              "--reset-mfa or --password-from-env", file=sys.stderr)
+        return 2
 
-    if args.password_from_env:
+    if mfa_only:
+        password, generated = "", False
+    elif args.password_from_env:
         password = os.environ.get(args.password_from_env, "")
         problems = password_rule_failures(password)
         if problems:
@@ -53,19 +68,33 @@ def main() -> int:
             return 1
         role, user_id, facility = user.role, user.id, user.facility  # read before commit expires the row
         now = datetime.now(timezone.utc)
-        user.hashed_password = auth.hash_password(password)
-        user.must_change_password = True
-        user.password_changed_at = now
+        if not mfa_only:
+            user.hashed_password = auth.hash_password(password)
+            user.must_change_password = True
+            user.password_changed_at = now
         user.login_locked_until = None
+        user.login_failed_count = 0
+        user.reset_attempt_count = 0
+        if clear_mfa:
+            user.mfa_secret_enc = None
+            user.mfa_enabled_at = None
+            user.mfa_last_step = None
+            db.query(models.MfaRecoveryCode).filter_by(user_id=user.id).delete()
         for tok in db.query(models.RefreshToken).filter_by(user_id=user.id, revoked_at=None).all():
             tok.revoked_at = now
         db.commit()
-        log_access(db, None, "system", "system", "admin_password_reset_cli",
-                   detail=f"user={user_id} role={role}", actor_facility=facility)
+        action = "admin_mfa_reset_cli" if mfa_only else "admin_password_reset_cli"
+        log_access(db, None, "system", "system", action,
+                   detail=f"user={user_id} role={role} mfa_cleared={clear_mfa}", actor_facility=facility)
     finally:
         db.close()
 
-    print(f"Password reset for {args.email} (role {role}). Must be changed at next sign-in.")
+    if mfa_only:
+        print(f"Authenticator and recovery codes cleared for {args.email} (role {role}). "
+              "Password unchanged; a new authenticator is enrolled at next sign-in.")
+        return 0
+    print(f"Password reset for {args.email} (role {role}). Must be changed at next sign-in."
+          + (" Authenticator cleared too." if clear_mfa else ""))
     if generated:
         print(f"Temporary password: {password}")
     return 0

@@ -47,6 +47,8 @@ class ScanMedication {
 /// flat `key: value` text dump in EmergencyScannerScreen -- that dump
 /// didn't clearly show medication dosage/frequency and gave no visual
 /// structure for a first responder skimming under pressure.
+String? _nonEmpty(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+
 class EmergencyScanResult {
   final String fullName;
 
@@ -71,6 +73,13 @@ class EmergencyScanResult {
   /// be the *complete* list of e.g. medications on file.
   final Map<String, int> omittedNonCritical;
 
+  /// Emergency contact, when the response carries one (the scan endpoints
+  /// do not send these today; the result view shows a tap-to-call row only
+  /// when [contactPhone] is present).
+  final String? contactName;
+  final String? contactPhone;
+  final String? contactRelationship;
+
   const EmergencyScanResult({
     required this.fullName,
     this.age,
@@ -79,6 +88,9 @@ class EmergencyScanResult {
     required this.medications,
     required this.conditions,
     this.omittedNonCritical = const {},
+    this.contactName,
+    this.contactPhone,
+    this.contactRelationship,
   });
 
   factory EmergencyScanResult.fromJson(Map<String, dynamic> json) => EmergencyScanResult(
@@ -92,6 +104,9 @@ class EmergencyScanResult {
             .map((e) => ScanMedication.fromJson(e as Map<String, dynamic>))
             .toList(),
         conditions: (json['conditions'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+        contactName: json['emergency_contact_name'] as String?,
+        contactPhone: _nonEmpty(json['emergency_contact_phone'] as String?),
+        contactRelationship: json['emergency_contact_relationship'] as String?,
         // `omitted_non_critical` is new and additive -- may be entirely
         // absent from the response (older-shaped payload, or nothing was
         // omitted), in which case this just defaults to an empty map and

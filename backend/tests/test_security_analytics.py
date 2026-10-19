@@ -88,7 +88,12 @@ def _row(db, *, actor, patient, timestamp, seq, actor_role="clinician", actor_fa
 
 
 def _now_bucket() -> datetime:
-    return datetime.now(timezone.utc).replace(minute=30, second=0, microsecond=0, tzinfo=None)
+    # Most recent 14:30 MYT (06:30 UTC) that is not in the future: always
+    # outside the 00:00-05:00 MYT quiet hours, so these tests do not depend on
+    # the time of day they run at.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    t = now.replace(hour=6, minute=30, second=0, microsecond=0)
+    return t if t <= now else t - timedelta(days=1)
 
 
 def test_distinct_patient_fanout_flags_a_burst(fresh_db):

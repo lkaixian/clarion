@@ -64,9 +64,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("notifiable_disease_reports", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_notifiable_disease_reports_status"))
-        batch_op.drop_index(batch_op.f("ix_notifiable_disease_reports_patient_id"))
-        batch_op.drop_index(batch_op.f("ix_notifiable_disease_reports_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_notifiable_disease_reports_disease_name"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("notifiable_disease_reports")

@@ -25,7 +25,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.database import SessionLocal
-from app import models, auth
+from app import models, auth, seal
 
 # Alembic is the single schema path (P1.5). `upgrade head` builds the schema on
 # a fresh SQLite file and is a no-op on an already-migrated one; the app's
@@ -528,6 +528,7 @@ try:
                         _apply_object_meta(_ann, _ann_meta, "signature")
                     except Exception:
                         pass
+                seal.seal("annotation", _ann)
                 db.add(_ann)
                 db.commit()
                 print("Added demo ClinicalRecordAnnotation: Hyperlipidemia -> resolved")
@@ -645,6 +646,7 @@ try:
                 _apply_object_meta(_result, _res_meta, "signature")
             except Exception:
                 pass
+        seal.seal("service_result", _result)
         db.add(_result)
         db.commit()
         print("Added demo signed-off ServiceRequest+ServiceResult: Full Blood Count (laboratory)")
@@ -678,6 +680,7 @@ try:
                 _apply_object_meta(_dental_entry, _dental_meta, "signature")
             except Exception:
                 pass
+        seal.seal("dental_entry", _dental_entry)
         db.add(_dental_entry)
         db.commit()
         print("Added demo signed DentalChartEntry: tooth 16, caries -> filling")

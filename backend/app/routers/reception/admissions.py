@@ -207,6 +207,11 @@ def create_admission(
         notes=payload.notes,
     )
     db.add(admission)
+    db.flush()
+    db.add(models.BedMovement(
+        facility_name=facility, admission_id=admission.id, patient_id=patient.id,
+        to_ward_id=chosen_ward.id, to_bed_number=chosen_bed, moved_by=current_user.id,
+    ))
     # Mirror patients.py::add_encounter -- an admission is a genuine
     # inpatient encounter in the patient's cross-facility history.
     db.add(
@@ -273,8 +278,15 @@ def update_admission(
         if target_bed in _occupied_beds_for_ward(db, target_ward_id, exclude_admission_id=adm.id):
             raise HTTPException(status_code=409, detail="That bed is already occupied.")
 
+    moved_from = (adm.ward_id, adm.bed_number)
     for field, value in submitted_fields.items():
         setattr(adm, field, value)
+    if (adm.ward_id, adm.bed_number) != moved_from:
+        db.add(models.BedMovement(
+            facility_name=adm.facility_name, admission_id=adm.id, patient_id=adm.patient_id,
+            from_ward_id=moved_from[0], from_bed_number=moved_from[1],
+            to_ward_id=adm.ward_id, to_bed_number=adm.bed_number, moved_by=current_user.id,
+        ))
     if submitted_fields:
         db.commit()
         db.refresh(adm)
@@ -284,6 +296,31 @@ def update_admission(
         fields=sorted(submitted_fields.keys()), actor_facility=current_user.facility,
     )
     return _serialize_admission(db, adm)
+
+
+@router.get("/admissions/{admission_id}/movements")
+def admission_movements(
+    admission_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*STAFF_ROLES)),
+):
+    """Where this admission has been, oldest first (first bed, then every ward/bed change)."""
+    adm = _get_admission_for_staff(admission_id, current_user, db)
+    wards = {w.id: w.ward_name for w in db.query(models.Ward).filter(models.Ward.facility_name == adm.facility_name)}
+    rows = (
+        db.query(models.BedMovement).filter(models.BedMovement.admission_id == adm.id)
+        # ponytail: ties within the clock tick fall back to "first bed (NULL from) comes first";
+        # a sequence column would be exact if two moves can ever share a timestamp.
+        .order_by(models.BedMovement.moved_at.asc(), models.BedMovement.from_bed_number.asc()).all()
+    )
+    return [
+        {
+            "id": r.id, "moved_at": r.moved_at,
+            "from_ward_name": wards.get(r.from_ward_id), "from_bed_number": r.from_bed_number,
+            "to_ward_name": wards.get(r.to_ward_id), "to_bed_number": r.to_bed_number,
+        }
+        for r in rows
+    ]
 
 
 @router.post("/admissions/{admission_id}/discharge", response_model=schemas.AdmissionOut)

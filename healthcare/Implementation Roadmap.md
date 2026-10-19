@@ -23,6 +23,17 @@ This file is the live plan. No older snapshot is kept in the repo. Backbone:
 
 ## Changelog
 
+### 2026-10-14 — Mobile 1.7.0-EXPERIMENTAL: booking v2, sign-up without OCR, emergency card tabs
+
+- **Online booking v2** (`routers/booking.py`, migration `7b8c0d2e4f66`): category, location (text or GPS), hospital timetable, saved people, confirm; hospitals set weekly ranges, slot length, people per slot, days ahead, minimum notice per category in the web admin tab "Online booking". MySejahtera is offered first in the app. Capacity re-checked after insert (no DB constraint; documented limit). Not run on MariaDB.
+- **Sign-up without an OCR model** (`SELF_REGISTER_PHOTO_CHECK` off by default): identity = a code emailed to the address already on the record, never one the caller types; `/complete` needs a completion token from whoever verified the code; the owner gets an "account created" email with a single-use one-tap lock (unlock = Forgot password, no staff); 24 h payment cooling for self-registered accounts (`SELF_REG_COOLING_HOURS`); needs `CLARION_PUBLIC_URL` per node. Audit by voltagent security-auditor: 7 findings, all but "cooling is thin" fixed; the daily code cap was removed (let a stranger block the owner).
+- **2FA:** `/auth/mfa/*` no longer treated as session expiry in the app; emailed code as a second factor (`/auth/mfa/email/send|verify`, roles via `CLARION_MFA_EMAIL_ROLES`).
+- **Emergency cards:** QR default 3 years; NFC by chip: NTAG21x/unknown 1 year default (2 max), NTAG 424 DNA 7 years; card list has `tag_type`, `outdated`, `status`, `valid_days_left`; per-card history endpoint (role/org/facility only). App: two tabs, fixed share list with preview, rendered card image.
+- **App:** one shell for every role (5 tabs, centre Scan = QR check-in/emergency or NFC), left-aligned buttons with 24 px icons, filter-tag "who viewed my record", live NRIC scan with guide frame and review step (ML Kit, on device, never uploaded), PDF errors now show the server message.
+- Decisions: no staff workload (no manual identity review, no helpdesk until one exists); on-device face match deferred; the phone's OCR/face result is never trusted by the server.
+- Open: deploy the new backend (the app's sign-up says "Field required" against the old one); booking retry has no idempotency key; CLARION_CENTRAL not mirrored; APK debug-signed.
+
+
 ### 2026-09-17 — Clinician profile (bio / internal contact email / photo)
 
 New `models.User` columns (`bio`, `contact_email`, `photo_object_key`/

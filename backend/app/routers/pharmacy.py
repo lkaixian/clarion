@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_access
+from ..catalogue_link import resolve_drug_code
 from ..storage import BUCKET_MEDICINE, ObjectNotFound, ObjectStoreError, get_object_store
 from ..derived import get_or_make_thumbnail
 from ..directory import resolve_user_names
@@ -454,6 +455,7 @@ def propose_new_item(
         proposed_drug_name=payload.proposed_drug_name,
         proposed_unit=payload.proposed_unit,
         proposed_barcode=payload.proposed_barcode,
+        drug_code=resolve_drug_code(db, payload.drug_code, payload.proposed_drug_name),
         quantity=payload.quantity,
         unit_cost=payload.unit_cost,
         reason=payload.reason,

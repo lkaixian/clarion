@@ -174,3 +174,29 @@ def test_same_facility_edit_allowed_when_patient_present(test_client, db_session
     db_session.expire_all()
     updated = db_session.query(models.Condition).filter_by(id=condition.id).first()
     assert updated.status == "resolved"
+
+
+def test_me_hospital_returns_own_facility_branding_only(test_client, db_session, make_user, auth_headers):
+    """Staff see their own hospital's name + logo; a patient and other
+    facilities' branding never leak; no row yet falls back to the facility name."""
+    clinician = make_user(role="clinician", facility="Hospital A")
+    patient_user = make_user(role="patient", facility=None)
+    db_session.add(models.HospitalSetting(
+        facility_name="Hospital B", display_name="B Specialist", logo_data_url="data:image/png;base64,QkJC"))
+    db_session.commit()
+
+    # no settings row for Hospital A yet -> facility name, no logo
+    r = test_client.get("/me/hospital", headers=auth_headers(clinician))
+    assert r.status_code == 200
+    assert r.json() == {"name": "Hospital A", "logo_data_url": None, "brand_primary_color": None}
+
+    db_session.add(models.HospitalSetting(
+        facility_name="Hospital A", display_name="Hospital A Sdn Bhd",
+        logo_data_url="data:image/png;base64,QUFB", brand_primary_color="#112233"))
+    db_session.commit()
+    body = test_client.get("/me/hospital", headers=auth_headers(clinician)).json()
+    assert body["name"] == "Hospital A Sdn Bhd"
+    assert body["logo_data_url"] == "data:image/png;base64,QUFB"
+    assert "QkJC" not in str(body)  # Hospital B's logo is not visible
+
+    assert test_client.get("/me/hospital", headers=auth_headers(patient_user)).json()["name"] is None

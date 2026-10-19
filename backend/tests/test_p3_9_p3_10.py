@@ -533,3 +533,24 @@ def test_announcement_scoped_to_own_facility_only(test_client, db_session, make_
     )
     assert listed.status_code == 200
     assert not any(a["title"] == "Facility A only" for a in listed.json())
+
+
+def test_sample_label_renders_new_fields_for_short_and_very_long_values():
+    """Name/IC/created/created-by/item/request; a long name wraps (compact
+    layout) rather than being cut, and neither layout raises."""
+    import io
+    from datetime import datetime, timezone
+    from PIL import Image
+    from app.printing import build_sample_label_png
+
+    for name, item, by in (
+        ("Nur Aisyah binti Rahman", "Full Blood Count", "Dr. Sarah Lim"),
+        ("MUHAMMAD AMIRUL HAKIMI BIN ABDUL RAHMAN AL-HAFIZ",
+         "Fasting Blood Glucose + HbA1c + Lipid Profile Panel", "Dr. Sarah Binti Mohd Zulkifli"),
+    ):
+        png = build_sample_label_png(
+            patient_name=name, national_id="950520-14-5678", item_name=item,
+            request_id="3f2a91c4-77aa-4b1e-9d0c-1e8b6a52f001",
+            created_at=datetime(2026, 10, 10, 15, 24, tzinfo=timezone.utc), created_by=by,
+        )
+        assert Image.open(io.BytesIO(png)).size == (560, 260)

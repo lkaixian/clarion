@@ -13,7 +13,7 @@ full citation set: `scratchpad/agy-research-full.md` (Part 1 = A–C, Part 2 = D
 ## Tender & codebase
 - CLARION static security audit, Aug 2026 → [[Security Audit]] (`scratchpad/security-audit.md`)
 - Target on-prem architecture, Aug 2026 → [[On-Prem Architecture]] (`scratchpad/architecture.md`)
-- `gemin-text.txt` (repo root) — the Gemini HIE thread → [[Nationwide Health Information Exchange]]
+- `docs/source/gemin-text.txt` — the Gemini HIE thread → [[Nationwide Health Information Exchange]]
 
 ## PHP / CodeIgniter 4
 - [CodeIgniter 4 — RESTful handling](https://codeigniter.com/user_guide/incoming/restful.html)
