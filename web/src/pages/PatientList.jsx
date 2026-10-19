@@ -184,8 +184,8 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel">
-        <h3 className="font-semibold text-slate-800 mb-1">Complete consultation</h3>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientlist-1">
+        <h3 id="dlg-patientlist-1" className="font-semibold text-slate-800 mb-1">Complete consultation</h3>
         <p className="text-xs text-slate-500 mb-4">
           #{ticket.queue_number} · {ticket.patient_full_name}
         </p>

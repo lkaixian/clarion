@@ -300,8 +300,8 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel">
-        <h3 className="font-semibold text-slate-800 mb-4">
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-1">
+        <h3 id="dlg-patientdetail-1" className="font-semibold text-slate-800 mb-4">
           {mode === "add" ? `Add ${config.label}` : `Edit ${config.label}`}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -435,7 +435,7 @@ function DocumentModal({ patientId, documentId, onClose }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Details">
         {error && <div role="alert" className="alert-error mb-3">{error}</div>}
         {!detail && !error && <p className="text-sm text-slate-500">Loading...</p>}
         {detail && (
@@ -784,8 +784,8 @@ function AppointmentModal({ patientId, onClose, onSaved }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel">
-        <h3 className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-3">
+        <h3 id="dlg-patientdetail-3" className="font-semibold text-slate-800 mb-4">Add Appointment</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && <div role="alert" className="alert-error">{error}</div>}
 
@@ -968,8 +968,8 @@ function RescheduleModal({ patientId, appointment, onClose, onSaved }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel">
-        <h3 className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-4">
+        <h3 id="dlg-patientdetail-4" className="font-semibold text-slate-800 mb-1">Reschedule Appointment</h3>
         <p className="text-xs text-slate-500 mb-4">
           {appointment.facility_name}{appointment.venue && ` — ${appointment.venue}`} · currently{" "}
           {formatAppointmentTime(appointment.scheduled_at)}
@@ -1362,7 +1362,7 @@ function formatAuditActor(l) {
 // facility. A missing `editable` field (older payloads) falls back to
 // showing Edit rather than hiding it. Still gated by isStaff upstream — a
 // patient viewer never sees any edit control here.
-function RecordEditControl({ record, onEdit }) {
+function RecordEditControl({ record, onEdit, label }) {
   if (record.editable === false) {
     const facility = record.authored_by_facility || "another facility";
     return (
@@ -1379,7 +1379,7 @@ function RecordEditControl({ record, onEdit }) {
     );
   }
   return (
-    <button onClick={onEdit} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>
+    <button onClick={onEdit} aria-label={label ? `Edit ${label}` : "Edit"} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>
   );
 }
 
@@ -1544,8 +1544,8 @@ function SignOffModal({ patientId, targetType, target, targetLabel, onClose, onS
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-panel">
-        <h3 className="font-semibold text-slate-800 mb-1">Sign off record</h3>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-5">
+        <h3 id="dlg-patientdetail-5" className="font-semibold text-slate-800 mb-1">Sign off record</h3>
         <p className="text-xs text-slate-500 mb-4">{targetLabel}</p>
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && <div role="alert" className="alert-error">{error}</div>}
@@ -1975,9 +1975,10 @@ export default function PatientDetail() {
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <RecordEditControl record={c} onEdit={() => openEditRecord("condition", c)} />
+                      <RecordEditControl record={c} label={c.name} onEdit={() => openEditRecord("condition", c)} />
                       <button
                         onClick={() => setSignOff({ targetType: "condition", target: c, targetLabel: c.name })}
+                        aria-label={`Sign off ${c.name}`}
                         className="btn-chip"
                       >
                         Sign off…
@@ -2005,9 +2006,10 @@ export default function PatientDetail() {
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <RecordEditControl record={m} onEdit={() => openEditRecord("medication", m)} />
+                      <RecordEditControl record={m} label={m.drug_name} onEdit={() => openEditRecord("medication", m)} />
                       <button
                         onClick={() => setSignOff({ targetType: "medication", target: m, targetLabel: m.drug_name })}
+                        aria-label={`Sign off ${m.drug_name}`}
                         className="btn-chip"
                       >
                         Sign off…
@@ -2028,9 +2030,10 @@ export default function PatientDetail() {
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <RecordEditControl record={a} onEdit={() => openEditRecord("allergy", a)} />
+                      <RecordEditControl record={a} label={a.substance} onEdit={() => openEditRecord("allergy", a)} />
                       <button
                         onClick={() => setSignOff({ targetType: "allergy", target: a, targetLabel: a.substance })}
+                        aria-label={`Sign off ${a.substance}`}
                         className="btn-chip"
                       >
                         Sign off…
@@ -2068,13 +2071,14 @@ export default function PatientDetail() {
                       </div>
                       {isStaff && (
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <RecordEditControl record={e} onEdit={() => openEditRecord("encounter", e)} />
+                          <RecordEditControl record={e} label={`${e.facility_name} visit`} onEdit={() => openEditRecord("encounter", e)} />
                           <button
                             onClick={() => setSignOff({
                               targetType: "encounter",
                               target: e,
                               targetLabel: `${e.facility_name} (${e.encounter_type})`,
                             })}
+                            aria-label={`Sign off visit at ${e.facility_name}`}
                             className="btn-chip"
                           >
                             Sign off…
@@ -2312,8 +2316,8 @@ export default function PatientDetail() {
 
       {issuedAccount && (
         <div className="modal-backdrop">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-            <h3 className="font-semibold text-slate-800 mb-1">Temporary login issued</h3>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full" role="dialog" aria-modal="true" aria-labelledby="dlg-patientdetail-6">
+            <h3 id="dlg-patientdetail-6" className="font-semibold text-slate-800 mb-1">Temporary login issued</h3>
             <p className="text-xs text-red-700 font-semibold uppercase mb-3">
               Shown once — write it down or hand it to the patient now
             </p>
