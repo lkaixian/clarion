@@ -32,6 +32,45 @@ void main() {
     expect(TagCrypto.keyIdOf(_blob), 1);
   });
 
+  test('only a whole sealed blob may be written to a tag', () {
+    expect(TagCrypto.isWellFormedBlob(_blob), isTrue);
+    expect(TagCrypto.isWellFormedBlob('BT:O+|AL:Penicillin(severe)'), isFalse);
+    expect(TagCrypto.isWellFormedBlob('C1.BT:O+|AL:Penicillin(severe)'), isFalse);
+    expect(TagCrypto.isWellFormedBlob('C1.1.abc def'), isFalse);
+    expect(TagCrypto.isWellFormedBlob(''), isFalse);
+  });
+
+  test('revocation id matches the backend for the same key and UID', () async {
+    // Vector from backend tag_crypto.revocation_id with SECRET_KEY="vector-secret".
+    const revKey = 'WUt+tgti5F1v6MerIAayxTQqTel7MR4ahqEVdPr97iw=';
+    expect(await TagCrypto.revocationId(_uid, revKey), 'f70b591457d357cef1945677a74282d7');
+    expect(await TagCrypto.revocationId('04FFFFFFFFFFFF', revKey),
+        isNot('f70b591457d357cef1945677a74282d7'));
+  });
+
+  test('tag key set parses the revocation list and defaults the lifetime to 24h', () {
+    final full = TagKeySet.fromJson({
+      'keys': {'1': _key},
+      'revocation_key': 'k',
+      'revoked_card_ids': ['aa', 'bb'],
+      'key_max_age_hours': 6,
+    });
+    expect(full.revokedCardIds, {'aa', 'bb'});
+    expect(full.maxAgeHours, 6);
+
+    final old = TagKeySet.fromJson({'keys': {'1': _key}}); // a pre-revocation server
+    expect(old.revokedCardIds, isEmpty);
+    expect(old.revocationKey, isNull);
+    expect(old.maxAgeHours, 24);
+    expect(old.validUntil, isNull);
+
+    final boxed = TagKeySet.fromJson({
+      'keys': {'1': _key},
+      'valid_until': '2026-10-20T08:30:00Z', // a time-boxed community responder
+    });
+    expect(boxed.validUntil, DateTime.utc(2026, 10, 20, 8, 30));
+  });
+
   test('offline-read chain hash matches the backend', () async {
     final h = await OfflineReadLog.entryHash(
       OfflineReadLog.genesisHash, 0, '2026-10-10T08:00:00.000Z', _uid, 1, 'decrypted',

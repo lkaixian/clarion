@@ -23,19 +23,22 @@ Patient record visibility is explicitly untouched by this router -- see
 routers/patients.py, which keeps its existing (broader) admin/clinician/
 records_officer access as-is.
 """
+import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from .. import models, schemas, auth, permissions
+from .. import models, schemas, auth, permissions, mfa
+from ..rate_limit import limiter
 from ..database import get_db
 from ..audit import log_access
+from ..catalogue_link import relink_on_update, resolve_drug_code
 from ..appointments import compute_reminder_offsets
 from ..clinical_access import _facility_known_patient_ids_select
 from .profile import _persist_photo
@@ -230,8 +233,10 @@ def create_inventory_item(
     scoping rests on -- see module docstring."""
     facility = _require_facility(current_user)
 
+    data = payload.model_dump()
+    data["drug_code"] = resolve_drug_code(db, data["drug_code"], data["drug_name"])
     item = models.MedicineInventoryItem(
-        facility_name=facility, updated_by=current_user.id, **payload.model_dump()
+        facility_name=facility, updated_by=current_user.id, **data
     )
     db.add(item)
     db.commit()
@@ -255,6 +260,7 @@ def update_inventory_item(
     item = _get_inventory_item_or_404(db, item_id, facility)
 
     submitted_fields = payload.model_dump(exclude_unset=True)
+    relink_on_update(db, submitted_fields, item.drug_name, item.drug_code)
     previous_quantity = item.quantity_on_hand
     for field, value in submitted_fields.items():
         setattr(item, field, value)
@@ -537,6 +543,7 @@ def approve_purchase_proposal(
         item = models.MedicineInventoryItem(
             facility_name=facility,
             drug_name=proposal.proposed_drug_name,
+            drug_code=proposal.drug_code,
             unit=proposal.proposed_unit,
             barcode=proposal.proposed_barcode,
             quantity_on_hand=0,
@@ -1590,6 +1597,164 @@ def delete_announcement(
     return {"detail": "Announcement deleted"}
 
 
+# ---------- Community responders (time-boxed guard / volunteer logins) ----------
+# An `emergency_responder` account is a named, auditable login for a security
+# guard or community volunteer. It can only use the emergency scan, the offline
+# tag keys and the upload of its offline reads (auth.RESPONDER_ALLOWED_PATHS,
+# enforced in get_current_user), it always carries a hard expiry
+# (User.access_expires_at, enforced on every request / login / refresh), and
+# every scan it makes is attributed to its user id in the audit log.
+_RESPONDER_MIN_WINDOW = timedelta(minutes=5)
+
+
+def _responder_max_days() -> int:
+    days = int(os.environ.get("CLARION_RESPONDER_MAX_DAYS", "90"))
+    if not 1 <= days <= 365:
+        raise RuntimeError("CLARION_RESPONDER_MAX_DAYS must be 1..365")
+    return days
+
+
+def _validated_responder_expiry(expires_at: datetime) -> datetime:
+    """Naive-UTC expiry, at least a few minutes ahead and no further out than
+    CLARION_RESPONDER_MAX_DAYS (default 90): a guard's access is meant to be
+    renewed, not set once and forgotten."""
+    if expires_at.tzinfo is None:
+        # A bare local time would silently shift the window by the client's UTC offset.
+        raise HTTPException(status_code=400, detail="expires_at must include a timezone offset (e.g. 2026-11-01T18:00:00+08:00)")
+    expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if expires_at < now + _RESPONDER_MIN_WINDOW:
+        raise HTTPException(status_code=400, detail="expires_at must be in the future")
+    if expires_at > now + timedelta(days=_responder_max_days()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"A community responder account can last at most {_responder_max_days()} days at a time.",
+        )
+    return expires_at
+
+
+def _get_responder_or_404(db: Session, user_id: str, facility: str) -> models.User:
+    user = (
+        db.query(models.User)
+        .filter(models.User.id == user_id, models.User.role == "emergency_responder",
+                models.User.facility == facility)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Responder account not found")
+    return user
+
+
+def _responder_out(user: models.User) -> dict:
+    exp = user.access_expires_at
+    if exp is not None and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)  # stored as naive UTC; send it as an unambiguous instant
+    return {
+        "id": user.id, "email": user.email, "full_name": user.full_name, "facility": user.facility,
+        "access_expires_at": exp, "active": not auth.access_expired(user),
+        "must_change_password": user.must_change_password,
+    }
+
+
+@router.get("/responders", response_model=List[schemas.ResponderOut])
+def list_responders(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    if not current_user.facility:
+        return []
+    users = (
+        db.query(models.User)
+        .filter(models.User.role == "emergency_responder", models.User.facility == current_user.facility)
+        .order_by(models.User.full_name.asc())
+        .all()
+    )
+    return [_responder_out(u) for u in users]
+
+
+@router.post("/responders", response_model=schemas.ResponderIssued)
+def create_responder(
+    payload: schemas.ResponderCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    facility = _require_facility(current_user)
+    expires_at = _validated_responder_expiry(payload.expires_at)
+    if db.query(models.User.id).filter(models.User.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    temp_password = auth.generate_temp_password()
+    user = models.User(
+        email=payload.email,
+        hashed_password=auth.hash_password(temp_password),
+        full_name=payload.full_name,
+        role="emergency_responder",
+        facility=facility,
+        must_change_password=True,
+        access_expires_at=expires_at,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:  # a concurrent create with the same email
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
+    db.refresh(user)
+    log_access(
+        db, None, current_user.id, current_user.role, "create_responder_account",
+        detail=f"email={user.email} expires_at={expires_at.isoformat()}Z",
+        actor_facility=current_user.facility,
+    )
+    return {**_responder_out(user), "temporary_password": temp_password}
+
+
+@router.patch("/responders/{user_id}", response_model=schemas.ResponderOut)
+def update_responder_expiry(
+    user_id: str,
+    payload: schemas.ResponderUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Extend or shorten the window (still capped from now). Extending an
+    already-expired account revives it; sessions that were cut off need a new
+    login."""
+    facility = _require_facility(current_user)
+    user = _get_responder_or_404(db, user_id, facility)
+    user.access_expires_at = _validated_responder_expiry(payload.expires_at)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    log_access(
+        db, None, current_user.id, current_user.role, "update_responder_expiry",
+        detail=f"email={user.email} expires_at={user.access_expires_at.isoformat()}Z",
+        actor_facility=current_user.facility,
+    )
+    return _responder_out(user)
+
+
+@router.post("/responders/{user_id}/revoke", response_model=schemas.ResponderOut)
+def revoke_responder(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """End the account's access now and kill its refresh tokens. A device that
+    cached tag keys keeps them until its cache lapses (the /emergency/tag-keys
+    lifetime is capped to the account's remaining time)."""
+    facility = _require_facility(current_user)
+    user = _get_responder_or_404(db, user_id, facility)
+    user.access_expires_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add(user)
+    db.commit()
+    auth.revoke_all_refresh_tokens_for_user(db, user)
+    db.refresh(user)
+    log_access(
+        db, None, current_user.id, current_user.role, "revoke_responder_account",
+        detail=f"email={user.email}", actor_facility=current_user.facility,
+    )
+    return _responder_out(user)
+
+
 # ---------- Staff roster (read-only) ----------
 # Deliberately READ-ONLY: no admin-initiated clock actions and no account
 # editing/deactivation here -- staff clock themselves in/out via
@@ -1776,6 +1941,92 @@ def update_staff_profile(
         contact_email=user.contact_email,
         has_photo=bool(user.photo_object_key),
     )
+
+
+@router.post("/staff/{user_id}/reset-password")
+@limiter.limit("10/minute")
+def reset_staff_password(
+    request: Request,
+    user_id: str,
+    payload: schemas.AdminStepUp,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Admin issues a one-time temporary password to a roster member or
+    another administrator who forgot theirs. Needs the ACTING admin's own
+    password + authenticator code (step-up). Same facility only, same
+    non-leaking 404 as the rest of this section; an admin's own account is
+    never reachable here, so the last admin recovers through the host-level
+    break-glass script (db/reset_admin_password.py), not this endpoint. Same
+    write path as every other staff-issued password (`_apply_new_password`):
+    forced change at next sign-in, lockout cleared, access + refresh tokens
+    revoked. The target's authenticator is untouched, so a reset password
+    alone never signs anyone in. The temporary password is returned once and
+    never logged or audited."""
+    from .auth_router import _apply_new_password
+    from .auth_security import _notify, require_stepup
+
+    facility = _require_facility(current_user)
+    user = (
+        db.query(models.User)
+        .filter(
+            models.User.id == user_id,
+            models.User.role.in_(["clinician", "records_officer", "receptionist", "admin"]),
+            models.User.facility == facility,
+            models.User.id != current_user.id,
+        )
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    if (getattr(user, "auth_source", None) or "local") != "local":
+        raise HTTPException(
+            status_code=400,
+            detail="This account signs in through the directory (LDAP); reset it there.",
+        )
+    if user.role == "admin" and mfa.role_requires_mfa("admin") and not mfa.is_enrolled(user):
+        # No authenticator on file while one is required: a temporary password would let whoever
+        # holds it enrol their own at sign-in (a takeover, not a recovery). Server-side only.
+        raise HTTPException(
+            status_code=409,
+            detail="This administrator has no authenticator set up. An operator must reset them "
+                   "from the server (db/reset_admin_password.py).",
+        )
+    factor = require_stepup(db, current_user, payload.password, payload.code)
+
+    temporary = secrets.token_urlsafe(18)
+    _apply_new_password(db, user, temporary, must_change=True)
+    log_access(
+        db, None, current_user.id, current_user.role, "admin_reset_staff_password",
+        detail=f"user={user.email} role={user.role} factor={factor}", actor_facility=current_user.facility,
+    )
+    _notify(user, "An administrator issued a temporary password for your CLARION account. "
+                  "You'll be asked to choose a new one at your next sign-in.")
+    response.headers["Cache-Control"] = "no-store"
+    return {"email": user.email, "temporary_password": temporary}
+
+
+@router.get("/admins")
+def list_other_admins(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """The other administrators at this facility, for the recovery panel
+    (reset password / reset authenticator). Never includes the caller."""
+    facility = _require_facility(current_user)
+    rows = (
+        db.query(models.User)
+        .filter(models.User.role == "admin", models.User.facility == facility,
+                models.User.id != current_user.id)
+        .order_by(models.User.full_name)
+        .all()
+    )
+    return [
+        {"id": u.id, "full_name": u.full_name, "email": u.email,
+         "mfa_enabled": bool(u.mfa_enabled_at), "must_change_password": u.must_change_password}
+        for u in rows
+    ]
 
 
 @router.post("/staff/{user_id}/photo")

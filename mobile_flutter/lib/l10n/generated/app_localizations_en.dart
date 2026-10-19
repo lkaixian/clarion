@@ -30,14 +30,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordLabel => 'Password';
 
   @override
+  String get emailOrNricHint => 'name@example.com or 900101-01-1234';
+
+  @override
+  String get loginFieldRequired =>
+      'Enter your email or NRIC and your password.';
+
+  @override
+  String get mfaResendButton => 'Send a new code';
+
+  @override
+  String mfaResendIn(int seconds) {
+    return 'Send a new code in ${seconds}s';
+  }
+
+  @override
   String get signIn => 'Sign In';
 
   @override
   String get signingIn => 'Signing in…';
-
-  @override
-  String get demoLoginHint =>
-      'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -60,11 +71,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get undo => 'Undo';
 
   @override
-  String get scanEmergencyCardButton => '🚨 Scan Emergency QR / NFC Card';
+  String get scanEmergencyCardButton => 'Scan an emergency card (QR or NFC)';
 
   @override
   String get scanEmergencyCardSubtitle =>
-      'For first responders — no sign-in needed';
+      'For first responders. No sign-in needed.';
 
   @override
   String get orSignInDivider => 'or sign in to manage your own record';
@@ -171,7 +182,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selfRegisterDetailsStepDesc =>
-      'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC — we\'ll verify them against your hospital record.';
+      'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC. We will check them against your hospital record.';
 
   @override
   String get selfRegisterContinueButton => 'Continue';
@@ -183,6 +194,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get selfRegisterOtpStepDesc =>
       'Enter the 6-digit verification code we emailed you.';
+
+  @override
+  String get selfRegisterScanButton => 'Scan my NRIC to fill these in';
+
+  @override
+  String get selfRegisterScanPrivacy =>
+      'The photo is read on this phone and is never uploaded. Check the details before continuing.';
+
+  @override
+  String selfRegisterCodeSentTo(String hint) {
+    return 'We emailed a 6-digit code to $hint, the address on your hospital record. Enter it below.';
+  }
 
   @override
   String get selfRegisterVerifyOtpButton => 'Verify Code';
@@ -233,6 +256,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get selfRegisterPasswordStepDesc =>
       'Almost done. Choose a password for your new account (at least 8 characters).';
+
+  @override
+  String get selfRegisterPendingDesc =>
+      'Your sign-up is waiting for verification and you cannot sign in yet. It is approved once staff check your IC at a counter, or as soon as your IC photos match. Only the first verified sign-up for an NRIC is kept; any others are rejected and their emails flagged.';
 
   @override
   String get selfRegisterCompleteButton => 'Create Account';
@@ -415,13 +442,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emergencyAccessCardTitle => 'Emergency Access Card';
-
-  @override
-  String get emergencyDesc =>
-      'Choose what a first responder can see in an emergency. Nothing else on your record is ever exposed by this QR code — each scan is logged and you can revoke access at any time.';
-
-  @override
-  String get fieldsToShare => 'Fields to share in an emergency:';
 
   @override
   String get scopeAllergies => 'Allergies';
@@ -669,7 +689,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeModeDark => 'Dark';
 
   @override
-  String get themeModeSystem => 'System default';
+  String get themeModeSystem => 'System';
 
   @override
   String get auditLogTitle => 'Who\'s Viewed My Record';
@@ -814,6 +834,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mfaCancelButton => 'Back to sign in';
 
   @override
+  String get mfaEmailButton => 'Email me a code instead';
+
+  @override
+  String mfaEmailSent(String hint) {
+    return 'We emailed a 6-digit code to $hint. It expires in 10 minutes.';
+  }
+
+  @override
+  String get mfaEmailCodeLabel => 'Emailed code';
+
+  @override
+  String get mfaUseAuthenticatorButton => 'Use my authenticator app instead';
+
+  @override
+  String get mfaEmailPrompt => 'Enter the 6-digit code we emailed you.';
+
+  @override
+  String get mfaWrongCodeHint =>
+      'That code was not accepted. Codes change every 30 seconds and work once, so wait for the next one, make sure your phone\'s clock is set to automatic, or email yourself a code.';
+
+  @override
   String get nfcBasicTagWarning =>
       'This tag type (NTAG213/215/216) works, but has no tamper-proof read counter: offline reads of it can\'t be checked for missing entries. Use an NTAG 424 DNA where accountability matters.';
 
@@ -824,6 +865,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get scanResultOfflineKeyMissing =>
       'No connection, and this device doesn\'t have the key for this tag. Connect once while signed in to download it, or use the QR code / online lookup.';
+
+  @override
+  String get scanResultOfflineRevoked =>
+      'This card has been revoked and can\'t be read. Do not rely on it; use the QR code or online lookup, and report the card.';
+
+  @override
+  String get offlineUnlockReason =>
+      'Confirm it\'s you to read this card offline';
+
+  @override
+  String get scanResultOfflineLockRequired =>
+      'This phone has no screen lock, so the card can\'t be read offline. Set a PIN, pattern or fingerprint in the phone\'s settings, or use the QR code or online lookup.';
+
+  @override
+  String get scanResultOfflineAuthFailed =>
+      'Identity check cancelled or failed, so the card was not read offline. Tap the card again and confirm with your fingerprint, face or PIN.';
 
   @override
   String get scanResultOfflineExpired =>
@@ -868,6 +925,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get writeOfflineTagTooLarge =>
       'This text is too large for this tag\'s memory. Re-register with fewer fields selected, or use a higher-capacity tag.';
+
+  @override
+  String get writeOfflineTagNotEncrypted =>
+      'Only the encrypted record from the web console can be written. Paste the text that starts with C1. and try again.';
 
   @override
   String get writeOfflineTagWriteFailed =>
@@ -1062,44 +1123,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookAppointmentTitle => 'Book Appointment';
 
   @override
-  String get bookAppointmentFacilityLabel => 'Facility';
-
-  @override
-  String get bookAppointmentOtherFacility => 'Other (type manually)';
-
-  @override
-  String get bookAppointmentFacilityManualHint => 'Facility name';
-
-  @override
-  String get bookAppointmentUseFacility => 'Use this facility';
-
-  @override
-  String get bookAppointmentDepartmentLabel => 'Department';
-
-  @override
-  String get bookAppointmentAnyDepartment => 'Any department';
-
-  @override
-  String get bookAppointmentClinicianLabel => 'Doctor';
-
-  @override
-  String get bookAppointmentAnyClinician => 'Any doctor';
-
-  @override
-  String get bookAppointmentPickDate => 'Pick a date';
-
-  @override
-  String get bookAppointmentNoSlots =>
-      'No open slots on this date — try another day.';
-
-  @override
-  String get bookAppointmentSuccess => 'Appointment booked.';
-
-  @override
-  String get bookAppointmentSlotTaken =>
-      'That slot was just taken — pick another.';
-
-  @override
   String get bookAppointmentGenericError =>
       'Could not complete the booking. Please try again.';
 
@@ -1214,4 +1237,683 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get confirmSignOutAction => 'Yes, Sign Out';
+
+  @override
+  String get myBills => 'My bills';
+
+  @override
+  String get billsEmpty => 'You have no bills.';
+
+  @override
+  String get paymentHistory => 'Payment history';
+
+  @override
+  String billToPay(String amount) {
+    return '$amount to pay';
+  }
+
+  @override
+  String get billInsurerPending => 'Waiting on your insurer';
+
+  @override
+  String get billPaidInFull => 'Paid in full';
+
+  @override
+  String get billItems => 'Items';
+
+  @override
+  String get payNow => 'Pay now';
+
+  @override
+  String get payAmountLabel => 'Amount to pay (RM)';
+
+  @override
+  String get payContinue => 'Continue';
+
+  @override
+  String get payInvalidAmount => 'Enter an amount in RM, for example 25.00.';
+
+  @override
+  String payTooMuch(String amount) {
+    return 'The most you can pay is $amount.';
+  }
+
+  @override
+  String get paySimulatedNotice =>
+      'Simulated payment page. This is a demo gateway: no real money moves.';
+
+  @override
+  String get payApprove => 'Approve payment';
+
+  @override
+  String get payDecline => 'Decline payment';
+
+  @override
+  String get payCancel => 'Cancel payment';
+
+  @override
+  String payDeclined(String reason) {
+    return '$reason You have not been charged.';
+  }
+
+  @override
+  String receiptTitle(String number) {
+    return 'Receipt $number';
+  }
+
+  @override
+  String get receiptVoided => 'This payment has been voided.';
+
+  @override
+  String get receiptEmail => 'Email receipt';
+
+  @override
+  String get receiptSharePdf => 'Share PDF';
+
+  @override
+  String receiptEmailSent(String to) {
+    return 'Receipt sent to $to.';
+  }
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get navHome => 'Home';
+
+  @override
+  String get navCare => 'Care';
+
+  @override
+  String get navScan => 'Scan';
+
+  @override
+  String get navQueue => 'Queue';
+
+  @override
+  String get navProfile => 'Profile';
+
+  @override
+  String get scanHubNotClarion =>
+      'This is not a CLARION code. Scan a clinic check-in code or an emergency card.';
+
+  @override
+  String get scanHubQrHint =>
+      'Point the camera at a clinic check-in code or an emergency card QR.';
+
+  @override
+  String get scanHubUnreadableTag =>
+      'Could not read this card. Hold it steady against the phone and try again.';
+
+  @override
+  String get scanAnotherCard => 'Scan another card';
+
+  @override
+  String get responderIdentityTitle => 'Who is scanning?';
+
+  @override
+  String get responderIdentityNote =>
+      'Your name is saved on this phone and recorded in the card\'s access log.';
+
+  @override
+  String responderScanningAs(String who) {
+    return 'Scanning as $who';
+  }
+
+  @override
+  String get responderChange => 'Change';
+
+  @override
+  String get responderAdd => 'Add your name and organisation';
+
+  @override
+  String callContactLabel(String name) {
+    return 'Call $name';
+  }
+
+  @override
+  String get legacyTagWarningTitle => 'Older NFC card';
+
+  @override
+  String get legacyTagWarningBody =>
+      'The data on this card is not encrypted and cannot be checked for tampering offline. Ask staff to re-issue the card.';
+
+  @override
+  String get bkBannerTitle => 'Prefer MySejahtera?';
+
+  @override
+  String get bkBannerNote =>
+      'Booking here only works at hospitals that have turned on online booking.';
+
+  @override
+  String get bkOpenMySejahtera => 'Open MySejahtera';
+
+  @override
+  String get bkBookHere => 'Book here';
+
+  @override
+  String get bkChooseCategory => 'What do you need?';
+
+  @override
+  String get bkChooseHospital => 'Find a hospital';
+
+  @override
+  String get bkChooseTime => 'Choose date and time';
+
+  @override
+  String get bkChoosePerson => 'Who is this for?';
+
+  @override
+  String get bkConfirmTitle => 'Check and confirm';
+
+  @override
+  String get bkCategoriesEmpty =>
+      'No booking services are available right now.';
+
+  @override
+  String get bkSearchHint => 'Hospital name or area';
+
+  @override
+  String get bkSearchAction => 'Search';
+
+  @override
+  String get bkUseMyLocation => 'Use my location';
+
+  @override
+  String get bkClearLocation => 'Stop using location';
+
+  @override
+  String get bkSortedNearest => 'Nearest first';
+
+  @override
+  String get bkLocationDenied =>
+      'Location permission was denied. Type a hospital name or area instead, or allow location in your phone settings.';
+
+  @override
+  String get bkLocationOff =>
+      'Location is switched off on this phone. Switch it on, or type a hospital name or area.';
+
+  @override
+  String get bkLocationFailed =>
+      'Could not find your location. Type a hospital name or area instead.';
+
+  @override
+  String get bkFacilitiesEmpty =>
+      'No hospitals found. Only hospitals that have turned on online booking for this service are listed. Try another name or area, or open MySejahtera.';
+
+  @override
+  String bkDistanceKm(String km) {
+    return '$km km away';
+  }
+
+  @override
+  String bkNextAvailable(String when) {
+    return 'Next available: $when';
+  }
+
+  @override
+  String get bkNoNextAvailable => 'No open times soon';
+
+  @override
+  String get bkDateLabel => 'Date';
+
+  @override
+  String get bkTimeLabel => 'Time';
+
+  @override
+  String get bkNoOpenDays =>
+      'This hospital has no open times in the next 14 days.';
+
+  @override
+  String get bkNoSlots => 'No times are left on this day. Pick another date.';
+
+  @override
+  String bkSlotsLeft(int count) {
+    return '$count left';
+  }
+
+  @override
+  String get bkSlotFull => 'Full';
+
+  @override
+  String bkDayOpenSemantics(String date, int count) {
+    return '$date, $count open times';
+  }
+
+  @override
+  String bkDayFullSemantics(String date) {
+    return '$date, no open times';
+  }
+
+  @override
+  String get bkContinue => 'Continue';
+
+  @override
+  String get bkMyself => 'Myself';
+
+  @override
+  String get bkMyselfNote => 'Your signed-in account';
+
+  @override
+  String get bkSavedPeople => 'Saved people';
+
+  @override
+  String get bkNoPeople =>
+      'You have not saved anyone yet. Add a child or parent to book for them.';
+
+  @override
+  String get bkAddPerson => 'Add a person';
+
+  @override
+  String get bkEditPerson => 'Edit person';
+
+  @override
+  String get bkDelete => 'Delete';
+
+  @override
+  String get bkDeletePersonTitle => 'Delete this person?';
+
+  @override
+  String bkDeletePersonBody(String name) {
+    return '$name will be removed from your saved people. Existing appointments are not affected.';
+  }
+
+  @override
+  String get bkFullName => 'Full name';
+
+  @override
+  String get bkRelationship => 'Relationship';
+
+  @override
+  String get bkRelChild => 'Child';
+
+  @override
+  String get bkRelParent => 'Parent';
+
+  @override
+  String get bkRelSpouse => 'Spouse';
+
+  @override
+  String get bkRelSibling => 'Sibling';
+
+  @override
+  String get bkRelRelative => 'Relative';
+
+  @override
+  String get bkRelOther => 'Other';
+
+  @override
+  String get bkPickDob => 'Pick date of birth';
+
+  @override
+  String get bkNric => 'NRIC (optional)';
+
+  @override
+  String get bkNameRequired => 'Enter a full name.';
+
+  @override
+  String get bkDobRequired => 'Pick a date of birth.';
+
+  @override
+  String get bkSummaryCategory => 'Service';
+
+  @override
+  String get bkSummaryHospital => 'Hospital';
+
+  @override
+  String get bkSummaryWhen => 'Date and time';
+
+  @override
+  String get bkSummaryPerson => 'For';
+
+  @override
+  String get bkReasonLabel => 'Reason (optional)';
+
+  @override
+  String get bkConfirmButton => 'Confirm booking';
+
+  @override
+  String get bkTryAgain => 'Try again';
+
+  @override
+  String get bkSlotTaken =>
+      'That time was just taken. Please pick another time.';
+
+  @override
+  String get bkNoPatientRecord =>
+      'Your account is not linked to a patient record yet, so it cannot book. Ask the hospital registration desk to link it.';
+
+  @override
+  String get bkNetworkError =>
+      'Could not reach the server. Check your connection and try again.';
+
+  @override
+  String get bkSuccessTitle => 'Booking confirmed';
+
+  @override
+  String get bkSuccessBody =>
+      'Your appointment is booked. You can see it under your appointments.';
+
+  @override
+  String get bkViewAppointments => 'View my appointments';
+
+  @override
+  String get bkDone => 'Done';
+
+  @override
+  String get bkCancelAppointment => 'Cancel booking';
+
+  @override
+  String get bkCancelTitle => 'Cancel this appointment?';
+
+  @override
+  String get bkCancelBody => 'The time will be released for other patients.';
+
+  @override
+  String get bkKeepAppointment => 'Keep appointment';
+
+  @override
+  String get bkCancelled => 'Appointment cancelled.';
+
+  @override
+  String bkForPerson(String name) {
+    return 'For $name';
+  }
+
+  @override
+  String get bkCatGeneral => 'General consultation';
+
+  @override
+  String get bkCatChronic => 'Follow-up and chronic care';
+
+  @override
+  String get bkCatVaccination => 'Vaccination';
+
+  @override
+  String get bkCatMaternalChild => 'Maternal and child health';
+
+  @override
+  String get bkCatDental => 'Dental';
+
+  @override
+  String get bkCatScreening => 'Health screening';
+
+  @override
+  String get bkCatMentalHealth => 'Mental health and counselling';
+
+  @override
+  String get bkCatPhysio => 'Physiotherapy and rehabilitation';
+
+  @override
+  String get emergencyTabQr => 'QR code';
+
+  @override
+  String get emergencyTabCard => 'Card';
+
+  @override
+  String get emergencyDescFixed =>
+      'A first responder who scans your QR code sees only the four items below. Each scan is logged and you can revoke the code at any time.';
+
+  @override
+  String get whatWillBeShared => 'What will be shared';
+
+  @override
+  String get sharedAlwaysNote =>
+      'These items are always included. Nothing else on your record is shared.';
+
+  @override
+  String get previewTooltip => 'Preview what a responder sees';
+
+  @override
+  String get previewTitle => 'What a responder sees';
+
+  @override
+  String get previewIntro =>
+      'Taken from your own record. This is what is shown when your QR code is scanned. Nothing else is shared.';
+
+  @override
+  String get previewNone => 'None recorded';
+
+  @override
+  String previewOmitted(int count) {
+    return '$count more not marked critical are not shown.';
+  }
+
+  @override
+  String get regenerateButton => 'Regenerate QR code';
+
+  @override
+  String get cardStatusActive => 'Active';
+
+  @override
+  String get cardStatusExpired => 'Expired';
+
+  @override
+  String get cardStatusRevoked => 'Revoked';
+
+  @override
+  String cardEndingIn(String last4) {
+    return 'Card ending ••••$last4';
+  }
+
+  @override
+  String get shareCardImage => 'Share card image';
+
+  @override
+  String get shareCardFailed => 'Could not share the card image.';
+
+  @override
+  String get cardOutdatedTitle => 'Older NFC chip';
+
+  @override
+  String cardOutdatedBody(String date) {
+    return 'This card uses an older chip without a tamper-proof read counter. Ask clinic staff for a newer card. It expires on $date.';
+  }
+
+  @override
+  String get cardInfoTitle => 'Card details';
+
+  @override
+  String get cardChipLabel => 'Chip type';
+
+  @override
+  String get chipNtag21x => 'NTAG213/215/216 (older chip)';
+
+  @override
+  String get chipNtag424 => 'NTAG 424 DNA';
+
+  @override
+  String get chipUnknown => 'Unknown chip';
+
+  @override
+  String get cardRegisteredLabel => 'Registered';
+
+  @override
+  String get cardValidUntilLabel => 'Valid until';
+
+  @override
+  String cardDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days left',
+      one: '1 day left',
+      zero: 'Expires today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cardSharesLabel => 'Shares';
+
+  @override
+  String get cardHistoryTitle => 'History';
+
+  @override
+  String get cardHistoryEmpty => 'No activity recorded for this card yet.';
+
+  @override
+  String get cardHistoryError => 'Could not load this card\'s history.';
+
+  @override
+  String get cardEventRegistered => 'Registered';
+
+  @override
+  String get cardEventRenewed => 'Renewed';
+
+  @override
+  String get cardEventRevoked => 'Revoked';
+
+  @override
+  String get cardEventScanned => 'Scanned';
+
+  @override
+  String cardEventBy(String who) {
+    return 'by $who';
+  }
+
+  @override
+  String get cardsEmptyTitle => 'No NFC card yet';
+
+  @override
+  String get cardsEmptyBody =>
+      'NFC cards are issued by clinic staff. Ask at your clinic front desk if you would like one. Your QR code works in the meantime.';
+
+  @override
+  String get cardsLoadError => 'Could not load your NFC cards.';
+
+  @override
+  String get dayToday => 'Today';
+
+  @override
+  String get dayYesterday => 'Yesterday';
+
+  @override
+  String daysAgo(int count) {
+    return '$count days ago';
+  }
+
+  @override
+  String get auditTagAll => 'All';
+
+  @override
+  String get auditTagEmergency => 'Emergency scans';
+
+  @override
+  String get auditTagViews => 'Record views';
+
+  @override
+  String get auditTagChanges => 'Changes';
+
+  @override
+  String get auditTagAccount => 'Account and cards';
+
+  @override
+  String get auditTagFailed => 'Failed attempts';
+
+  @override
+  String get auditNeedsAttention => 'Needs attention';
+
+  @override
+  String auditSummary(int count, String window, int attention) {
+    return '$count accesses in the last $window, $attention need attention';
+  }
+
+  @override
+  String get auditWindow7d => '7 days';
+
+  @override
+  String get auditWindow30d => '30 days';
+
+  @override
+  String get auditWindow1y => 'year';
+
+  @override
+  String get auditWindow7y => '7 years';
+
+  @override
+  String auditCollapsedCount(int count, String time) {
+    return 'x$count, latest $time';
+  }
+
+  @override
+  String get auditInfoTooltip => 'How severity is shown';
+
+  @override
+  String get auditInfoTitle => 'Severity';
+
+  @override
+  String auditDetailLabel(String detail) {
+    return 'Detail: $detail';
+  }
+
+  @override
+  String auditTimesLabel(String times) {
+    return 'Times: $times';
+  }
+
+  @override
+  String get auditNoMatches => 'No entries match these filters.';
+
+  @override
+  String get auditClearFilters => 'Clear filters';
+
+  @override
+  String get auditLoadError => 'Could not load the access log.';
+
+  @override
+  String get nricScanTitle => 'Scan your NRIC';
+
+  @override
+  String get nricScanHint => 'Fit the front of your NRIC inside the frame';
+
+  @override
+  String get nricScanLooking => 'Looking for the card…';
+
+  @override
+  String get nricScanHold => 'Hold steady';
+
+  @override
+  String get nricScanTimeout =>
+      'Could not read the card. Press the shutter button to take the picture yourself, or go back and type your details.';
+
+  @override
+  String get nricScanShutter => 'Take picture';
+
+  @override
+  String get nricScanTorch => 'Torch';
+
+  @override
+  String get nricScanTorchFailed => 'This phone cannot turn the torch on.';
+
+  @override
+  String get nricScanPermission =>
+      'Camera access is off. Allow the camera for CLARION in your phone settings, or go back and type your details.';
+
+  @override
+  String get nricScanNoCamera =>
+      'No camera was found on this phone. Go back and type your details.';
+
+  @override
+  String get nricScanCameraFailed =>
+      'The camera could not be started. Go back and type your details.';
+
+  @override
+  String get nricScanTypeInstead => 'Type my details instead';
+
+  @override
+  String get nricScanReviewTitle => 'Check your details';
+
+  @override
+  String get nricScanReviewHint =>
+      'Correct anything that was misread before you continue.';
+
+  @override
+  String get nricScanUse => 'Use these details';
+
+  @override
+  String get nricScanRetake => 'Retake';
 }

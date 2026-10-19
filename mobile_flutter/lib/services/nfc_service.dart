@@ -6,6 +6,8 @@ import 'package:nfc_manager/ndef_record.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
 
+import 'tag_crypto.dart';
+
 /// Thin wrapper around `nfc_manager` for reading/writing a physical NFC
 /// card — used by the responder-side "Tap NFC Card" scanner and by staff
 /// registering a card. Android-only in this app (iOS NFC reading/writing
@@ -95,6 +97,8 @@ class NfcService {
   /// [NfcWriteResult] describing what happened; never throws.
   static Future<NfcWriteResult> writeNdefText(String text, {String languageCode = 'en'}) async {
     if (!isSupportedPlatform) return NfcWriteResult.unsupported;
+    // Plaintext is never written to a tag (legacy plaintext tags stay readable).
+    if (!TagCrypto.isWellFormedBlob(text)) return NfcWriteResult.notEncrypted;
 
     final completer = Completer<NfcWriteResult>();
     await NfcManager.instance.startSession(
@@ -248,5 +252,6 @@ enum NfcWriteResult {
   notNdef,
   notWritable,
   tooLarge,
+  notEncrypted,
   writeFailed,
 }

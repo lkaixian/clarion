@@ -15,6 +15,8 @@ AES-256-GCM blob that only a CLARION device holding the data key can open:
   POST /emergency/offline-reads).
 """
 import base64
+import hashlib
+import hmac
 import os
 import secrets
 
@@ -60,6 +62,34 @@ def key_for(key_id: int) -> bytes:
         algorithm=hashes.SHA256(), length=32, salt=None,
         info=f"clarion-tag-v1|{key_id}".encode(),
     ).derive(_master())
+
+
+def revocation_key() -> bytes:
+    """Key a device uses to recognise a revoked card offline. Independent of the
+    data key ids, so rotating those does not change any card's revocation id."""
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=None,
+        info=b"clarion-tag-revocation-v1",
+    ).derive(_master())
+
+
+def revocation_id(uid_canonical: str) -> str:
+    """Stable per-card id (hex, 128 bits) the server lists once the card is
+    revoked and a device recomputes from the UID it just read. The Flutter
+    app implements the same HMAC (see tag_crypto.dart)."""
+    return hmac.new(revocation_key(), f"rev|{uid_canonical}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+_DEFAULT_KEY_MAX_AGE_HOURS = 24
+
+
+def key_max_age_hours() -> int:
+    """How long a device may keep using cached keys (and the revocation list)
+    without a successful refresh. Env CLARION_TAG_KEY_MAX_AGE_HOURS, 1..168."""
+    hours = int(os.environ.get("CLARION_TAG_KEY_MAX_AGE_HOURS", str(_DEFAULT_KEY_MAX_AGE_HOURS)))
+    if not 1 <= hours <= 168:
+        raise RuntimeError("CLARION_TAG_KEY_MAX_AGE_HOURS must be 1..168")
+    return hours
 
 
 def active_keys() -> dict:

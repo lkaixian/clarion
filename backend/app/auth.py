@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -402,6 +402,9 @@ def rotate_refresh_token(
     user = row.user
     if user is None:
         return None
+    if access_expired(user):
+        revoke_all_refresh_tokens_for_user(db, user)
+        return None
 
     from . import mfa as _mfa  # local import: mfa -> nothing from auth
     if not row.mfa_ok and _mfa.challenge_kind(user) is not None:
@@ -480,6 +483,15 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
     if user is None:
         raise credentials_exception
 
+    # A time-boxed account (community responder) stops working the moment its
+    # window ends, on every authenticated request, whatever token it holds.
+    if access_expired(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account access has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if user.password_changed_at is not None:
         if token_pwd_changed_at is None:
             # A password change has happened at some point, but this token
@@ -511,7 +523,39 @@ def get_current_user_allow_pending_change(
     return _resolve_current_user(token, db)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+def access_expired(user: "models.User") -> bool:
+    """True once a time-boxed account's `access_expires_at` has passed.
+    Accounts with no expiry (NULL) never expire here."""
+    at = user.access_expires_at
+    if at is None:
+        return False
+    if at.tzinfo is not None:
+        at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    return at <= datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+# A signed-in community responder (guard / volunteer) may use exactly these
+# routes and nothing else: the emergency scan, the offline tag keys + the
+# upload of their offline reads, and their own session/password endpoints.
+# Enforced in get_current_user, the dependency every protected route (and
+# require_roles / require_page_access on top of it) passes through, so a new
+# router cannot forget it. Everything else 403s for this role.
+RESPONDER_ALLOWED_PATHS = (
+    "/emergency/scan",
+    "/emergency/nfc/scan",
+    "/emergency/tag-keys",
+    "/emergency/offline-reads",
+)
+RESPONDER_ALLOWED_PREFIXES = ("/auth/",)
+
+
+def _responder_may_use(path: str) -> bool:
+    return path in RESPONDER_ALLOWED_PATHS or path.startswith(RESPONDER_ALLOWED_PREFIXES)
+
+
+def get_current_user(
+    request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db),
+) -> models.User:
     """Standard auth dependency used by (almost) every protected endpoint,
     directly or via require_roles(). Enforces must_change_password
     server-side: a staff-issued temp password or a fresh self-service reset
@@ -529,6 +573,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
                 "must_change_password": True,
             },
         )
+    if user.role == "emergency_responder" and not _responder_may_use(request.url.path):
+        raise HTTPException(status_code=403, detail="Community responder accounts are limited to emergency lookups")
     return user
 
 
@@ -558,6 +604,13 @@ def require_roles(*roles: str):
             raise HTTPException(status_code=403, detail=f"Requires one of roles: {roles}")
         return user
     return checker
+
+
+def get_staff_user(user: models.User = Depends(get_current_user)) -> models.User:
+    """Any signed-in staff account; patient and emergency_responder accounts get 403."""
+    if user.role in ("patient", "emergency_responder"):
+        raise HTTPException(status_code=403, detail="Staff accounts only")
+    return user
 
 
 def require_page_access(page: str):

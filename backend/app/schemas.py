@@ -196,6 +196,8 @@ class MfaChallenge(BaseModel):
     mfa_required: bool = True
     mfa_enrol: bool = False
     mfa_token: str
+    email_available: bool = False  # an emailed code may be used instead of an authenticator
+    email_hint: Optional[str] = None  # masked address, e.g. "j***@example.com"
 
 
 class MfaCodeRequest(BaseModel):
@@ -220,6 +222,14 @@ class PasswordOnly(BaseModel):
 class PasswordAndCode(BaseModel):
     password: str
     code: str = Field(min_length=6, max_length=16)
+
+
+class AdminStepUp(BaseModel):
+    """The acting admin's own password + current authenticator (or recovery) code,
+    re-entered before a credential-reset action. `code` may be empty only for an
+    admin who has not enrolled an authenticator (MFA not enforced for the role)."""
+    password: str = Field(min_length=1, max_length=256)
+    code: str = Field(default="", max_length=16)
 
 
 class SessionOut(BaseModel):
@@ -303,7 +313,9 @@ class SelfRegisterStartRequest(BaseModel):
 
     national_id: str
     full_name: str
-    email: EmailStr
+    # Only used when the NRIC photo check is on (the code then goes to this address).
+    # With the photo check off the code always goes to the email already on file.
+    email: Optional[EmailStr] = None
 
 
 class SelfRegisterVerifyOtpRequest(BaseModel):
@@ -313,12 +325,13 @@ class SelfRegisterVerifyOtpRequest(BaseModel):
     otp_code: str
 
 
-class SelfRegisterCompleteRequest(BaseModel):
+class SelfRegisterCompleteRequest(BaseModel):  # completion_token: from /verify-otp
     """Public, unauthenticated. Final step of self-service registration --
     only reachable once the attempt's status is photo_verified (router
     enforces this). Same password-length floor as every other
     human-chosen-password endpoint in this API."""
 
+    completion_token: Optional[str] = None
     national_id: str
     new_password: str
 
@@ -359,6 +372,19 @@ class PatientCreate(BaseModel):
     blood_type: Optional[str] = None
     phone: Optional[str] = None
     senior_citizen_mode: bool = False
+    # Coded demographics (checked against reference_codes by demographics.validate_demographics).
+    title_code: Optional[str] = Field(default=None, max_length=32)
+    religion_code: Optional[str] = Field(default=None, max_length=32)
+    race_code: Optional[str] = Field(default=None, max_length=32)
+    nation_code: Optional[str] = Field(default=None, max_length=32)
+    marital_code: Optional[str] = Field(default=None, max_length=32)
+    occupation_code: Optional[str] = Field(default=None, max_length=32)
+    address_line: Optional[str] = Field(default=None, max_length=255)
+    postcode: Optional[str] = Field(default=None, max_length=16)
+    city: Optional[str] = Field(default=None, max_length=128)
+    state_code: Optional[str] = Field(default=None, max_length=32)
+    sponsor_code: Optional[str] = Field(default=None, max_length=32)
+    sponsor_member_no: Optional[str] = Field(default=None, max_length=64)
 
 
 class PatientOut(PatientCreate):
@@ -434,6 +460,7 @@ class ConditionUpdate(BaseModel):
 
 class MedicationCreate(BaseModel):
     drug_name: str
+    drug_code: Optional[str] = None  # catalogue drug; blank = match by exact name, else unlinked
     dosage: Optional[str] = None
     frequency: Optional[str] = None
     prescribed_by_facility: Optional[str] = None
@@ -444,6 +471,7 @@ class MedicationCreate(BaseModel):
 
 class MedicationUpdate(BaseModel):
     drug_name: Optional[str] = None
+    drug_code: Optional[str] = None
     dosage: Optional[str] = None
     frequency: Optional[str] = None
     # The prescriber (may be external) -- informational, editable. NOT the
@@ -750,6 +778,11 @@ class AppointmentOut(BaseModel):
     department: Optional[str] = None
     clinician_id: Optional[str] = None
     self_booked: bool = False
+    # Online booking v2 -- see models.Appointment.
+    booking_category: Optional[str] = None
+    attendee_name: Optional[str] = None
+    attendee_relationship: Optional[str] = None
+    attendee_dob: Optional[date] = None
     # Reschedule tracking -- see models.Appointment's docstring. All null on
     # an appointment that's never been rescheduled.
     previous_scheduled_at: Optional[datetime] = None
@@ -910,6 +943,7 @@ class AdminAppointmentOut(AppointmentOut):
 
 class MedicineInventoryCreate(BaseModel):
     drug_name: str
+    drug_code: Optional[str] = None
     quantity_on_hand: int = 0
     unit: str = "units"
     reorder_threshold: Optional[int] = None
@@ -953,6 +987,7 @@ class MedicineInventoryUpdate(BaseModel):
     MedicineInventoryCreate, applied to whatever's actually set."""
 
     drug_name: Optional[str] = None
+    drug_code: Optional[str] = None
     quantity_on_hand: Optional[int] = None
     unit: Optional[str] = None
     reorder_threshold: Optional[int] = None
@@ -995,6 +1030,7 @@ class MedicineInventoryOut(BaseModel):
     id: str
     facility_name: str
     drug_name: str
+    drug_code: Optional[str] = None
     quantity_on_hand: int
     unit: str
     reorder_threshold: Optional[int] = None
@@ -1118,6 +1154,7 @@ class PurchaseProposalCreate(BaseModel):
     proposed_drug_name: str
     proposed_unit: str = "units"
     proposed_barcode: Optional[str] = None
+    drug_code: Optional[str] = None
     quantity: int
     unit_cost: Optional[float] = None
     reason: Optional[str] = None
@@ -1166,6 +1203,7 @@ class PurchaseProposalOut(BaseModel):
     proposed_drug_name: str
     proposed_unit: str
     proposed_barcode: Optional[str] = None
+    drug_code: Optional[str] = None
     quantity: int
     unit_cost: Optional[float] = None
     reason: Optional[str] = None
@@ -1712,26 +1750,33 @@ class StaffProfileUpdate(MyProfileUpdate):
 #     (screenshot/photo-able, no physical possession requirement to use),
 #     so its ceiling is deliberately much tighter than the staff-managed
 #     NFC one below.
-QR_VALID_MINUTES_MAX = 129600  # 90 days
+QR_VALID_MINUTES_MAX = 1576800  # 3 years (elders should not have to renew a QR often)
 #   - NFC_VALID_MINUTES_MAX: 2 years (1051200 min) -- 2x the 525600
 #     (1 year) default. Staff-issued/admin-managed physical cards
 #     legitimately need longer validity than a patient-self-issued QR
 #     (they're not reissued on every login the way a QR conceptually is),
 #     but still bounded rather than effectively-forever.
-NFC_VALID_MINUTES_MAX = 1051200  # 2 years
+NFC_VALID_MINUTES_MAX = 1051200  # 2 years: ceiling for NTAG213/215/216 and unknown chips
+# Per chip type: (default, maximum) minutes. Older NTAG21x chips have no tamper-proof read
+# counter, so they get a shorter life; NTAG 424 DNA is the long-lived card.
+NFC_VALIDITY_MINUTES = {
+    "ntag21x": (525600, 1051200),      # 1 year default, 2 years max
+    "unknown": (525600, 1051200),
+    "ntag424": (3679200, 3679200),     # 7 years
+}
 
 
 class EmergencyProfileRequest(BaseModel):
     patient_id: str
     scope: List[str] = ["allergies", "medications", "conditions", "blood_type"]
-    valid_minutes: int = 43200  # default 30 days validity for the QR "grant"; each *scan* still mints a short-lived token
+    valid_minutes: int = 1576800  # default 3 years for the QR "grant"; each *scan* still mints a short-lived token
 
     @field_validator("valid_minutes")
     @classmethod
     def _check_valid_minutes(cls, v: int) -> int:
         if v <= 0 or v > QR_VALID_MINUTES_MAX:
             raise ValueError(
-                f"valid_minutes must be between 1 and {QR_VALID_MINUTES_MAX} (90 days)."
+                f"valid_minutes must be between 1 and {QR_VALID_MINUTES_MAX} (3 years)."
             )
         return v
 
@@ -1764,9 +1809,9 @@ class NfcRegisterRequest(BaseModel):
     patient_id: str
     nfc_uid: str
     scope: List[str] = ["allergies", "medications", "conditions", "blood_type"]
-    # Physical cards are meant to last a long time (not reissued every
-    # login like the QR flow) — default to ~1 year.
-    valid_minutes: int = 525600
+    # Physical cards are meant to last a long time (not reissued every login like the QR
+    # flow). None = the default for the chip type (see NFC_VALIDITY_MINUTES).
+    valid_minutes: "int | None" = None
     # The physical tag's real NDEF capacity in bytes, if the registering
     # device already tapped it and knows (e.g. NdefAndroid.maxSize --
     # NTAG213=144B, NTAG215=504B, NTAG216=888B). Drives how much of the
@@ -1778,14 +1823,15 @@ class NfcRegisterRequest(BaseModel):
     # "unknown". Only drives the warning in the response; every type works.
     tag_type: Literal["ntag21x", "ntag424", "unknown"] = "unknown"
 
-    @field_validator("valid_minutes")
-    @classmethod
-    def _check_valid_minutes(cls, v: int) -> int:
-        if v <= 0 or v > NFC_VALID_MINUTES_MAX:
-            raise ValueError(
-                f"valid_minutes must be between 1 and {NFC_VALID_MINUTES_MAX} (2 years)."
-            )
-        return v
+    @model_validator(mode="after")
+    def _check_valid_minutes(self):
+        default, maximum = NFC_VALIDITY_MINUTES[self.tag_type]
+        if self.valid_minutes is None:
+            self.valid_minutes = default
+        elif self.valid_minutes <= 0 or self.valid_minutes > maximum:
+            years = maximum // 525600
+            raise ValueError(f"valid_minutes must be between 1 and {maximum} ({years} year(s) for this chip type).")
+        return self
 
     @field_validator("tag_max_bytes")
     @classmethod
@@ -2097,6 +2143,45 @@ class StaffSectionAssign(BaseModel):
 
     class Config:
         extra = "forbid"
+
+
+class ResponderCreate(BaseModel):
+    """Body for POST /admin/responders: a time-boxed community responder
+    (guard / volunteer) login. `expires_at` is required and capped (see
+    routers/admin.py::_validated_responder_expiry)."""
+
+    full_name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    expires_at: datetime
+
+    class Config:
+        extra = "forbid"
+
+
+class ResponderUpdate(BaseModel):
+    """Body for PATCH /admin/responders/{id}: move the expiry (extend or shorten)."""
+
+    expires_at: datetime
+
+    class Config:
+        extra = "forbid"
+
+
+class ResponderOut(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    facility: Optional[str] = None
+    access_expires_at: Optional[datetime] = None
+    active: bool
+    must_change_password: bool = False
+
+
+class ResponderIssued(ResponderOut):
+    """Returned once, on creation: the plaintext temporary password is never
+    stored or shown again."""
+
+    temporary_password: str
 
 
 class RoomClaimOut(BaseModel):
@@ -2555,9 +2640,37 @@ class ServiceResultCreate(BaseModel):
     flag_abnormal: bool = False
     flag_critical: bool = False
     signature_b64: Optional[str] = Field(default=None, max_length=1_400_000)  # ~1MB PNG as base64
+    # Ids from POST /ancillary/requests/{id}/attachments (uploaded by the same
+    # signer, still pending). They become part of the sealed result.
+    attachment_ids: List[str] = Field(default_factory=list, max_length=10)
 
     class Config:
         extra = "forbid"
+
+
+class AttachmentOut(BaseModel):
+    id: str
+    filename: str
+    file_mime: Optional[str] = None
+    file_bytes: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    body: Optional[str] = None
+    link: Optional[str] = None
+    urgent: bool = False
+    created_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class ServiceResultOut(BaseModel):
@@ -2577,6 +2690,9 @@ class ServiceResultOut(BaseModel):
     # Whether a softcopy attachment exists -- never the raw object key (see
     # GET /ancillary/requests/{id}/result/document to fetch it).
     has_document: bool = False
+    # Files attached at sign-off (covered by the seal); download via
+    # GET /ancillary/requests/{id}/attachments/{attachment_id}.
+    attachments: List[AttachmentOut] = []
     created_at: datetime
 
     class Config:
@@ -2745,6 +2861,9 @@ class DentalChartOptionsOut(BaseModel):
 CHARGE_MASTER_CATEGORIES = set(_models.CHARGE_MASTER_CATEGORIES)
 BILL_ITEM_SOURCE_TYPES = set(_models.BILL_ITEM_SOURCE_TYPES)
 PAYMENT_METHODS = set(_models.PAYMENT_METHODS)
+# Created only by the payments flow (settled gateway intent / applied deposit); staff cannot
+# type them in, or "online" could be recorded without any money having moved.
+_SYSTEM_PAYMENT_METHODS = {"online", "deposit"}
 CLAIM_STATUSES = set(_models.CLAIM_STATUSES)
 
 
@@ -2907,8 +3026,9 @@ class PaymentCreate(BaseModel):
     @field_validator("method")
     @classmethod
     def _check_method(cls, v: str) -> str:
-        if v not in PAYMENT_METHODS:
-            raise ValueError(f"method must be one of: {', '.join(sorted(PAYMENT_METHODS))}")
+        if v not in PAYMENT_METHODS or v in _SYSTEM_PAYMENT_METHODS:
+            allowed = sorted(PAYMENT_METHODS - _SYSTEM_PAYMENT_METHODS)
+            raise ValueError(f"method must be one of: {', '.join(allowed)}")
         return v
 
     @model_validator(mode="after")
@@ -3033,6 +3153,7 @@ class BillOut(BaseModel):
     claimed_pending_cents: int = 0
     amount_due_cents: int = 0
     patient_due_cents: int = 0
+    refunded_cents: int = 0  # approved refunds, already netted out of paid_cents
 
     class Config:
         from_attributes = True
@@ -3193,3 +3314,104 @@ class MfaTokenWithRecovery(Token):
     """Returned once when MFA enrolment is confirmed: the session AND the
     recovery codes (shown a single time, never retrievable again)."""
     recovery_codes: List[str]
+
+
+# ---------------------------------------------------------------------------
+# Online booking v2 (routers/booking.py)
+# ---------------------------------------------------------------------------
+
+BOOKING_RELATIONSHIPS = ("child", "parent", "spouse", "sibling", "relative", "other")
+
+
+class BookingProfileIn(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+    relationship: Literal["child", "parent", "spouse", "sibling", "relative", "other"]
+    date_of_birth: Optional[date] = None
+    national_id: Optional[str] = Field(default=None, max_length=32)
+    gender: Optional[str] = Field(default=None, max_length=16)
+
+    @field_validator("full_name")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("full_name must not be blank")
+        return v
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _dob_not_future(cls, v):
+        if v is not None and v > date.today():
+            raise ValueError("date_of_birth cannot be in the future")
+        return v
+
+
+class BookingProfilePatch(BookingProfileIn):
+    """PATCH: every field optional; only fields actually sent are applied."""
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    relationship: Optional[Literal["child", "parent", "spouse", "sibling", "relative", "other"]] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def _strip_name(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            raise ValueError("full_name must not be blank")
+        return v
+
+
+class BookingProfileOut(BaseModel):
+    id: str
+    full_name: str
+    relationship: str
+    date_of_birth: Optional[date] = None
+    national_id: Optional[str] = None
+    gender: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class BookingAppointmentCreate(BaseModel):
+    facility_name: str = Field(min_length=1, max_length=255)
+    category: str = Field(min_length=1, max_length=32)
+    scheduled_at: datetime
+    profile_id: Optional[str] = None
+    reason: Optional[str] = Field(default=None, max_length=255)
+
+
+class BookingAppointmentOut(AppointmentOut):
+    """AppointmentOut plus the facility's display name (both keys carry the
+    same value: `display_name` matches /booking/facilities items)."""
+    facility_display_name: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+class BookingHourIO(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+
+class BookingServiceIn(BaseModel):
+    category: str = Field(min_length=1, max_length=32)
+    active: bool = False
+    slot_minutes: int = Field(default=30, ge=5, le=240)
+    capacity: int = Field(default=1, ge=1, le=50)
+    advance_days: int = Field(default=14, ge=1, le=90)
+    min_notice_minutes: int = Field(default=60, ge=0, le=10080)
+    hours: List[BookingHourIO] = []
+
+
+class BookingAdminSettingsIn(BaseModel):
+    """PUT body. facility_name/display_name/address are accepted (same shape
+    as GET) but ignored: the facility is always the admin's own and the
+    display name/address belong to the hospital-settings screen."""
+    online_booking_enabled: bool = False
+    latitude: Optional[float] = Field(default=None, allow_inf_nan=False)
+    longitude: Optional[float] = Field(default=None, allow_inf_nan=False)
+    services: List[BookingServiceIn] = []

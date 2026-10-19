@@ -7,6 +7,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'api_client.dart';
 import 'api_exception.dart';
+import 'device_lock.dart';
+import 'device_lock_system.dart';
+import 'tag_crypto.dart';
+
+/// Result of checking a card's UID against the cached revoked-card list.
+enum RevocationCheck { clear, revoked, unknown }
 
 /// Device-side half of the offline emergency-tag audit trail.
 ///
@@ -23,21 +29,26 @@ import 'api_exception.dart';
 /// tag-side read counter (NTAG 424 DNA, a later phase) is what detects a
 /// dropped tail.
 class OfflineReadLog {
-  OfflineReadLog({FlutterSecureStorage? storage})
-      : _s = storage ?? const FlutterSecureStorage();
+  OfflineReadLog({FlutterSecureStorage? storage, DeviceLock? lock})
+      : _s = storage ?? const FlutterSecureStorage(),
+        _lock = lock ?? systemDeviceLock();
 
   final FlutterSecureStorage _s;
+  final DeviceLock _lock;
 
   static const genesisHash =
       '0000000000000000000000000000000000000000000000000000000000000000';
   static const _deviceKey = 'clarion_device_id';
   static const _keysKey = 'clarion_tag_keys';
   static const _keysAtKey = 'clarion_tag_keys_at';
+  static const _revocationKey = 'clarion_tag_revocation';
 
-  /// Cached keys stop being used for offline reads this long after the last
-  /// successful key refresh, so a disabled account / stolen phone cannot
-  /// keep decrypting indefinitely.
-  static const keyMaxAge = Duration(hours: 72);
+  /// Cached keys (and the revoked-card list) stop being used for offline reads
+  /// this long after the last successful refresh, so a disabled account /
+  /// stolen phone cannot keep decrypting indefinitely. The server sets the
+  /// value (`key_max_age_hours`, default 24); this is the fallback until the
+  /// first sync stores one.
+  static const defaultKeyMaxAge = Duration(hours: TagKeySet.defaultMaxAgeHours);
 
   // Serialises every read-modify-write of the chain so a background
   // acknowledge can never overwrite a concurrent append (lost entry /
@@ -52,12 +63,37 @@ class OfflineReadLog {
 
   // ---- data keys -----------------------------------------------------
 
-  /// Cached keys, or empty if none / older than [keyMaxAge].
-  Future<Map<String, String>> readKeys() async {
-    final raw = await _s.read(key: _keysKey);
-    if (raw == null) return {};
+  Map<String, dynamic>? _decodeRevocation(String? raw) {
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True while the last successful refresh is within the server-set lifetime.
+  Future<bool> _fresh() async {
     final at = DateTime.tryParse(await _s.read(key: _keysAtKey) ?? '');
-    if (at == null || DateTime.now().toUtc().difference(at) > keyMaxAge) return {};
+    if (at == null) return false;
+    final stored = _decodeRevocation(await _s.read(key: _revocationKey));
+    final hours = stored?['max_age_hours'];
+    final maxAge = hours is int && hours > 0 ? Duration(hours: hours) : defaultKeyMaxAge;
+    final now = DateTime.now().toUtc();
+    final until = DateTime.tryParse((stored?['valid_until'] as String?) ?? '');
+    if (until != null && !now.isBefore(until)) return false; // time-boxed account has ended
+    return now.difference(at) <= maxAge;
+  }
+
+  /// Cached keys, or empty if none / past the key lifetime. The device
+  /// biometric / PIN check comes FIRST, before secure storage is touched; it
+  /// throws [DeviceLockException] when the user does not pass it (or the
+  /// phone has no screen lock). [reason] is the localized prompt text.
+  Future<Map<String, String>> readKeys({required String reason}) async {
+    final unlocked = await _lock.unlock(reason);
+    if (unlocked != DeviceLockResult.unlocked) throw DeviceLockException(unlocked);
+    final raw = await _s.read(key: _keysKey);
+    if (raw == null || !await _fresh()) return {};
     try {
       return (jsonDecode(raw) as Map<String, dynamic>).cast<String, String>();
     } catch (_) {
@@ -65,15 +101,44 @@ class OfflineReadLog {
     }
   }
 
-  Future<void> saveKeys(Map<String, String> keys) async {
-    await _s.write(key: _keysKey, value: jsonEncode(keys));
+  Future<void> saveKeys(TagKeySet set) async {
+    await _s.write(key: _keysKey, value: jsonEncode(set.keys));
+    await _s.write(
+      key: _revocationKey,
+      value: jsonEncode({
+        'key': set.revocationKey,
+        'ids': set.revokedCardIds.toList(),
+        'max_age_hours': set.maxAgeHours,
+        'valid_until': set.validUntil?.toIso8601String(),
+      }),
+    );
     await _s.write(key: _keysAtKey, value: DateTime.now().toUtc().toIso8601String());
+  }
+
+  /// Checks [uid] (canonical hex, as read from the tag) against the cached
+  /// revoked-card list. [RevocationCheck.unknown] means there is no fresh list
+  /// to check against (never synced, or past the key lifetime): a sealed tag
+  /// cannot open then anyway (no usable keys), but a legacy plaintext tag needs
+  /// no key, so the caller must refuse it on `unknown`. Fresh keys from before
+  /// this feature carry no revocation key and count as `revoked` (fail safe)
+  /// until the next sync stores one.
+  Future<RevocationCheck> checkRevocation(String uid) async {
+    if (uid.isEmpty || !await _fresh()) return RevocationCheck.unknown;
+    final stored = _decodeRevocation(await _s.read(key: _revocationKey));
+    final key = stored?['key'];
+    if (key is! String) return RevocationCheck.revoked;
+    final ids = (stored!['ids'] as List?)?.cast<String>() ?? const <String>[];
+    return ids.contains(await TagCrypto.revocationId(uid, key))
+        ? RevocationCheck.revoked
+        : RevocationCheck.clear;
   }
 
   /// Called on sign-out: a signed-out device must not keep offline access.
   Future<void> clearKeys() async {
+    _lock.lock();
     await _s.delete(key: _keysKey);
     await _s.delete(key: _keysAtKey);
+    await _s.delete(key: _revocationKey);
   }
 
   Future<void> _rotateDeviceId() => _s.delete(key: _deviceKey);
@@ -148,10 +213,10 @@ class OfflineReadLog {
     return _serialSync(() async {
       try {
         final keys = await api.getTagKeys();
-        if (keys.isNotEmpty) await saveKeys(keys);
+        if (keys.keys.isNotEmpty) await saveKeys(keys);
       } on ApiException catch (e) {
         // The server said no (disabled account, role change): drop offline
-        // access now rather than at the 72 h expiry. A network failure
+        // access now rather than at the key-lifetime expiry. A network failure
         // keeps the cache.
         if (e.statusCode == 401 || e.statusCode == 403) await clearKeys();
       } catch (_) {/* keep whatever is cached */}

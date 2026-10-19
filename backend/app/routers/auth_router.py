@@ -67,6 +67,12 @@ def register(
             status_code=400,
             detail="Use POST /auth/patients/{patient_id}/issue-account to create a patient login.",
         )
+    # Community responders are always time-boxed, which this endpoint cannot express.
+    if payload.role == "emergency_responder":
+        raise HTTPException(
+            status_code=400,
+            detail="Use POST /admin/responders to create a time-boxed community responder account.",
+        )
 
     # "Manager admin, not super admin" (see routers/admin.py's module
     # docstring): an admin provisions staff for THEIR OWN facility only.
@@ -403,19 +409,44 @@ def _device_label(user_agent: str) -> str:
     return ua[:60]
 
 
+def _refuse_if_access_expired(db: Session, user: models.User) -> None:
+    """A time-boxed account (community responder) whose window has ended can
+    no longer sign in. Only reached with a correct password / verified second
+    factor, so naming the reason leaks nothing an attacker could use."""
+    if auth.access_expired(user):
+        log_access(db, user.patient_id, user.id, user.role, "login_refused_access_expired",
+                   actor_facility=user.facility)
+        raise HTTPException(
+            status_code=403,
+            detail="This account's access period has ended. Ask an administrator to extend it.",
+        )
+
+
 def _finish_primary_auth(
     db: Session, request: Request, response: Response, user: models.User, fp: Optional[str],
 ) -> "Union[schemas.Token, schemas.MfaChallenge]":
     """Everything after a verified first factor: either hand back an MFA
     challenge (no token) or issue the session. Shared by the local, LDAP-JIT
     and LDAP-resync branches of login()."""
+    _refuse_if_access_expired(db, user)
+    if user.owner_locked_at is not None:
+        log_access(db, user.patient_id, user.id, user.role, "login_refused_owner_lock",
+                   actor_facility=user.facility)
+        raise HTTPException(
+            status_code=403,
+            detail="This account was locked at the owner's request. Choose Forgot password "
+                   "to unlock it with a code sent to your email.",
+        )
     kind = mfa.challenge_kind(user)
     if kind is not None:
         log_access(db, user.patient_id, user.id, user.role, "login_mfa_challenge",
                    detail=f"kind={kind}", actor_facility=user.facility)
+        target = mfa.email_target(db, user)
         return schemas.MfaChallenge(
             mfa_enrol=(kind == "enrol"),
             mfa_token=mfa.make_challenge(user.id, kind, mfa.password_marker(user)),
+            email_available=target is not None,
+            email_hint=mfa.mask_email(target) if target else None,
         )
     return _complete_login(db, request, response, user, fp)
 
@@ -424,6 +455,7 @@ def _complete_login(
     db: Session, request: Request, response: Response, user: models.User, fp: Optional[str],
     mfa_ok: bool = False,
 ) -> schemas.Token:
+    _refuse_if_access_expired(db, user)  # the window can close between password and MFA
     ip, ua = _client_meta(request)
     new_device = bool(fp) and not db.query(models.RefreshToken.id).filter_by(
         user_id=user.id, client_fingerprint=fp).first()
@@ -683,6 +715,7 @@ def _apply_new_password(db: Session, user: models.User, new_password: str, must_
     # fails auth._resolve_current_user's pwd_changed_at check (see that
     # function's docstring / models.User.password_changed_at's comment).
     user.password_changed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.owner_locked_at = None
     db.add(user)
     db.commit()
     # P2.5 (Security Audit M4): the watermark above only ever covered the
@@ -731,6 +764,11 @@ def issue_patient_account(
         db.commit()
         db.refresh(user)
         action = "issue_patient_account"
+        # Staff verified someone in person: pending web claims lose. Not flagged -- this endpoint
+        # cannot tell which claim was the genuine owner's, and flagging them would blacklist
+        # their real email (use the claim's Approve button to also flag the others).
+        from .. import claims
+        claims.reject_other_claims(db, patient, keep_claim_id=None, winner_email=None, flag=False)
 
     # Audit the event itself, never the plaintext password.
     log_access(

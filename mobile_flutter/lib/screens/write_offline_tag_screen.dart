@@ -3,6 +3,7 @@ import 'package:nfc_manager/nfc_manager.dart' show NfcAvailability;
 
 import '../l10n/generated/app_localizations.dart';
 import '../services/nfc_service.dart';
+import '../services/tag_crypto.dart';
 import '../theme/app_theme.dart';
 
 /// Staff-only screen: writes a compact offline-fallback text directly onto
@@ -10,8 +11,9 @@ import '../theme/app_theme.dart';
 /// `backend/app/routers/emergency.py::_build_compact_tag_text`'s
 /// docstring for the full rationale). The text itself is produced by the
 /// WEB console's "Register NFC Card" flow (`POST /emergency/nfc/register`
-/// now returns `tag_text` alongside the UID grant) -- staff copies it here
-/// and taps the SAME physical card to write it. Deliberately a bare
+/// returns the sealed `tag_blob` alongside the UID grant) -- staff copies it
+/// here and taps the SAME physical card to write it. Only a sealed `C1.`
+/// record is accepted; plaintext is never written. Deliberately a bare
 /// paste-and-write screen, not a patient search + registration flow of
 /// its own: registration (choosing the patient/scope, reading the UID)
 /// already exists on the web console; this only adds the one thing a
@@ -52,6 +54,12 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
   Future<void> _write() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
+    // Same check NfcService.writeNdefText enforces; done here too so the
+    // error shows without waiting for the tap prompt.
+    if (!TagCrypto.isWellFormedBlob(text)) {
+      setState(() => _lastResult = NfcWriteResult.notEncrypted);
+      return;
+    }
     setState(() {
       _writing = true;
       _lastResult = null;
@@ -101,7 +109,7 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: l10n.writeOfflineTagTextLabel,
-                  hintText: 'BT:O+|AL:Penicillin(severe)|MED:Warfarin 5mg',
+                  hintText: 'C1.1.…',
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -150,6 +158,7 @@ class _ResultBanner extends StatelessWidget {
       NfcWriteResult.notNdef => l10n.writeOfflineTagNotNdef,
       NfcWriteResult.notWritable => l10n.writeOfflineTagNotWritable,
       NfcWriteResult.tooLarge => l10n.writeOfflineTagTooLarge,
+      NfcWriteResult.notEncrypted => l10n.writeOfflineTagNotEncrypted,
       NfcWriteResult.unsupported => l10n.nfcUnsupportedPlatform,
       NfcWriteResult.writeFailed => l10n.writeOfflineTagWriteFailed,
     };

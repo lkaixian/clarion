@@ -8,11 +8,12 @@ import android.nfc.Tag
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+// local_auth (biometric / device PIN prompt) needs a FragmentActivity.
+class MainActivity : FlutterFragmentActivity() {
     private var pendingTag: Map<String, String?>? = null
     private var channel: MethodChannel? = null
 

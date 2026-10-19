@@ -11,12 +11,64 @@ import 'package:cryptography/cryptography.dart';
 /// The AAD is `C1|<key_id>|<UID>`, so a blob copied onto a different tag
 /// fails to open. Keys are the ones cached from `GET /emergency/tag-keys`
 /// at staff login -- there is deliberately no key in the app binary.
+/// What `GET /emergency/tag-keys` hands a device: the data keys, plus what it
+/// needs to refuse a revoked card with no network, and how long it may rely on
+/// any of it without a refresh.
+class TagKeySet {
+  const TagKeySet({
+    required this.keys,
+    required this.revocationKey,
+    required this.revokedCardIds,
+    required this.maxAgeHours,
+    this.validUntil,
+  });
+
+  final Map<String, String> keys;
+  final String? revocationKey; // base64
+  final Set<String> revokedCardIds;
+  final int maxAgeHours;
+
+  /// Hard stop (UTC) for a time-boxed account, e.g. a community responder:
+  /// nothing cached is used after this, whatever [maxAgeHours] says. Null for
+  /// accounts that don't expire.
+  final DateTime? validUntil;
+
+  static const defaultMaxAgeHours = 24;
+
+  factory TagKeySet.fromJson(Map<String, dynamic> json) {
+    final hours = json['key_max_age_hours'];
+    return TagKeySet(
+      keys: (json['keys'] as Map<String, dynamic>).cast<String, String>(),
+      revocationKey: json['revocation_key'] as String?,
+      revokedCardIds: ((json['revoked_card_ids'] as List?) ?? const []).cast<String>().toSet(),
+      maxAgeHours: hours is int && hours > 0 ? hours : defaultMaxAgeHours,
+      validUntil: DateTime.tryParse((json['valid_until'] as String?) ?? '')?.toUtc(),
+    );
+  }
+}
+
 class TagCrypto {
   static const _prefix = 'C1';
+
+  /// The id the server lists for a revoked card (`tag_crypto.revocation_id`
+  /// in the backend): the first 32 hex chars of HMAC-SHA256(key, `rev|UID`).
+  /// [uid] is the canonical form NfcService returns (uppercase hex, no separators).
+  static Future<String> revocationId(String uid, String revocationKeyB64) async {
+    final mac = await Hmac.sha256().calculateMac(
+      utf8.encode('rev|$uid'),
+      secretKey: SecretKey(base64.decode(revocationKeyB64)),
+    );
+    return mac.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().substring(0, 32);
+  }
   static const _nonceLen = 12;
   static const _macLen = 16;
 
   static bool looksSealed(String text) => text.startsWith('$_prefix.');
+
+  /// Strict shape check for text about to be WRITTEN to a tag: the whole
+  /// string must be `C1.<key_id>.<base64url>`, not merely start with `C1.`.
+  static final _blobShape = RegExp(r'^C1\.\d+\.[A-Za-z0-9_-]+$');
+  static bool isWellFormedBlob(String text) => _blobShape.hasMatch(text);
 
   /// The key id named in a sealed blob, or null if it isn't one.
   static int? keyIdOf(String blob) {

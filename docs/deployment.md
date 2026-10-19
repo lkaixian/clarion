@@ -361,7 +361,13 @@ a DPO register, and a flag-only retention schedule.
   for a `(patient, purpose)` wins. Purposes: `pdpa_notice` (the notice
   acknowledgement), `research`, `marketing`, `sms_reminders`,
   `cross_facility_sharing`. `GET/POST /pdpa/consent` (patient acts on own;
-  RO/admin on behalf).
+  RO/admin on behalf). **`cross_facility_sharing` gates federation, opt-in:**
+  with no grant on file (or after a withdrawal) the requesting hospital's
+  `/federation/patients/...` routes return 403 and the origin hospital's
+  `/federation/visits/...` peer route returns 404, each writing a
+  `federation_denied_no_consent` / `federation_peer_denied_no_consent` audit
+  row. Each hospital checks its own copy of the ledger, so record the consent
+  at every hospital that holds the patient.
 - **Data-subject requests** — `POST /pdpa/requests` (patient or staff),
   `kind ∈ {access, correction, portability, withdraw_consent, objection}` —
   **`erasure` is rejected.** 21-day SLA (`due_at`), `+14` via
@@ -1169,7 +1175,7 @@ Two independent things live on the same physical NFC card
 **Registration flow** (staff, same roles as today's NFC registration --
 admin/records_officer/clinician):
 1. Web console → Patient → "Register NFC Card" (unchanged) — now the
-   response includes `tag_text` (+ `tag_text_truncated` if it didn't all
+   response includes `tag_blob` (+ `tag_blob_truncated` if it didn't all
    fit). The prompt shown after registering walks staff through the next
    step.
 2. On a phone running the CLARION app (staff role), open the NFC icon in
@@ -1194,21 +1200,52 @@ enough to fit the smallest common tag without it.
 
 ### Encrypted tags (v2) -- what changed operationally
 
-`register_nfc_card` now also returns `tag_blob`: the same critical data
-sealed with AES-256-GCM to that tag's UID. Staff should write **`tag_blob`**
-(the web prompt offers it first); `tag_text` plaintext is only for a tag too
-small to hold a sealed record.
+`register_nfc_card` returns `tag_blob`: the critical data sealed with
+AES-256-GCM to that tag's UID. It is the **only** form staff are given to
+write; plaintext is never returned or written. A tag too small to hold the
+sealed record (`tag_max_bytes` under 89 bytes) is refused with a 422
+before anything is saved: use an NTAG215/216. A patient with no
+emergency-critical data registers fine with `tag_blob: null` (nothing to
+write yet; rewrite the tag after data is added). The app's Write Offline Tag
+screen refuses any text that isn't a sealed `C1.` record. Plaintext tags
+already in the field are still read.
 
 | Setting | Meaning |
 |---|---|
 | `CLARION_TAG_KEY_SECRET` | Master secret the data keys are derived from. **Set it in production**; if unset the key falls back to `SECRET_KEY`, and rotating `SECRET_KEY` would then make every tag in the field unreadable. |
 | `CLARION_TAG_KEY_ID` | Current key id (default 1). Bump to rotate; re-write tags afterwards. |
-| `CLARION_TAG_MIN_KEY_ID` | Oldest key id still handed to devices (default = current). Raising it is the only revocation lever for old keys; a device that already cached one is unaffected until its 72 h cache lapses. |
+| `CLARION_TAG_MIN_KEY_ID` | Oldest key id still handed to devices (default = current). Raising it is the only revocation lever for old keys; a device that already cached one is unaffected until its key cache lapses (`CLARION_TAG_KEY_MAX_AGE_HOURS`). |
+| `CLARION_TAG_KEY_MAX_AGE_HOURS` | How long a device may use its cached keys **and the revoked-card list** without a successful refresh (1..168, default **24**). The server sends it with `/emergency/tag-keys`; the app stores it with the keys. A shorter value shrinks the window in which a disabled account or stolen phone still opens cards offline, at the cost of more frequent syncs. |
 
 Behaviour you should expect:
 - A sealed tag opens offline only on a CLARION device with a signed-in
   admin / clinician / records_officer / emergency_responder account that
-  fetched the key within the last 72 h. A generic phone sees ciphertext.
+  fetched the key within the last `CLARION_TAG_KEY_MAX_AGE_HOURS` (24 h by
+  default). A generic phone sees ciphertext.
+- **Device unlock before offline reads.** The app asks for the phone's
+  fingerprint / face / PIN / pattern (`local_auth`, biometric **or** device
+  credential) before it touches the cached keys, then not again for 60 s so a
+  responder can work through several tags. A phone with **no screen lock at
+  all** cannot read cards offline (the app says to set one, or to use the QR
+  code / online lookup). Sign-out ends the 60 s window. This is an app-level
+  gate, not a hardware-bound key: a rooted phone or extracted secure storage
+  is not stopped by it. Android needs the `FlutterFragmentActivity`,
+  `Theme.AppCompat` launch theme and `USE_BIOMETRIC` permission already set in
+  `mobile_flutter/android`; iOS is not configured for this app.
+- **Offline revocation.** `GET /emergency/tag-keys` also returns
+  `revocation_key` and `revoked_card_ids` (cards revoked and not yet expired).
+  The app recomputes `HMAC-SHA256(revocation_key, "rev|<UID>")[:32]` from the
+  UID it reads and refuses a listed card before showing anything; the attempt
+  is still logged. A card revoked while a device is offline is refused from
+  that device's next sync, so the exposure window is at most the key lifetime.
+  Cards registered **before** this feature carry no revocation id: register
+  them again (same UID) to make them revocable offline (`POST
+  /emergency/nfc/revoke/{id}` answers `offline_revocable: false` for those, and
+  the web console says so). A legacy plaintext tag is also refused offline
+  unless the device holds a fresh revoked list. Known limit: an attacker who
+  trips the `/nfc/scan` rate limit (429) can force the offline path, where a
+  revocation only lands at the device's next sync (at most
+  `CLARION_TAG_KEY_MAX_AGE_HOURS`).
 - The scanner tries the server for 1.5 s, then falls back to the tag only
   when the server is genuinely unreachable (timeout / no connection / 429 /
   502 / 503 / 504). A real 404 for a revoked card is never overridden.
@@ -1216,8 +1253,48 @@ Behaviour you should expect:
   connection (`POST /emergency/offline-reads`); they appear in the audit log
   as `emergency_access_nfc_offline` with `source=device_asserted`. Treat them
   as honest-but-unverifiable until the NTAG 424 DNA read counter lands.
-- Any key holder can open any sealed tag; a revoked-but-unexpired tag still
-  opens offline.
+- Any key holder can open any sealed tag. A revoked card is refused offline
+  only on devices that have synced since the revocation (see above).
+
+### Community responder accounts (guards / volunteers)
+
+A named, time-boxed login for someone who may need to look up an emergency card
+(an estate guard, a trained volunteer) without being clinic staff. API only for
+now (no admin-console screen yet).
+
+- **Create / manage** (admin, own facility only): `POST /admin/responders`
+  `{full_name, email, expires_at}` returns the temporary password once (forced
+  change at first login); `GET /admin/responders`; `PATCH /admin/responders/{id}`
+  `{expires_at}` to extend or shorten; `POST /admin/responders/{id}/revoke` to end
+  access now and kill refresh tokens. `expires_at` is required and capped at
+  `CLARION_RESPONDER_MAX_DAYS` (default 90) from now, so access is renewed on
+  purpose. `POST /auth/register` refuses this role.
+- **Emergency-only, enforced centrally.** `auth.get_current_user` (the dependency
+  under every protected route, `require_roles` and `require_page_access`
+  included) lets this role reach only `/emergency/scan`, `/emergency/nfc/scan`,
+  `/emergency/tag-keys`, `/emergency/offline-reads` and `/auth/*`; everything
+  else answers 403. A new router cannot forget it. What a scan returns is the
+  same emergency-tier payload as any scan (blood type, critical allergies /
+  medications / conditions, name and age).
+- **Hard expiry.** `User.access_expires_at` is checked on every authenticated
+  request (401 "Account access has expired"), at login (403, audited as
+  `login_refused_access_expired`), after MFA, and on refresh-token rotation. For
+  the offline path, `GET /emergency/tag-keys` returns `valid_until` and the app
+  stops using cached keys and the revoked list at that moment, even without a
+  network.
+- **Every read audited.** A signed-in scan is attributed to the account's user id
+  (`actor_role=emergency_responder`, detail starts `verified`), key fetches are
+  `tag_keys_fetch`, offline reads upload under that user, and admin create /
+  extend / revoke actions are audited.
+- **Known limits.** Tag keys are one global set, so a responder device can open
+  any sealed tag in the system (emergency-tier data only). A phone with no
+  screen lock cannot read tags offline at all (see the device-unlock bullet
+  above). The unauthenticated public scan still works for anyone, including
+  with an expired or revoked responder's token (it simply falls back to an
+  unattributed scan, because a broken token must never turn a life-safety scan
+  into an error): the account adds attribution and offline capability, it does
+  not gate the public scan. `expires_at` must carry a timezone offset; the API
+  rejects a bare local time.
 
 ---
 
