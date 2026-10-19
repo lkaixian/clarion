@@ -101,6 +101,9 @@ class OfflineReadLog {
     }
   }
 
+  /// The app went to the background: the next read prompts again.
+  void relockIfIdle() => _lock.lockIfIdle();
+
   Future<void> saveKeys(TagKeySet set) async {
     await _s.write(key: _keysKey, value: jsonEncode(set.keys));
     await _s.write(

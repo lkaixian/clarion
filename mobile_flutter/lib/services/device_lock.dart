@@ -76,6 +76,16 @@ class DeviceLock {
     return DeviceLockResult.denied;
   }
 
+  /// App sent to the background: end the grace window, but leave a prompt that
+  /// is on screen alone (some platforms background the app while it shows).
+  void lockIfIdle() {
+    if (_pending == null) {
+      lock();
+    } else {
+      _generation++; // a prompt that finishes after this must not start a fresh grace window
+    }
+  }
+
   /// Forget a previous success (sign-out), including one still being prompted.
   void lock() {
     _generation++;

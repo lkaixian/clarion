@@ -151,6 +151,9 @@ def _publish_job(payload: dict) -> None:
             return  # nothing to key a pointer on -- not an error, not retried
         if enc.facility_name != facility_name():
             return  # not authored here: peers could never fetch it from us
+        from .routers.federation import _has_sharing_consent  # lazy: routers import this module
+        if not _has_sharing_consent(db, patient.id):
+            return  # no cross_facility_sharing consent: central learns nothing about this visit
         doc = visit_document(db, enc)
         pkey = patient_key(patient.national_id)
         chash = sigs.content_hash(doc)

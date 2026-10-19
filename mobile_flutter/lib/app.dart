@@ -13,7 +13,7 @@ import 'providers/queue_provider.dart';
 import 'providers/reminders_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/change_password_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_shell.dart';
 import 'screens/login_screen.dart';
 import 'screens/senior/senior_home_screen.dart';
 import 'screens/emergency_scanner_screen.dart';
@@ -50,11 +50,11 @@ class ClarionApp extends StatefulWidget {
   State<ClarionApp> createState() => _ClarionAppState();
 }
 
-class _ClarionAppState extends State<ClarionApp> {
+class _ClarionAppState extends State<ClarionApp> with WidgetsBindingObserver {
   late final Future<void> _bootstrap;
 
   // FIX for "no way to log out after 'session expired' during backend
-  // downtime": `_AuthGate` below swaps HomeScreen/SeniorHomeScreen for
+  // downtime": `_AuthGate` below swaps MainShell/SeniorHomeScreen for
   // LoginScreen the instant `AuthProvider.status` flips to
   // `unauthenticated` (either via a deliberate Sign Out or the involuntary
   // `forceLogout()` fired from a 401) — but that swap only replaces the
@@ -78,6 +78,7 @@ class _ClarionAppState extends State<ClarionApp> {
     super.initState();
     _bootstrap = _init();
     widget.authProvider.addListener(_onAuthChanged);
+    WidgetsBinding.instance.addObserver(this);
     LaunchTag.listen((tag) {
       _pendingTag = tag;
       _openPendingTag();
@@ -101,8 +102,14 @@ class _ClarionAppState extends State<ClarionApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.authProvider.removeListener(_onAuthChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) widget.authProvider.offlineLog.relockIfIdle();
   }
 
   void _onAuthChanged() {
@@ -249,7 +256,7 @@ class _AuthGate extends StatelessWidget {
             if (auth.mustChangePassword) return const ChangePasswordScreen();
             return auth.prefersSeniorMode
                 ? const SeniorHomeScreen()
-                : const HomeScreen();
+                : const MainShell();
         }
       },
     );

@@ -8,6 +8,7 @@ import SealBadge from "../components/SealBadge";
 import PatientOrders from "../components/PatientOrders";
 import PatientForms from "../components/PatientForms";
 import PatientDemographics from "../components/PatientDemographics";
+import SharingConsent from "../components/SharingConsent";
 import { roleLabel } from "../lib/role";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
@@ -151,6 +152,14 @@ const RESCHEDULE_REQUEST_STATUS_BADGE_CLASSES = {
   pending: "bg-amber-100 text-amber-700",
   accepted: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-600",
+};
+
+// Usable NDEF text bytes per tag model (a little under the chip's user memory).
+const NFC_TAGS = {
+  213: { type: "ntag21x", bytes: 128 },
+  215: { type: "ntag21x", bytes: 480 },
+  216: { type: "ntag21x", bytes: 860 },
+  424: { type: "ntag424", bytes: 400 },
 };
 
 // What staff see after an NFC card registers. The encrypted tag_blob is the
@@ -1750,12 +1759,16 @@ export default function PatientDetail() {
     );
     const scope = (scopeInput || "").split(",").map((s) => s.trim()).filter(Boolean);
     // Every tag type works; only an NTAG 424 DNA has the tamper-proof read
-    // counter, so anything else gets a warning in the prompt below.
-    const tagType = window.confirm("Is this an NTAG 424 DNA tag?\n\nOK = yes. Cancel = NTAG213/215/216 or not sure (still works, with a warning).")
-      ? "ntag424" : "ntag21x";
+    // counter. The model also gives the server the tag's size, so a tag too
+    // small for the encrypted record is refused up front.
+    const answer = prompt("Tag model: 213, 215, 216 or 424 (NTAG 424 DNA). Not sure? Leave 213, the smallest.", "213");
+    if (answer === null) return;
+    const model = answer.trim();
+    const tag = NFC_TAGS[model];
+    if (!tag) { alert("Tag model must be 213, 215, 216 or 424."); return; }
     setBusy("nfc");
     try {
-      const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"], tagType);
+      const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"], tag.type, tag.bytes);
       refresh();
       // tag_blob is the encrypted on-tag record meant to be written DIRECTLY
       // onto the physical tag's own NDEF memory (readable with zero network;
@@ -2094,9 +2107,14 @@ export default function PatientDetail() {
       )}
 
       {isStaff && activeTab === "registry" && (
+        <>
         <Section title="Demographics, sponsor and dependants">
           <PatientDemographics patientId={id} demographics={patient.demographics} onChanged={refresh} />
         </Section>
+        {["admin", "records_officer"].includes(currentUser?.role) && (
+          <Section title="Sharing with other facilities"><SharingConsent patientId={id} /></Section>
+        )}
+        </>
       )}
 
       {activeTab === "documents" && (

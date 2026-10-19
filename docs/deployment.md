@@ -367,7 +367,12 @@ a DPO register, and a flag-only retention schedule.
   `/federation/visits/...` peer route returns 404, each writing a
   `federation_denied_no_consent` / `federation_peer_denied_no_consent` audit
   row. Each hospital checks its own copy of the ledger, so record the consent
-  at every hospital that holds the patient.
+  at every hospital that holds the patient. **Consent is also checked when a
+  visit is signed off:** with no grant on file the pointer is not published to
+  central at all, so central never learns the visit exists. A visit signed
+  before consent was given stays unpublished (it is not back-filled); tick the
+  box on the patient's Demographics tab (admin / records officer) and the next
+  sign-off publishes.
 - **Data-subject requests** — `POST /pdpa/requests` (patient or staff),
   `kind ∈ {access, correction, portability, withdraw_consent, objection}` —
   **`erasure` is rejected.** 21-day SLA (`due_at`), `+14` via
@@ -1196,7 +1201,9 @@ over the tag's own (possibly stale) copy.
 `tag_max_bytes` on the registration request lets the app pass the actual
 tapped tag's real NDEF capacity (`NdefAndroid.maxSize` -- NTAG213=144B,
 NTAG215=504B, NTAG216=888B); the backend default (128B) is conservative
-enough to fit the smallest common tag without it.
+enough to fit the smallest common tag without it. The web console asks staff
+for the tag model (213 / 215 / 216 / 424) when registering a card and sends
+the matching size (128 / 480 / 860 / 400 usable bytes).
 
 ### Encrypted tags (v2) -- what changed operationally
 
@@ -1227,7 +1234,8 @@ Behaviour you should expect:
   credential) before it touches the cached keys, then not again for 60 s so a
   responder can work through several tags. A phone with **no screen lock at
   all** cannot read cards offline (the app says to set one, or to use the QR
-  code / online lookup). Sign-out ends the 60 s window. This is an app-level
+  code / online lookup). Sign-out, or sending the app to the background, ends
+  the 60 s window. This is an app-level
   gate, not a hardware-bound key: a rooted phone or extracted secure storage
   is not stopped by it. Android needs the `FlutterFragmentActivity`,
   `Theme.AppCompat` launch theme and `USE_BIOMETRIC` permission already set in
@@ -1259,8 +1267,8 @@ Behaviour you should expect:
 ### Community responder accounts (guards / volunteers)
 
 A named, time-boxed login for someone who may need to look up an emergency card
-(an estate guard, a trained volunteer) without being clinic staff. API only for
-now (no admin-console screen yet).
+(an estate guard, a trained volunteer) without being clinic staff. Managed from
+the admin console's **Responders** tab (or the API below).
 
 - **Create / manage** (admin, own facility only): `POST /admin/responders`
   `{full_name, email, expires_at}` returns the temporary password once (forced
