@@ -187,11 +187,11 @@ def test_old_ntag_types_still_register_with_a_warning(test_client, make_user, au
             "/emergency/nfc/register", headers=h,
             json={"patient_id": patient.id, "nfc_uid": uid, "tag_max_bytes": size, "tag_type": tag_type},
         ).json()
-        assert body["tag_text"], tag_type  # always something writable
+        assert body["tag_blob"], tag_type  # always something writable
+        assert "tag_text" not in body
         assert (body["tag_security"]["warning"] is not None) is warns
         assert body["tag_security"]["read_counter"] is (not warns)
-        if body["tag_blob"]:
-            assert len(body["tag_blob"]) <= (size or 128)
+        assert len(body["tag_blob"]) <= (size or 128)
 
 
 def test_sealed_blob_carries_the_grant_expiry(test_client, make_user, auth_headers, db_session):
@@ -203,3 +203,108 @@ def test_sealed_blob_carries_the_grant_expiry(test_client, make_user, auth_heade
         json={"patient_id": patient.id, "nfc_uid": uid, "tag_max_bytes": 256},
     ).json()
     assert tag_crypto.open_blob(body["tag_blob"], uid).startswith("X:20")
+
+
+# ---- offline revocation list + key lifetime ----
+
+def _register(test_client, headers, patient, uid):
+    r = test_client.post("/emergency/nfc/register", headers=headers,
+                         json={"patient_id": patient.id, "nfc_uid": uid, "tag_max_bytes": 256})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_revoked_card_is_listed_with_the_key_a_device_needs_to_match_it(
+        test_client, make_user, auth_headers, db_session):
+    import base64
+    import hashlib
+    import hmac as hmac_mod
+
+    from app import auth
+
+    clin = make_user(role="clinician", facility="Main Hospital")
+    h = auth_headers(clin)
+    patient = _patient(db_session)
+    uid = secrets.token_hex(7).upper()
+    grant = _register(test_client, h, patient, uid)
+
+    keys = test_client.get("/emergency/tag-keys", headers=h).json()
+    rid = tag_crypto.revocation_id(auth.canonical_nfc_uid(uid))
+    assert rid not in keys["revoked_card_ids"]  # still valid
+
+    assert test_client.post(f"/emergency/nfc/revoke/{grant['id']}", headers=h).status_code == 200
+    keys = test_client.get("/emergency/tag-keys", headers=h).json()
+    assert rid in keys["revoked_card_ids"]
+
+    # The device recomputes the id from the UID it read, using only what the
+    # response gave it (the same HMAC the Flutter app implements).
+    key = base64.b64decode(keys["revocation_key"])
+    device_id = hmac_mod.new(key, f"rev|{auth.canonical_nfc_uid(uid)}".encode(), hashlib.sha256).hexdigest()[:32]
+    assert device_id == rid
+
+    # Registering the same card again re-enables it and drops it from the list.
+    _register(test_client, h, patient, uid)
+    assert rid not in test_client.get("/emergency/tag-keys", headers=h).json()["revoked_card_ids"]
+
+
+def test_expired_revoked_cards_are_left_off_the_list(test_client, make_user, auth_headers, db_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app import auth, models as m
+
+    clin = make_user(role="clinician", facility="Main Hospital")
+    h = auth_headers(clin)
+    patient = _patient(db_session)
+    uid = secrets.token_hex(7).upper()
+    grant = _register(test_client, h, patient, uid)
+    test_client.post(f"/emergency/nfc/revoke/{grant['id']}", headers=h)
+    row = db_session.query(m.EmergencyToken).filter_by(id=grant["id"]).first()
+    rid = tag_crypto.revocation_id(auth.canonical_nfc_uid(uid))
+
+    # Lapsed hours ago: the sealed expiry is date-only, so a device still opens
+    # the record until the end of that UTC day -- it must stay listed.
+    row.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)
+    db_session.commit()
+    assert rid in test_client.get("/emergency/tag-keys", headers=h).json()["revoked_card_ids"]
+
+    # Lapsed days ago: every device refuses it by date, so it drops off the list.
+    row.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=3)
+    db_session.commit()
+    assert rid not in test_client.get("/emergency/tag-keys", headers=h).json()["revoked_card_ids"]
+
+
+def test_revoking_a_card_with_no_revocation_id_says_it_is_not_offline_revocable(
+        test_client, make_user, auth_headers, db_session):
+    from app import models as m
+
+    clin = make_user(role="clinician", facility="Main Hospital")
+    h = auth_headers(clin)
+    patient = _patient(db_session)
+    grant = _register(test_client, h, patient, secrets.token_hex(7).upper())
+
+    res = test_client.post(f"/emergency/nfc/revoke/{grant['id']}", headers=h).json()
+    assert res == {"status": "revoked", "offline_revocable": True}
+
+    # A card issued before the column existed has no id to list.
+    row = db_session.query(m.EmergencyToken).filter_by(id=grant["id"]).first()
+    row.nfc_revocation_id = None
+    db_session.commit()
+    res = test_client.post(f"/emergency/nfc/revoke/{grant['id']}", headers=h).json()
+    assert res == {"status": "revoked", "offline_revocable": False}
+
+
+def test_key_max_age_defaults_to_24h_and_is_configurable(test_client, make_user, auth_headers, monkeypatch):
+    h = auth_headers(make_user(role="clinician", facility="Main Hospital"))
+    assert test_client.get("/emergency/tag-keys", headers=h).json()["key_max_age_hours"] == 24
+    monkeypatch.setenv("CLARION_TAG_KEY_MAX_AGE_HOURS", "6")
+    assert test_client.get("/emergency/tag-keys", headers=h).json()["key_max_age_hours"] == 6
+    monkeypatch.setenv("CLARION_TAG_KEY_MAX_AGE_HOURS", "0")
+    with pytest.raises(RuntimeError):
+        tag_crypto.key_max_age_hours()
+
+
+def test_revocation_id_is_stable_and_tied_to_the_uid():
+    a = tag_crypto.revocation_id("04A1B2C3D4E5F6")
+    assert a == tag_crypto.revocation_id("04A1B2C3D4E5F6")
+    assert a != tag_crypto.revocation_id("04A1B2C3D4E5F7")
+    assert len(a) == 32

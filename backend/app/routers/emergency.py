@@ -1,11 +1,13 @@
 import base64
 import io
 import secrets
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -622,6 +624,17 @@ def _tag_security(tag_type: str) -> dict:
     }
 
 
+# The sealed record leads with "X:<yyyymmdd>|"; below this many plaintext
+# bytes left over, there is no room for even a blood type plus one allergy.
+_SEALED_EXPIRY_LEN = len("X:YYYYMMDD")
+_MIN_SEALED_BUDGET = 24
+
+
+def _sealed_budget(max_bytes: int) -> int:
+    """Plaintext bytes available for the data once the expiry prefix is paid for."""
+    return tag_crypto.plaintext_budget(max_bytes) - _SEALED_EXPIRY_LEN - 1
+
+
 @router.post("/nfc/register")
 def register_nfc_card(
     payload: schemas.NfcRegisterRequest,
@@ -650,12 +663,24 @@ def register_nfc_card(
                    "Revoke it first if you're re-issuing the physical card.",
         )
 
+    # Refuse before anything is persisted: a tag too small for the sealed
+    # record must never fall back to writing readable plaintext.
+    budget = _sealed_budget(payload.tag_max_bytes or _TAG_TEXT_MAX_BYTES_DEFAULT)
+    if budget < _MIN_SEALED_BUDGET:
+        raise HTTPException(
+            status_code=422,
+            detail="This tag is too small for an encrypted emergency record. "
+                   "Use a larger tag (NTAG215 or NTAG216).",
+        )
+
     if existing:
         existing.scope = payload.scope
         existing.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes)
         existing.revoked = False
         existing.registered_by = current_user.id
         existing.nfc_uid_last4 = auth.nfc_uid_last4(payload.nfc_uid)
+        existing.nfc_revocation_id = tag_crypto.revocation_id(auth.canonical_nfc_uid(payload.nfc_uid))
+        existing.nfc_tag_type = payload.tag_type
         grant = existing
         action = "update_nfc_card"
     else:
@@ -664,6 +689,8 @@ def register_nfc_card(
             token=secrets.token_urlsafe(32),
             nfc_uid=uid_hash,
             nfc_uid_last4=auth.nfc_uid_last4(payload.nfc_uid),
+            nfc_revocation_id=tag_crypto.revocation_id(auth.canonical_nfc_uid(payload.nfc_uid)),
+            nfc_tag_type=payload.tag_type,
             scope=payload.scope,
             expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes),
             registered_by=current_user.id,
@@ -679,42 +706,30 @@ def register_nfc_card(
                detail=f"card_id={grant.id} last4={grant.nfc_uid_last4}",
                actor_facility=current_user.facility)
 
-    # tag_text: the compact, write-it-directly-onto-the-physical-tag
-    # fallback (see _build_compact_tag_text's own docstring for why this
-    # exists alongside the UID pointer above) -- computed with the SAME
-    # scope just granted, so the tag never carries more than the patient
-    # already consented to share via this card's pointer half. The
-    # registering app is expected to write this into an NDEF text record
-    # on the same physical tag right after this call returns.
+    # tag_blob: the compact on-tag record (see _build_compact_tag_text's
+    # docstring for why it exists alongside the UID pointer above), AES-GCM
+    # sealed to this physical tag's UID and computed with the SAME scope just
+    # granted, so the tag never carries more than the patient consented to
+    # share. Staff write it onto the tag's NDEF memory after this returns.
+    # It is the only form ever returned: plaintext tags are read-only legacy.
+    # None means the patient has no emergency-critical data yet (nothing to
+    # write; the card still works online).
     resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, payload.patient_id)
-    max_bytes = payload.tag_max_bytes or _TAG_TEXT_MAX_BYTES_DEFAULT
-    tag_text, tag_text_truncated = _build_compact_tag_text(
-        patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, max_bytes,
-    )
-
-    # tag_blob: the SAME data AES-GCM sealed to this physical tag's UID --
-    # what staff should actually write. tag_text stays as the legacy
-    # plaintext form (readable by any NFC reader; no per-read attribution).
     tag_blob = None
-    tag_blob_truncated = False
     # X:<yyyymmdd> = the grant's own expiry, sealed in so an offline reader
-    # refuses a lapsed tag. (A revoked-but-unexpired tag still opens offline:
-    # revocation needs connectivity.)
+    # refuses a lapsed tag. (A revoked-but-unexpired tag is refused offline
+    # once the device has synced the revoked list from /emergency/tag-keys.)
     expiry = f"X:{grant.expires_at:%Y%m%d}"
-    budget = tag_crypto.plaintext_budget(max_bytes) - len(expiry) - 1
-    if budget >= 24:
-        blob_plain, tag_blob_truncated = _build_compact_tag_text(
-            patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, budget,
-        )
-        if blob_plain:
-            tag_blob = tag_crypto.seal(f"{expiry}|{blob_plain}", auth.canonical_nfc_uid(payload.nfc_uid))
+    blob_plain, tag_blob_truncated = _build_compact_tag_text(
+        patient, set(payload.scope or []), resolved_cond_ids, discontinued_med_ids, budget,
+    )
+    if blob_plain:
+        tag_blob = tag_crypto.seal(f"{expiry}|{blob_plain}", auth.canonical_nfc_uid(payload.nfc_uid))
 
     return {
         "id": grant.id,
         "nfc_uid_last4": grant.nfc_uid_last4,
         "scope": grant.scope,
-        "tag_text": tag_text,
-        "tag_text_truncated": tag_text_truncated,
         "tag_blob": tag_blob,
         "tag_blob_key_id": tag_crypto.current_key_id() if tag_blob else None,
         "tag_blob_truncated": tag_blob_truncated,
@@ -813,12 +828,42 @@ def get_tag_keys(
     current_user: models.User = Depends(auth.require_roles(*_TAG_KEY_ROLES)),
 ):
     """Data keys a device caches so it can open an encrypted tag with no
-    network. Every fetch is audited."""
+    network, plus what it needs to refuse a revoked card offline: the
+    revocation key and the ids of cards revoked while still unexpired (an
+    expired card is already refused by the expiry sealed into its record, so
+    the list stays short). `key_max_age_hours` is how long the device may keep
+    all of this without a successful refresh. Every fetch is audited."""
     keys = tag_crypto.active_keys()
+    # The sealed expiry is date-only and a device treats a record as valid until
+    # 23:59:59 UTC that day, so keep a card listed for a day past expires_at.
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+    revoked_ids = [
+        r[0] for r in db.query(models.EmergencyToken.nfc_revocation_id)
+        .filter(models.EmergencyToken.revoked.is_(True),
+                models.EmergencyToken.nfc_revocation_id.isnot(None),
+                models.EmergencyToken.expires_at > cutoff)
+        .all()
+    ]
+    # A time-boxed account (community responder) must not outlive its window
+    # on a phone that is offline: the device treats `valid_until` as a hard stop
+    # on top of key_max_age_hours.
+    valid_until = None
+    if current_user.access_expires_at is not None:
+        exp = current_user.access_expires_at
+        if exp.tzinfo is not None:
+            exp = exp.astimezone(timezone.utc).replace(tzinfo=None)
+        valid_until = exp.isoformat() + "Z"
     response.headers["Cache-Control"] = "no-store"
     log_access(db, None, current_user.id, current_user.role, "tag_keys_fetch",
-               detail=f"key_ids={','.join(keys)}", actor_facility=current_user.facility)
-    return {"current_key_id": tag_crypto.current_key_id(), "keys": keys}
+               detail=f"key_ids={','.join(keys)} revoked={len(revoked_ids)}", actor_facility=current_user.facility)
+    return {
+        "current_key_id": tag_crypto.current_key_id(),
+        "keys": keys,
+        "revocation_key": base64.b64encode(tag_crypto.revocation_key()).decode(),
+        "revoked_card_ids": revoked_ids,
+        "key_max_age_hours": tag_crypto.key_max_age_hours(),
+        "valid_until": valid_until,
+    }
 
 
 @router.post("/offline-reads")
@@ -931,10 +976,14 @@ def revoke_nfc_card(
         raise HTTPException(status_code=404, detail="NFC card not found")
     grant.revoked = True
     db.commit()
+    # A card registered before nfc_revocation_id existed cannot be listed for
+    # offline devices (the raw UID is not stored): say so, so staff re-register
+    # and revoke again, or retire the key set.
+    offline_revocable = grant.nfc_revocation_id is not None
     log_access(db, grant.patient_id, current_user.id, current_user.role, "revoke_nfc_card",
-               detail=f"card_id={grant.id} last4={grant.nfc_uid_last4}",
+               detail=f"card_id={grant.id} last4={grant.nfc_uid_last4} offline_revocable={offline_revocable}",
                actor_facility=current_user.facility)
-    return {"status": "revoked"}
+    return {"status": "revoked", "offline_revocable": offline_revocable}
 
 
 @router.get("/nfc/{patient_id}")
@@ -956,15 +1005,75 @@ def list_nfc_cards(
         .order_by(models.EmergencyToken.created_at.desc())
         .all()
     )
-    return [
-        {
-            "id": g.id,
-            "nfc_uid_last4": g.nfc_uid_last4,
-            "scope": g.scope,
-            "grant_valid_until": g.expires_at.isoformat(),
-            "revoked": g.revoked,
-            "registered_by": g.registered_by,
-            "created_at": g.created_at.isoformat(),
-        }
-        for g in grants
-    ]
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return [_nfc_card_out(g, now) for g in grants]
+
+
+def _nfc_card_out(g: "models.EmergencyToken", now: datetime) -> dict:
+    tag_type = g.nfc_tag_type or "unknown"
+    expired = g.expires_at < now
+    status = "revoked" if g.revoked else ("expired" if expired else "active")
+    return {
+        "id": g.id,
+        "nfc_uid_last4": g.nfc_uid_last4,
+        "scope": g.scope,
+        "grant_valid_until": g.expires_at.isoformat(),
+        "revoked": g.revoked,
+        "registered_by": g.registered_by,
+        "created_at": g.created_at.isoformat(),
+        "tag_type": tag_type,
+        # Anything but an NTAG 424 DNA has no tamper-proof read counter.
+        "outdated": tag_type != "ntag424",
+        "status": status,
+        "valid_days_left": None if status != "active" else max(0, (g.expires_at - now).days),
+    }
+
+
+_NFC_HISTORY_EVENTS = {
+    "register_nfc_card": "registered",
+    "update_nfc_card": "renewed",
+    "revoke_nfc_card": "revoked",
+    "emergency_access_nfc": "scanned",
+}
+
+
+@router.get("/nfc/{patient_id}/{card_id}/history")
+def nfc_card_history(
+    patient_id: str, card_id: str, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
+):
+    """Timeline for one card, newest first, from the audit log. Shows role / organisation /
+    facility only: a responder's typed name is not repeated here."""
+    if current_user.role == "patient" and current_user.patient_id != patient_id:
+        raise HTTPException(status_code=403, detail="Cannot view another patient's NFC cards")
+    _require_patient_present_for_staff(db, current_user, patient_id)
+    grant = (
+        db.query(models.EmergencyToken)
+        .filter(models.EmergencyToken.id == card_id, models.EmergencyToken.patient_id == patient_id,
+                models.EmergencyToken.nfc_uid.isnot(None))
+        .first()
+    )
+    if grant is None:
+        raise HTTPException(status_code=404, detail="NFC card not found")
+    rows = (
+        db.query(models.AuditLog)
+        .filter(models.AuditLog.patient_id == patient_id,
+                models.AuditLog.action.in_(list(_NFC_HISTORY_EVENTS)),
+                or_(models.AuditLog.detail.like(f"%card_id={grant.id}%"),
+                    models.AuditLog.detail.like(f"%nfc_hash={grant.nfc_uid[:16]}%")))
+        .order_by(models.AuditLog.timestamp.desc())
+        .limit(50)
+        .all()
+    )
+    out = []
+    for r in rows:
+        m = re.search(r"org=(.*?)(?: self_asserted=|$)", r.detail or "")
+        org = m.group(1).strip() if m and m.group(1).strip() not in ("", "None") else None
+        out.append({
+            "at": (r.timestamp.replace(tzinfo=timezone.utc) if r.timestamp.tzinfo is None else r.timestamp).isoformat(),
+            "event": _NFC_HISTORY_EVENTS[r.action],
+            "by_role": r.actor_role,
+            "by_org": org,
+            "facility": r.actor_facility,
+        })
+    return out

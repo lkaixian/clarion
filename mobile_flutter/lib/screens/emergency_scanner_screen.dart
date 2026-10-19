@@ -1,39 +1,62 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:nfc_manager/nfc_manager.dart' show NfcAvailability;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../models/emergency_scan_result.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
-import '../providers/auth_provider.dart';
+import '../services/device_lock.dart';
 import '../services/nfc_service.dart';
+import '../services/offline_read_log.dart';
 import '../services/tag_crypto.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart' show EmptyText;
 import '../widgets/loading_view.dart';
-import '../widgets/common.dart';
+import '../widgets/record_widgets.dart';
+import '../widgets/scan_widgets.dart';
+import 'scan_hub_screen.dart' show QrKind, parseClarionQr;
 
-enum _ScanMode { qr, nfc, manual }
+const _kNameKey = 'mb_responder_name';
+const _kOrgKey = 'mb_responder_org';
+const _kAskedKey = 'mb_responder_asked';
 
-/// The responder-facing "scan an emergency card" screen — reachable from
-/// the Login screen **without** authenticating (matches the backend's
-/// design: /emergency/scan and /emergency/nfc/scan need no auth). Offers
-/// three ways to look a card up, switchable via a segmented control:
+enum _Mode { qr, nfc }
+
+/// scanning: camera/NFC armed. looking: lookup in flight. result / failed.
+enum _Phase { scanning, looking, result, failed }
+
+/// Responder-facing "scan an emergency card" screen. Reachable from Login
+/// WITHOUT signing in (the backend's /emergency/scan and /emergency/nfc/scan
+/// need no auth) and from the signed-in Scan hub.
 ///
-/// - **Scan QR**: live camera preview (`mobile_scanner`), decodes the
-///   `CLARION-EMERGENCY:<ref>` payload encoded in the QR.
-/// - **Tap NFC**: reads a physical NFC card's UID (`nfc_manager`), for
-///   patients using a physical card instead of the QR flow.
-/// - **Type Manually**: text entry fallback for either a QR card
-///   reference or an NFC UID, if the camera/NFC hardware isn't usable.
+/// Scan-first: the camera opens immediately. Responder name/organisation
+/// (sent for the card's audit trail) are remembered on this phone and asked
+/// once in a bottom sheet.
 class EmergencyScannerScreen extends StatefulWidget {
-  const EmergencyScannerScreen({super.key, this.initialTag});
+  const EmergencyScannerScreen({
+    super.key,
+    this.initialTag,
+    this.initialCardReference,
+    this.deliberateTap = false,
+  });
 
   /// A card tapped while locked / app closed (see services/launch_tag.dart):
   /// skips the tap step and goes straight to the lookup.
   final NfcReadResult? initialTag;
+
+  /// A `CLARION-EMERGENCY:` QR already decoded elsewhere: straight to lookup.
+  final String? initialCardReference;
+
+  /// [initialTag] came from a deliberate in-app tap, not a launch from a
+  /// locked phone, so a legacy plaintext tag may be shown offline.
+  final bool deliberateTap;
 
   @override
   State<EmergencyScannerScreen> createState() => _EmergencyScannerScreenState();
@@ -43,128 +66,234 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
   /// How long the online lookup gets before the tag's own record is used.
   static const _offlineFallbackTimeout = Duration(milliseconds: 1500);
 
-  _ScanMode _mode = _ScanMode.qr;
+  final _camera = MobileScannerController(formats: [BarcodeFormat.qrCode]);
+  final _manual = TextEditingController();
 
-  final _refController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _orgController = TextEditingController();
-  bool _manualIsNfc = false;
+  _Mode _mode = _Mode.qr;
+  _Phase _phase = _Phase.scanning;
+  bool _latched = false;
+  Timer? _rearm;
 
-  MobileScannerController? _qrController;
-  bool _qrHandledOnce = false;
+  String _name = '';
+  String _org = '';
 
   NfcAvailability? _nfcAvailability;
   bool _nfcSessionActive = false;
-  // Kind of the last tapped tag; drives the "no read counter" warning.
+  int _gen = 0; // bumps on cancel/restart so stale async results are ignored
   NfcTagKind? _tagKind;
+  // True when the tapped card has no sealed on-tag record (legacy/blank).
+  bool _legacyTag = false;
 
-  bool _loading = false;
+  String? _notClarion;
   String? _error;
+  VoidCallback? _retry;
   EmergencyScanResult? _result;
-  // True when _result came from a tag's own on-card text (no network),
-  // not a live server lookup -- drives the "offline / may be outdated"
-  // banner in _buildResultCard. Always false outside NFC-tap mode.
+  // True when _result came from a tag's own on-card text (no network).
   bool _resultIsOffline = false;
 
   @override
   void initState() {
     super.initState();
-    // Online now? Top up the cached tag keys and flush any queued offline
-    // reads before the user is (maybe) in a dead zone.
+    // Online now? Top up the cached tag keys and flush queued offline reads.
     context.read<AuthProvider>().syncOfflineTagData();
+    unawaited(_loadIdentity());
     final tag = widget.initialTag;
+    final ref = widget.initialCardReference;
     if (tag != null) {
-      _mode = _ScanMode.nfc;
+      _mode = _Mode.nfc;
+      _phase = _Phase.looking;
       _tagKind = tag.kind;
+      _legacyTag = tagIsLegacy(tag.ndefText);
       WidgetsBinding.instance.addPostFrameCallback(
           (_) => _lookup(nfcUid: tag.uid, offlineNdefText: tag.ndefText));
-      return;
+    } else if (ref != null) {
+      _phase = _Phase.looking;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _lookup(cardReference: ref));
     }
-    _startModeResources();
   }
 
   @override
   void dispose() {
-    _refController.dispose();
-    _nameController.dispose();
-    _orgController.dispose();
-    _qrController?.dispose();
+    _rearm?.cancel();
+    _gen++;
+    _manual.dispose();
+    _camera.dispose();
     NfcService.cancelSession();
     super.dispose();
   }
 
-  void _startModeResources() {
-    if (_mode == _ScanMode.qr) {
-      _qrHandledOnce = false;
-      _qrController ??= MobileScannerController(formats: [BarcodeFormat.qrCode]);
-      _qrController!.start();
-    } else {
-      _qrController?.stop();
-    }
-    if (_mode == _ScanMode.nfc) {
-      _checkNfcAndStartSession();
-    } else {
-      NfcService.cancelSession();
-      _nfcSessionActive = false;
-    }
-  }
-
-  Future<void> _checkNfcAndStartSession() async {
-    final availability = await NfcService.checkAvailability();
-    if (!mounted) return;
-    setState(() => _nfcAvailability = availability);
-    if (availability == NfcAvailability.enabled) {
-      _beginNfcSession();
-    }
-  }
-
-  Future<void> _beginNfcSession() async {
-    setState(() => _nfcSessionActive = true);
-    // One tap reads BOTH the hardware UID (the online lookup key) and
-    // whatever offline text is already written on the tag -- see
-    // NfcService.readTagOnce's own doc comment for why this beats reading
-    // the UID first and only deciding to re-tap for text if the network
-    // call fails.
-    final read = await NfcService.readTagOnce();
+  Future<void> _loadIdentity() async {
+    final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _nfcSessionActive = false;
-      _tagKind = read.uid != null ? read.kind : null;
+      _name = prefs.getString(_kNameKey) ?? '';
+      _org = prefs.getString(_kOrgKey) ?? '';
     });
-    if (read.uid != null) {
-      await _lookup(nfcUid: read.uid, offlineNdefText: read.ndefText);
+    final asked = prefs.getBool(_kAskedKey) ?? false;
+    if (!asked && (_name.isEmpty || _org.isEmpty) && _phase == _Phase.scanning) {
+      await _editIdentity();
     }
   }
 
-  void _switchMode(_ScanMode mode) {
+  Future<void> _editIdentity() async {
+    final name = TextEditingController(text: _name);
+    final org = TextEditingController(text: _org);
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.responderIdentityTitle,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ctx.palette.textPrimary)),
+              const SizedBox(height: 4),
+              Text(l10n.responderIdentityNote, style: TextStyle(fontSize: 13, color: ctx.palette.textMuted)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: name,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(labelText: l10n.responderNameLabel),
+              ),
+              const SizedBox(height: 12),
+              TextField(controller: org, decoration: InputDecoration(labelText: l10n.responderOrgLabel)),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(l10n.save)),
+            ],
+          ),
+        );
+      },
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAskedKey, true);
+    if (saved == true) {
+      await prefs.setString(_kNameKey, name.text.trim());
+      await prefs.setString(_kOrgKey, org.text.trim());
+      if (mounted) {
+        setState(() {
+          _name = name.text.trim();
+          _org = org.text.trim();
+        });
+      }
+    }
+    name.dispose();
+    org.dispose();
+  }
+
+  // ---- scanning ----------------------------------------------------------
+
+  /// Re-arms whichever input the current mode uses.
+  void _arm() {
+    _latched = false;
+    if (_mode == _Mode.qr) {
+      NfcService.cancelSession();
+      _nfcSessionActive = false;
+      _camera.start().catchError((Object _) {});
+    } else {
+      _camera.stop().catchError((Object _) {});
+      unawaited(_checkNfcAndStartSession());
+    }
+  }
+
+  void _disarm() {
+    _gen++;
+    _camera.stop().catchError((Object _) {});
+    NfcService.cancelSession();
+    _nfcSessionActive = false;
+  }
+
+  void _setMode(_Mode mode) {
     if (mode == _mode) return;
     setState(() {
       _mode = mode;
+      _notClarion = null;
+    });
+    _disarm();
+    _arm();
+  }
+
+  void _scanAnother() {
+    setState(() {
+      _phase = _Phase.scanning;
       _result = null;
       _error = null;
+      _notClarion = null;
       _tagKind = null;
+      _legacyTag = false;
       _resultIsOffline = false;
     });
-    _startModeResources();
+    _arm();
   }
 
   void _onQrDetect(BarcodeCapture capture) {
-    if (_qrHandledOnce || _loading) return;
-    for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue;
-      if (raw == null) continue;
-      // QR payload format encoded by the backend: see
-      // backend/app/routers/emergency.py::issue_emergency_card ->
-      // `f"CLARION-EMERGENCY:{card_reference}"`.
-      const prefix = 'CLARION-EMERGENCY:';
-      final ref = raw.startsWith(prefix) ? raw.substring(prefix.length) : raw;
-      if (ref.isEmpty) continue;
-      _qrHandledOnce = true;
-      _qrController?.stop();
-      _lookup(cardReference: ref);
+    if (_latched || _phase != _Phase.scanning || _mode != _Mode.qr) return;
+    String? raw;
+    for (final b in capture.barcodes) {
+      raw = b.rawValue;
+      if (raw != null) break;
+    }
+    if (raw == null) return;
+    _latched = true;
+    final parsed = parseClarionQr(raw);
+    if (parsed == null || parsed.kind != QrKind.emergency) {
+      // Not an emergency card (clinic check-in codes land here too): say so
+      // and keep scanning after a short pause on the same code.
+      setState(() => _notClarion = AppLocalizations.of(context).scanHubNotClarion);
+      _rearm?.cancel();
+      _rearm = Timer(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        setState(() => _notClarion = null);
+        _latched = false;
+      });
       return;
     }
+    _startLookup(cardReference: parsed.token);
   }
+
+  void _startLookup({String? cardReference, String? nfcUid, String? offlineNdefText}) {
+    _camera.stop().catchError((Object _) {});
+    _lookup(cardReference: cardReference, nfcUid: nfcUid, offlineNdefText: offlineNdefText);
+  }
+
+  Future<void> _checkNfcAndStartSession() async {
+    final gen = ++_gen;
+    NfcAvailability availability;
+    try {
+      availability = await NfcService.checkAvailability();
+    } catch (_) {
+      availability = NfcAvailability.unsupported;
+    }
+    if (!mounted || gen != _gen) return;
+    setState(() => _nfcAvailability = availability);
+    if (availability != NfcAvailability.enabled) return;
+
+    setState(() => _nfcSessionActive = true);
+    // One tap reads BOTH the hardware UID (online lookup key) and whatever
+    // offline text is on the tag; see NfcService.readTagOnce.
+    NfcReadResult read;
+    try {
+      read = await NfcService.readTagOnce();
+    } catch (_) {
+      read = const NfcReadResult();
+    }
+    if (!mounted || gen != _gen) return;
+    setState(() {
+      _nfcSessionActive = false;
+      _tagKind = read.uid != null ? read.kind : null;
+      _legacyTag = tagIsLegacy(read.ndefText);
+    });
+    if (read.uid != null) {
+      _startLookup(nfcUid: read.uid, offlineNdefText: read.ndefText);
+    } else {
+      setState(() => _notClarion = AppLocalizations.of(context).scanHubUnreadableTag);
+    }
+  }
+
+  // ---- lookup (online first, on-tag record only on a real outage) --------
 
   /// "The server can't be used right now": no network path (timeout /
   /// connection error / our own 1.5 s cap) or the edge/limiter answering for
@@ -182,19 +311,39 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     final auth = context.read<AuthProvider>();
     final log = auth.offlineLog;
     final userId = auth.user?.id;
+    final unlockReason = AppLocalizations.of(context).offlineUnlockReason;
     if (userId == null) return (text: null, failure: _OfflineFailure.needsSignIn);
 
     String? plain;
     _OfflineFailure? failure;
     var keyId = 0;
-    if (TagCrypto.looksSealed(ndefText)) {
+    final sealed = TagCrypto.looksSealed(ndefText);
+    final revocation = await log.checkRevocation(uid);
+    if (revocation == RevocationCheck.revoked) {
+      // Revoked while this device was offline: refuse before anything is shown
+      // (the read is still logged below, as a failed attempt).
+      keyId = sealed ? (TagCrypto.keyIdOf(ndefText) ?? 0) : 0;
+      failure = _OfflineFailure.revoked;
+    } else if (revocation == RevocationCheck.unknown && !sealed) {
+      // No fresh revoked list, and a plaintext tag needs no key to open: refuse
+      // rather than show a card that may have been revoked. (A sealed tag
+      // needs the cached keys, which share this list's lifetime.)
+      failure = _OfflineFailure.keyMissing;
+    } else if (sealed) {
       keyId = TagCrypto.keyIdOf(ndefText) ?? 0;
-      final keys = await log.readKeys();
-      plain = await TagCrypto.open(ndefText, uid, keys);
-      if (plain == null) {
-        failure = keys.containsKey('$keyId') ? _OfflineFailure.damaged : _OfflineFailure.keyMissing;
+      try {
+        // Biometric / device PIN first: the keys are not read until it passes.
+        final keys = await log.readKeys(reason: unlockReason);
+        plain = await TagCrypto.open(ndefText, uid, keys);
+        if (plain == null) {
+          failure = keys.containsKey('$keyId') ? _OfflineFailure.damaged : _OfflineFailure.keyMissing;
+        }
+      } on DeviceLockException catch (e) {
+        failure = e.result == DeviceLockResult.noScreenLock
+            ? _OfflineFailure.lockRequired
+            : _OfflineFailure.authFailed;
       }
-    } else if (widget.initialTag != null) {
+    } else if (widget.initialTag != null && !widget.deliberateTap) {
       // Launched from a card tap: anything can claim to be a CLARION card, so
       // only a sealed (authenticated) blob is ever shown on this path.
       failure = _OfflineFailure.damaged;
@@ -223,8 +372,10 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
   }
 
   Future<void> _lookup({String? cardReference, String? nfcUid, String? offlineNdefText}) async {
+    final gen = ++_gen;
+    _retry = () => _startLookup(cardReference: cardReference, nfcUid: nfcUid, offlineNdefText: offlineNdefText);
     setState(() {
-      _loading = true;
+      _phase = _Phase.looking;
       _error = null;
       _result = null;
       _resultIsOffline = false;
@@ -232,34 +383,28 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     try {
       final api = context.read<ApiClient>();
       final raw = cardReference != null
-          ? await api.scanEmergencyCard(
-              cardReference: cardReference,
-              responderName: _nameController.text.trim(),
-              responderOrg: _orgController.text.trim(),
-            )
+          ? await api.scanEmergencyCard(cardReference: cardReference, responderName: _name, responderOrg: _org)
           : await api.scanNfcCard(
               nfcUid: nfcUid!,
-              responderName: _nameController.text.trim(),
-              responderOrg: _orgController.text.trim(),
+              responderName: _name,
+              responderOrg: _org,
               // The tag carries its own record: don't make a responder wait
               // out the client's 12 s default when the network is down.
               timeout: offlineNdefText != null ? _offlineFallbackTimeout : null,
             );
-      if (!mounted) return;
-      setState(() => _result = EmergencyScanResult.fromJson(raw));
+      if (!mounted || gen != _gen) return;
+      setState(() {
+        _result = EmergencyScanResult.fromJson(raw);
+        _phase = _Phase.result;
+      });
     } on ApiException catch (e) {
-      if (!mounted) return;
-      // statusCode == null means no response reached us at all (a
-      // connection error, not a real server answer like a 404) -- see
-      // ApiException.data's doc comment. THAT specific case, and only
-      // that case, is when falling back to whatever's written on the tag
-      // itself is appropriate: a real 404 ("not registered") is an
-      // authoritative answer from a server that IS reachable, and must
-      // not be silently overridden by stale on-tag data.
+      if (!mounted || gen != _gen) return;
+      // Only a genuine no-response outage may fall back to the on-tag record;
+      // a real 404 ("not registered", revoked) is authoritative.
       if (_isOutage(e) && offlineNdefText != null) {
         final l10n = AppLocalizations.of(context);
         final opened = await _openOfflineTag(offlineNdefText, nfcUid ?? '');
-        if (!mounted) return;
+        if (!mounted || gen != _gen) return;
         setState(() {
           if (opened.text == null) {
             _error = switch (opened.failure!) {
@@ -267,172 +412,242 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
               _OfflineFailure.keyMissing => l10n.scanResultOfflineKeyMissing,
               _OfflineFailure.expired => l10n.scanResultOfflineExpired,
               _OfflineFailure.damaged => l10n.scanResultOfflineDamaged,
+              _OfflineFailure.revoked => l10n.scanResultOfflineRevoked,
+              _OfflineFailure.lockRequired => l10n.scanResultOfflineLockRequired,
+              _OfflineFailure.authFailed => l10n.scanResultOfflineAuthFailed,
             };
+            _phase = _Phase.failed;
           } else {
             _result = EmergencyScanResult.fromCompactTagText(
               opened.text!,
               placeholderName: l10n.scanResultOfflinePlaceholderName,
             );
             _resultIsOffline = true;
-            _error = null;
+            _phase = _Phase.result;
           }
         });
       } else {
-        setState(() => _error = e.message);
+        setState(() {
+          _error = e.message;
+          _phase = _Phase.failed;
+        });
       }
-    } catch (e) {
-      // Deliberately not e.toString() here — never interpolate a raw
-      // error object into user-facing text (see api_exception.dart's
-      // hardening against the same class of problem for backend errors).
-      if (!mounted) return;
-      setState(() => _error = AppLocalizations.of(context).unexpectedErrorGeneric);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      // Never interpolate a raw error object into user-facing text.
+      if (!mounted || gen != _gen) return;
+      setState(() {
+        _error = AppLocalizations.of(context).unexpectedErrorGeneric;
+        _phase = _Phase.failed;
+      });
     }
   }
+
+  // ---- build -------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-
+    final Widget body;
+    switch (_phase) {
+      case _Phase.scanning:
+        body = _buildScanning(l10n);
+      case _Phase.looking:
+        body = _buildLooking(l10n);
+      case _Phase.failed:
+        body = _buildFailed(l10n);
+      case _Phase.result:
+        body = _buildResult(l10n, _result!);
+    }
     return Scaffold(
       appBar: AppBar(title: Text(l10n.responderScanTitle)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.responderScanDesc,
-              style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
-            ),
-            const SizedBox(height: 16),
-            SegmentedButton<_ScanMode>(
-              segments: [
-                ButtonSegment(value: _ScanMode.qr, label: Text(l10n.scanModeQr), icon: const Icon(Icons.qr_code_scanner)),
-                ButtonSegment(value: _ScanMode.nfc, label: Text(l10n.scanModeNfc), icon: const Icon(Icons.nfc)),
-                ButtonSegment(value: _ScanMode.manual, label: Text(l10n.scanModeManual), icon: const Icon(Icons.keyboard)),
-              ],
-              selected: {_mode},
-              onSelectionChanged: (s) => _switchMode(s.first),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(labelText: l10n.responderNameLabel),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _orgController,
-              decoration: InputDecoration(labelText: l10n.responderOrgLabel),
-            ),
-            const SizedBox(height: 16),
-            if (_mode == _ScanMode.qr) _buildQrMode(l10n),
-            if (_mode == _ScanMode.nfc) _buildNfcMode(l10n),
-            if (_mode == _ScanMode.manual) _buildManualMode(l10n),
-            if (_mode == _ScanMode.nfc && _tagKind != null && !_tagKind!.hasReadCounter)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(top: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.shade800),
-                ),
+      body: SafeArea(child: body),
+    );
+  }
+
+  Widget _buildScanning(AppLocalizations l10n) {
+    final p = context.palette;
+    final who = joinNonEmpty([_name, _org], ', ');
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<_Mode>(
+            style: SegmentedButton.styleFrom(minimumSize: const Size(0, 48)),
+            segments: [
+              ButtonSegment(value: _Mode.qr, label: Text(l10n.scanModeQr), icon: const Icon(Icons.qr_code_scanner)),
+              ButtonSegment(value: _Mode.nfc, label: Text(l10n.scanModeNfc), icon: const Icon(Icons.nfc)),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (s) => _setMode(s.first),
+          ),
+          const SizedBox(height: 12),
+          if (_mode == _Mode.qr) ..._qrBody(l10n) else ..._nfcBody(l10n),
+          if (_notClarion != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Semantics(
+                liveRegion: true,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade800),
+                    Icon(Icons.info_outline, size: 18, color: p.attention),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(l10n.nfcBasicTagWarning,
-                          style: TextStyle(fontSize: 12, color: context.palette.textBody)),
-                    ),
+                    Expanded(child: Text(_notClarion!, style: TextStyle(color: p.textBody))),
                   ],
                 ),
               ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(_error!, style: TextStyle(color: context.palette.emergency)),
-              ),
-            if (_loading)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: const LoadingView(),
-              ),
-            if (_result != null) ...[
-              const SizedBox(height: 20),
-              _buildResultCard(l10n, _result!),
-            ],
+            ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _editIdentity,
+              icon: const Icon(Icons.badge_outlined),
+              label: Text(who.isEmpty ? l10n.responderAdd : '${l10n.responderScanningAs(who)}  ·  ${l10n.responderChange}'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _qrBody(AppLocalizations l10n) {
+    return [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 340,
+          child: MobileScanner(
+            controller: _camera,
+            onDetect: _onQrDetect,
+            errorBuilder: (context, error) => CameraErrorView(error),
+            placeholderBuilder: (context) => const ColoredBox(
+              color: Colors.black,
+              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            ),
+          ),
+        ),
+      ),
+      // Typed fallback, only when the camera can't run.
+      ValueListenableBuilder<MobileScannerState>(
+        valueListenable: _camera,
+        builder: (context, state, _) {
+          if (state.error == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _manual,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(labelText: l10n.cardReferenceLabel, hintText: l10n.cardReferenceHint),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _manual.text.trim().isEmpty ? null : () => _startLookup(cardReference: _manual.text.trim()),
+                  child: Text(l10n.scanButton),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ];
+  }
+
+  List<Widget> _nfcBody(AppLocalizations l10n) {
+    return [
+      NfcStatusPanel(availability: _nfcAvailability, sessionActive: _nfcSessionActive),
+      if (_nfcAvailability == NfcAvailability.enabled && !_nfcSessionActive)
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: OutlinedButton(onPressed: _arm, child: Text(l10n.tryAgain)),
+        ),
+    ];
+  }
+
+  Widget _buildLooking(AppLocalizations l10n) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const LoadingView(),
+            const SizedBox(height: 12),
+            Text(l10n.scanning, style: TextStyle(color: context.palette.textBody)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () {
+                _gen++; // drop the in-flight lookup's result
+                _scanAnother();
+              },
+              child: Text(l10n.cancel),
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// Renders a successful scan lookup as a structured, category-per-card
-  /// layout instead of the old flat `key: value` text dump -- deliberately
-  /// mirrors the visual language HomeScreen uses for "my own record"
-  /// (SectionCard + bulleted lines) so a responder scanning someone else's
-  /// card and the patient viewing their own record see the same product,
-  /// not two unrelated designs. Distinct colouring per category comes
-  /// entirely from the existing AppColors palette (no new colours
-  /// invented): allergies use the app's established emergency red, since
-  /// that's already the "urgent" colour everywhere else in this app.
-  Widget _buildResultCard(AppLocalizations l10n, EmergencyScanResult result) {
-    final omitted = result.omittedNonCritical;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            l10n.scanResultFoundTitle,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.palette.textMuted, letterSpacing: 0.5),
-          ),
+  Widget _buildFailed(AppLocalizations l10n) {
+    final p = context.palette;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 44, color: p.emergency),
+            const SizedBox(height: 12),
+            Semantics(
+              liveRegion: true,
+              child: Text(_error ?? '', textAlign: TextAlign.center, style: TextStyle(color: p.textBody, fontSize: 16)),
+            ),
+            const SizedBox(height: 20),
+            if (_retry != null) ElevatedButton(onPressed: _retry, child: Text(l10n.retry)),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: _scanAnother, child: Text(l10n.scanAnotherCard)),
+          ],
         ),
-        // Only ever shown when the server was unreachable and this came
-        // from the tag's own on-card text instead -- see _lookup's
-        // statusCode == null branch. Deliberately loud (not a quiet
-        // footnote): a responder acting on this must know it could be
-        // stale, and that a name/age/full history couldn't fit on the tag.
-        if (_resultIsOffline) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: context.palette.emergencyBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: context.palette.emergency),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.wifi_off, size: 18, color: context.palette.emergency),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.scanResultOfflineBanner,
-                    style: TextStyle(fontSize: 12, color: context.palette.textBody, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
+      ),
+    );
+  }
+
+  /// Result: what a responder acts on first (blood type, allergies,
+  /// conditions, medications) in large type, then emergency contacts.
+  Widget _buildResult(AppLocalizations l10n, EmergencyScanResult result) {
+    final omitted = result.omittedNonCritical;
+    final p = context.palette;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_resultIsOffline)
+          _Banner(
+            icon: Icons.wifi_off,
+            text: l10n.scanResultOfflineBanner,
+            color: p.emergency,
+            background: p.emergencyBg,
+            bold: true,
           ),
-        ],
+        if (_legacyTag) const LegacyTagBanner(),
+        if (_tagKind != null && !_tagKind!.hasReadCounter)
+          _Banner(
+            icon: Icons.warning_amber_rounded,
+            text: l10n.nfcBasicTagWarning,
+            color: p.attention,
+            background: p.attentionBg,
+          ),
         _ScanResultHeader(result: result, l10n: l10n),
         const SizedBox(height: 16),
-        // Allergies first and in the app's established "urgent" red -- the
-        // single highest-stakes category for a responder about to
-        // administer anything.
         _CategorySection(
           title: l10n.allergiesTitle,
           icon: Icons.warning_amber_rounded,
-          iconColor: context.palette.emergency,
-          backgroundColor: context.palette.emergencyBg,
-          borderColor: context.palette.emergency,
+          iconColor: p.emergency,
+          backgroundColor: p.emergencyBg,
+          borderColor: p.emergency,
           omittedNotice: (omitted['allergies'] ?? 0) > 0 ? l10n.scanResultOmittedAllergies(omitted['allergies']!) : null,
           child: result.allergies.isEmpty
               ? EmptyText(l10n.noAllergies)
@@ -441,31 +656,8 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
                   children: result.allergies.map((a) {
                     final reaction = a.reaction;
                     final title = (reaction != null && reaction.trim().isNotEmpty)
-                        ? '${a.substance} (${a.severity}) — $reaction'
+                        ? '${a.substance} (${a.severity}) · $reaction'
                         : '${a.substance} (${a.severity})';
-                    return _ScanBulletLine(title);
-                  }).toList(),
-                ),
-        ),
-        _CategorySection(
-          title: l10n.currentMedicationsTitle,
-          icon: Icons.medication_outlined,
-          iconColor: context.palette.primary,
-          backgroundColor: context.palette.chipBg,
-          borderColor: context.palette.primaryLight,
-          omittedNotice:
-              (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
-          child: result.medications.isEmpty
-              ? EmptyText(l10n.noActiveMedications)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: result.medications.map((m) {
-                    // Dosage/frequency shown alongside the drug name --
-                    // this is the whole point of the backend shape change
-                    // this screen is built on top of (medications used to
-                    // be bare name strings).
-                    final doseFreq = _joinNonEmpty([m.dosage, m.frequency], ', ');
-                    final title = doseFreq.isEmpty ? m.drugName : '${m.drugName} — $doseFreq';
                     return _ScanBulletLine(title);
                   }).toList(),
                 ),
@@ -473,161 +665,132 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
         _CategorySection(
           title: l10n.activeConditionsTitle,
           icon: Icons.medical_information_outlined,
-          iconColor: context.palette.primary,
-          backgroundColor: context.palette.surface,
-          borderColor: context.palette.border,
+          iconColor: p.primary,
+          backgroundColor: p.surface,
+          borderColor: p.border,
           omittedNotice: (omitted['conditions'] ?? 0) > 0 ? l10n.scanResultOmittedConditions(omitted['conditions']!) : null,
           child: result.conditions.isEmpty
               ? EmptyText(l10n.noConditions)
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: result.conditions
-                      .map((c) => Chip(
-                            label: Text(c, style: TextStyle(fontSize: 12, color: context.palette.textBody)),
-                            backgroundColor: context.palette.chipBg,
-                            side: BorderSide.none,
-                          ))
-                      .toList(),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.conditions.map((c) => _ScanBulletLine(c)).toList(),
                 ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildQrMode(AppLocalizations l10n) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        height: 320,
-        child: MobileScanner(
-          controller: _qrController,
-          onDetect: _onQrDetect,
-          errorBuilder: (context, error) => _cameraErrorView(l10n, error),
-          placeholderBuilder: (context) => const ColoredBox(
-            color: Colors.black,
-            child: Center(child: CircularProgressIndicator(color: Colors.white)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _cameraErrorView(AppLocalizations l10n, MobileScannerException error) {
-    final isPermission = error.errorCode == MobileScannerErrorCode.permissionDenied;
-    return ColoredBox(
-      color: Colors.black,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.no_photography_outlined, color: Colors.white70, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                isPermission ? l10n.cameraPermissionDenied : error.errorDetails?.message ?? error.errorCode.message,
-                style: const TextStyle(color: Colors.white70),
-                textAlign: TextAlign.center,
-              ),
-              if (isPermission) ...[
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: openAppSettings,
-                  child: Text(l10n.openAppSettings),
+        _CategorySection(
+          title: l10n.currentMedicationsTitle,
+          icon: Icons.medication_outlined,
+          iconColor: p.primary,
+          backgroundColor: p.chipBg,
+          borderColor: p.primaryLight,
+          omittedNotice:
+              (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
+          child: result.medications.isEmpty
+              ? EmptyText(l10n.noActiveMedications)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.medications.map((m) {
+                    final doseFreq = joinNonEmpty([m.dosage, m.frequency], ', ');
+                    return _ScanBulletLine(doseFreq.isEmpty ? m.drugName : '${m.drugName} · $doseFreq');
+                  }).toList(),
                 ),
-              ],
-            ],
-          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNfcMode(AppLocalizations l10n) {
-    if (!NfcService.isSupportedPlatform) {
-      return Text(l10n.nfcUnsupportedPlatform, style: TextStyle(color: context.palette.textMuted));
-    }
-    switch (_nfcAvailability) {
-      case null:
-        return const LoadingView();
-      case NfcAvailability.unsupported:
-        return Text(l10n.nfcUnsupportedDevice, style: TextStyle(color: context.palette.textMuted));
-      case NfcAvailability.disabled:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.nfcDisabled, style: TextStyle(color: context.palette.textMuted)),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: openAppSettings, child: Text(l10n.openAppSettings)),
-          ],
-        );
-      case NfcAvailability.enabled:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: context.palette.chipBg, borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            children: [
-              Icon(Icons.nfc, size: 48, color: _nfcSessionActive ? context.palette.primary : context.palette.textFaint),
-              const SizedBox(height: 12),
-              Text(
-                _nfcSessionActive ? l10n.nfcReadyToTap : l10n.nfcStarting,
-                style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-            ],
+        if (result.contactPhone != null)
+          _CategorySection(
+            title: l10n.emergencyContactSectionTitle,
+            icon: Icons.contact_phone_outlined,
+            iconColor: p.primary,
+            backgroundColor: p.surface,
+            borderColor: p.border,
+            child: _ContactRow(result: result),
           ),
-        );
-    }
-  }
-
-  Widget _buildManualMode(AppLocalizations l10n) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SegmentedButton<bool>(
-          segments: [
-            ButtonSegment(value: false, label: Text(l10n.cardReferenceLabel)),
-            ButtonSegment(value: true, label: Text(l10n.nfcUidLabel)),
-          ],
-          selected: {_manualIsNfc},
-          onSelectionChanged: (s) => setState(() => _manualIsNfc = s.first),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _refController,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: _manualIsNfc ? l10n.nfcUidLabel : l10n.cardReferenceLabel,
-            hintText: _manualIsNfc ? null : l10n.cardReferenceHint,
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _loading || _refController.text.trim().isEmpty
-                ? null
-                : () => _manualIsNfc
-                    ? _lookup(nfcUid: _refController.text.trim())
-                    : _lookup(cardReference: _refController.text.trim()),
-            child: Text(_loading ? l10n.scanning : l10n.scanButton),
-          ),
+        const SizedBox(height: 8),
+        ElevatedButton.icon(
+          onPressed: _scanAnother,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: Text(l10n.scanAnotherCard),
         ),
       ],
     );
   }
 }
 
-/// Joins the non-empty entries of [parts] with [separator] -- used to fold
-/// optional dosage/frequency fields into a single display string without
-/// stray separators when one is missing. Mirrors the identically-named
-/// private helper in home_screen.dart (not shared/imported since that one
-/// is file-private) so medication lines read the same way on both
-/// "my own record" and "what a responder sees".
-String _joinNonEmpty(List<String?> parts, String separator) {
-  return parts.where((p) => p != null && p.trim().isNotEmpty).join(separator);
+class _Banner extends StatelessWidget {
+  const _Banner({
+    required this.icon,
+    required this.text,
+    required this.color,
+    required this.background,
+    this.bold = false,
+  });
+  final IconData icon;
+  final String text;
+  final Color color;
+  final Color background;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: context.palette.textBody,
+                fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({required this.result});
+  final EmergencyScanResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final phone = result.contactPhone!;
+    final label = joinNonEmpty([result.contactName, result.contactRelationship], ' · ');
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (label.isNotEmpty) Text(label, style: TextStyle(fontSize: 17, color: context.palette.textPrimary)),
+              Text(
+                phone,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: context.palette.textPrimary),
+              ),
+            ],
+          ),
+        ),
+        IconButton.filled(
+          tooltip: l10n.callContactLabel(result.contactName ?? phone),
+          icon: const Icon(Icons.call),
+          onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
+        ),
+      ],
+    );
+  }
 }
 
 /// Name / date-of-birth / blood-type header for a scan result -- blood
@@ -659,14 +822,14 @@ class _ScanResultHeader extends StatelessWidget {
               children: [
                 Text(
                   result.fullName,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   l10n.scanResultAgeValue(
                     result.age?.toString() ?? l10n.scanResultBloodTypeUnknown,
                   ),
-                  style: const TextStyle(fontSize: 13, color: Colors.white70),
+                  style: const TextStyle(fontSize: 15, color: Colors.white),
                 ),
               ],
             ),
@@ -709,7 +872,7 @@ class _BloodTypeBadge extends StatelessWidget {
           Text(
             hasType ? bloodType! : l10n.scanResultBloodTypeUnknown,
             style: TextStyle(
-              fontSize: hasType ? 24 : 12,
+              fontSize: hasType ? 36 : 14,
               fontWeight: FontWeight.w800,
               color: AppColors.primary,
             ),
@@ -763,7 +926,7 @@ class _CategorySection extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: iconColor),
               const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: iconColor, fontSize: 14)),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: iconColor, fontSize: 16)),
             ],
           ),
           const SizedBox(height: 8),
@@ -793,11 +956,11 @@ class _ScanBulletLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text('•  $text', style: TextStyle(fontSize: 14, color: context.palette.textBody, height: 1.4)),
+      child: Text('•  $text', style: TextStyle(fontSize: 18, color: context.palette.textBody, height: 1.4)),
     );
   }
 }
 
 /// Why a tag couldn't be read without the server -- picks the responder-facing
 /// message so each case says what to do next.
-enum _OfflineFailure { needsSignIn, keyMissing, expired, damaged }
+enum _OfflineFailure { needsSignIn, keyMissing, expired, damaged, revoked, lockRequired, authFailed }

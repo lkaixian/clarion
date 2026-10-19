@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer, Index,
-    UniqueConstraint, Float, Computed, BigInteger
+    UniqueConstraint, Float, Computed, BigInteger, Date, CheckConstraint, false
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship, validates
@@ -31,7 +31,7 @@ TZDateTime = DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), "mysql"
 # after login if still blank (missing_profile_fields on schemas.UserOut).
 # Deliberately a plain list, not hardcoded logic per-field, so a future
 # column addition (e.g. a 5th contact field) only ever means appending here
-# â€” see auth_router.py's use of this for the "informational, not a security
+# — see auth_router.py's use of this for the "informational, not a security
 # gate" computation.
 PATIENT_PROFILE_FIELDS_TO_PROMPT = [
     "email",
@@ -74,6 +74,13 @@ class User(Base):
     # clients force a "you must change your password" screen.
     must_change_password = Column(Boolean, nullable=False, default=False)
 
+    # Hard stop for a time-boxed account (naive UTC). NULL = no expiry (every
+    # normal staff/patient account). Required for `emergency_responder`
+    # accounts (guards / community volunteers), created via POST
+    # /admin/responders. Enforced centrally: auth._resolve_current_user (every
+    # authenticated request), login, and refresh-token rotation.
+    access_expires_at = Column(TZDateTime, nullable=True)
+
     # Vestigial: rate limiting for the old self-service NRIC+DOB
     # /auth/forgot-password flow, which has been REMOVED and replaced by
     # the email-OTP reset (otp_* columns below). Left in place (unused by
@@ -84,7 +91,7 @@ class User(Base):
     reset_locked_until = Column(TZDateTime, nullable=True)
 
     # POST /auth/login failed-attempt rate limiting/lockout. Deliberately
-    # separate columns from reset_attempt_count/reset_locked_until above â€”
+    # separate columns from reset_attempt_count/reset_locked_until above —
     # those were scoped to the now-removed NRIC+DOB self-service
     # forgot-password flow only; these track wrong-password attempts
     # against this account's actual login. Keeping them independent means
@@ -105,7 +112,7 @@ class User(Base):
 
     # Password-reset-via-email-OTP state (POST /auth/request-password-reset-otp
     # and POST /auth/reset-password-with-otp). Only ever the HASH of the
-    # 6-digit code is stored, never the plaintext â€” mirrors hashed_password.
+    # 6-digit code is stored, never the plaintext — mirrors hashed_password.
     # otp_attempt_count is the *verify* attempt counter (wrong codes against
     # a live OTP); it is distinct from otp_request_count/otp_request_window_start
     # below, which rate-limit how often a fresh OTP can be *requested* in the
@@ -130,6 +137,12 @@ class User(Base):
     # only ever rejected once an ACTUAL subsequent password change sets
     # this to a newer timestamp than what the token was issued with.
     password_changed_at = Column(TZDateTime, nullable=True)
+    # Set when the OWNER of the record locks the account from the "an account was created for
+    # you" email (routers/auth_security.py). Cleared by a password reset through the emailed
+    # code, so no staff action is ever needed. Login is refused while it is set.
+    owner_locked_at = Column(TZDateTime, nullable=True)
+    # Set only for accounts created through self-registration; drives the cooling period.
+    self_registered_at = Column(TZDateTime, nullable=True)
 
     # Object key of this staff member's saved digital signature PNG in the
     # `clarion-signatures` bucket (see app/storage.py), key
@@ -341,6 +354,9 @@ class Patient(Base):
     blood_type = Column(String(64), nullable=True)
     phone = Column(String(64), nullable=True)
     senior_citizen_mode = Column(Boolean, default=False)
+    # True for a record created by a web sign-up for an NRIC no hospital had: name and identity
+    # are unproven until a claim is verified (see claims.approve_claim).
+    provisional = Column(Boolean, nullable=False, default=False, server_default=false())
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     # Patient-owned contact/profile fields, editable via the self-service
@@ -353,6 +369,22 @@ class Patient(Base):
     emergency_contact_name = Column(String(255), nullable=True)
     emergency_contact_phone = Column(String(64), nullable=True)
     emergency_contact_relationship = Column(String(64), nullable=True)
+
+    # Coded demographics (his_open_1 `patients`). Values are `reference_codes.code`s of the
+    # kind named in schemas.PATIENT_DEMOGRAPHIC_KINDS, checked on write; nullable, so every
+    # existing row and client keeps working. state_code/city are derivable from postcode.
+    title_code = Column(String(32), nullable=True)
+    religion_code = Column(String(32), nullable=True)
+    race_code = Column(String(32), nullable=True)
+    nation_code = Column(String(32), nullable=True)
+    marital_code = Column(String(32), nullable=True)
+    occupation_code = Column(String(32), nullable=True)
+    address_line = Column(String(255), nullable=True)
+    postcode = Column(String(16), nullable=True)
+    city = Column(String(128), nullable=True)
+    state_code = Column(String(32), nullable=True)
+    sponsor_code = Column(String(32), nullable=True)  # sponsors.code; no FK, same as other code lookups
+    sponsor_member_no = Column(String(64), nullable=True)
 
     @validates("national_id")
     def _sync_normalized_national_id(self, key, value):
@@ -548,6 +580,9 @@ class MedicationStatement(Base):
     code_system = Column(String(255), nullable=True)
     code_code = Column(String(64), nullable=True)
     code_display = Column(String(255), nullable=True)
+    # HIS catalogue link (drugs.drug_code). Nullable: free text stays valid. No FK on
+    # purpose, the catalogue is re-importable data. See catalogue_link.py.
+    drug_code = Column(String(32), nullable=True, index=True)
 
     patient = relationship("Patient", back_populates="medications")
 
@@ -667,6 +702,17 @@ class Appointment(Base):
     # the UI can render/manage them differently (see AppointmentOut).
     self_booked = Column(Boolean, nullable=False, default=False)
 
+    # Online booking v2 (routers/booking.py). attendee_* is a SNAPSHOT of the
+    # saved BookingProfile the visit was booked for, so it survives later
+    # profile edits/deletes (the FK goes NULL on delete).
+    booking_category = Column(String(32), nullable=True)
+    booked_for_profile_id = Column(
+        String(36), ForeignKey("booking_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    attendee_name = Column(String(255), nullable=True)
+    attendee_relationship = Column(String(32), nullable=True)
+    attendee_dob = Column(Date, nullable=True)
+
     # Security review follow-up (2026-09-14, P3.9/P3.10 wave): self_book_
     # appointment's slot check was read-then-write with NO db-level guard --
     # exactly the concurrent-threadpool race models.QueueTicket's docstring
@@ -747,6 +793,7 @@ class MedicineInventoryItem(Base):
     id = Column(String(36), primary_key=True, default=gen_id)
     facility_name = Column(String(255), nullable=False, index=True)
     drug_name = Column(String(255), nullable=False)
+    drug_code = Column(String(32), nullable=True, index=True)  # drugs.drug_code, see catalogue_link.py
     quantity_on_hand = Column(Integer, nullable=False, default=0)
     unit = Column(String(64), nullable=False, default="units")  # e.g. "tablets", "vials", "boxes"
     reorder_threshold = Column(Integer, nullable=True)  # null = no low-stock tracking for this item
@@ -793,7 +840,7 @@ class MedicineBudget(Base):
     accrues automatically on every restock (delta > 0) through
     routers/pharmacy.py::adjust_stock, so "remaining" = allocated - spend can
     be shown without re-summing the stock-event log every read. `current_stock_value`
-    (Î£ unit_cost x quantity_on_hand) is computed live in the serializer, not
+    (Σ unit_cost x quantity_on_hand) is computed live in the serializer, not
     stored here."""
     __tablename__ = "medicine_budgets"
 
@@ -884,6 +931,7 @@ class MedicinePurchaseProposal(Base):
     proposed_drug_name = Column(String(255), nullable=False)  # new-item name, or a snapshot of the existing item's name
     proposed_unit = Column(String(64), nullable=False, default="units")
     proposed_barcode = Column(String(64), nullable=True)
+    drug_code = Column(String(32), nullable=True)  # drugs.drug_code, copied to the item on approval
     quantity = Column(Integer, nullable=False)  # units to add on approval (always > 0)
     unit_cost = Column(Float, nullable=True)  # expected price per unit for THIS purchase; nullable = "unknown" (0 in the budget rollup)
     reason = Column(Text, nullable=True)
@@ -1104,7 +1152,7 @@ class StaffClockEvent(Base):
 
 class EmergencyToken(Base):
     """A short-lived, single-scope token bound to a QR code / physical card
-    reference. Never stores the actual medical data â€” just the grant.
+    reference. Never stores the actual medical data — just the grant.
 
     Two independent "keys" can point at the same grant:
       - `card_reference`: the pointer encoded in the QR code, issued by the
@@ -1128,6 +1176,12 @@ class EmergencyToken(Base):
     card_reference = Column(String(64), unique=True, nullable=True)  # printed on physical card / encoded in QR
     nfc_uid = Column(String(64), unique=True, nullable=True)  # M7: HMAC of the UID, never the raw UID
     nfc_uid_last4 = Column(String(8), nullable=True)  # cleartext tail of the raw UID, display only
+    # tag_crypto.revocation_id(uid): what offline devices match against the
+    # revoked list. Set at register time (the only moment the raw UID is in
+    # hand); cards registered before this column existed have none until they
+    # are registered again, so they cannot be revoked offline.
+    nfc_revocation_id = Column(String(32), nullable=True, index=True)
+    nfc_tag_type = Column(String(16), nullable=True)  # ntag21x | ntag424 | unknown, as seen at registration
     scope = Column(JSON, default=lambda: ["allergies", "medications", "conditions", "blood_type"])
     expires_at = Column(TZDateTime, nullable=False)
     revoked = Column(Boolean, default=False)
@@ -1191,6 +1245,43 @@ class SelfRegistrationAttempt(Base):
     updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     patient = relationship("Patient")
+
+
+class RegistrationClaim(Base):
+    """One person's PENDING sign-up for a patient record (routers/registration_claims.py).
+    Several people may claim the same NRIC at once (each with their own email + password, no
+    access to anything); the first to be verified (IC photo scan, the record's own inbox, or
+    staff) becomes the account and every other claim is rejected. A claim never grants access:
+    the User row is only created when a claim is approved."""
+    __tablename__ = "registration_claims"
+    __table_args__ = (UniqueConstraint("patient_id", "email", name="uq_registration_claims_patient_email"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String(255), nullable=False)  # stored lowercase
+    full_name = Column(String(255), nullable=True)  # name typed by the claimant, capitals
+    password_hash = Column(String(255), nullable=False)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    otp_code_hash = Column(String(255), nullable=True)
+    otp_expires_at = Column(TZDateTime, nullable=True)
+    otp_attempt_count = Column(Integer, nullable=False, default=0)
+    otp_request_count = Column(Integer, nullable=False, default=0)
+    otp_request_window_start = Column(TZDateTime, nullable=True)
+    photo_attempts = Column(Integer, nullable=False, default=0)
+    status = Column(String(16), nullable=False, default="pending")  # pending | approved | rejected
+    decided_at = Column(TZDateTime, nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class FlaggedEmail(Base):
+    """An email that proved its inbox for a claim that lost to the real owner: treated as a
+    likely spam/scam address and refused by later sign-ups."""
+    __tablename__ = "flagged_emails"
+
+    email = Column(String(255), primary_key=True)  # lowercase
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="SET NULL"), nullable=True)
+    reason = Column(String(255), nullable=False)
+    flagged_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class QueueTicket(Base):
@@ -1586,6 +1677,63 @@ class HospitalSetting(Base):
     brand_primary_color = Column(String(16), nullable=True)
     logo_data_url = Column(Text, nullable=True)
 
+    # Online booking v2: visible/bookable in the patient app only when on.
+    online_booking_enabled = Column(Boolean, nullable=False, default=False, server_default=false())
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+
+
+class BookingService(Base):
+    """One bookable category at one facility (timetable parameters). The
+    category code list lives in routers/booking.py::CATEGORIES."""
+    __tablename__ = "booking_services"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False)
+    category = Column(String(32), nullable=False)
+    active = Column(Boolean, nullable=False, default=False)
+    slot_minutes = Column(Integer, nullable=False, default=30)
+    capacity = Column(Integer, nullable=False, default=1)       # people per slot
+    advance_days = Column(Integer, nullable=False, default=14)
+    min_notice_minutes = Column(Integer, nullable=False, default=60)
+
+    __table_args__ = (
+        UniqueConstraint("facility_name", "category", name="uq_booking_services_facility_category"),
+    )
+
+
+class BookingHour(Base):
+    """A weekly opening range (minutes after local midnight) for a service.
+    Several ranges per weekday are allowed (lunch break); the router
+    rejects overlaps."""
+    __tablename__ = "booking_hours"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    service_id = Column(String(36), ForeignKey("booking_services.id", ondelete="CASCADE"), nullable=False, index=True)
+    weekday = Column(Integer, nullable=False)        # 0 = Monday .. 6 = Sunday
+    start_minute = Column(Integer, nullable=False)   # 0..1439
+    end_minute = Column(Integer, nullable=False)     # 1..1440, > start_minute
+
+    __table_args__ = (
+        CheckConstraint("end_minute > start_minute", name="ck_booking_hours_end_after_start"),
+    )
+
+
+class BookingProfile(Base):
+    """A saved person (child, parent...) an account books for. PHI: owner
+    only, never logged."""
+    __tablename__ = "booking_profiles"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    owner_user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    full_name = Column(String(255), nullable=False)
+    relationship = Column(String(32), nullable=False)
+    date_of_birth = Column(Date, nullable=True)
+    national_id = Column(String(32), nullable=True)
+    gender = Column(String(16), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 
 class Announcement(Base):
     """P3.10: a clinic-published notice (health campaign,
@@ -1905,6 +2053,12 @@ class ServiceResult(Base):
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     request = relationship("ServiceRequest", back_populates="result")
+    # Extra result files attached at sign-off (paper slip photos, docx, json, ...).
+    # Their hashes are part of the seal, see app/seal.py.
+    attachments = relationship(
+        "ServiceResultAttachment", order_by="ServiceResultAttachment.created_at",
+        primaryjoin="ServiceResult.id == ServiceResultAttachment.service_result_id", viewonly=True,
+    )
 
 
 class DicomStudy(Base):
@@ -2122,7 +2276,9 @@ class DentalChartEntry(Base):
 CHARGE_MASTER_CATEGORIES = ("consultation", "misc")
 BILL_STATUSES = ("open", "finalized", "voided")
 BILL_ITEM_SOURCE_TYPES = ("charge_master", "service_request", "pharmacy_item")
-PAYMENT_METHODS = ("cash", "card", "insurance", "panel", "other")
+PAYMENT_METHODS = ("cash", "card", "insurance", "panel", "online", "deposit", "other")
+PAYMENT_INTENT_STATUSES = ("pending", "succeeded", "failed", "cancelled", "expired")
+REFUND_STATUSES = ("requested", "approved", "rejected")
 CLAIM_STATUSES = ("draft", "submitted", "approved", "rejected", "paid", "void")
 
 
@@ -2148,6 +2304,100 @@ class ChargeMasterItem(Base):
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
     bill_items = relationship("BillItem", back_populates="charge_master_item")
+
+
+class PaymentIntent(Base):
+    """One online payment attempt by a patient against one bill. The money only
+    exists once `settle_intent` (routers/payments.py) turns a succeeded intent
+    into a normal Payment row (`payment_id`); the intent itself is never counted
+    in a bill's totals. `provider` names the gateway adapter (payment_providers.py);
+    `provider_ref` is its transaction id and is unique, so a replayed webhook can
+    never settle twice. `idempotency_key` is client-chosen: the same key from the
+    same patient returns the same intent instead of opening a second one."""
+    __tablename__ = "payment_intents"
+    __table_args__ = (
+        UniqueConstraint("patient_id", "idempotency_key", name="uq_payment_intent_patient_key"),
+    )
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    bill_id = Column(String(36), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    amount_cents = Column(Integer, nullable=False)
+    provider = Column(String(32), nullable=False)
+    provider_ref = Column(String(128), nullable=True, unique=True)
+    status = Column(String(16), nullable=False, default="pending", index=True)
+    idempotency_key = Column(String(64), nullable=True)
+    failure_reason = Column(Text, nullable=True)
+    payment_id = Column(String(36), ForeignKey("payments.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(TZDateTime, nullable=False)
+    completed_at = Column(TZDateTime, nullable=True)
+
+    bill = relationship("Bill")
+
+
+class Refund(Base):
+    """Money returned against one Payment. Two-person rule: staff request, an
+    admin (a different person) approves. Only an `approved` refund reduces a
+    bill's paid_cents; an online payment's refund is also sent to the gateway
+    (`provider_ref`). Never edited or deleted once decided."""
+    __tablename__ = "refunds"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    payment_id = Column(String(36), ForeignKey("payments.id", ondelete="CASCADE"), nullable=False, index=True)
+    bill_id = Column(String(36), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    amount_cents = Column(Integer, nullable=False)
+    reason = Column(Text, nullable=False)
+    status = Column(String(16), nullable=False, default="requested", index=True)
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    requested_by_name = Column(String(255), nullable=True)
+    requested_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    decided_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    decided_by_name = Column(String(255), nullable=True)
+    decided_at = Column(TZDateTime, nullable=True)
+    decision_note = Column(Text, nullable=True)
+    provider_ref = Column(String(128), nullable=True)
+
+    bill = relationship("Bill", back_populates="refunds")
+    payment = relationship("Payment")
+
+
+class Deposit(Base):
+    """An advance held for a patient at one facility (e.g. an admission
+    deposit). balance = amount - applied - refunded. Applying it to a bill
+    creates a Payment (method 'deposit', reference_no = this id); voiding that
+    payment returns the money here."""
+    __tablename__ = "deposits"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    amount_cents = Column(Integer, nullable=False)
+    applied_cents = Column(Integer, nullable=False, default=0)
+    refunded_cents = Column(Integer, nullable=False, default=0)
+    method = Column(String(32), nullable=False)
+    reference_no = Column(String(128), nullable=True)
+    received_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    received_by_name = Column(String(255), nullable=True)
+    received_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    patient = relationship("Patient")
+
+
+class DepositRefund(Base):
+    """One refund of (part of) a deposit, kept as an event so the cashier day
+    close can subtract it on the day the money left the drawer."""
+    __tablename__ = "deposit_refunds"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    deposit_id = Column(String(36), ForeignKey("deposits.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    amount_cents = Column(Integer, nullable=False)
+    refunded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    refunded_by_name = Column(String(255), nullable=True)
+    refunded_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Bill(Base):
@@ -2192,6 +2442,7 @@ class Bill(Base):
     items = relationship("BillItem", back_populates="bill", order_by="BillItem.created_at")
     payments = relationship("Payment", back_populates="bill", order_by="Payment.received_at")
     claims = relationship("Claim", back_populates="bill", order_by="Claim.created_at")
+    refunds = relationship("Refund", back_populates="bill", order_by="Refund.requested_at")
 
 
 class BillItem(Base):
@@ -2611,3 +2862,383 @@ class StatusDaily(Base):
     component = Column(String(32), primary_key=True)  # api|database|object_store|cache|local_ai
     total = Column(Integer, nullable=False, default=0)
     bad = Column(Integer, nullable=False, default=0)
+
+
+class ReferenceCode(Base):
+    """One row of a read-only lookup list imported from the HIS dataset
+    (his_open_1): states, cities, postcodes, nations, titles, ... `kind` names
+    the list, `parent` links child->parent (city->state, postcode->city), `extra`
+    holds the list-specific leftovers. Loaded by the 0f1a migration from
+    app/reference_data.json; served by GET /reference/{kind}."""
+    __tablename__ = "reference_codes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    kind = Column(String(32), nullable=False, index=True)
+    code = Column(String(64), nullable=False)
+    name = Column(String(255), nullable=False)
+    parent = Column(String(64), nullable=True)
+    extra = Column(JSON, nullable=True)
+
+class Drug(Base):
+    """Drug master row from his_open_1 (read-only catalogue, not stock; stock lives in
+    medicine_inventory). Codes in special/instruction/caution_code resolve through
+    reference_codes kinds drug_special_instructions / drug_instructions / drug_cautions."""
+    __tablename__ = "drugs"
+
+    drug_code = Column(String(32), primary_key=True)
+    drug_generic_name = Column(String(255), nullable=False, index=True)
+    drug_label = Column(String(255), nullable=True)
+    active_ingredient = Column(String(255), nullable=True)
+    drug_category = Column(String(32), nullable=True, index=True)
+    drug_schedule = Column(String(64), nullable=True)
+    drug_formulary = Column(String(8), nullable=True)
+    drug_type = Column(String(64), nullable=True)
+    item_subgroup = Column(String(64), nullable=True)
+    trade_name = Column(String(255), nullable=True)
+    strength = Column(String(64), nullable=True)
+    uom_strength = Column(String(64), nullable=True)
+    dosage_form = Column(String(128), nullable=True)
+    sku_uom = Column(String(32), nullable=True)
+    special_code = Column(String(32), nullable=True)
+    instruction_code = Column(String(32), nullable=True)
+    caution_code = Column(String(32), nullable=True)
+
+
+class DrugPrescription(Base):
+    """A default prescribing line (dose / frequency / route / duration) for a drug."""
+    __tablename__ = "drug_prescriptions"
+
+    prescription_id = Column(Integer, primary_key=True)
+    drug_code = Column(String(32), ForeignKey("drugs.drug_code", ondelete="CASCADE"), nullable=False, index=True)
+    drug_dosage = Column(Float, nullable=True)
+    dosage_code = Column(String(32), nullable=True)
+    frequency_code = Column(String(32), nullable=True)
+    route_code = Column(String(32), nullable=True)
+    drug_duration = Column(Float, nullable=True)
+    period_code = Column(String(32), nullable=True)
+    drug_total_unit = Column(Float, nullable=True)
+    instruction_code = Column(String(32), nullable=True)
+    special_code = Column(String(32), nullable=True)
+    caution_code = Column(String(32), nullable=True)
+
+
+class DrugDisease(Base):
+    """Drug -> indication link (indication_code is a reference_codes drug_indications code)."""
+    __tablename__ = "drug_diseases"
+
+    disease_id = Column(Integer, primary_key=True)
+    drug_code = Column(String(32), ForeignKey("drugs.drug_code", ondelete="CASCADE"), nullable=False, index=True)
+    indication_code = Column(String(32), nullable=False)
+
+
+class Product(Base):
+    """Billable/stockable product catalogue row from his_open_1 (consumables, services,
+    bed charges, drugs). category_code resolves through reference_codes product_categories."""
+    __tablename__ = "products"
+
+    product_code = Column(String(32), primary_key=True)
+    product_name = Column(String(255), nullable=False, index=True)
+    product_name_other = Column(String(255), nullable=True)
+    product_custom_id = Column(String(64), nullable=True)
+    category_code = Column(String(32), nullable=True, index=True)
+    unit_code = Column(String(32), nullable=True)
+    order_form = Column(String(32), nullable=True)
+    product_unit_charge = Column(Float, nullable=True)
+    product_stocked = Column(Integer, nullable=True)
+    product_edit_price = Column(Integer, nullable=True)
+    product_reorder = Column(Float, nullable=True)
+    product_input_tax = Column(String(32), nullable=True)
+    form_code = Column(String(32), nullable=True)
+    product_average_cost = Column(Float, nullable=True)
+    charge_code = Column(String(64), nullable=True)
+    product_output_tax = Column(String(32), nullable=True)
+    status_code = Column(String(32), nullable=True)
+    product_track_batch = Column(Integer, nullable=True)
+    product_on_hand = Column(Float, nullable=True)
+    product_drop_charge = Column(Integer, nullable=True)
+    product_local_store = Column(Integer, nullable=True)
+    product_non_claimable = Column(Integer, nullable=True)
+    product_duration_use = Column(Integer, nullable=True)
+
+
+class ProductUom(Base):
+    """Unit of measure for a product: conversion rate, price and cost per unit."""
+    __tablename__ = "product_uoms"
+
+    id = Column(Integer, primary_key=True)
+    product_code = Column(String(32), nullable=False, index=True)  # also fee_schedules FS... codes, so no FK
+    unit_code = Column(String(32), nullable=True)
+    uom_rate = Column(Float, nullable=True)
+    uom_price = Column(Float, nullable=True)
+    uom_price_2 = Column(Float, nullable=True)
+    uom_cost = Column(Float, nullable=True)
+    uom_default_cost = Column(Integer, nullable=True)
+    uom_default_price = Column(Integer, nullable=True)
+
+class FeeSchedule(Base):
+    """Fee schedule line from his_open_1 (professional/procedure fee guideline: a part,
+    two header levels, a description and a fee or fee range as text, e.g. "30-125")."""
+    __tablename__ = "fee_schedules"
+
+    fee_code = Column(String(32), primary_key=True)
+    part = Column(String(32), nullable=True, index=True)
+    header = Column(String(255), nullable=True)
+    sub_header = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    value = Column(String(200), nullable=True)
+    value2 = Column(String(200), nullable=True)
+
+
+class ProductPriceTier(Base):
+    """Price band for a product charge_code (products.charge_code). tier_min/tier_max bound
+    the unit cost the band applies to; `rates` holds the non-null outpatient / inpatient /
+    public / sponsor multiplier, limit and markup columns of the source row."""
+    __tablename__ = "product_price_tiers"
+
+    tier_id = Column(Integer, primary_key=True)
+    charge_code = Column(String(64), nullable=False, index=True)
+    tier_min = Column(Float, nullable=True)
+    tier_max = Column(Float, nullable=True)
+    rates = Column(JSON, nullable=True)
+
+class ServiceResultAttachment(Base):
+    """One file attached to an ancillary result at sign-off (a photo of the
+    lab's own paper slip, a docx/txt/json/pdf report, DICOM, HL7). Uploaded
+    first as a *pending* row (`service_result_id` NULL, staged in the 7-day
+    scratch bucket), then linked and copied into the WORM documents bucket
+    by POST /ancillary/requests/{id}/result so it is covered by the seal."""
+    __tablename__ = "service_result_attachments"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    service_request_id = Column(
+        String(36), ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    service_result_id = Column(
+        String(36), ForeignKey("service_results.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    filename = Column(String(255), nullable=False)  # sanitized, display + download name
+    file_object_key = Column(String(512), nullable=True)
+    file_sha256 = Column(String(64), nullable=True)
+    file_bytes = Column(Integer, nullable=True)
+    file_mime = Column(String(128), nullable=True)
+    uploaded_by = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Notification(Base):
+    """In-app inbox item for one user. Only ever created for clinical
+    readers; text carries the patient name and an urgency flag, never result
+    values -- the link goes to the record, whose access rules still apply.
+    # ponytail: no retention/purge yet (this table and pending attachment rows
+    # grow); add a periodic delete of read items / stale pending files."""
+    __tablename__ = "notifications"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_name = Column(String(255), nullable=True)
+    kind = Column(String(32), nullable=False)  # e.g. "result_ready"
+    title = Column(String(255), nullable=False)
+    body = Column(String(500), nullable=True)
+    link = Column(String(255), nullable=True)
+    urgent = Column(Boolean, nullable=False, default=False)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    read_at = Column(TZDateTime, nullable=True)
+
+
+class Sponsor(Base):
+    """A payer or employer that covers patients (his_open_1 `sponsors`). Per facility, like the
+    rest of its master data; that facility's admin edits it, its staff read it."""
+    __tablename__ = "sponsors"
+    __table_args__ = (UniqueConstraint("facility_name", "code", name="uq_sponsors_facility_code"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    code = Column(String(32), nullable=False)
+    name = Column(String(255), nullable=False)
+    company_number = Column(String(64), nullable=True)
+    street_1 = Column(String(255), nullable=True)
+    street_2 = Column(String(255), nullable=True)
+    city = Column(String(128), nullable=True)
+    postcode = Column(String(16), nullable=True)
+    state_code = Column(String(32), nullable=True)
+    country = Column(String(64), nullable=True)
+    phone = Column(String(64), nullable=True)
+    entitlement_code = Column(String(32), nullable=True)  # reference_codes kind `entitlements`
+    description = Column(Text, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PatientDependant(Base):
+    """`patient` is responsible for `dependant` (both are Patient rows), with a relationship
+    code from reference_codes kind `relationships`."""
+    __tablename__ = "patient_dependants"
+    __table_args__ = (UniqueConstraint("patient_id", "dependant_id", name="uq_patient_dependants_pair"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    dependant_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    relation_code = Column(String(32), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class BedMovement(Base):
+    """Append-only history of where an admission has been: one row for the first bed, one per
+    ward/bed change (his_open_1 `bed_movements`)."""
+    __tablename__ = "bed_movements"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    admission_id = Column(String(36), ForeignKey("admissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_ward_id = Column(String(36), nullable=True)
+    from_bed_number = Column(Integer, nullable=True)
+    to_ward_id = Column(String(36), nullable=False)
+    to_bed_number = Column(Integer, nullable=False)
+    moved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    moved_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ClinicalOrder(Base):
+    """CPOE: one thing a clinician orders for a patient (his_open_1 `orders` + `order_drugs` +
+    `order_investigations` + `order_imaging`, flattened: the type-specific columns are nullable).
+    Lifecycle ordered -> completed | cancelled; a repeat is a new order. Completing an order
+    here records who did it; results of lab/imaging orders still go through the ancillary
+    module's signed results."""
+    __tablename__ = "clinical_orders"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    encounter_id = Column(String(36), ForeignKey("encounters.id", ondelete="SET NULL"), nullable=True, index=True)
+    facility_name = Column(String(255), nullable=False, index=True)  # ordering facility
+    order_type = Column(String(16), nullable=False)  # drug | investigation | imaging | procedure | other
+    product_code = Column(String(32), nullable=True)  # products.product_code, validated on create
+    description = Column(String(500), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    unit_code = Column(String(32), nullable=True)
+    is_stat = Column(Boolean, nullable=False, default=False)
+    notes = Column(Text, nullable=True)
+    # drug
+    strength = Column(String(64), nullable=True)
+    dosage = Column(String(64), nullable=True)
+    route_code = Column(String(32), nullable=True)
+    frequency_code = Column(String(32), nullable=True)
+    duration = Column(Integer, nullable=True)
+    period_code = Column(String(32), nullable=True)
+    # investigation / imaging
+    urgency_code = Column(String(32), nullable=True)
+    side = Column(String(32), nullable=True)
+    region = Column(String(64), nullable=True)
+    view = Column(String(64), nullable=True)
+
+    status = Column(String(16), nullable=False, default="ordered", index=True)
+    ordered_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    ordered_by_name = Column(String(255), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    completed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    completed_by_name = Column(String(255), nullable=True)
+    completed_at = Column(TZDateTime, nullable=True)
+    completion_note = Column(Text, nullable=True)
+    cancelled_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    cancelled_at = Column(TZDateTime, nullable=True)
+    cancel_reason = Column(Text, nullable=True)
+
+    patient = relationship("Patient")
+
+
+class Supplier(Base):
+    """Vendor master (his_open_1 `suppliers`). Facility-local, like the inventory it supplies."""
+    __tablename__ = "suppliers"
+    __table_args__ = (UniqueConstraint("facility_name", "code", name="uq_suppliers_facility_code"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    code = Column(String(32), nullable=False)
+    name = Column(String(255), nullable=False)
+    company_number = Column(String(64), nullable=True)
+    tax_number = Column(String(64), nullable=True)
+    street_1 = Column(String(255), nullable=True)
+    street_2 = Column(String(255), nullable=True)
+    city = Column(String(128), nullable=True)
+    postcode = Column(String(16), nullable=True)
+    state_code = Column(String(32), nullable=True)
+    phone = Column(String(64), nullable=True)
+    email = Column(String(255), nullable=True)
+    contact_person = Column(String(255), nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PurchaseOrder(Base):
+    """draft -> ordered -> (partially_received) -> received, or cancelled. Receiving a line
+    restocks the inventory item through inventory._apply_restock, so stock, the stock-event
+    log and the procurement budget move exactly as for any other restock."""
+    __tablename__ = "purchase_orders"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    po_number = Column(String(32), nullable=False, unique=True)
+    supplier_id = Column(String(36), ForeignKey("suppliers.id"), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="draft", index=True)
+    reference = Column(String(128), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    ordered_at = Column(TZDateTime, nullable=True)
+    closed_at = Column(TZDateTime, nullable=True)
+
+    supplier = relationship("Supplier")
+    lines = relationship("PurchaseOrderLine", back_populates="order", cascade="all, delete-orphan")
+
+
+class PurchaseOrderLine(Base):
+    __tablename__ = "purchase_order_lines"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    order_id = Column(String(36), ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("medicine_inventory.id"), nullable=False, index=True)
+    item_name = Column(String(255), nullable=False)  # snapshot, survives a rename
+    quantity = Column(Integer, nullable=False)
+    unit_cost = Column(Float, nullable=True)
+    received_quantity = Column(Integer, nullable=False, default=0)
+    batch_number = Column(String(64), nullable=True)  # last received batch
+    expiry_date = Column(String(16), nullable=True)  # ISO date of the last received batch
+
+    order = relationship("PurchaseOrder", back_populates="lines")
+
+
+class ClinicalForm(Base):
+    """A configurable clinical form (his_open_1 `forms` + `form_positions`): `fields` is an
+    ordered list of {key, label, type: text|number|select|boolean|date, required, options}.
+    Facility-local; a form is never edited in place (a new version is a new row) so old
+    responses keep meaning what they meant."""
+    __tablename__ = "clinical_forms"
+    __table_args__ = (UniqueConstraint("facility_name", "code", "version", name="uq_clinical_forms_code_version"),)
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    facility_name = Column(String(255), nullable=False, index=True)
+    code = Column(String(64), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    name = Column(String(255), nullable=False)
+    fields = Column(JSON, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class FormResponse(Base):
+    """One filled-in form for a patient. Append-only: a correction is a new response."""
+    __tablename__ = "form_responses"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    form_id = Column(String(36), ForeignKey("clinical_forms.id"), nullable=False, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    encounter_id = Column(String(36), ForeignKey("encounters.id", ondelete="SET NULL"), nullable=True)
+    facility_name = Column(String(255), nullable=False, index=True)
+    answers = Column(JSON, nullable=False)
+    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    submitted_by_name = Column(String(255), nullable=True)
+    created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+
+    form = relationship("ClinicalForm")

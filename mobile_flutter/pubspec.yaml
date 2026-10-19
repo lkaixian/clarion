@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.6.1+9
+version: 1.7.1-EXPERIMENTAL+14
 
 environment:
   sdk: ^3.12.1
@@ -118,6 +118,10 @@ dependencies:
   # that a raw file:// URI hits StrictMode/FileUriExposedException on --
   # there's no stdlib or already-installed path that does this safely.
   share_plus: ^10.1.4
+  google_mlkit_text_recognition: ^0.17.1
+  geolocator: ^14.0.2
+  camera: ^0.12.1
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:

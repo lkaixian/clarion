@@ -15,7 +15,7 @@ import importlib.util
 import pathlib
 import uuid
 
-from app import auth, models
+from app import auth, models, tag_crypto
 
 
 def test_migration_hash_helpers_match_auth():
@@ -248,15 +248,20 @@ def test_different_cards_do_not_cross_trigger_anomaly(test_client, db_session, m
 
 
 # --------------------------------------------------------------------------
-# Offline NFC-tag fallback (P5.x follow-up): the register response now
-# includes a compact `tag_text` meant to be written DIRECTLY onto the
-# physical tag's own NDEF memory, so a responder can still read blood
-# type / allergies / meds with ZERO network (not just when the WAN link
-# specifically is down, but the whole backend). See
+# Offline NFC-tag record (P5.x follow-up): the register response includes a
+# sealed `tag_blob` meant to be written DIRECTLY onto the physical tag's own
+# NDEF memory, so a responder can still read blood type / allergies / meds
+# with ZERO network (not just when the WAN link specifically is down, but
+# the whole backend). Plaintext is never returned. See
 # routers/emergency.py::_build_compact_tag_text's own docstring.
 # --------------------------------------------------------------------------
 
-def test_register_response_includes_tag_text(test_client, db_session, make_user, auth_headers):
+def _tag_plain(body, uid):
+    """The sealed blob's contents with the leading `X:<expiry>|` stripped."""
+    return tag_crypto.open_blob(body["tag_blob"], auth.canonical_nfc_uid(uid)).split("|", 1)[1]
+
+
+def test_register_response_includes_sealed_tag_blob_and_no_plaintext(test_client, db_session, make_user, auth_headers):
     staff = make_user(role="clinician", facility="H7")
     patient = _patient(db_session, full_name="M7 TagText", blood_type="O+")
     _present(db_session, patient, "H7")
@@ -265,11 +270,13 @@ def test_register_response_includes_tag_text(test_client, db_session, make_user,
     ))
     db_session.commit()
 
-    resp = _register(test_client, auth_headers, staff, patient.id, _uid())
+    uid = _uid()
+    resp = _register(test_client, auth_headers, staff, patient.id, uid)
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["tag_text"] == "BT:O+|AL:Penicillin(severe)"
-    assert body["tag_text_truncated"] is False
+    assert _tag_plain(body, uid) == "BT:O+|AL:Penicillin(severe)"
+    assert body["tag_blob_truncated"] is False
+    assert "tag_text" not in body and "tag_text_truncated" not in body
 
 
 def test_register_response_omits_non_critical_and_non_scoped_items(test_client, db_session, make_user, auth_headers):
@@ -289,18 +296,19 @@ def test_register_response_omits_non_critical_and_non_scoped_items(test_client, 
     ])
     db_session.commit()
 
+    uid = _uid()
     resp = test_client.post(
         "/emergency/nfc/register",
         headers=auth_headers(staff),
-        json={"patient_id": patient.id, "nfc_uid": _uid(), "scope": ["allergies", "blood_type"]},
+        json={"patient_id": patient.id, "nfc_uid": uid, "scope": ["allergies", "blood_type"]},
     )
     assert resp.status_code == 200, resp.text
     # medications not in scope -> never appears; the mild allergy isn't
     # critical -> also never appears. Only blood type makes it on.
-    assert resp.json()["tag_text"] == "BT:A-"
+    assert _tag_plain(resp.json(), uid) == "BT:A-"
 
 
-def test_tag_text_truncates_to_the_requested_capacity_and_flags_it(test_client, db_session, make_user, auth_headers):
+def test_tag_blob_truncates_to_the_requested_capacity_and_flags_it(test_client, db_session, make_user, auth_headers):
     staff = make_user(role="clinician", facility="H9")
     patient = _patient(db_session, full_name="M7 Truncate", blood_type="AB+")
     _present(db_session, patient, "H9")
@@ -314,20 +322,51 @@ def test_tag_text_truncates_to_the_requested_capacity_and_flags_it(test_client, 
     ])
     db_session.commit()
 
-    # Tiny tag (schema floor is 16) -- fits "BT:AB+" but not the first
-    # allergy on top of it.
+    # Smallest tag the sealed record fits on -- room for "BT:AB+" but not
+    # the first allergy on top of it.
+    uid = _uid()
     resp = test_client.post(
         "/emergency/nfc/register",
         headers=auth_headers(staff),
-        json={"patient_id": patient.id, "nfc_uid": _uid(), "tag_max_bytes": 16},
+        json={"patient_id": patient.id, "nfc_uid": uid, "tag_max_bytes": 89},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["tag_text"] == "BT:AB+"
-    assert body["tag_text_truncated"] is True
+    assert _tag_plain(body, uid).startswith("BT:AB+")
+    assert body["tag_blob_truncated"] is True
+    assert len(body["tag_blob"]) <= 89
 
 
-def test_tag_text_sanitizes_the_field_separator_out_of_free_text(test_client, db_session, make_user, auth_headers):
+def test_tag_too_small_for_the_sealed_record_is_refused_and_not_registered(test_client, db_session, make_user, auth_headers):
+    """No plaintext fallback: a tag that can't hold the sealed blob gets a
+    422 with a clear message, and no grant is created."""
+    staff = make_user(role="clinician", facility="H12")
+    patient = _patient(db_session, full_name="M7 TooSmall", blood_type="B+")
+    _present(db_session, patient, "H12")
+    uid = _uid()
+
+    resp = test_client.post(
+        "/emergency/nfc/register",
+        headers=auth_headers(staff),
+        json={"patient_id": patient.id, "nfc_uid": uid, "tag_max_bytes": 16},
+    )
+    assert resp.status_code == 422, resp.text
+    assert "larger tag" in resp.json()["detail"]
+    assert db_session.query(models.EmergencyToken).filter_by(nfc_uid=auth.hash_nfc_uid(uid)).count() == 0
+
+
+def test_patient_with_no_critical_data_registers_with_no_blob(test_client, db_session, make_user, auth_headers):
+    """Nothing to seal is not an error: the card works online, nothing is written."""
+    staff = make_user(role="clinician", facility="H13")
+    patient = _patient(db_session, full_name="M7 Healthy")
+    _present(db_session, patient, "H13")
+
+    resp = _register(test_client, auth_headers, staff, patient.id, _uid())
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["tag_blob"] is None
+
+
+def test_tag_blob_sanitizes_the_field_separator_out_of_free_text(test_client, db_session, make_user, auth_headers):
     """`|` is the compact format's own field separator with no escaping --
     a substance name that happened to contain one would otherwise corrupt
     the parse on the mobile reading side."""
@@ -339,12 +378,13 @@ def test_tag_text_sanitizes_the_field_separator_out_of_free_text(test_client, db
     ))
     db_session.commit()
 
-    resp = _register(test_client, auth_headers, staff, patient.id, _uid())
+    uid = _uid()
+    resp = _register(test_client, auth_headers, staff, patient.id, uid)
     assert resp.status_code == 200, resp.text
     # The stray "|" became "/" -- had it survived, this would parse back
     # (mobile_flutter's fromCompactTagText) as two separate fields instead
     # of one allergy.
-    assert resp.json()["tag_text"] == "AL:Foo/Bar(severe)"
+    assert _tag_plain(resp.json(), uid) == "AL:Foo/Bar(severe)"
 
 
 def test_tag_max_bytes_out_of_range_is_rejected(test_client, db_session, make_user, auth_headers):

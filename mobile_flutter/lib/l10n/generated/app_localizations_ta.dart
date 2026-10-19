@@ -31,14 +31,25 @@ class AppLocalizationsTa extends AppLocalizations {
   String get passwordLabel => 'கடவுச்சொல்';
 
   @override
+  String get emailOrNricHint => 'name@example.com அல்லது 900101-01-1234';
+
+  @override
+  String get loginFieldRequired =>
+      'மின்னஞ்சல் அல்லது அடையாள அட்டை எண்ணையும் கடவுச்சொல்லையும் உள்ளிடவும்.';
+
+  @override
+  String get mfaResendButton => 'புதிய குறியீட்டை அனுப்பு';
+
+  @override
+  String mfaResendIn(int seconds) {
+    return '$seconds விநாடிகளில் புதிய குறியீட்டை அனுப்பலாம்';
+  }
+
+  @override
   String get signIn => 'உள்நுழைக';
 
   @override
   String get signingIn => 'உள்நுழைகிறது…';
-
-  @override
-  String get demoLoginHint =>
-      'டெமோ உள்நுழைவு: patient@clarion.demo / patient123 (அல்லது அடையாள அட்டை 520314-01-1234 / patient123)';
 
   @override
   String get loginFailedGeneric =>
@@ -62,11 +73,12 @@ class AppLocalizationsTa extends AppLocalizations {
   String get undo => 'செயல்தவிர்';
 
   @override
-  String get scanEmergencyCardButton => '🚨 அவசர QR / NFC அட்டையை ஸ்கேன் செய்';
+  String get scanEmergencyCardButton =>
+      'அவசர அட்டையை ஸ்கேன் செய்யவும் (QR அல்லது NFC)';
 
   @override
   String get scanEmergencyCardSubtitle =>
-      'முதலுதவியாளர்களுக்கு — உள்நுழைவு தேவையில்லை';
+      'முதல் உதவியாளர்களுக்கு. உள்நுழைவு தேவையில்லை.';
 
   @override
   String get orSignInDivider =>
@@ -188,6 +200,19 @@ class AppLocalizationsTa extends AppLocalizations {
       'நாங்கள் உங்கள் மின்னஞ்சலுக்கு அனுப்பிய 6 இலக்க சரிபார்ப்பு குறியீட்டை உள்ளிடவும்.';
 
   @override
+  String get selfRegisterScanButton =>
+      'என் அடையாள அட்டையை ஸ்கேன் செய்து நிரப்பு';
+
+  @override
+  String get selfRegisterScanPrivacy =>
+      'புகைப்படம் இந்தத் தொலைபேசியிலேயே படிக்கப்படும், பதிவேற்றப்படாது. தொடர்வதற்கு முன் விவரங்களைச் சரிபார்க்கவும்.';
+
+  @override
+  String selfRegisterCodeSentTo(String hint) {
+    return 'உங்கள் மருத்துவமனைப் பதிவில் உள்ள $hint முகவரிக்கு 6 இலக்கக் குறியீட்டை அனுப்பியுள்ளோம். கீழே உள்ளிடவும்.';
+  }
+
+  @override
   String get selfRegisterVerifyOtpButton => 'குறியீட்டை சரிபார்';
 
   @override
@@ -236,6 +261,10 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get selfRegisterPasswordStepDesc =>
       'கிட்டத்தட்ட முடிந்தது. உங்கள் புதிய கணக்கிற்கு ஒரு கடவுச்சொல்லைத் தேர்ந்தெடுக்கவும் (குறைந்தது 8 எழுத்துகள்).';
+
+  @override
+  String get selfRegisterPendingDesc =>
+      'Your sign-up is waiting for verification and you cannot sign in yet. It is approved once staff check your IC at a counter, or as soon as your IC photos match. Only the first verified sign-up for an NRIC is kept; any others are rejected and their emails flagged.';
 
   @override
   String get selfRegisterCompleteButton => 'கணக்கை உருவாக்கு';
@@ -420,13 +449,6 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get emergencyAccessCardTitle => 'அவசர அணுகல் அட்டை';
-
-  @override
-  String get emergencyDesc =>
-      'அவசர காலத்தில் முதலுதவியாளர் என்ன பார்க்க முடியும் என்பதைத் தேர்ந்தெடுக்கவும். இந்த QR குறியீடு மூலம் உங்கள் பதிவில் உள்ள வேறு எந்த தகவலும் வெளிப்படுத்தப்படாது — ஒவ்வொரு ஸ்கேனும் பதிவு செய்யப்படும், மேலும் நீங்கள் எப்போது வேண்டுமானாலும் அணுகலை ரத்து செய்யலாம்.';
-
-  @override
-  String get fieldsToShare => 'அவசர காலத்தில் பகிரப்பட வேண்டிய தகவல்கள்:';
 
   @override
   String get scopeAllergies => 'ஒவ்வாமைகள்';
@@ -823,6 +845,29 @@ class AppLocalizationsTa extends AppLocalizations {
   String get mfaCancelButton => 'உள்நுழைவுக்குத் திரும்பு';
 
   @override
+  String get mfaEmailButton => 'மின்னஞ்சலில் குறியீட்டைப் பெறு';
+
+  @override
+  String mfaEmailSent(String hint) {
+    return '6 இலக்கக் குறியீட்டை $hint க்கு மின்னஞ்சல் செய்துள்ளோம். இது 10 நிமிடங்களில் காலாவதியாகும்.';
+  }
+
+  @override
+  String get mfaEmailCodeLabel => 'மின்னஞ்சல் குறியீடு';
+
+  @override
+  String get mfaUseAuthenticatorButton =>
+      'என் அங்கீகரிப்பு செயலியைப் பயன்படுத்து';
+
+  @override
+  String get mfaEmailPrompt =>
+      'நாங்கள் மின்னஞ்சலில் அனுப்பிய 6 இலக்கக் குறியீட்டை உள்ளிடவும்.';
+
+  @override
+  String get mfaWrongCodeHint =>
+      'அந்தக் குறியீடு ஏற்கப்படவில்லை. குறியீடுகள் 30 விநாடிகளுக்கு ஒருமுறை மாறும், ஒருமுறை மட்டுமே செல்லும். அடுத்த குறியீட்டுக்குக் காத்திருக்கவும், தொலைபேசியின் நேரம் தானியங்கியாக இருப்பதை உறுதிசெய்யவும் அல்லது மின்னஞ்சலில் குறியீட்டைப் பெறவும்.';
+
+  @override
   String get nfcBasicTagWarning =>
       'இந்த டேக் வகை (NTAG213/215/216) செயல்படும், ஆனால் சேதப்படுத்த முடியாத வாசிப்பு கவுண்டர் இல்லை: அதன் ஆஃப்லைன் வாசிப்புகளில் விடுபட்டவற்றைச் சரிபார்க்க முடியாது. பொறுப்புக்கூறல் முக்கியமெனில் NTAG 424 DNA பயன்படுத்தவும்.';
 
@@ -833,6 +878,22 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get scanResultOfflineKeyMissing =>
       'இணைப்பு இல்லை, இந்தச் சாதனத்தில் இந்த டேக்கிற்கான விசை இல்லை. உள்நுழைந்த நிலையில் ஒருமுறை இணைத்து அதைப் பதிவிறக்கவும், அல்லது QR குறியீடு / ஆன்லைன் தேடலைப் பயன்படுத்தவும்.';
+
+  @override
+  String get scanResultOfflineRevoked =>
+      'இந்த கார்டு ரத்து செய்யப்பட்டுள்ளது; படிக்க முடியாது. இதை நம்ப வேண்டாம்; QR குறியீடு அல்லது ஆன்லைன் தேடலைப் பயன்படுத்தி, கார்டைப் புகாரளிக்கவும்.';
+
+  @override
+  String get offlineUnlockReason =>
+      'இந்த கார்டை ஆஃப்லைனில் படிக்க உங்கள் அடையாளத்தை உறுதிப்படுத்தவும்';
+
+  @override
+  String get scanResultOfflineLockRequired =>
+      'இந்த தொலைபேசியில் திரைப் பூட்டு இல்லை, எனவே கார்டை ஆஃப்லைனில் படிக்க முடியாது. தொலைபேசி அமைப்புகளில் PIN, பேட்டர்ன் அல்லது கைரேகையை அமைக்கவும், அல்லது QR குறியீடு அல்லது ஆன்லைன் தேடலைப் பயன்படுத்தவும்.';
+
+  @override
+  String get scanResultOfflineAuthFailed =>
+      'அடையாளச் சரிபார்ப்பு ரத்து செய்யப்பட்டது அல்லது தோல்வியடைந்தது, எனவே கார்டு ஆஃப்லைனில் படிக்கப்படவில்லை. கார்டை மீண்டும் தட்டி, கைரேகை, முகம் அல்லது PIN மூலம் உறுதிப்படுத்தவும்.';
 
   @override
   String get scanResultOfflineExpired =>
@@ -878,6 +939,10 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get writeOfflineTagTooLarge =>
       'இந்த உரை இந்த டேக்கின் நினைவகத்திற்கு மிகப் பெரியது. குறைவான புலங்களுடன் மீண்டும் பதிவு செய்யவும், அல்லது அதிக கொள்ளளவு கொண்ட டேக்கைப் பயன்படுத்தவும்.';
+
+  @override
+  String get writeOfflineTagNotEncrypted =>
+      'வலை கன்சோலில் இருந்து பெற்ற மறைகுறியாக்கப்பட்ட பதிவை மட்டுமே எழுத முடியும். C1. என்று தொடங்கும் உரையை ஒட்டி மீண்டும் முயலவும்.';
 
   @override
   String get writeOfflineTagWriteFailed =>
@@ -1073,47 +1138,6 @@ class AppLocalizationsTa extends AppLocalizations {
   String get bookAppointmentTitle => 'சந்திப்பு பதிவு செய்யவும்';
 
   @override
-  String get bookAppointmentFacilityLabel => 'மருத்துவமனை';
-
-  @override
-  String get bookAppointmentOtherFacility =>
-      'மற்றவை (கைமுறையாக தட்டச்சு செய்யவும்)';
-
-  @override
-  String get bookAppointmentFacilityManualHint => 'மருத்துவமனையின் பெயர்';
-
-  @override
-  String get bookAppointmentUseFacility =>
-      'இந்த மருத்துவமனையைப் பயன்படுத்தவும்';
-
-  @override
-  String get bookAppointmentDepartmentLabel => 'துறை';
-
-  @override
-  String get bookAppointmentAnyDepartment => 'எந்த துறையும்';
-
-  @override
-  String get bookAppointmentClinicianLabel => 'மருத்துவர்';
-
-  @override
-  String get bookAppointmentAnyClinician => 'எந்த மருத்துவரும்';
-
-  @override
-  String get bookAppointmentPickDate => 'தேதியைத் தேர்ந்தெடுக்கவும்';
-
-  @override
-  String get bookAppointmentNoSlots =>
-      'இந்த தேதியில் காலி நேரங்கள் இல்லை — வேறு நாளை முயற்சிக்கவும்.';
-
-  @override
-  String get bookAppointmentSuccess =>
-      'சந்திப்பு வெற்றிகரமாக பதிவு செய்யப்பட்டது.';
-
-  @override
-  String get bookAppointmentSlotTaken =>
-      'அந்த நேரம் இப்போதுதான் எடுக்கப்பட்டது — வேறு நேரத்தைத் தேர்ந்தெடுக்கவும்.';
-
-  @override
   String get bookAppointmentGenericError =>
       'பதிவை முடிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
 
@@ -1230,4 +1254,689 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get confirmSignOutAction => 'ஆம், வெளியேறு';
+
+  @override
+  String get myBills => 'என் பில்கள்';
+
+  @override
+  String get billsEmpty => 'உங்களுக்கு பில்கள் எதுவும் இல்லை.';
+
+  @override
+  String get paymentHistory => 'கட்டண வரலாறு';
+
+  @override
+  String billToPay(String amount) {
+    return 'செலுத்த வேண்டியது $amount';
+  }
+
+  @override
+  String get billInsurerPending => 'உங்கள் காப்பீட்டாளருக்காக காத்திருக்கிறது';
+
+  @override
+  String get billPaidInFull => 'முழுமையாக செலுத்தப்பட்டது';
+
+  @override
+  String get billItems => 'பொருட்கள்';
+
+  @override
+  String get payNow => 'இப்போது செலுத்துங்கள்';
+
+  @override
+  String get payAmountLabel => 'செலுத்த வேண்டிய தொகை (RM)';
+
+  @override
+  String get payContinue => 'தொடரவும்';
+
+  @override
+  String get payInvalidAmount =>
+      'RM இல் தொகையை உள்ளிடவும், எடுத்துக்காட்டாக 25.00.';
+
+  @override
+  String payTooMuch(String amount) {
+    return 'நீங்கள் அதிகபட்சம் $amount மட்டுமே செலுத்த முடியும்.';
+  }
+
+  @override
+  String get paySimulatedNotice =>
+      'இது மாதிரி கட்டணப் பக்கம். இது டெமோ நுழைவாயில்: உண்மையான பணம் எதுவும் நகராது.';
+
+  @override
+  String get payApprove => 'கட்டணத்தை அங்கீகரிக்கவும்';
+
+  @override
+  String get payDecline => 'கட்டணத்தை நிராகரிக்கவும்';
+
+  @override
+  String get payCancel => 'கட்டணத்தை ரத்து செய்யவும்';
+
+  @override
+  String payDeclined(String reason) {
+    return '$reason உங்களிடம் கட்டணம் வசூலிக்கப்படவில்லை.';
+  }
+
+  @override
+  String receiptTitle(String number) {
+    return 'ரசீது $number';
+  }
+
+  @override
+  String get receiptVoided => 'இந்த கட்டணம் செல்லாதாக்கப்பட்டது.';
+
+  @override
+  String get receiptEmail => 'ரசீதை மின்னஞ்சல் செய்';
+
+  @override
+  String get receiptSharePdf => 'PDF ஐப் பகிர்';
+
+  @override
+  String receiptEmailSent(String to) {
+    return 'ரசீது $to க்கு அனுப்பப்பட்டது.';
+  }
+
+  @override
+  String get cancel => 'ரத்து செய்';
+
+  @override
+  String get close => 'மூடு';
+
+  @override
+  String get navHome => 'முகப்பு';
+
+  @override
+  String get navCare => 'பராமரிப்பு';
+
+  @override
+  String get navScan => 'ஸ்கேன்';
+
+  @override
+  String get navQueue => 'வரிசை';
+
+  @override
+  String get navProfile => 'சுயவிவரம்';
+
+  @override
+  String get scanHubNotClarion =>
+      'இது CLARION குறியீடு அல்ல. கிளினிக் செக்-இன் குறியீடு அல்லது அவசர அட்டையை ஸ்கேன் செய்யுங்கள்.';
+
+  @override
+  String get scanHubQrHint =>
+      'கிளினிக் செக்-இன் குறியீடு அல்லது அவசர அட்டை QR-ஐ கேமராவால் காட்டுங்கள்.';
+
+  @override
+  String get scanHubUnreadableTag =>
+      'இந்த அட்டையைப் படிக்க முடியவில்லை. தொலைபேசியில் அசையாமல் பிடித்து மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get scanAnotherCard => 'மற்றொரு அட்டையை ஸ்கேன் செய்';
+
+  @override
+  String get responderIdentityTitle => 'ஸ்கேன் செய்பவர் யார்?';
+
+  @override
+  String get responderIdentityNote =>
+      'உங்கள் பெயர் இந்த தொலைபேசியில் சேமிக்கப்படும்; அட்டையின் அணுகல் பதிவில் பதிவாகும்.';
+
+  @override
+  String responderScanningAs(String who) {
+    return '$who ஆக ஸ்கேன் செய்கிறீர்கள்';
+  }
+
+  @override
+  String get responderChange => 'மாற்று';
+
+  @override
+  String get responderAdd => 'உங்கள் பெயர் மற்றும் அமைப்பைச் சேர்க்கவும்';
+
+  @override
+  String callContactLabel(String name) {
+    return '$name ஐ அழைக்கவும்';
+  }
+
+  @override
+  String get legacyTagWarningTitle => 'பழைய NFC அட்டை';
+
+  @override
+  String get legacyTagWarningBody =>
+      'இந்த அட்டையில் உள்ள தரவு குறியாக்கம் செய்யப்படவில்லை; நெட்வொர்க் இல்லாமல் மாற்றப்பட்டதா என சரிபார்க்க முடியாது. அட்டையை மீண்டும் வழங்க ஊழியர்களிடம் கேளுங்கள்.';
+
+  @override
+  String get bkBannerTitle => 'MySejahtera பயன்படுத்த விரும்புகிறீர்களா?';
+
+  @override
+  String get bkBannerNote =>
+      'இங்கு முன்பதிவு செய்வது ஆன்லைன் முன்பதிவை இயக்கியுள்ள மருத்துவமனைகளில் மட்டுமே செயல்படும்.';
+
+  @override
+  String get bkOpenMySejahtera => 'MySejahtera ஐத் திற';
+
+  @override
+  String get bkBookHere => 'இங்கே முன்பதிவு செய்';
+
+  @override
+  String get bkChooseCategory => 'உங்களுக்கு என்ன தேவை?';
+
+  @override
+  String get bkChooseHospital => 'மருத்துவமனையைத் தேடுங்கள்';
+
+  @override
+  String get bkChooseTime => 'தேதி மற்றும் நேரத்தைத் தேர்ந்தெடுங்கள்';
+
+  @override
+  String get bkChoosePerson => 'இது யாருக்காக?';
+
+  @override
+  String get bkConfirmTitle => 'சரிபார்த்து உறுதிப்படுத்துங்கள்';
+
+  @override
+  String get bkCategoriesEmpty => 'தற்போது முன்பதிவு சேவைகள் எதுவும் இல்லை.';
+
+  @override
+  String get bkSearchHint => 'மருத்துவமனை பெயர் அல்லது பகுதி';
+
+  @override
+  String get bkSearchAction => 'தேடு';
+
+  @override
+  String get bkUseMyLocation => 'என் இருப்பிடத்தைப் பயன்படுத்து';
+
+  @override
+  String get bkClearLocation => 'இருப்பிடத்தை நிறுத்து';
+
+  @override
+  String get bkSortedNearest => 'அருகிலுள்ளவை முதலில்';
+
+  @override
+  String get bkLocationDenied =>
+      'இருப்பிட அனுமதி மறுக்கப்பட்டது. மருத்துவமனை பெயர் அல்லது பகுதியை உள்ளிடுங்கள், அல்லது தொலைபேசி அமைப்புகளில் இருப்பிடத்தை அனுமதியுங்கள்.';
+
+  @override
+  String get bkLocationOff =>
+      'இந்த தொலைபேசியில் இருப்பிடம் அணைக்கப்பட்டுள்ளது. அதை இயக்குங்கள், அல்லது மருத்துவமனை பெயர் அல்லது பகுதியை உள்ளிடுங்கள்.';
+
+  @override
+  String get bkLocationFailed =>
+      'உங்கள் இருப்பிடத்தைக் கண்டறிய முடியவில்லை. மருத்துவமனை பெயர் அல்லது பகுதியை உள்ளிடுங்கள்.';
+
+  @override
+  String get bkFacilitiesEmpty =>
+      'மருத்துவமனைகள் எதுவும் இல்லை. இந்தச் சேவைக்கு ஆன்லைன் முன்பதிவை இயக்கிய மருத்துவமனைகள் மட்டுமே பட்டியலிடப்படும். வேறு பெயர் அல்லது பகுதியை முயற்சிக்கவும், அல்லது MySejahtera ஐத் திறக்கவும்.';
+
+  @override
+  String bkDistanceKm(String km) {
+    return '$km கி.மீ தொலைவில்';
+  }
+
+  @override
+  String bkNextAvailable(String when) {
+    return 'அடுத்த வாய்ப்பு: $when';
+  }
+
+  @override
+  String get bkNoNextAvailable => 'விரைவில் காலியிடம் இல்லை';
+
+  @override
+  String get bkDateLabel => 'தேதி';
+
+  @override
+  String get bkTimeLabel => 'நேரம்';
+
+  @override
+  String get bkNoOpenDays =>
+      'இந்த மருத்துவமனையில் அடுத்த 14 நாட்களில் காலியிடம் இல்லை.';
+
+  @override
+  String get bkNoSlots =>
+      'இந்த நாளில் நேரங்கள் இல்லை. வேறு தேதியைத் தேர்ந்தெடுங்கள்.';
+
+  @override
+  String bkSlotsLeft(int count) {
+    return '$count மீதம்';
+  }
+
+  @override
+  String get bkSlotFull => 'நிரம்பியது';
+
+  @override
+  String bkDayOpenSemantics(String date, int count) {
+    return '$date, $count காலி நேரங்கள்';
+  }
+
+  @override
+  String bkDayFullSemantics(String date) {
+    return '$date, காலி நேரம் இல்லை';
+  }
+
+  @override
+  String get bkContinue => 'தொடரவும்';
+
+  @override
+  String get bkMyself => 'நான்';
+
+  @override
+  String get bkMyselfNote => 'நீங்கள் உள்நுழைந்த கணக்கு';
+
+  @override
+  String get bkSavedPeople => 'சேமித்த நபர்கள்';
+
+  @override
+  String get bkNoPeople =>
+      'நீங்கள் இன்னும் யாரையும் சேமிக்கவில்லை. குழந்தை அல்லது பெற்றோரைச் சேர்த்து அவர்களுக்காக முன்பதிவு செய்யுங்கள்.';
+
+  @override
+  String get bkAddPerson => 'நபரைச் சேர்';
+
+  @override
+  String get bkEditPerson => 'நபரைத் திருத்து';
+
+  @override
+  String get bkDelete => 'நீக்கு';
+
+  @override
+  String get bkDeletePersonTitle => 'இந்த நபரை நீக்கவா?';
+
+  @override
+  String bkDeletePersonBody(String name) {
+    return '$name சேமித்த நபர்களிலிருந்து நீக்கப்படுவார். ஏற்கனவே உள்ள சந்திப்புகள் பாதிக்கப்படாது.';
+  }
+
+  @override
+  String get bkFullName => 'முழுப் பெயர்';
+
+  @override
+  String get bkRelationship => 'உறவு';
+
+  @override
+  String get bkRelChild => 'குழந்தை';
+
+  @override
+  String get bkRelParent => 'பெற்றோர்';
+
+  @override
+  String get bkRelSpouse => 'துணைவர்';
+
+  @override
+  String get bkRelSibling => 'சகோதரர் அல்லது சகோதரி';
+
+  @override
+  String get bkRelRelative => 'உறவினர்';
+
+  @override
+  String get bkRelOther => 'மற்றவர்';
+
+  @override
+  String get bkPickDob => 'பிறந்த தேதியைத் தேர்ந்தெடுங்கள்';
+
+  @override
+  String get bkNric => 'அடையாள அட்டை எண் (விருப்பம்)';
+
+  @override
+  String get bkNameRequired => 'முழுப் பெயரை உள்ளிடுங்கள்.';
+
+  @override
+  String get bkDobRequired => 'பிறந்த தேதியைத் தேர்ந்தெடுங்கள்.';
+
+  @override
+  String get bkSummaryCategory => 'சேவை';
+
+  @override
+  String get bkSummaryHospital => 'மருத்துவமனை';
+
+  @override
+  String get bkSummaryWhen => 'தேதி மற்றும் நேரம்';
+
+  @override
+  String get bkSummaryPerson => 'யாருக்கு';
+
+  @override
+  String get bkReasonLabel => 'காரணம் (விருப்பம்)';
+
+  @override
+  String get bkConfirmButton => 'முன்பதிவை உறுதிப்படுத்து';
+
+  @override
+  String get bkTryAgain => 'மீண்டும் முயற்சி';
+
+  @override
+  String get bkSlotTaken =>
+      'அந்த நேரம் இப்போதுதான் எடுக்கப்பட்டது. வேறு நேரத்தைத் தேர்ந்தெடுங்கள்.';
+
+  @override
+  String get bkNoPatientRecord =>
+      'உங்கள் கணக்கு நோயாளி பதிவுடன் இணைக்கப்படவில்லை, எனவே முன்பதிவு செய்ய முடியாது. மருத்துவமனை பதிவு மேசையில் இணைக்கக் கேளுங்கள்.';
+
+  @override
+  String get bkNetworkError =>
+      'சேவையகத்தை அடைய முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயலுங்கள்.';
+
+  @override
+  String get bkSuccessTitle => 'முன்பதிவு உறுதிசெய்யப்பட்டது';
+
+  @override
+  String get bkSuccessBody =>
+      'உங்கள் சந்திப்பு முன்பதிவு செய்யப்பட்டது. உங்கள் சந்திப்புகளில் பார்க்கலாம்.';
+
+  @override
+  String get bkViewAppointments => 'என் சந்திப்புகளைப் பார்';
+
+  @override
+  String get bkDone => 'முடிந்தது';
+
+  @override
+  String get bkCancelAppointment => 'முன்பதிவை ரத்து செய்';
+
+  @override
+  String get bkCancelTitle => 'இந்தச் சந்திப்பை ரத்து செய்யவா?';
+
+  @override
+  String get bkCancelBody => 'இந்த நேரம் மற்ற நோயாளிகளுக்கு விடுவிக்கப்படும்.';
+
+  @override
+  String get bkKeepAppointment => 'சந்திப்பை வைத்திரு';
+
+  @override
+  String get bkCancelled => 'சந்திப்பு ரத்து செய்யப்பட்டது.';
+
+  @override
+  String bkForPerson(String name) {
+    return '$name க்காக';
+  }
+
+  @override
+  String get bkCatGeneral => 'பொது ஆலோசனை';
+
+  @override
+  String get bkCatChronic => 'தொடர் சிகிச்சை மற்றும் நாள்பட்ட பராமரிப்பு';
+
+  @override
+  String get bkCatVaccination => 'தடுப்பூசி';
+
+  @override
+  String get bkCatMaternalChild => 'தாய் சேய் நலம்';
+
+  @override
+  String get bkCatDental => 'பல் மருத்துவம்';
+
+  @override
+  String get bkCatScreening => 'சுகாதார பரிசோதனை';
+
+  @override
+  String get bkCatMentalHealth => 'மனநலம் மற்றும் ஆலோசனை';
+
+  @override
+  String get bkCatPhysio => 'இயன்முறை சிகிச்சை மற்றும் மறுவாழ்வு';
+
+  @override
+  String get emergencyTabQr => 'QR குறியீடு';
+
+  @override
+  String get emergencyTabCard => 'அட்டை';
+
+  @override
+  String get emergencyDescFixed =>
+      'முதலுதவியாளர் உங்கள் QR குறியீட்டை ஸ்கேன் செய்தால் கீழே உள்ள நான்கு விவரங்களை மட்டுமே பார்ப்பார். ஒவ்வொரு ஸ்கேனும் பதிவு செய்யப்படும்; எப்போது வேண்டுமானாலும் குறியீட்டை ரத்து செய்யலாம்.';
+
+  @override
+  String get whatWillBeShared => 'பகிரப்படுபவை';
+
+  @override
+  String get sharedAlwaysNote =>
+      'இவை எப்போதும் சேர்க்கப்படும். உங்கள் பதிவில் உள்ள வேறு எதுவும் பகிரப்படாது.';
+
+  @override
+  String get previewTooltip =>
+      'முதலுதவியாளர் பார்ப்பதை முன்னோட்டம் பார்க்கவும்';
+
+  @override
+  String get previewTitle => 'முதலுதவியாளர் பார்ப்பது';
+
+  @override
+  String get previewIntro =>
+      'உங்கள் சொந்த பதிவிலிருந்து எடுக்கப்பட்டது. உங்கள் QR குறியீடு ஸ்கேன் செய்யப்படும்போது இதுவே காட்டப்படும். வேறு எதுவும் பகிரப்படாது.';
+
+  @override
+  String get previewNone => 'பதிவு இல்லை';
+
+  @override
+  String previewOmitted(int count) {
+    return 'முக்கியமெனக் குறிக்கப்படாத மேலும் $count விவரங்கள் காட்டப்படாது.';
+  }
+
+  @override
+  String get regenerateButton => 'QR குறியீட்டை மீண்டும் உருவாக்கு';
+
+  @override
+  String get cardStatusActive => 'செயலில்';
+
+  @override
+  String get cardStatusExpired => 'காலாவதியானது';
+
+  @override
+  String get cardStatusRevoked => 'ரத்து செய்யப்பட்டது';
+
+  @override
+  String cardEndingIn(String last4) {
+    return '••••$last4 இல் முடியும் அட்டை';
+  }
+
+  @override
+  String get shareCardImage => 'அட்டை படத்தைப் பகிர்';
+
+  @override
+  String get shareCardFailed => 'அட்டை படத்தைப் பகிர முடியவில்லை.';
+
+  @override
+  String get cardOutdatedTitle => 'பழைய NFC சிப்';
+
+  @override
+  String cardOutdatedBody(String date) {
+    return 'இந்த அட்டை, மாற்ற முடியாத வாசிப்பு எண்ணி இல்லாத பழைய சிப்பைப் பயன்படுத்துகிறது. புதிய அட்டைக்கு கிளினிக் ஊழியரிடம் கேளுங்கள். இது $date அன்று காலாவதியாகும்.';
+  }
+
+  @override
+  String get cardInfoTitle => 'அட்டை விவரங்கள்';
+
+  @override
+  String get cardChipLabel => 'சிப் வகை';
+
+  @override
+  String get chipNtag21x => 'NTAG213/215/216 (பழைய சிப்)';
+
+  @override
+  String get chipNtag424 => 'NTAG 424 DNA';
+
+  @override
+  String get chipUnknown => 'தெரியாத சிப்';
+
+  @override
+  String get cardRegisteredLabel => 'பதிவு செய்த நாள்';
+
+  @override
+  String get cardValidUntilLabel => 'செல்லுபடியாகும் வரை';
+
+  @override
+  String cardDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days நாட்கள் மீதம்',
+      one: '1 நாள் மீதம்',
+      zero: 'இன்று காலாவதியாகும்',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cardSharesLabel => 'பகிர்வவை';
+
+  @override
+  String get cardHistoryTitle => 'வரலாறு';
+
+  @override
+  String get cardHistoryEmpty =>
+      'இந்த அட்டைக்கு இன்னும் செயல்பாடு எதுவும் பதிவாகவில்லை.';
+
+  @override
+  String get cardHistoryError => 'இந்த அட்டையின் வரலாற்றை ஏற்ற முடியவில்லை.';
+
+  @override
+  String get cardEventRegistered => 'பதிவு செய்யப்பட்டது';
+
+  @override
+  String get cardEventRenewed => 'புதுப்பிக்கப்பட்டது';
+
+  @override
+  String get cardEventRevoked => 'ரத்து செய்யப்பட்டது';
+
+  @override
+  String get cardEventScanned => 'ஸ்கேன் செய்யப்பட்டது';
+
+  @override
+  String cardEventBy(String who) {
+    return '$who மூலம்';
+  }
+
+  @override
+  String get cardsEmptyTitle => 'NFC அட்டை இன்னும் இல்லை';
+
+  @override
+  String get cardsEmptyBody =>
+      'NFC அட்டைகளை கிளினிக் ஊழியர்களே வழங்குவார்கள். வேண்டுமெனில் கிளினிக் வரவேற்பில் கேளுங்கள். அதுவரை உங்கள் QR குறியீடு செயல்படும்.';
+
+  @override
+  String get cardsLoadError => 'உங்கள் NFC அட்டைகளை ஏற்ற முடியவில்லை.';
+
+  @override
+  String get dayToday => 'இன்று';
+
+  @override
+  String get dayYesterday => 'நேற்று';
+
+  @override
+  String daysAgo(int count) {
+    return '$count நாட்களுக்கு முன்';
+  }
+
+  @override
+  String get auditTagAll => 'அனைத்தும்';
+
+  @override
+  String get auditTagEmergency => 'அவசர ஸ்கேன்கள்';
+
+  @override
+  String get auditTagViews => 'பதிவு பார்வைகள்';
+
+  @override
+  String get auditTagChanges => 'மாற்றங்கள்';
+
+  @override
+  String get auditTagAccount => 'கணக்கு மற்றும் அட்டைகள்';
+
+  @override
+  String get auditTagFailed => 'தோல்வியுற்ற முயற்சிகள்';
+
+  @override
+  String get auditNeedsAttention => 'கவனம் தேவை';
+
+  @override
+  String auditSummary(int count, String window, int attention) {
+    return 'கடந்த $window இல் $count அணுகல்கள், $attention கவனம் தேவை';
+  }
+
+  @override
+  String get auditWindow7d => '7 நாட்கள்';
+
+  @override
+  String get auditWindow30d => '30 நாட்கள்';
+
+  @override
+  String get auditWindow1y => 'ஆண்டு';
+
+  @override
+  String get auditWindow7y => '7 ஆண்டுகள்';
+
+  @override
+  String auditCollapsedCount(int count, String time) {
+    return 'x$count, சமீபத்தியது $time';
+  }
+
+  @override
+  String get auditInfoTooltip => 'தீவிரம் எவ்வாறு காட்டப்படுகிறது';
+
+  @override
+  String get auditInfoTitle => 'தீவிரம்';
+
+  @override
+  String auditDetailLabel(String detail) {
+    return 'விவரம்: $detail';
+  }
+
+  @override
+  String auditTimesLabel(String times) {
+    return 'நேரங்கள்: $times';
+  }
+
+  @override
+  String get auditNoMatches =>
+      'இந்த வடிகட்டிகளுக்குப் பொருந்தும் பதிவுகள் இல்லை.';
+
+  @override
+  String get auditClearFilters => 'வடிகட்டிகளை அழி';
+
+  @override
+  String get auditLoadError => 'அணுகல் பதிவை ஏற்ற முடியவில்லை.';
+
+  @override
+  String get nricScanTitle => 'உங்கள் NRIC ஐ ஸ்கேன் செய்யுங்கள்';
+
+  @override
+  String get nricScanHint =>
+      'உங்கள் NRIC இன் முன்பக்கத்தை சட்டத்திற்குள் வையுங்கள்';
+
+  @override
+  String get nricScanLooking => 'அட்டையைத் தேடுகிறது…';
+
+  @override
+  String get nricScanHold => 'அசையாமல் பிடியுங்கள்';
+
+  @override
+  String get nricScanTimeout =>
+      'அட்டையைப் படிக்க முடியவில்லை. நீங்களே படம் எடுக்க ஷட்டர் பொத்தானை அழுத்துங்கள், அல்லது திரும்பிச் சென்று விவரங்களை தட்டச்சு செய்யுங்கள்.';
+
+  @override
+  String get nricScanShutter => 'படம் எடு';
+
+  @override
+  String get nricScanTorch => 'டார்ச்';
+
+  @override
+  String get nricScanTorchFailed =>
+      'இந்த தொலைபேசியில் டார்ச்சை இயக்க முடியவில்லை.';
+
+  @override
+  String get nricScanPermission =>
+      'கேமரா அணுகல் முடக்கப்பட்டுள்ளது. தொலைபேசி அமைப்புகளில் CLARION க்கு கேமராவை அனுமதியுங்கள், அல்லது திரும்பிச் சென்று விவரங்களை தட்டச்சு செய்யுங்கள்.';
+
+  @override
+  String get nricScanNoCamera =>
+      'இந்த தொலைபேசியில் கேமரா கிடைக்கவில்லை. திரும்பிச் சென்று விவரங்களை தட்டச்சு செய்யுங்கள்.';
+
+  @override
+  String get nricScanCameraFailed =>
+      'கேமராவைத் தொடங்க முடியவில்லை. திரும்பிச் சென்று விவரங்களை தட்டச்சு செய்யுங்கள்.';
+
+  @override
+  String get nricScanTypeInstead => 'விவரங்களை தட்டச்சு செய்கிறேன்';
+
+  @override
+  String get nricScanReviewTitle => 'உங்கள் விவரங்களைச் சரிபாருங்கள்';
+
+  @override
+  String get nricScanReviewHint =>
+      'தொடர்வதற்கு முன் தவறாகப் படிக்கப்பட்டதைத் திருத்துங்கள்.';
+
+  @override
+  String get nricScanUse => 'இந்த விவரங்களைப் பயன்படுத்து';
+
+  @override
+  String get nricScanRetake => 'மீண்டும் எடு';
 }

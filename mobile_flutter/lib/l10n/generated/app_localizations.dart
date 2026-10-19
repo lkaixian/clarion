@@ -144,6 +144,30 @@ abstract class AppLocalizations {
   /// **'Password'**
   String get passwordLabel;
 
+  /// No description provided for @emailOrNricHint.
+  ///
+  /// In en, this message translates to:
+  /// **'name@example.com or 900101-01-1234'**
+  String get emailOrNricHint;
+
+  /// No description provided for @loginFieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email or NRIC and your password.'**
+  String get loginFieldRequired;
+
+  /// No description provided for @mfaResendButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new code'**
+  String get mfaResendButton;
+
+  /// No description provided for @mfaResendIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new code in {seconds}s'**
+  String mfaResendIn(int seconds);
+
   /// No description provided for @signIn.
   ///
   /// In en, this message translates to:
@@ -155,12 +179,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Signing in…'**
   String get signingIn;
-
-  /// No description provided for @demoLoginHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Demo login: patient@clarion.demo / patient123 (or NRIC 520314-01-1234 / patient123)'**
-  String get demoLoginHint;
 
   /// No description provided for @loginFailedGeneric.
   ///
@@ -201,13 +219,13 @@ abstract class AppLocalizations {
   /// No description provided for @scanEmergencyCardButton.
   ///
   /// In en, this message translates to:
-  /// **'🚨 Scan Emergency QR / NFC Card'**
+  /// **'Scan an emergency card (QR or NFC)'**
   String get scanEmergencyCardButton;
 
   /// No description provided for @scanEmergencyCardSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'For first responders — no sign-in needed'**
+  /// **'For first responders. No sign-in needed.'**
   String get scanEmergencyCardSubtitle;
 
   /// No description provided for @orSignInDivider.
@@ -399,7 +417,7 @@ abstract class AppLocalizations {
   /// No description provided for @selfRegisterDetailsStepDesc.
   ///
   /// In en, this message translates to:
-  /// **'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC — we\'ll verify them against your hospital record.'**
+  /// **'For patients who don\'t yet have a CLARION login. Enter your details exactly as they appear on your NRIC. We will check them against your hospital record.'**
   String get selfRegisterDetailsStepDesc;
 
   /// No description provided for @selfRegisterContinueButton.
@@ -419,6 +437,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter the 6-digit verification code we emailed you.'**
   String get selfRegisterOtpStepDesc;
+
+  /// No description provided for @selfRegisterScanButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan my NRIC to fill these in'**
+  String get selfRegisterScanButton;
+
+  /// No description provided for @selfRegisterScanPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo is read on this phone and is never uploaded. Check the details before continuing.'**
+  String get selfRegisterScanPrivacy;
+
+  /// No description provided for @selfRegisterCodeSentTo.
+  ///
+  /// In en, this message translates to:
+  /// **'We emailed a 6-digit code to {hint}, the address on your hospital record. Enter it below.'**
+  String selfRegisterCodeSentTo(String hint);
 
   /// No description provided for @selfRegisterVerifyOtpButton.
   ///
@@ -503,6 +539,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Almost done. Choose a password for your new account (at least 8 characters).'**
   String get selfRegisterPasswordStepDesc;
+
+  /// No description provided for @selfRegisterPendingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Your sign-up is waiting for verification and you cannot sign in yet. It is approved once staff check your IC at a counter, or as soon as your IC photos match. Only the first verified sign-up for an NRIC is kept; any others are rejected and their emails flagged.'**
+  String get selfRegisterPendingDesc;
 
   /// No description provided for @selfRegisterCompleteButton.
   ///
@@ -821,18 +863,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Emergency Access Card'**
   String get emergencyAccessCardTitle;
-
-  /// No description provided for @emergencyDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose what a first responder can see in an emergency. Nothing else on your record is ever exposed by this QR code — each scan is logged and you can revoke access at any time.'**
-  String get emergencyDesc;
-
-  /// No description provided for @fieldsToShare.
-  ///
-  /// In en, this message translates to:
-  /// **'Fields to share in an emergency:'**
-  String get fieldsToShare;
 
   /// No description provided for @scopeAllergies.
   ///
@@ -1257,7 +1287,7 @@ abstract class AppLocalizations {
   /// No description provided for @themeModeSystem.
   ///
   /// In en, this message translates to:
-  /// **'System default'**
+  /// **'System'**
   String get themeModeSystem;
 
   /// No description provided for @auditLogTitle.
@@ -1506,6 +1536,42 @@ abstract class AppLocalizations {
   /// **'Back to sign in'**
   String get mfaCancelButton;
 
+  /// No description provided for @mfaEmailButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Email me a code instead'**
+  String get mfaEmailButton;
+
+  /// No description provided for @mfaEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'We emailed a 6-digit code to {hint}. It expires in 10 minutes.'**
+  String mfaEmailSent(String hint);
+
+  /// No description provided for @mfaEmailCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Emailed code'**
+  String get mfaEmailCodeLabel;
+
+  /// No description provided for @mfaUseAuthenticatorButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Use my authenticator app instead'**
+  String get mfaUseAuthenticatorButton;
+
+  /// No description provided for @mfaEmailPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code we emailed you.'**
+  String get mfaEmailPrompt;
+
+  /// No description provided for @mfaWrongCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'That code was not accepted. Codes change every 30 seconds and work once, so wait for the next one, make sure your phone\'s clock is set to automatic, or email yourself a code.'**
+  String get mfaWrongCodeHint;
+
   /// No description provided for @nfcBasicTagWarning.
   ///
   /// In en, this message translates to:
@@ -1523,6 +1589,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No connection, and this device doesn\'t have the key for this tag. Connect once while signed in to download it, or use the QR code / online lookup.'**
   String get scanResultOfflineKeyMissing;
+
+  /// No description provided for @scanResultOfflineRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'This card has been revoked and can\'t be read. Do not rely on it; use the QR code or online lookup, and report the card.'**
+  String get scanResultOfflineRevoked;
+
+  /// No description provided for @offlineUnlockReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it\'s you to read this card offline'**
+  String get offlineUnlockReason;
+
+  /// No description provided for @scanResultOfflineLockRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone has no screen lock, so the card can\'t be read offline. Set a PIN, pattern or fingerprint in the phone\'s settings, or use the QR code or online lookup.'**
+  String get scanResultOfflineLockRequired;
+
+  /// No description provided for @scanResultOfflineAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity check cancelled or failed, so the card was not read offline. Tap the card again and confirm with your fingerprint, face or PIN.'**
+  String get scanResultOfflineAuthFailed;
 
   /// No description provided for @scanResultOfflineExpired.
   ///
@@ -1595,6 +1685,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This text is too large for this tag\'s memory. Re-register with fewer fields selected, or use a higher-capacity tag.'**
   String get writeOfflineTagTooLarge;
+
+  /// No description provided for @writeOfflineTagNotEncrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the encrypted record from the web console can be written. Paste the text that starts with C1. and try again.'**
+  String get writeOfflineTagNotEncrypted;
 
   /// No description provided for @writeOfflineTagWriteFailed.
   ///
@@ -1932,78 +2028,6 @@ abstract class AppLocalizations {
   /// **'Book Appointment'**
   String get bookAppointmentTitle;
 
-  /// No description provided for @bookAppointmentFacilityLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Facility'**
-  String get bookAppointmentFacilityLabel;
-
-  /// No description provided for @bookAppointmentOtherFacility.
-  ///
-  /// In en, this message translates to:
-  /// **'Other (type manually)'**
-  String get bookAppointmentOtherFacility;
-
-  /// No description provided for @bookAppointmentFacilityManualHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Facility name'**
-  String get bookAppointmentFacilityManualHint;
-
-  /// No description provided for @bookAppointmentUseFacility.
-  ///
-  /// In en, this message translates to:
-  /// **'Use this facility'**
-  String get bookAppointmentUseFacility;
-
-  /// No description provided for @bookAppointmentDepartmentLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Department'**
-  String get bookAppointmentDepartmentLabel;
-
-  /// No description provided for @bookAppointmentAnyDepartment.
-  ///
-  /// In en, this message translates to:
-  /// **'Any department'**
-  String get bookAppointmentAnyDepartment;
-
-  /// No description provided for @bookAppointmentClinicianLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Doctor'**
-  String get bookAppointmentClinicianLabel;
-
-  /// No description provided for @bookAppointmentAnyClinician.
-  ///
-  /// In en, this message translates to:
-  /// **'Any doctor'**
-  String get bookAppointmentAnyClinician;
-
-  /// No description provided for @bookAppointmentPickDate.
-  ///
-  /// In en, this message translates to:
-  /// **'Pick a date'**
-  String get bookAppointmentPickDate;
-
-  /// No description provided for @bookAppointmentNoSlots.
-  ///
-  /// In en, this message translates to:
-  /// **'No open slots on this date — try another day.'**
-  String get bookAppointmentNoSlots;
-
-  /// No description provided for @bookAppointmentSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'Appointment booked.'**
-  String get bookAppointmentSuccess;
-
-  /// No description provided for @bookAppointmentSlotTaken.
-  ///
-  /// In en, this message translates to:
-  /// **'That slot was just taken — pick another.'**
-  String get bookAppointmentSlotTaken;
-
   /// No description provided for @bookAppointmentGenericError.
   ///
   /// In en, this message translates to:
@@ -2213,6 +2237,1200 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Yes, Sign Out'**
   String get confirmSignOutAction;
+
+  /// No description provided for @myBills.
+  ///
+  /// In en, this message translates to:
+  /// **'My bills'**
+  String get myBills;
+
+  /// No description provided for @billsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no bills.'**
+  String get billsEmpty;
+
+  /// No description provided for @paymentHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment history'**
+  String get paymentHistory;
+
+  /// No description provided for @billToPay.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} to pay'**
+  String billToPay(String amount);
+
+  /// No description provided for @billInsurerPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on your insurer'**
+  String get billInsurerPending;
+
+  /// No description provided for @billPaidInFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full'**
+  String get billPaidInFull;
+
+  /// No description provided for @billItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get billItems;
+
+  /// No description provided for @payNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get payNow;
+
+  /// No description provided for @payAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount to pay (RM)'**
+  String get payAmountLabel;
+
+  /// No description provided for @payContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get payContinue;
+
+  /// No description provided for @payInvalidAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount in RM, for example 25.00.'**
+  String get payInvalidAmount;
+
+  /// No description provided for @payTooMuch.
+  ///
+  /// In en, this message translates to:
+  /// **'The most you can pay is {amount}.'**
+  String payTooMuch(String amount);
+
+  /// No description provided for @paySimulatedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Simulated payment page. This is a demo gateway: no real money moves.'**
+  String get paySimulatedNotice;
+
+  /// No description provided for @payApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve payment'**
+  String get payApprove;
+
+  /// No description provided for @payDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline payment'**
+  String get payDecline;
+
+  /// No description provided for @payCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel payment'**
+  String get payCancel;
+
+  /// No description provided for @payDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} You have not been charged.'**
+  String payDeclined(String reason);
+
+  /// No description provided for @receiptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt {number}'**
+  String receiptTitle(String number);
+
+  /// No description provided for @receiptVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment has been voided.'**
+  String get receiptVoided;
+
+  /// No description provided for @receiptEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email receipt'**
+  String get receiptEmail;
+
+  /// No description provided for @receiptSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share PDF'**
+  String get receiptSharePdf;
+
+  /// No description provided for @receiptEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt sent to {to}.'**
+  String receiptEmailSent(String to);
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navCare.
+  ///
+  /// In en, this message translates to:
+  /// **'Care'**
+  String get navCare;
+
+  /// No description provided for @navScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan'**
+  String get navScan;
+
+  /// No description provided for @navQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get navQueue;
+
+  /// No description provided for @navProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get navProfile;
+
+  /// No description provided for @scanHubNotClarion.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a CLARION code. Scan a clinic check-in code or an emergency card.'**
+  String get scanHubNotClarion;
+
+  /// No description provided for @scanHubQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Point the camera at a clinic check-in code or an emergency card QR.'**
+  String get scanHubQrHint;
+
+  /// No description provided for @scanHubUnreadableTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read this card. Hold it steady against the phone and try again.'**
+  String get scanHubUnreadableTag;
+
+  /// No description provided for @scanAnotherCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan another card'**
+  String get scanAnotherCard;
+
+  /// No description provided for @responderIdentityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is scanning?'**
+  String get responderIdentityTitle;
+
+  /// No description provided for @responderIdentityNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name is saved on this phone and recorded in the card\'s access log.'**
+  String get responderIdentityNote;
+
+  /// No description provided for @responderScanningAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning as {who}'**
+  String responderScanningAs(String who);
+
+  /// No description provided for @responderChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get responderChange;
+
+  /// No description provided for @responderAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your name and organisation'**
+  String get responderAdd;
+
+  /// No description provided for @callContactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {name}'**
+  String callContactLabel(String name);
+
+  /// No description provided for @legacyTagWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Older NFC card'**
+  String get legacyTagWarningTitle;
+
+  /// No description provided for @legacyTagWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The data on this card is not encrypted and cannot be checked for tampering offline. Ask staff to re-issue the card.'**
+  String get legacyTagWarningBody;
+
+  /// No description provided for @bkBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Prefer MySejahtera?'**
+  String get bkBannerTitle;
+
+  /// No description provided for @bkBannerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking here only works at hospitals that have turned on online booking.'**
+  String get bkBannerNote;
+
+  /// No description provided for @bkOpenMySejahtera.
+  ///
+  /// In en, this message translates to:
+  /// **'Open MySejahtera'**
+  String get bkOpenMySejahtera;
+
+  /// No description provided for @bkBookHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Book here'**
+  String get bkBookHere;
+
+  /// No description provided for @bkChooseCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'What do you need?'**
+  String get bkChooseCategory;
+
+  /// No description provided for @bkChooseHospital.
+  ///
+  /// In en, this message translates to:
+  /// **'Find a hospital'**
+  String get bkChooseHospital;
+
+  /// No description provided for @bkChooseTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose date and time'**
+  String get bkChooseTime;
+
+  /// No description provided for @bkChoosePerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is this for?'**
+  String get bkChoosePerson;
+
+  /// No description provided for @bkConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check and confirm'**
+  String get bkConfirmTitle;
+
+  /// No description provided for @bkCategoriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No booking services are available right now.'**
+  String get bkCategoriesEmpty;
+
+  /// No description provided for @bkSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Hospital name or area'**
+  String get bkSearchHint;
+
+  /// No description provided for @bkSearchAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bkSearchAction;
+
+  /// No description provided for @bkUseMyLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Use my location'**
+  String get bkUseMyLocation;
+
+  /// No description provided for @bkClearLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop using location'**
+  String get bkClearLocation;
+
+  /// No description provided for @bkSortedNearest.
+  ///
+  /// In en, this message translates to:
+  /// **'Nearest first'**
+  String get bkSortedNearest;
+
+  /// No description provided for @bkLocationDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission was denied. Type a hospital name or area instead, or allow location in your phone settings.'**
+  String get bkLocationDenied;
+
+  /// No description provided for @bkLocationOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Location is switched off on this phone. Switch it on, or type a hospital name or area.'**
+  String get bkLocationOff;
+
+  /// No description provided for @bkLocationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not find your location. Type a hospital name or area instead.'**
+  String get bkLocationFailed;
+
+  /// No description provided for @bkFacilitiesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No hospitals found. Only hospitals that have turned on online booking for this service are listed. Try another name or area, or open MySejahtera.'**
+  String get bkFacilitiesEmpty;
+
+  /// No description provided for @bkDistanceKm.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km away'**
+  String bkDistanceKm(String km);
+
+  /// No description provided for @bkNextAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Next available: {when}'**
+  String bkNextAvailable(String when);
+
+  /// No description provided for @bkNoNextAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No open times soon'**
+  String get bkNoNextAvailable;
+
+  /// No description provided for @bkDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get bkDateLabel;
+
+  /// No description provided for @bkTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get bkTimeLabel;
+
+  /// No description provided for @bkNoOpenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'This hospital has no open times in the next 14 days.'**
+  String get bkNoOpenDays;
+
+  /// No description provided for @bkNoSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'No times are left on this day. Pick another date.'**
+  String get bkNoSlots;
+
+  /// No description provided for @bkSlotsLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} left'**
+  String bkSlotsLeft(int count);
+
+  /// No description provided for @bkSlotFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get bkSlotFull;
+
+  /// No description provided for @bkDayOpenSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}, {count} open times'**
+  String bkDayOpenSemantics(String date, int count);
+
+  /// No description provided for @bkDayFullSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}, no open times'**
+  String bkDayFullSemantics(String date);
+
+  /// No description provided for @bkContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get bkContinue;
+
+  /// No description provided for @bkMyself.
+  ///
+  /// In en, this message translates to:
+  /// **'Myself'**
+  String get bkMyself;
+
+  /// No description provided for @bkMyselfNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your signed-in account'**
+  String get bkMyselfNote;
+
+  /// No description provided for @bkSavedPeople.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved people'**
+  String get bkSavedPeople;
+
+  /// No description provided for @bkNoPeople.
+  ///
+  /// In en, this message translates to:
+  /// **'You have not saved anyone yet. Add a child or parent to book for them.'**
+  String get bkNoPeople;
+
+  /// No description provided for @bkAddPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a person'**
+  String get bkAddPerson;
+
+  /// No description provided for @bkEditPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit person'**
+  String get bkEditPerson;
+
+  /// No description provided for @bkDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get bkDelete;
+
+  /// No description provided for @bkDeletePersonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this person?'**
+  String get bkDeletePersonTitle;
+
+  /// No description provided for @bkDeletePersonBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed from your saved people. Existing appointments are not affected.'**
+  String bkDeletePersonBody(String name);
+
+  /// No description provided for @bkFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get bkFullName;
+
+  /// No description provided for @bkRelationship.
+  ///
+  /// In en, this message translates to:
+  /// **'Relationship'**
+  String get bkRelationship;
+
+  /// No description provided for @bkRelChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Child'**
+  String get bkRelChild;
+
+  /// No description provided for @bkRelParent.
+  ///
+  /// In en, this message translates to:
+  /// **'Parent'**
+  String get bkRelParent;
+
+  /// No description provided for @bkRelSpouse.
+  ///
+  /// In en, this message translates to:
+  /// **'Spouse'**
+  String get bkRelSpouse;
+
+  /// No description provided for @bkRelSibling.
+  ///
+  /// In en, this message translates to:
+  /// **'Sibling'**
+  String get bkRelSibling;
+
+  /// No description provided for @bkRelRelative.
+  ///
+  /// In en, this message translates to:
+  /// **'Relative'**
+  String get bkRelRelative;
+
+  /// No description provided for @bkRelOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get bkRelOther;
+
+  /// No description provided for @bkPickDob.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick date of birth'**
+  String get bkPickDob;
+
+  /// No description provided for @bkNric.
+  ///
+  /// In en, this message translates to:
+  /// **'NRIC (optional)'**
+  String get bkNric;
+
+  /// No description provided for @bkNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a full name.'**
+  String get bkNameRequired;
+
+  /// No description provided for @bkDobRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date of birth.'**
+  String get bkDobRequired;
+
+  /// No description provided for @bkSummaryCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get bkSummaryCategory;
+
+  /// No description provided for @bkSummaryHospital.
+  ///
+  /// In en, this message translates to:
+  /// **'Hospital'**
+  String get bkSummaryHospital;
+
+  /// No description provided for @bkSummaryWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'Date and time'**
+  String get bkSummaryWhen;
+
+  /// No description provided for @bkSummaryPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get bkSummaryPerson;
+
+  /// No description provided for @bkReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get bkReasonLabel;
+
+  /// No description provided for @bkConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm booking'**
+  String get bkConfirmButton;
+
+  /// No description provided for @bkTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get bkTryAgain;
+
+  /// No description provided for @bkSlotTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'That time was just taken. Please pick another time.'**
+  String get bkSlotTaken;
+
+  /// No description provided for @bkNoPatientRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not linked to a patient record yet, so it cannot book. Ask the hospital registration desk to link it.'**
+  String get bkNoPatientRecord;
+
+  /// No description provided for @bkNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server. Check your connection and try again.'**
+  String get bkNetworkError;
+
+  /// No description provided for @bkSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking confirmed'**
+  String get bkSuccessTitle;
+
+  /// No description provided for @bkSuccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your appointment is booked. You can see it under your appointments.'**
+  String get bkSuccessBody;
+
+  /// No description provided for @bkViewAppointments.
+  ///
+  /// In en, this message translates to:
+  /// **'View my appointments'**
+  String get bkViewAppointments;
+
+  /// No description provided for @bkDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get bkDone;
+
+  /// No description provided for @bkCancelAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel booking'**
+  String get bkCancelAppointment;
+
+  /// No description provided for @bkCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this appointment?'**
+  String get bkCancelTitle;
+
+  /// No description provided for @bkCancelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The time will be released for other patients.'**
+  String get bkCancelBody;
+
+  /// No description provided for @bkKeepAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep appointment'**
+  String get bkKeepAppointment;
+
+  /// No description provided for @bkCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment cancelled.'**
+  String get bkCancelled;
+
+  /// No description provided for @bkForPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'For {name}'**
+  String bkForPerson(String name);
+
+  /// No description provided for @bkCatGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General consultation'**
+  String get bkCatGeneral;
+
+  /// No description provided for @bkCatChronic.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up and chronic care'**
+  String get bkCatChronic;
+
+  /// No description provided for @bkCatVaccination.
+  ///
+  /// In en, this message translates to:
+  /// **'Vaccination'**
+  String get bkCatVaccination;
+
+  /// No description provided for @bkCatMaternalChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Maternal and child health'**
+  String get bkCatMaternalChild;
+
+  /// No description provided for @bkCatDental.
+  ///
+  /// In en, this message translates to:
+  /// **'Dental'**
+  String get bkCatDental;
+
+  /// No description provided for @bkCatScreening.
+  ///
+  /// In en, this message translates to:
+  /// **'Health screening'**
+  String get bkCatScreening;
+
+  /// No description provided for @bkCatMentalHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Mental health and counselling'**
+  String get bkCatMentalHealth;
+
+  /// No description provided for @bkCatPhysio.
+  ///
+  /// In en, this message translates to:
+  /// **'Physiotherapy and rehabilitation'**
+  String get bkCatPhysio;
+
+  /// No description provided for @emergencyTabQr.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get emergencyTabQr;
+
+  /// No description provided for @emergencyTabCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get emergencyTabCard;
+
+  /// No description provided for @emergencyDescFixed.
+  ///
+  /// In en, this message translates to:
+  /// **'A first responder who scans your QR code sees only the four items below. Each scan is logged and you can revoke the code at any time.'**
+  String get emergencyDescFixed;
+
+  /// No description provided for @whatWillBeShared.
+  ///
+  /// In en, this message translates to:
+  /// **'What will be shared'**
+  String get whatWillBeShared;
+
+  /// No description provided for @sharedAlwaysNote.
+  ///
+  /// In en, this message translates to:
+  /// **'These items are always included. Nothing else on your record is shared.'**
+  String get sharedAlwaysNote;
+
+  /// No description provided for @previewTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview what a responder sees'**
+  String get previewTooltip;
+
+  /// No description provided for @previewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What a responder sees'**
+  String get previewTitle;
+
+  /// No description provided for @previewIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from your own record. This is what is shown when your QR code is scanned. Nothing else is shared.'**
+  String get previewIntro;
+
+  /// No description provided for @previewNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None recorded'**
+  String get previewNone;
+
+  /// No description provided for @previewOmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} more not marked critical are not shown.'**
+  String previewOmitted(int count);
+
+  /// No description provided for @regenerateButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate QR code'**
+  String get regenerateButton;
+
+  /// No description provided for @cardStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get cardStatusActive;
+
+  /// No description provided for @cardStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get cardStatusExpired;
+
+  /// No description provided for @cardStatusRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get cardStatusRevoked;
+
+  /// No description provided for @cardEndingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Card ending ••••{last4}'**
+  String cardEndingIn(String last4);
+
+  /// No description provided for @shareCardImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Share card image'**
+  String get shareCardImage;
+
+  /// No description provided for @shareCardFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share the card image.'**
+  String get shareCardFailed;
+
+  /// No description provided for @cardOutdatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Older NFC chip'**
+  String get cardOutdatedTitle;
+
+  /// No description provided for @cardOutdatedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This card uses an older chip without a tamper-proof read counter. Ask clinic staff for a newer card. It expires on {date}.'**
+  String cardOutdatedBody(String date);
+
+  /// No description provided for @cardInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Card details'**
+  String get cardInfoTitle;
+
+  /// No description provided for @cardChipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chip type'**
+  String get cardChipLabel;
+
+  /// No description provided for @chipNtag21x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTAG213/215/216 (older chip)'**
+  String get chipNtag21x;
+
+  /// No description provided for @chipNtag424.
+  ///
+  /// In en, this message translates to:
+  /// **'NTAG 424 DNA'**
+  String get chipNtag424;
+
+  /// No description provided for @chipUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown chip'**
+  String get chipUnknown;
+
+  /// No description provided for @cardRegisteredLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered'**
+  String get cardRegisteredLabel;
+
+  /// No description provided for @cardValidUntilLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid until'**
+  String get cardValidUntilLabel;
+
+  /// No description provided for @cardDaysLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Expires today} =1{1 day left} other{{days} days left}}'**
+  String cardDaysLeft(int days);
+
+  /// No description provided for @cardSharesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Shares'**
+  String get cardSharesLabel;
+
+  /// No description provided for @cardHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get cardHistoryTitle;
+
+  /// No description provided for @cardHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity recorded for this card yet.'**
+  String get cardHistoryEmpty;
+
+  /// No description provided for @cardHistoryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this card\'s history.'**
+  String get cardHistoryError;
+
+  /// No description provided for @cardEventRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered'**
+  String get cardEventRegistered;
+
+  /// No description provided for @cardEventRenewed.
+  ///
+  /// In en, this message translates to:
+  /// **'Renewed'**
+  String get cardEventRenewed;
+
+  /// No description provided for @cardEventRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get cardEventRevoked;
+
+  /// No description provided for @cardEventScanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned'**
+  String get cardEventScanned;
+
+  /// No description provided for @cardEventBy.
+  ///
+  /// In en, this message translates to:
+  /// **'by {who}'**
+  String cardEventBy(String who);
+
+  /// No description provided for @cardsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No NFC card yet'**
+  String get cardsEmptyTitle;
+
+  /// No description provided for @cardsEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'NFC cards are issued by clinic staff. Ask at your clinic front desk if you would like one. Your QR code works in the meantime.'**
+  String get cardsEmptyBody;
+
+  /// No description provided for @cardsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your NFC cards.'**
+  String get cardsLoadError;
+
+  /// No description provided for @dayToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get dayToday;
+
+  /// No description provided for @dayYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get dayYesterday;
+
+  /// No description provided for @daysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days ago'**
+  String daysAgo(int count);
+
+  /// No description provided for @auditTagAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get auditTagAll;
+
+  /// No description provided for @auditTagEmergency.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency scans'**
+  String get auditTagEmergency;
+
+  /// No description provided for @auditTagViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Record views'**
+  String get auditTagViews;
+
+  /// No description provided for @auditTagChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes'**
+  String get auditTagChanges;
+
+  /// No description provided for @auditTagAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account and cards'**
+  String get auditTagAccount;
+
+  /// No description provided for @auditTagFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed attempts'**
+  String get auditTagFailed;
+
+  /// No description provided for @auditNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get auditNeedsAttention;
+
+  /// No description provided for @auditSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} accesses in the last {window}, {attention} need attention'**
+  String auditSummary(int count, String window, int attention);
+
+  /// No description provided for @auditWindow7d.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get auditWindow7d;
+
+  /// No description provided for @auditWindow30d.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get auditWindow30d;
+
+  /// No description provided for @auditWindow1y.
+  ///
+  /// In en, this message translates to:
+  /// **'year'**
+  String get auditWindow1y;
+
+  /// No description provided for @auditWindow7y.
+  ///
+  /// In en, this message translates to:
+  /// **'7 years'**
+  String get auditWindow7y;
+
+  /// No description provided for @auditCollapsedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'x{count}, latest {time}'**
+  String auditCollapsedCount(int count, String time);
+
+  /// No description provided for @auditInfoTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'How severity is shown'**
+  String get auditInfoTooltip;
+
+  /// No description provided for @auditInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get auditInfoTitle;
+
+  /// No description provided for @auditDetailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Detail: {detail}'**
+  String auditDetailLabel(String detail);
+
+  /// No description provided for @auditTimesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Times: {times}'**
+  String auditTimesLabel(String times);
+
+  /// No description provided for @auditNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries match these filters.'**
+  String get auditNoMatches;
+
+  /// No description provided for @auditClearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get auditClearFilters;
+
+  /// No description provided for @auditLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the access log.'**
+  String get auditLoadError;
+
+  /// No description provided for @nricScanTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan your NRIC'**
+  String get nricScanTitle;
+
+  /// No description provided for @nricScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit the front of your NRIC inside the frame'**
+  String get nricScanHint;
+
+  /// No description provided for @nricScanLooking.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for the card…'**
+  String get nricScanLooking;
+
+  /// No description provided for @nricScanHold.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold steady'**
+  String get nricScanHold;
+
+  /// No description provided for @nricScanTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the card. Press the shutter button to take the picture yourself, or go back and type your details.'**
+  String get nricScanTimeout;
+
+  /// No description provided for @nricScanShutter.
+  ///
+  /// In en, this message translates to:
+  /// **'Take picture'**
+  String get nricScanShutter;
+
+  /// No description provided for @nricScanTorch.
+  ///
+  /// In en, this message translates to:
+  /// **'Torch'**
+  String get nricScanTorch;
+
+  /// No description provided for @nricScanTorchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone cannot turn the torch on.'**
+  String get nricScanTorchFailed;
+
+  /// No description provided for @nricScanPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access is off. Allow the camera for CLARION in your phone settings, or go back and type your details.'**
+  String get nricScanPermission;
+
+  /// No description provided for @nricScanNoCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'No camera was found on this phone. Go back and type your details.'**
+  String get nricScanNoCamera;
+
+  /// No description provided for @nricScanCameraFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera could not be started. Go back and type your details.'**
+  String get nricScanCameraFailed;
+
+  /// No description provided for @nricScanTypeInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Type my details instead'**
+  String get nricScanTypeInstead;
+
+  /// No description provided for @nricScanReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your details'**
+  String get nricScanReviewTitle;
+
+  /// No description provided for @nricScanReviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct anything that was misread before you continue.'**
+  String get nricScanReviewHint;
+
+  /// No description provided for @nricScanUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use these details'**
+  String get nricScanUse;
+
+  /// No description provided for @nricScanRetake.
+  ///
+  /// In en, this message translates to:
+  /// **'Retake'**
+  String get nricScanRetake;
 }
 
 class _AppLocalizationsDelegate

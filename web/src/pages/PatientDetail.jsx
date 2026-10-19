@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
+import { CatalogueTag } from "../components/DrugHints";
 import SignaturePad from "../components/SignaturePad";
+import RegistrationClaims from "../components/RegistrationClaims";
 import SealBadge from "../components/SealBadge";
+import PatientOrders from "../components/PatientOrders";
+import PatientForms from "../components/PatientForms";
+import PatientDemographics from "../components/PatientDemographics";
+import { roleLabel } from "../lib/role";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
   revokeEmergencyCard, getCurrentCardStatus,
@@ -15,6 +21,7 @@ import {
   rescheduleAppointment, acceptRescheduleRequest, rejectRescheduleRequest,
   addPatientAnnotation,
   getMySignatureBlob,
+  listDrugs,
 } from "../api/client";
 
 const PROFILE_FIELD_LABELS = {
@@ -146,11 +153,47 @@ const RESCHEDULE_REQUEST_STATUS_BADGE_CLASSES = {
   rejected: "bg-red-100 text-red-600",
 };
 
+// What staff see after an NFC card registers. The encrypted tag_blob is the
+// only thing ever offered for writing (plaintext is never written to a tag);
+// no blob means the patient has no emergency data on file yet.
+export function tagWritePrompt(result) {
+  if (!result?.tag_blob && result?.tag_blob_truncated) {
+    return {
+      blob: null,
+      message:
+        "Card registered, but the emergency data on file does not fit this tag, so nothing can be " +
+        "written. Use a larger tag (NTAG215 or NTAG216) and register the card again.",
+    };
+  }
+  if (!result?.tag_blob) {
+    return {
+      blob: null,
+      message:
+        "Card registered. There is no emergency data on file yet, so there is nothing to write " +
+        "to the tag. Add allergies, medications or conditions, then register this card again to " +
+        "write an updated tag. A tag already written for this card still holds its old record " +
+        "until it expires: replace or rewrite it.",
+    };
+  }
+  const note = result.tag_blob_truncated
+    ? "\n\n(truncated to fit the tag — not everything critical fit)"
+    : "";
+  const securityWarning = result.tag_security?.warning ? "\n\n⚠ " + result.tag_security.warning : "";
+  return {
+    blob: result.tag_blob,
+    message:
+      "Card registered. To make this card readable with NO network at all, copy this " +
+      "text and write it to the SAME physical card from a phone: open the CLARION app, " +
+      "tap the NFC icon in the top bar (\"Write Offline Tag\" — staff only), paste, and tap. " +
+      "This is ENCRYPTED: only a signed-in CLARION staff device can read it offline." + note + securityWarning,
+  };
+}
+
 // Generic add/edit form for conditions/medications/allergies/encounters —
 // replaces the old window.prompt() chain (quickAdd) with real inputs,
 // select dropdowns constrained to the backend's actual enums, and proper
 // edit-in-place instead of "create a new one, never touch the old one".
-function RecordModal({ kind, mode, initial, onClose, onSaved }) {
+export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
   const config = RECORD_FIELD_CONFIG[kind];
   const [values, setValues] = useState(() => {
     const seed = {};
@@ -175,6 +218,21 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
     setScreenResult(null);
     setScreenAcknowledged(false);
   }, [values.drug_name]);
+
+  // Drug-master suggestions for the medication name (HIS catalogue). Free text stays
+  // valid: external or unlisted drugs are common, so this only fills a <datalist>.
+  const [drugHints, setDrugHints] = useState([]);
+  useEffect(() => {
+    const q = String(values.drug_name || "").trim();
+    if (kind !== "medication" || q.length < 3) { setDrugHints([]); return undefined; }
+    let off = false;
+    const t = setTimeout(() => {
+      listDrugs({ q, limit: 8 })
+        .then((rows) => !off && setDrugHints(rows))
+        .catch(() => !off && setDrugHints([])); // suggestions are optional; never block entry
+    }, 250);
+    return () => { off = true; clearTimeout(t); };
+  }, [kind, values.drug_name]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -260,11 +318,12 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                 </label>
               ) : (
                 <>
-                  <label className="field-label">
+                  <label className="field-label" htmlFor={`rec-${f.key}`}>
                     {f.label}{f.required && <span className="text-red-600"> *</span>}
                   </label>
                   {f.type === "select" ? (
                     <select
+                      id={`rec-${f.key}`}
                       className="field-input"
                       value={values[f.key]}
                       onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
@@ -273,6 +332,7 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                     </select>
                   ) : f.type === "textarea" ? (
                     <textarea
+                      id={`rec-${f.key}`}
                       className="field-input"
                       rows={3}
                       value={values[f.key]}
@@ -281,12 +341,24 @@ function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                     />
                   ) : (
                     <input
+                      id={`rec-${f.key}`}
                       className="field-input"
                       type={f.type}
                       placeholder={f.placeholder}
                       value={values[f.key]}
+                      list={kind === "medication" && f.key === "drug_name" ? "drug-hints" : undefined}
+                      autoComplete={kind === "medication" && f.key === "drug_name" ? "off" : undefined}
                       onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                     />
+                  )}
+                  {kind === "medication" && f.key === "drug_name" && (
+                    <datalist id="drug-hints">
+                      {drugHints.map((d) => (
+                        <option key={d.drug_code} value={d.drug_generic_name}>
+                          {[d.trade_name, d.dosage_form].filter(Boolean).join(", ")}
+                        </option>
+                      ))}
+                    </datalist>
                   )}
                 </>
               )}
@@ -1213,12 +1285,15 @@ const TABS = [
   { key: "documents", label: "Documents" },
   { key: "ai", label: "AI & Interactions" },
   { key: "access", label: "Emergency & Access" },
+  // Staff only (filtered in TabBar's caller): clinical work that has no patient-facing view.
+  { key: "orders", label: "Orders & forms", staffOnly: true },
+  { key: "registry", label: "Demographics", staffOnly: true },
 ];
 
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, isStaff }) {
   return (
     <div className="mb-5 inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1">
-      {TABS.map((t) => (
+      {TABS.filter((t) => isStaff || !t.staffOnly).map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
@@ -1263,8 +1338,8 @@ function formatAuditActor(l) {
   }
 
   const who = l.actor_name
-    ? `${l.actor_name}${l.actor_role ? ` (${l.actor_role})` : ""}`
-    : (l.actor_role || "system");
+    ? `${l.actor_name}${l.actor_role ? ` (${roleLabel(l.actor_role)})` : ""}`
+    : (l.actor_role ? roleLabel(l.actor_role) : "system");
   return l.actor_facility ? `${who} · ${l.actor_facility}` : who;
 }
 
@@ -1352,7 +1427,7 @@ function AnnotationList({ annotations }) {
           <span aria-hidden="true">{ANNOTATION_KIND_ICON[a.kind] || "•"}</span>
           {a.note && <span className="text-slate-700">{a.note}</span>}
           <span className="text-slate-400">
-            — {a.signed_by_name} ({a.signed_by_role}) · {a.facility_name} · {formatSignedAt(a.created_at)}
+            — {a.signed_by_name} ({roleLabel(a.signed_by_role)}) · {a.facility_name} · {formatSignedAt(a.created_at)}
           </span>
           <SealBadge status={a.seal_status} />
         </div>
@@ -1682,33 +1757,17 @@ export default function PatientDetail() {
     try {
       const result = await registerNfcCard(id, nfcUid, scope.length ? scope : ["allergies", "medications", "conditions", "blood_type"], tagType);
       refresh();
-      // tag_text is the compact fallback meant to be written DIRECTLY onto
-      // the physical tag's own NDEF memory (readable with zero network —
-      // see app/campus_registry... no, app/routers/emergency.py's
-      // _build_compact_tag_text docstring) -- this pointer-based /register
-      // call can't write it itself (no browser API does generic NDEF write
-      // on desktop), so hand it to staff to carry to a phone running the
-      // CLARION app's "Write Offline Tag" screen (same physical card).
-      // Prefer the encrypted blob (opens only on a signed-in CLARION device,
-      // every offline read is attributed); plaintext tag_text is the legacy
-      // fallback for a tag too small to hold a sealed record.
-      const toWrite = result?.tag_blob || result?.tag_text;
-      if (toWrite) {
-        const kind = result.tag_blob
-          ? " This is ENCRYPTED: only a signed-in CLARION staff device can read it offline."
-          : " This is plaintext (the tag is too small for an encrypted record).";
-        const truncated = result.tag_blob ? result.tag_blob_truncated : result.tag_text_truncated;
-        const note = truncated
-          ? "\n\n(truncated to fit the tag — not everything critical fit)"
-          : "";
-        const securityWarning = result.tag_security?.warning ? "\n\n⚠ " + result.tag_security.warning : "";
-        prompt(
-          "Card registered. To make this card readable with NO network at all, copy this " +
-          "text and write it to the SAME physical card from a phone: open the CLARION app, " +
-          "tap the NFC icon in the top bar (\"Write Offline Tag\" — staff only), paste, and tap." + kind + note + securityWarning,
-          toWrite,
-        );
-      }
+      // tag_blob is the encrypted on-tag record meant to be written DIRECTLY
+      // onto the physical tag's own NDEF memory (readable with zero network;
+      // opens only on a signed-in CLARION staff device, every offline read is
+      // attributed). This pointer-based /register call can't write it itself
+      // (no browser API does generic NDEF write on desktop), so hand it to
+      // staff to carry to a phone running the CLARION app's "Write Offline
+      // Tag" screen (same physical card). Plaintext is never offered; a tag
+      // too small for the blob is refused by the server (422, shown below).
+      const tagPrompt = tagWritePrompt(result);
+      if (tagPrompt.blob) prompt(tagPrompt.message, tagPrompt.blob);
+      else alert(tagPrompt.message);
     } catch (e) {
       alert(e?.response?.data?.detail || "Failed to register NFC card.");
     } finally {
@@ -1768,8 +1827,15 @@ export default function PatientDetail() {
 
   async function revokeNfc(card) {
     if (!confirm(`Revoke NFC card ••${card.nfc_uid_last4 || "?"}? This cannot be undone from here — you'd need to re-register it.`)) return;
-    await revokeNfcCard(card.id);
+    const res = await revokeNfcCard(card.id);
     refresh();
+    if (res?.offline_revocable === false) {
+      alert(
+        "Revoked online. This card was registered before offline revocation existed, so a device that is " +
+        "offline can still open its on-tag record until it expires. Register the card again (same card), " +
+        "then revoke it, to include it in the offline revoked list."
+      );
+    }
   }
 
   function openAddRecord(kind) {
@@ -1826,7 +1892,7 @@ export default function PatientDetail() {
         </div>
       )}
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <TabBar active={activeTab} onChange={setActiveTab} isStaff={isStaff} />
 
       {activeTab === "overview" && (
         <>
@@ -1913,7 +1979,8 @@ export default function PatientDetail() {
                 <div key={m.id} className="record-row">
                   <div className="text-sm text-slate-700">
                     <p>
-                      {m.drug_name}{" "}
+                      {m.drug_name}
+                      <CatalogueTag code={m.drug_code} />{" "}
                       <MedicationStatusBadge medication={m} />
                     </p>
                     <p className="text-xs text-slate-400">
@@ -1979,7 +2046,7 @@ export default function PatientDetail() {
                         {e.signed_by_name && (
                           <p className="text-xs text-slate-500 mt-0.5">
                             ✔ Consultation completed — signed by {e.signed_by_name}
-                            {e.signed_by_role ? ` (${e.signed_by_role})` : ""}{" "}
+                            {e.signed_by_role ? ` (${roleLabel(e.signed_by_role)})` : ""}{" "}
                             <SealBadge status={e.seal_status} />
                           </p>
                         )}
@@ -2017,6 +2084,19 @@ export default function PatientDetail() {
             onChanged={refresh}
           />
         </>
+      )}
+
+      {isStaff && activeTab === "orders" && (
+        <>
+          <Section title="Orders"><PatientOrders patientId={id} /></Section>
+          <Section title="Forms"><PatientForms patientId={id} /></Section>
+        </>
+      )}
+
+      {isStaff && activeTab === "registry" && (
+        <Section title="Demographics, sponsor and dependants">
+          <PatientDemographics patientId={id} demographics={patient.demographics} onChanged={refresh} />
+        </Section>
       )}
 
       {activeTab === "documents" && (
@@ -2134,12 +2214,13 @@ export default function PatientDetail() {
               </button>
             }>
               <p className="text-xs text-slate-400">
-                Patients don't self-register — NRIC alone isn't secret in Malaysia (it's on every IC
-                and form), so anyone claiming an account with just an NRIC would be a takeover risk.
-                Verify identity in person, then issue a one-time temporary password here; the patient
-                sets their own password on first login. Also use this to reset a forgotten password
-                for a patient who can't self-serve via NRIC + date of birth in the app.
+                NRIC alone isn't secret in Malaysia, so a web or app sign-up stays pending (no access)
+                until it is verified by an IC photo scan, the email already on this record, or you.
+                Verify identity in person, then approve a pending sign-up below, or issue a one-time
+                temporary password here (the patient sets their own on first login). Issuing a login
+                also rejects any pending sign-ups.
               </p>
+              <RegistrationClaims patientId={id} />
             </Section>
           )}
 

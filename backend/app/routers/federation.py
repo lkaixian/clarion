@@ -11,6 +11,10 @@ Two audiences, deliberately on separate routes:
   visits. Authenticated by an Ed25519 signature checked against the key
   central has registered for the caller -- no passwords, no shared secrets.
 
+Both sides also require the patient's own `cross_facility_sharing` consent
+(PDPA ledger, opt-in): the requesting hospital checks it before looking up or
+fetching, and the origin checks it before serving a peer. A denial is audited.
+
 A fetched visit is returned for display; it is never written into this
 hospital's own tables (foreign records stay read-only, by design).
 """
@@ -25,9 +29,18 @@ from ..audit import log_access
 from ..clinical_access import _patient_present_at
 from ..database import get_db
 from ..rate_limit import limiter
+from .pdpa import _effective_consent
 from mpi import sigs
 
 router = APIRouter(prefix="/federation", tags=["federation"])
+
+# Opt-in: the newest ConsentRecord for this purpose must be a grant. No row
+# (never asked) and a withdrawal both mean "no".
+_SHARING_PURPOSE = "cross_facility_sharing"
+
+
+def _has_sharing_consent(db: Session, patient_id: str) -> bool:
+    return _effective_consent(db, patient_id).get(_SHARING_PURPOSE) is True
 
 # Process-local: with several gunicorn workers a replay inside the 120 s window
 # can land on a worker that has not seen the original (audience binding limits
@@ -40,7 +53,7 @@ def _require_enabled() -> None:
         raise HTTPException(status_code=503, detail="Federation is not configured on this node")
 
 
-def _staff_patient(db: Session, current_user: models.User, patient_id: str) -> models.Patient:
+def _staff_patient(db: Session, current_user: models.User, patient_id: str, action: str) -> models.Patient:
     patient = db.query(models.Patient).filter_by(id=patient_id).first()
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -48,6 +61,10 @@ def _staff_patient(db: Session, current_user: models.User, patient_id: str) -> m
         raise HTTPException(status_code=403, detail="Patient is not present at your facility")
     if not patient.national_id:
         raise HTTPException(status_code=409, detail="Patient has no national ID to match on")
+    if not _has_sharing_consent(db, patient.id):
+        log_access(db, patient.id, current_user.id, current_user.role, "federation_denied_no_consent",
+                   detail=f"action={action}", actor_facility=current_user.facility)
+        raise HTTPException(status_code=403, detail="Patient has not consented to sharing records between facilities")
     return patient
 
 
@@ -60,7 +77,7 @@ def other_visits(
     current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
     _require_enabled()
-    patient = _staff_patient(db, current_user, patient_id)
+    patient = _staff_patient(db, current_user, patient_id, "other_visits")
     try:
         pointers = mpi_client.lookup(patient.national_id)
     except mpi_client.MpiError as exc:
@@ -80,7 +97,7 @@ def fetch_other_visit(
     current_user: models.User = Depends(auth.require_page_access("patients")),
 ):
     _require_enabled()
-    patient = _staff_patient(db, current_user, patient_id)
+    patient = _staff_patient(db, current_user, patient_id, "fetch_visit")
     try:
         pointer = next(
             (p for p in mpi_client.lookup(patient.national_id)
@@ -157,6 +174,12 @@ def serve_visit_to_peer(
     patient = db.query(models.Patient).filter_by(id=enc.patient_id).first() if enc else None
     if (enc is None or patient is None or not patient.national_id
             or mpi_client.patient_key(patient.national_id) != patient_key):
+        raise HTTPException(status_code=404, detail="Not found")
+    # The origin enforces consent too: no consent looks exactly like an unknown
+    # visit to the caller (no oracle), but the denial is audited here.
+    if not _has_sharing_consent(db, enc.patient_id):
+        log_access(db, enc.patient_id, f"facility:{x_facility}", "federation_peer", "federation_peer_denied_no_consent",
+                   detail=f"visit_ref={visit_ref}")
         raise HTTPException(status_code=404, detail="Not found")
     log_access(db, enc.patient_id, f"facility:{x_facility}", "federation_peer", "federation_visit_served",
                detail=f"visit_ref={visit_ref}")

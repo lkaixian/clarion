@@ -64,6 +64,18 @@ def _iso(days_ago):
     return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
 
 
+def _consent(db, patient_id, granted):
+    """Append a cross_facility_sharing ledger row (newest wins)."""
+    db.add(models.ConsentRecord(
+        patient_id=patient_id, purpose="cross_facility_sharing", granted=granted,
+        source="portal", created_at=datetime.now(timezone.utc)))
+    db.commit()
+
+
+def _audit_actions(db, patient_id):
+    return [r.action for r in db.query(models.AuditLog).filter_by(patient_id=patient_id)]
+
+
 # ---- central ---------------------------------------------------------------
 
 def test_registration_needs_the_admin_token(central):
@@ -187,6 +199,7 @@ def test_publish_lookup_fetch_and_tamper_detection(central, test_client, db_sess
     patient = models.Patient(full_name="Fed Patient", date_of_birth="1990-01-01", national_id=nric)
     db_session.add(patient)
     db_session.commit()
+    _consent(db_session, patient.id, True)
     enc = models.Encounter(
         patient_id=patient.id, facility_name="Hospital A", encounter_type="outpatient",
         reason="cough", notes="rest and fluids", started_at=datetime.now(timezone.utc) - timedelta(days=1),
@@ -264,3 +277,91 @@ def test_peer_route_rejects_unregistered_callers(central, test_client, monkeypat
         headers = sigs.sign_headers("stranger", stranger_seed, "GET", path, audience="hosp-serve")
         assert test_client.get(path, headers=headers).status_code == 401
         assert test_client.get(path).status_code == 401
+
+
+# ---- patient consent --------------------------------------------------------
+
+def test_origin_refuses_to_serve_a_visit_without_consent_and_audits_it(
+        central, test_client, db_session, make_user, monkeypatch):
+    signer = make_user(role="clinician", facility="Hospital C")
+    seed_c = _facility(central, "hosp-c", endpoint="http://hosp-c.test")
+    seed_d = _facility(central, "hosp-d", endpoint="http://hosp-d.test")
+    mpi_client._key_cache.clear()
+
+    nric = f"91{secrets.randbelow(10**10):010d}"
+    patient = models.Patient(full_name="Consent Patient", date_of_birth="1991-01-01", national_id=nric)
+    db_session.add(patient)
+    db_session.commit()
+    enc = models.Encounter(
+        patient_id=patient.id, facility_name="Hospital C", encounter_type="outpatient",
+        reason="rash", notes="cream", started_at=datetime.now(timezone.utc) - timedelta(days=1),
+        signed_by=signer.id, signed_by_name="Dr C", signed_by_role="clinician",
+    )
+    db_session.add(enc)
+    db_session.commit()
+
+    def route(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "central.test":
+            r = central.request(request.method, request.url.path, content=request.content,
+                                headers=dict(request.headers))
+        else:
+            with _identity("hosp-c", seed_c, name="Hospital C"):
+                mpi_client._key_cache.clear()
+                r = test_client.request(request.method, request.url.path, content=request.content,
+                                        headers=dict(request.headers))
+        return httpx.Response(r.status_code, content=r.content,
+                              headers={"content-type": r.headers.get("content-type", "application/json")})
+
+    monkeypatch.setattr(mpi_client, "_client_factory", lambda: httpx.Client(transport=httpx.MockTransport(route)))
+    with _identity("hosp-c", seed_c, name="Hospital C"):
+        mpi_client._publish_job({"encounter_id": enc.id})
+
+    with _identity("hosp-d", seed_d):
+        mpi_client._key_cache.clear()
+        pointer = mpi_client.lookup(nric)[0]
+
+        # Never asked -> denied, and it looks like an unknown visit to the caller.
+        with pytest.raises(mpi_client.MpiError):
+            mpi_client.fetch_visit(nric, pointer)
+        assert "federation_peer_denied_no_consent" in _audit_actions(db_session, patient.id)
+        assert "federation_visit_served" not in _audit_actions(db_session, patient.id)
+
+        # Granted -> served.
+        _consent(db_session, patient.id, True)
+        mpi_client._key_cache.clear()
+        assert mpi_client.fetch_visit(nric, pointer)["notes"] == "cream"
+
+        # Withdrawn later -> denied again (newest ledger row wins).
+        _consent(db_session, patient.id, False)
+        mpi_client._key_cache.clear()
+        with pytest.raises(mpi_client.MpiError):
+            mpi_client.fetch_visit(nric, pointer)
+
+
+def test_staff_federation_routes_need_the_patients_consent(
+        test_client, db_session, make_user, auth_headers, monkeypatch):
+    from app.routers import federation
+
+    clin = make_user(role="clinician", facility="Hospital B")
+    patient = models.Patient(full_name="Staff Consent", date_of_birth="1990-02-02",
+                             national_id=f"92{secrets.randbelow(10**10):010d}")
+    db_session.add(patient)
+    db_session.commit()
+    monkeypatch.setattr(mpi_client, "enabled", lambda: True)
+    monkeypatch.setattr(federation, "_patient_present_at", lambda *a, **k: True)
+    monkeypatch.setattr(mpi_client, "lookup", lambda nric: [])
+    monkeypatch.setattr(mpi_client, "_cfg", lambda: {"facility_id": "hosp-b"})
+    url = f"/federation/patients/{patient.id}/other-visits"
+    fetch_url = f"/federation/patients/{patient.id}/visits/hosp-a/some-ref"
+
+    for u in (url, fetch_url):
+        resp = test_client.get(u, headers=auth_headers(clin))
+        assert resp.status_code == 403, resp.text
+        assert "consented" in resp.json()["detail"]
+    assert _audit_actions(db_session, patient.id).count("federation_denied_no_consent") == 2
+
+    _consent(db_session, patient.id, True)
+    assert test_client.get(url, headers=auth_headers(clin)).status_code == 200
+
+    _consent(db_session, patient.id, False)  # withdrawn
+    assert test_client.get(url, headers=auth_headers(clin)).status_code == 403

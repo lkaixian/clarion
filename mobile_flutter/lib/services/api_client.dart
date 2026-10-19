@@ -5,13 +5,16 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
 import '../config/app_config.dart';
+import '../models/bill.dart';
 import '../models/booking.dart';
 import '../models/emergency_card.dart';
+import '../models/nfc_card.dart';
 import '../models/patient.dart';
 import '../models/audit_log_entry.dart';
 import '../models/queue_ticket.dart';
 import '../models/server_appointment.dart';
 import 'api_exception.dart';
+import 'tag_crypto.dart';
 import 'token_storage.dart';
 
 /// Thin, typed wrapper around the CLARION FastAPI backend.
@@ -102,6 +105,9 @@ class ApiClient {
           final path = error.requestOptions.path;
           const exemptPaths = {
             '/auth/login',
+            '/auth/mfa/verify',
+            '/auth/mfa/email/send',
+            '/auth/mfa/email/verify',
             '/auth/refresh',
             '/auth/request-password-reset-otp',
             '/auth/reset-password-with-otp',
@@ -109,6 +115,9 @@ class ApiClient {
             '/auth/self-register/verify-otp',
             '/auth/self-register/verify-photos',
             '/auth/self-register/complete',
+            '/auth/self-register/claim/start',
+            '/auth/self-register/claim/verify-otp',
+            '/auth/self-register/claim/verify-photos',
           };
           final alreadyRetried = error.requestOptions.extra['retriedAfterRefresh'] == true;
 
@@ -240,6 +249,29 @@ class ApiClient {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/auth/mfa/verify',
+        data: {'mfa_token': mfaToken, 'code': code},
+      );
+      return response.data!;
+    });
+  }
+
+  /// `POST /auth/mfa/email/send` -- emails a one-time sign-in code. Returns
+  /// `{status, email_hint}`.
+  Future<Map<String, dynamic>> sendMfaEmailCode(String mfaToken) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/mfa/email/send',
+        data: {'mfa_token': mfaToken},
+      );
+      return response.data!;
+    });
+  }
+
+  /// `POST /auth/mfa/email/verify` -- same response shape as [login] on success.
+  Future<Map<String, dynamic>> verifyMfaEmail(String mfaToken, String code) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/mfa/email/verify',
         data: {'mfa_token': mfaToken, 'code': code},
       );
       return response.data!;
@@ -418,69 +450,100 @@ class ApiClient {
     });
   }
 
-  /// `GET /patients/appointment-slots` — P3.10. Bookable
-  /// slots for one Malaysia-local calendar `date` ("YYYY-MM-DD"), already
-  /// excluding anything already booked. `department`/`clinicianId` narrow
-  /// the search; omitting `clinicianId` returns the union of every matching
-  /// clinician's free slots (see backend/app/routers/patients.py::
-  /// list_appointment_slots).
-  Future<List<AppointmentSlot>> getAppointmentSlots({
-    required String facilityName,
-    required String date,
-    String? department,
-    String? clinicianId,
+  // ---- online booking v2 (/booking/*) ------------------------------------
+  Future<List<BookingCategory>> getBookingCategories() {
+    return _guard(() async {
+      final r = await _dio.get<List<dynamic>>('/booking/categories');
+      return (r.data ?? []).map((e) => BookingCategory.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  /// Hospitals with online booking on for [category]. `q` is a typed name/area;
+  /// `lat`/`lng` (both or neither) sort nearest first.
+  Future<List<BookingFacility>> getBookingFacilities({
+    required String category,
+    String? q,
+    double? lat,
+    double? lng,
+    int limit = 20,
   }) {
     return _guard(() async {
-      final response = await _dio.get<List<dynamic>>(
-        '/patients/appointment-slots',
+      final text = q?.trim() ?? '';
+      final r = await _dio.get<List<dynamic>>(
+        '/booking/facilities',
         queryParameters: {
-          'facility_name': facilityName,
-          'date': date,
-          'department': ?department,
-          'clinician_id': ?clinicianId,
+          'category': category,
+          if (text.isNotEmpty) 'q': text,
+          'lat': ?lat,
+          'lng': ?lng,
+          'limit': limit,
         },
       );
-      return (response.data ?? [])
-          .map((e) => AppointmentSlot.fromJson(e as Map<String, dynamic>))
+      return (r.data ?? []).map((e) => BookingFacility.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  Future<FacilityAvailability> getBookingAvailability(String facilityName, String category, {int days = 14}) {
+    return _guard(() async {
+      final r = await _dio.get<Map<String, dynamic>>(
+        '/booking/facilities/${Uri.encodeComponent(facilityName)}/availability',
+        queryParameters: {'category': category, 'days': days},
+      );
+      return FacilityAvailability.fromJson(r.data!);
+    });
+  }
+
+  Future<List<BookingSlot>> getBookingSlots(String facilityName, String category, String date) {
+    return _guard(() async {
+      final r = await _dio.get<Map<String, dynamic>>(
+        '/booking/facilities/${Uri.encodeComponent(facilityName)}/slots',
+        queryParameters: {'category': category, 'date': date},
+      );
+      return (r.data?['slots'] as List<dynamic>? ?? [])
+          .map((e) => BookingSlot.fromJson(e as Map<String, dynamic>))
           .toList();
     });
   }
 
-  /// `GET /patients/booking-options` — the department/clinician pickers a
-  /// self-booking flow needs for one facility.
-  Future<BookingOptions> getBookingOptions(String facilityName) {
+  /// `POST /booking/appointments`. 409 = slot taken, 403 = no patient record.
+  Future<ServerAppointment> createBookingAppointment(Map<String, dynamic> body) {
     return _guard(() async {
-      final response = await _dio.get<Map<String, dynamic>>(
-        '/patients/booking-options',
-        queryParameters: {'facility_name': facilityName},
-      );
-      return BookingOptions.fromJson(response.data!);
+      final r = await _dio.post<Map<String, dynamic>>('/booking/appointments', data: body);
+      return ServerAppointment.fromJson(r.data!);
     });
   }
 
-  /// `POST /patients/{patient_id}/appointments/self-book` — patient JWT,
-  /// own record only. `scheduledAt` MUST be one of the exact values
-  /// [getAppointmentSlots] just returned (copied verbatim, not reformatted)
-  /// -- the backend re-validates it's still a real offered slot and 409s
-  /// otherwise (someone else took it in the meantime).
-  Future<ServerAppointment> selfBookAppointment({
-    required String patientId,
-    required String facilityName,
-    String? department,
-    String? clinicianId,
-    required DateTime scheduledAt,
-  }) {
+  Future<ServerAppointment> cancelBookingAppointment(String appointmentId) {
     return _guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/patients/$patientId/appointments/self-book',
-        data: {
-          'facility_name': facilityName,
-          'department': ?department,
-          'clinician_id': ?clinicianId,
-          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
-        },
-      );
-      return ServerAppointment.fromJson(response.data!);
+      final r = await _dio.post<Map<String, dynamic>>('/booking/appointments/$appointmentId/cancel');
+      return ServerAppointment.fromJson(r.data!);
+    });
+  }
+
+  Future<List<BookingProfile>> getBookingProfiles() {
+    return _guard(() async {
+      final r = await _dio.get<List<dynamic>>('/booking/profiles');
+      return (r.data ?? []).map((e) => BookingProfile.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  Future<BookingProfile> createBookingProfile(Map<String, dynamic> body) {
+    return _guard(() async {
+      final r = await _dio.post<Map<String, dynamic>>('/booking/profiles', data: body);
+      return BookingProfile.fromJson(r.data!);
+    });
+  }
+
+  Future<BookingProfile> updateBookingProfile(String id, Map<String, dynamic> body) {
+    return _guard(() async {
+      final r = await _dio.patch<Map<String, dynamic>>('/booking/profiles/$id', data: body);
+      return BookingProfile.fromJson(r.data!);
+    });
+  }
+
+  Future<void> deleteBookingProfile(String id) {
+    return _guard(() async {
+      await _dio.delete<dynamic>('/booking/profiles/$id');
     });
   }
 
@@ -531,10 +594,77 @@ class ApiClient {
     });
   }
 
+  // ---- payments (patient self-service) -----------------------------------
+  Future<List<PatientBill>> getMyBills() {
+    return _guard(() async {
+      final r = await _dio.get<List<dynamic>>('/payments/my-bills');
+      return (r.data ?? []).map((e) => PatientBill.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  Future<List<PaymentHistoryEntry>> getMyPaymentHistory() {
+    return _guard(() async {
+      final r = await _dio.get<List<dynamic>>('/payments/my-history');
+      return (r.data ?? []).map((e) => PaymentHistoryEntry.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  Future<PaymentIntent> createPaymentIntent(String billId, int amountCents, String idempotencyKey) {
+    return _guard(() async {
+      final r = await _dio.post<Map<String, dynamic>>(
+        '/payments/bills/$billId/intents',
+        data: {'amount_cents': amountCents, 'idempotency_key': idempotencyKey},
+      );
+      return PaymentIntent.fromJson(r.data!);
+    });
+  }
+
+  /// Demo gateway only: the backend refuses this unless the node is a demo.
+  Future<PaymentIntent> simulatePayment(String intentId, String outcome) {
+    return _guard(() async {
+      final r = await _dio.post<Map<String, dynamic>>(
+        '/payments/intents/$intentId/simulate',
+        data: {'outcome': outcome},
+      );
+      return PaymentIntent.fromJson(r.data!);
+    });
+  }
+
+  Future<void> cancelPaymentIntent(String intentId) {
+    return _guard(() async {
+      await _dio.post<Map<String, dynamic>>('/payments/intents/$intentId/cancel');
+    });
+  }
+
+  Future<PaymentReceipt> getReceipt(String paymentId) {
+    return _guard(() async {
+      final r = await _dio.get<Map<String, dynamic>>('/payments/receipts/$paymentId');
+      return PaymentReceipt.fromJson(r.data!);
+    });
+  }
+
+  /// Raw PDF bytes of one receipt, for the caller to write to a temp file and share.
+  Future<List<int>> getReceiptPdfBytes(String paymentId) {
+    return _guard(() async {
+      final r = await _dio.get<List<int>>('/payments/receipts/$paymentId/pdf',
+          options: Options(responseType: ResponseType.bytes));
+      return r.data!;
+    });
+  }
+
+  /// Emails the receipt to the patient's address on file. Returns the masked address.
+  Future<String> emailReceipt(String paymentId) {
+    return _guard(() async {
+      final r = await _dio.post<Map<String, dynamic>>('/payments/receipts/$paymentId/email');
+      return r.data!['to_masked'] as String? ?? '';
+    });
+  }
+
   Future<EmergencyCard> issueEmergencyCard({
     required String patientId,
     required List<String> scope,
-    int validMinutes = 43200,
+    // Omitted from the body when null: the server default (3 years) applies.
+    int? validMinutes,
   }) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -542,7 +672,7 @@ class ApiClient {
         data: {
           'patient_id': patientId,
           'scope': scope,
-          'valid_minutes': validMinutes,
+          'valid_minutes': ?validMinutes,
         },
       );
       return EmergencyCard.fromJson(response.data!);
@@ -627,12 +757,13 @@ class ApiClient {
     });
   }
 
-  /// `GET /emergency/tag-keys` -- staff only. `{key_id: base64 key}` the
-  /// device caches to open encrypted NFC tags with no network.
-  Future<Map<String, String>> getTagKeys() {
+  /// `GET /emergency/tag-keys` -- staff only. The data keys the device caches
+  /// to open encrypted NFC tags with no network, plus the revoked-card list
+  /// and how long it may rely on them (see [TagKeySet]).
+  Future<TagKeySet> getTagKeys() {
     return _guard(() async {
       final response = await _dio.get<Map<String, dynamic>>('/emergency/tag-keys');
-      return (response.data!['keys'] as Map<String, dynamic>).cast<String, String>();
+      return TagKeySet.fromJson(response.data!);
     });
   }
 
@@ -651,10 +782,18 @@ class ApiClient {
   /// `GET /emergency/nfc/{patient_id}` — a patient can view (read-only)
   /// which physical NFC cards staff have registered against their own
   /// record.
-  Future<List<Map<String, dynamic>>> listNfcCards(String patientId) {
+  Future<List<NfcCard>> listNfcCards(String patientId) {
     return _guard(() async {
       final response = await _dio.get<List<dynamic>>('/emergency/nfc/$patientId');
-      return (response.data ?? []).cast<Map<String, dynamic>>();
+      return (response.data ?? []).cast<Map<String, dynamic>>().map(NfcCard.fromJson).toList();
+    });
+  }
+
+  /// `GET /emergency/nfc/{patient_id}/{card_id}/history` -- newest first.
+  Future<List<NfcCardEvent>> getNfcCardHistory(String patientId, String cardId) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/emergency/nfc/$patientId/$cardId/history');
+      return (response.data ?? []).cast<Map<String, dynamic>>().map(NfcCardEvent.fromJson).toList();
     });
   }
 
@@ -719,7 +858,7 @@ class ApiClient {
   Future<Map<String, dynamic>> selfRegisterStart({
     required String nationalId,
     required String fullName,
-    required String email,
+    String? email,
   }) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -727,10 +866,20 @@ class ApiClient {
         data: {
           'national_id': nationalId,
           'full_name': fullName,
-          'email': email,
+          if (email != null && email.isNotEmpty) 'email': email,
         },
       );
       return response.data!;
+    });
+  }
+
+  /// `GET /auth/self-register/config` -- `{photo_check: bool}`. False (the
+  /// default) means no NRIC photos and no email field: the code goes to the
+  /// address already on the patient's record.
+  Future<bool> selfRegisterPhotoCheck() {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>('/auth/self-register/config');
+      return response.data?['photo_check'] == true;
     });
   }
 
@@ -802,11 +951,73 @@ class ApiClient {
   Future<Map<String, dynamic>> selfRegisterComplete({
     required String nationalId,
     required String newPassword,
+    String? completionToken,
   }) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/auth/self-register/complete',
-        data: {'national_id': nationalId, 'new_password': newPassword},
+        data: {
+          'national_id': nationalId,
+          'new_password': newPassword,
+          'completion_token': ?completionToken,
+        },
+      );
+      return response.data!;
+    });
+  }
+
+  // ---- pending-claim sign-up (see web/src/pages/Register.jsx): no hospital record needed ----
+
+  /// `POST /auth/self-register/claim/start` -- sends a code to [email].
+  Future<Map<String, dynamic>> claimStart({
+    required String nationalId,
+    required String fullName,
+    required String email,
+  }) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/self-register/claim/start',
+        data: {'national_id': nationalId, 'full_name': fullName, 'email': email},
+      );
+      return response.data!;
+    });
+  }
+
+  /// `POST /auth/self-register/claim/verify-otp`. The password is chosen here, by whoever proves
+  /// the inbox. Returns `{status: approved, session}` (signed in) or `{status: pending, photo_check}`.
+  Future<Map<String, dynamic>> claimVerifyOtp({
+    required String nationalId,
+    required String email,
+    required String otpCode,
+    required String password,
+  }) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/self-register/claim/verify-otp',
+        data: {'national_id': nationalId, 'email': email, 'otp_code': otpCode, 'password': password},
+      );
+      return response.data!;
+    });
+  }
+
+  /// `POST /auth/self-register/claim/verify-photos` (multipart). Same result shape as [claimVerifyOtp].
+  Future<Map<String, dynamic>> claimVerifyPhotos({
+    required String nationalId,
+    required String email,
+    required String frontImagePath,
+    required String backImagePath,
+  }) {
+    return _guard(() async {
+      final formData = FormData.fromMap({
+        'national_id': nationalId,
+        'email': email,
+        'front_image': await MultipartFile.fromFile(frontImagePath, filename: 'nric_front.jpg'),
+        'back_image': await MultipartFile.fromFile(backImagePath, filename: 'nric_back.jpg'),
+      });
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/self-register/claim/verify-photos',
+        data: formData,
+        options: Options(contentType: Headers.multipartFormDataContentType),
       );
       return response.data!;
     });
