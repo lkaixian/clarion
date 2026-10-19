@@ -16,6 +16,7 @@ The signed request path is relative to the *service root* (no `/mpi` or
 cannot break verification.
 """
 import base64
+import os
 import hashlib
 import json
 import secrets
@@ -98,13 +99,28 @@ def sign_headers(facility_id: str, private_seed_b64: str, method: str,
 
 
 class ReplayCache:
-    """(facility, signature) pairs seen inside the freshness window. Process
-    local: run ONE worker per verifier, or back this with Redis SET NX EX."""
+    """(facility, signature) pairs seen inside the freshness window. With
+    REDIS_URL set (and the `redis` package installed) the check is a shared
+    SET NX EX, so it holds across workers; if Redis is unreachable it falls
+    back to this process's own memory (the old behaviour), never to "allow"."""
 
-    def __init__(self) -> None:
+    def __init__(self, redis_url: "str | None" = None) -> None:
         self._seen: dict = {}
+        self._redis = None
+        url = redis_url or os.environ.get("REDIS_URL")
+        if url:
+            try:
+                import redis
+                self._redis = redis.Redis.from_url(url, socket_timeout=0.5, socket_connect_timeout=0.5)
+            except Exception:  # noqa: BLE001 -- package missing / bad URL: stay process-local
+                self._redis = None
 
     def first_time(self, key: tuple, now: float) -> bool:
+        if self._redis is not None:
+            try:
+                return bool(self._redis.set("clarion:replay:" + "|".join(key), 1, nx=True, ex=2 * MAX_SKEW_SECONDS))
+            except Exception:  # noqa: BLE001 -- Redis blip: fall through to the local check
+                pass
         self._seen = {k: exp for k, exp in self._seen.items() if exp >= now}
         if key in self._seen:
             return False

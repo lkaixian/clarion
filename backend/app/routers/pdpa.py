@@ -55,6 +55,9 @@ def _staff_may_reach_patient(db: Session, current_user: models.User, patient_id:
 
 
 _AGE_OF_MAJORITY = 18
+# Dependant links to a partner or ex-partner are never a guardian relationship
+# (reference_codes kind `relationships`: Husband, Spouse, Ex-wife, Ex-husband).
+_NOT_GUARDIAN_CODES = {"2", "spouse", "13", "14"}
 
 
 def _is_guardian_of_minor(db: Session, current_user: models.User, patient_id: str) -> bool:
@@ -63,8 +66,10 @@ def _is_guardian_of_minor(db: Session, current_user: models.User, patient_id: st
     from .emergency import _age_from_dob  # lazy: emergency imports this module's neighbours
     if not current_user.patient_id:
         return False
-    linked = db.query(models.PatientDependant.id).filter_by(
+    linked = db.query(models.PatientDependant).filter_by(
         patient_id=current_user.patient_id, dependant_id=patient_id).first()
+    if linked is not None and linked.relation_code in _NOT_GUARDIAN_CODES:
+        return False
     child = db.query(models.Patient.date_of_birth).filter_by(id=patient_id).first()
     age = _age_from_dob(child[0]) if child else None
     return bool(linked) and age is not None and age < _AGE_OF_MAJORITY
