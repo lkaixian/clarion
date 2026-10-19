@@ -16,7 +16,10 @@ import {
   createAncillaryRequest,
   cancelAncillaryRequest,
   signOffAncillaryResult,
-  uploadAncillaryResultDocument,
+  stageResultAttachment,
+  listStagedAttachments,
+  deleteResultAttachment,
+  getResultAttachmentBlob,
   getAncillaryResultDocumentBlob,
   getServiceRequestLabelBlob,
   getAncillaryStats,
@@ -24,6 +27,7 @@ import {
   uploadDicomStudy,
 } from "../api/client";
 import { formatDateTime } from "../lib/format";
+import { tr } from "../lib/i18n";
 
 const TABS = [
   { key: "procedure", label: "Procedure" },
@@ -157,8 +161,8 @@ export default function Ancillary() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Ancillary Services</h1>
-        <p className="text-sm text-slate-500">Manage orders, results, and catalogs for ancillary departments.</p>
+        <h1 className="page-title">{tr("Ancillary Services")}</h1>
+        <p className="text-sm text-slate-500">{tr("Manage orders, results, and catalogs for ancillary departments.")}</p>
       </div>
 
       <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto">
@@ -188,26 +192,26 @@ export default function Ancillary() {
         <div className="flex gap-4 mb-4">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 w-40 text-center">
             <p className="text-2xl font-bold text-amber-800">{statOpen}</p>
-            <p className="text-xs text-amber-700 uppercase tracking-wide">Open Orders</p>
+            <p className="text-xs text-amber-700 uppercase tracking-wide">{tr("Open Orders")}</p>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 w-40 text-center">
             <p className="text-2xl font-bold text-green-800">{statSignedOff}</p>
-            <p className="text-xs text-green-700 uppercase tracking-wide">Signed Off (30d)</p>
+            <p className="text-xs text-green-700 uppercase tracking-wide">{tr("Signed Off (30d)")}</p>
           </div>
         </div>
       )}
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2 items-center">
-          <label className="text-sm font-medium text-slate-600">View status:</label>
+          <label className="text-sm font-medium text-slate-600">{tr("View status:")}</label>
           <select 
             className="border border-slate-300 rounded-lg px-2 py-1 text-sm"
             value={viewStatus} onChange={(e) => setViewStatus(e.target.value)}
           >
-            <option value="ordered">Ordered</option>
-            <option value="signed_off">Signed off</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="all">All</option>
+            <option value="ordered">{tr("Ordered")}</option>
+            <option value="signed_off">{tr("Signed off")}</option>
+            <option value="cancelled">{tr("Cancelled")}</option>
+            <option value="all">{tr("All")}</option>
           </select>
         </div>
         <button
@@ -232,11 +236,11 @@ export default function Ancillary() {
 
       <div className="card mb-6">
         {loading ? (
-          <p className="text-sm text-slate-400">Loading worklist…</p>
+          <p className="text-sm text-slate-400">{tr("Loading worklist…")}</p>
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : requests.length === 0 ? (
-          <p className="text-sm text-slate-400">No requests found.</p>
+          <p className="text-sm text-slate-400">{tr("No requests found.")}</p>
         ) : (
           <div className="space-y-3">
             {requests.map(req => (
@@ -258,7 +262,7 @@ export default function Ancillary() {
       {canSignOff && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
           <button onClick={() => setShowCatalog(!showCatalog)} className="w-full flex items-center justify-between text-left">
-            <span className="font-semibold text-slate-800">Catalog Management</span>
+            <span className="font-semibold text-slate-800">{tr("Catalog Management")}</span>
             <span className="text-xs text-slate-400">{showCatalog ? "Hide" : "Show"}</span>
           </button>
           
@@ -266,7 +270,7 @@ export default function Ancillary() {
             <div className="mt-4">
               <div className="space-y-2 mb-4">
                 {catalogItems.length === 0 ? (
-                  <p className="text-sm text-slate-400">No items in this module's catalog.</p>
+                  <p className="text-sm text-slate-400">{tr("No items in this module's catalog.")}</p>
                 ) : (
                   catalogItems.map(item => (
                     <div key={item.id} className={`flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2 ${item.active ? "bg-slate-50" : "bg-slate-100 opacity-70"}`}>
@@ -304,10 +308,15 @@ export default function Ancillary() {
   );
 }
 
+function catalogLabel(item) {
+  return item ? `${item.name} (RM ${(item.unit_price_cents / 100).toFixed(2)})` : "";
+}
+
 function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel, onSuccess, onError }) {
   const [patientSearch, setPatientSearch] = useState("");
   const [patientId, setPatientId] = useState("");
   const [catalogId, setCatalogId] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [source, setSource] = useState("frontdesk");
   const [encounterId, setEncounterId] = useState("");
   const [indication, setIndication] = useState("");
@@ -318,6 +327,16 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
     p.full_name?.toLowerCase().includes(patientSearch.toLowerCase()) || 
     p.national_id?.toLowerCase().includes(patientSearch.toLowerCase())
   ).slice(0, 10);
+
+  // Every word typed must appear in the name (or code), any order, so
+  // "blood count" finds "Full Blood Count".
+  const catalogWords = catalogSearch.toLowerCase().split(/\s+/).filter(Boolean);
+  const filteredCatalog = catalogItems
+    .filter(i => {
+      const hay = `${i.name || ""} ${i.code || ""}`.toLowerCase();
+      return catalogWords.every(w => hay.includes(w));
+    })
+    .slice(0, 50);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -345,28 +364,28 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
 
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-xl p-5 mb-4 grid gap-3">
-      <h2 className="font-semibold text-slate-800">New Order</h2>
+      <h2 className="font-semibold text-slate-800">{tr("New Order")}</h2>
       
       <div>
-        <label className="field-label">Patient</label>
+        <label className="field-label">{tr("Patient")}</label>
         {!canBrowsePatients ? (
           // Receptionist has no `patients` page access (GET /patients 403s
           // for that role by design -- see app/permissions.py), so there's
           // no searchable list to offer here. They already have the
           // patient's id from Reception check-in; paste it directly.
           <input
-            type="text" placeholder="Patient ID (from Reception check-in)"
+            type="text" placeholder={tr("Patient ID (from Reception check-in)")}
             className="field-input"
             value={patientId} onChange={e => setPatientId(e.target.value.trim())}
           />
         ) : patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
             <span>{patients.find(p => p.id === patientId)?.full_name || patientId}</span>
-            <button type="button" onClick={() => setPatientId("")} className="text-blue-700 hover:underline">Change</button>
+            <button type="button" onClick={() => setPatientId("")} className="text-blue-700 hover:underline">{tr("Change")}</button>
           </div>
         ) : (
           <div>
-            <input type="text" placeholder="Search by name or NRIC..." className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-1" value={patientSearch} onChange={e => setPatientSearch(e.target.value)} />
+            <input type="text" placeholder={tr("Search by name or NRIC...")} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-1" value={patientSearch} onChange={e => setPatientSearch(e.target.value)} />
             {patientSearch && filteredPatients.length > 0 && (
               <ul className="border border-slate-200 rounded-lg divide-y max-h-40 overflow-y-auto">
                 {filteredPatients.map(p => (
@@ -382,48 +401,68 @@ function OrderForm({ module, catalogItems, patients, canBrowsePatients, onCancel
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="field-label">Catalog Item</label>
-          <select required className="field-input" value={catalogId} onChange={e => setCatalogId(e.target.value)}>
-            <option value="">-- select item --</option>
-            {catalogItems.map(item => (
-              <option key={item.id} value={item.id}>{item.name} (RM {(item.unit_price_cents / 100).toFixed(2)})</option>
-            ))}
-          </select>
+          <label className="field-label">{tr("Catalog Item")}</label>
+          {catalogId ? (
+            <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
+              <span>{catalogLabel(catalogItems.find(i => i.id === catalogId))}</span>
+              <button type="button" onClick={() => setCatalogId("")} className="text-blue-700 hover:underline">{tr("Change")}</button>
+            </div>
+          ) : (
+            <div>
+              <input
+                type="text" autoComplete="off" placeholder={tr("Type to search items...")}
+                className="field-input mb-1" value={catalogSearch}
+                onChange={e => setCatalogSearch(e.target.value)}
+              />
+              {/* No query: the first few items so it isn't an empty box; typing narrows the whole catalog. */}
+              <ul className="border border-slate-200 rounded-lg divide-y max-h-48 overflow-y-auto">
+                {filteredCatalog.map(item => (
+                  <li
+                    key={item.id} onClick={() => { setCatalogId(item.id); setCatalogSearch(""); }}
+                    className="px-3 py-2 text-sm hover:bg-slate-50 cursor-pointer"
+                  >
+                    {catalogLabel(item)}
+                  </li>
+                ))}
+                {filteredCatalog.length === 0 && <li className="px-3 py-2 text-sm text-slate-400">{tr("No matching item.")}</li>}
+              </ul>
+            </div>
+          )}
         </div>
         <div>
-          <label className="field-label">Priority</label>
+          <label className="field-label">{tr("Priority")}</label>
           <select className="field-input" value={priority} onChange={e => setPriority(e.target.value)}>
-            <option value="routine">Routine</option>
-            <option value="urgent">Urgent</option>
-            <option value="stat">Stat</option>
+            <option value="routine">{tr("Routine")}</option>
+            <option value="urgent">{tr("Urgent")}</option>
+            <option value="stat">{tr("Stat")}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="field-label">Source</label>
+          <label className="field-label">{tr("Source")}</label>
           <select className="field-input" value={source} onChange={e => setSource(e.target.value)}>
-            <option value="frontdesk">Frontdesk</option>
-            <option value="physician_order">Physician Order</option>
+            <option value="frontdesk">{tr("Frontdesk")}</option>
+            <option value="physician_order">{tr("Physician Order")}</option>
           </select>
         </div>
         {source === "physician_order" && (
           <div>
-            <label className="field-label">Encounter ID</label>
+            <label className="field-label">{tr("Encounter ID")}</label>
             <input required type="text" className="field-input" value={encounterId} onChange={e => setEncounterId(e.target.value)} />
           </div>
         )}
       </div>
 
       <div>
-        <label className="field-label">Clinical Indication</label>
+        <label className="field-label">{tr("Clinical Indication")}</label>
         <textarea rows={2} className="field-input" value={indication} onChange={e => setIndication(e.target.value)}></textarea>
       </div>
 
       <div className="flex gap-2 mt-2">
-        <button disabled={busy} className="btn-primary">Create Order</button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
+        <button disabled={busy} className="btn-primary">{tr("Create Order")}</button>
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">{tr("Cancel")}</button>
       </div>
     </form>
   );
@@ -433,6 +472,20 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
   const [showSignOff, setShowSignOff] = useState(false);
   const [showViewer, setShowViewer] = useState(false);
   const [uploadingDicom, setUploadingDicom] = useState(false);
+
+  async function downloadAttachment(a) {
+    try {
+      const blob = await getResultAttachmentBlob(req.id, a.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = a.filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      showMsg("error", "Could not download that file.");
+    }
+  }
 
   async function handleDicomUpload(e) {
     const file = e.target.files?.[0];
@@ -461,7 +514,7 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
           </div>
           <p className="text-xs text-slate-600 mb-1">
             Patient: {req.patient_full_name || req.patient_id}
-            <Link to={`/patients/${req.patient_id}`} className="ml-2 text-blue-700 hover:underline">View Record</Link>
+            <Link to={`/patients/${req.patient_id}`} className="ml-2 text-blue-700 hover:underline">{tr("View Record")}</Link>
           </p>
           <p className="text-xs text-slate-500">Ordered {formatDateTime(req.created_at)} · {req.source}</p>
           {req.clinical_indication && <p className="text-xs text-slate-600 mt-1 italic truncate max-w-lg">Indication: {req.clinical_indication}</p>}
@@ -513,7 +566,7 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
           above: the images usually exist before the report does). */}
       {req.module === "xray" && req.status !== "cancelled" && (
         <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-700">Imaging</span>
+          <span className="text-xs font-semibold text-slate-700">{tr("Imaging")}</span>
           {req.has_dicom_study ? (
             <button onClick={() => setShowViewer(true)} className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1">
               🩻 View imaging
@@ -525,7 +578,7 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
                 disabled={uploadingDicom} onChange={handleDicomUpload} />
             </label>
           ) : (
-            <span className="text-xs text-slate-400">Not yet attached.</span>
+            <span className="text-xs text-slate-400">{tr("Not yet attached.")}</span>
           )}
         </div>
       )}
@@ -534,12 +587,24 @@ function RequestRow({ req, canSignOff, hasSignature, onCancel, onDownload, onRef
       {req.result && (
         <div className="mt-3 pt-3 border-t border-slate-200">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold text-slate-700">Result</span>
-            {req.result.flag_abnormal && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">Abnormal</span>}
-            {req.result.flag_critical && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase">Critical</span>}
+            <span className="text-xs font-semibold text-slate-700">{tr("Result")}</span>
+            {req.result.flag_abnormal && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">{tr("Abnormal")}</span>}
+            {req.result.flag_critical && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded uppercase">{tr("Critical")}</span>}
             <span className="text-xs text-slate-500 ml-auto">Signed by {req.result.signed_by_name} at {formatDateTime(req.result.performed_at)} <SealBadge status={req.result.seal_status} /></span>
           </div>
           {req.result.result_text && <p className="text-sm text-slate-700 mb-2 whitespace-pre-wrap">{req.result.result_text}</p>}
+          {req.result.attachments?.length > 0 && (
+            <ul className="mb-2 space-y-1">
+              {req.result.attachments.map((a) => (
+                <li key={a.id}>
+                  <button onClick={() => downloadAttachment(a)} className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    {a.filename}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {req.result.has_document && (
             <button onClick={onDownload} className="text-xs text-blue-700 hover:underline inline-flex items-center gap-1">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
@@ -556,14 +621,45 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
   const [resultText, setResultText] = useState("");
   const [abnormal, setAbnormal] = useState(false);
   const [critical, setCritical] = useState(false);
-  const [file, setFile] = useState(null);
+  const [staged, setStaged] = useState([]); // [{ id, filename }] uploaded, not yet signed
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Closing and reopening the form must not strand files already staged.
+  useEffect(() => {
+    listStagedAttachments(req.id)
+      .then((list) => setStaged(list.map((a) => ({ id: a.id, filename: a.filename }))))
+      .catch(() => {});
+  }, [req.id]);
+
+  async function handlePick(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ""; // allow re-picking the same file after an error
+    if (!files.length) return;
+    setUploading(true);
+    for (const f of files) {
+      try {
+        const a = await stageResultAttachment(req.id, f);
+        setStaged((list) => [...list, { id: a.id, filename: a.filename }]);
+      } catch (err) {
+        onError(`${f.name}: ${err?.response?.data?.detail || "upload failed."}`);
+      }
+    }
+    setUploading(false);
+  }
+
+  async function handleRemove(a) {
+    try {
+      await deleteResultAttachment(req.id, a.id);
+    } catch { /* already gone (expired): drop it from the list either way */ }
+    setStaged((list) => list.filter((x) => x.id !== a.id));
+  }
 
   if (!hasSignature) {
     return (
       <div className="mt-3 bg-white p-4 border border-slate-200 rounded-lg text-sm text-center">
-        <p className="text-amber-700 mb-2">You need a digital signature to sign off results.</p>
-        <Link to="/profile" className="text-blue-700 underline font-medium">Save your signature in your profile first.</Link>
+        <p className="text-amber-700 mb-2">{tr("You need a digital signature to sign off results.")}</p>
+        <Link to="/profile" className="text-blue-700 underline font-medium">{tr("Save your signature in your profile first.")}</Link>
       </div>
     );
   }
@@ -575,11 +671,9 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
       await signOffAncillaryResult(req.id, {
         result_text: resultText,
         flag_abnormal: abnormal,
-        flag_critical: critical
+        flag_critical: critical,
+        attachment_ids: staged.map((a) => a.id),
       });
-      if (file) {
-        await uploadAncillaryResultDocument(req.id, file);
-      }
       onSuccess();
     } catch (err) {
       onError(err?.response?.data?.detail || "Failed to sign off.");
@@ -590,7 +684,7 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="mt-3 bg-white p-4 border border-slate-200 rounded-lg grid gap-3">
       <div>
-        <label className="field-label">Result Text</label>
+        <label className="field-label">{tr("Result Text")} <span className="font-normal text-slate-400">{tr("(optional if you attach the result file)")}</span></label>
         <textarea rows={3} className="field-input" value={resultText} onChange={e => setResultText(e.target.value)}></textarea>
       </div>
       <div className="flex gap-4">
@@ -602,11 +696,27 @@ function SignOffForm({ req, hasSignature, onSuccess, onError }) {
         </label>
       </div>
       <div className="mt-1 pt-3 border-t border-slate-100">
-        <label className="field-label">Attachment (Optional document/scan)</label>
-        <input type="file" accept="image/*,application/pdf" className="text-sm" onChange={e => setFile(e.target.files?.[0])} />
+        <label className="field-label">{tr("Result files")} <span className="font-normal text-slate-400">{tr("(optional: photo of the paper slip, PDF, Word .docx, TXT, JSON, DICOM, HL7)")}</span></label>
+        <input
+          type="file" multiple disabled={uploading || busy} className="text-sm"
+          accept="image/*,.pdf,.txt,.json,.docx,.dcm,.hl7"
+          onChange={handlePick}
+        />
+        <p className="text-[11px] text-slate-400 mt-1">{tr("Older Word files (.doc): save as .docx or PDF first.")}</p>
+        {staged.length > 0 && (
+          <ul className="mt-2 divide-y divide-slate-100 border border-slate-200 rounded-lg">
+            {staged.map((a) => (
+              <li key={a.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                <span className="truncate">{a.filename}</span>
+                <button type="button" onClick={() => handleRemove(a)} className="text-xs text-red-700 hover:underline ml-3">{tr("Remove")}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {uploading && <p className="text-xs text-slate-500 mt-1">{tr("Uploading…")}</p>}
       </div>
       <div className="mt-2 text-right">
-        <button disabled={busy} className="bg-green-700 text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50">Confirm Sign-off</button>
+        <button disabled={busy || uploading} className="bg-green-700 text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50">{tr("Confirm Sign-off")}</button>
       </div>
     </form>
   );
@@ -641,7 +751,7 @@ function CatalogAddForm({ module, onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="mt-2 pt-4 border-t border-slate-200 flex flex-wrap items-end gap-3">
       <div>
-        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Item Name</label>
+        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">{tr("Item Name")}</label>
         <input required type="text" className="w-48 border border-slate-300 rounded px-2 py-1 text-sm" value={name} onChange={e => setName(e.target.value)} />
       </div>
       <div>
@@ -652,7 +762,7 @@ function CatalogAddForm({ module, onSuccess, onError }) {
         <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Price (RM)</label>
         <input required type="number" step="0.01" min="0" className="w-24 border border-slate-300 rounded px-2 py-1 text-sm" value={price} onChange={e => setPrice(e.target.value)} />
       </div>
-      <button disabled={busy} className="bg-slate-800 text-white text-sm px-3 py-1 rounded disabled:opacity-50 h-[30px]">Add Item</button>
+      <button disabled={busy} className="bg-slate-800 text-white text-sm px-3 py-1 rounded disabled:opacity-50 h-[30px]">{tr("Add Item")}</button>
     </form>
   );
 }

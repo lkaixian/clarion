@@ -9,7 +9,9 @@ import {
 import { formatDateTime } from "../../lib/format";
 import { validateImageFile } from "../../lib/upload";
 import { Section } from "./_shared";
+import DrugHints, { CatalogueTag } from "../../components/DrugHints";
 import { occupancyColor, occupancyTextColor } from "./occupancy";
+import { tr } from "../../lib/i18n";
 
 // ---------- Medicine inventory ----------
 const INVENTORY_FIELDS = [
@@ -195,11 +197,14 @@ function InventoryModal({ mode, initial, onClose, onSaved }) {
                   step={f.step}
                   placeholder={f.placeholder}
                   value={values[f.key]}
+                  list={f.key === "drug_name" ? "inventory-drug-hints" : undefined}
+                  autoComplete={f.key === "drug_name" ? "off" : undefined}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 />
               )}
             </div>
           ))}
+          <DrugHints id="inventory-drug-hints" query={values.drug_name} />
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
@@ -273,7 +278,7 @@ function BudgetPanel() {
     }
   }
 
-  if (loading) return <Section title="Procurement Budget"><p className="text-sm text-slate-400">Loading...</p></Section>;
+  if (loading) return <Section title={tr("Procurement Budget")}><p className="text-sm text-slate-400">{tr("Loading...")}</p></Section>;
 
   const allocated = budget?.allocated_amount ?? 0;
   const spend = budget?.procurement_spend ?? 0;
@@ -282,7 +287,7 @@ function BudgetPanel() {
   const pct = allocated > 0 ? Math.round((spend / allocated) * 100) : 0;
 
   return (
-    <Section title="Procurement Budget">
+    <Section title={tr("Procurement Budget")}>
       {error && <div className="alert-error mb-3">{error}</div>}
 
       <form onSubmit={save} className="flex flex-wrap items-end gap-3 mb-4">
@@ -310,19 +315,19 @@ function BudgetPanel() {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
         <div>
-          <p className="text-xs text-slate-400">Allocated</p>
+          <p className="text-xs text-slate-400">{tr("Allocated")}</p>
           <p className="font-medium text-slate-800">RM {allocated.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-400">Procurement spend</p>
+          <p className="text-xs text-slate-400">{tr("Procurement spend")}</p>
           <p className={`font-medium ${occupancyTextColor(pct)}`}>RM {spend.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-400">Current stock value</p>
+          <p className="text-xs text-slate-400">{tr("Current stock value")}</p>
           <p className="font-medium text-slate-800">RM {stockValue.toFixed(2)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-400">Remaining</p>
+          <p className="text-xs text-slate-400">{tr("Remaining")}</p>
           <p className={`font-medium ${remaining < 0 ? "text-red-700" : "text-slate-800"}`}>
             RM {remaining.toFixed(2)}
           </p>
@@ -398,7 +403,7 @@ function DeleteRequestsSection({ onResolved }) {
   if (requests.length === 0) return null;
 
   return (
-    <Section title="Deletion Requests">
+    <Section title={tr("Deletion Requests")}>
       <div className="space-y-2">
         {requests.map((req) => (
           <ReviewCard
@@ -518,7 +523,7 @@ function PurchaseProposalsSection({ onResolved }) {
       }
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : proposals.length === 0 ? (
         <p className="text-sm text-slate-400">No {status} proposals.</p>
       ) : (
@@ -557,7 +562,7 @@ function PurchaseProposalsSection({ onResolved }) {
                     New item
                   </span>
                 ) : (
-                  <span className="ml-2 text-xs text-slate-400">restock</span>
+                  <span className="ml-2 text-xs text-slate-400">{tr("restock")}</span>
                 )}
               </p>
               <p className="text-xs text-slate-500">
@@ -652,22 +657,22 @@ export default function InventoryTab() {
         onResolved={() => { refresh(); setReloadKey((k) => k + 1); }}
       />
     <Section
-      title="Medicine Inventory"
+      title={tr("Medicine Inventory")}
       action={
         <div className="flex items-center gap-2">
           <input
             type="text"
-            placeholder="Search name or barcode..."
+            placeholder={tr("Search name or barcode...")}
             className="border rounded-lg px-3 py-1.5 text-sm w-52"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg whitespace-nowrap">+ Add Item</button>
+          <button onClick={() => setModal({ mode: "add", initial: null })} className="text-sm bg-blue-800 text-white px-3 py-1.5 rounded-lg whitespace-nowrap">{tr("+ Add Item")}</button>
         </div>
       }
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-slate-400">
           {debouncedQuery.trim() ? "No items match that search." : "No inventory items yet — add one above."}
@@ -690,10 +695,11 @@ export default function InventoryTab() {
                 <div className="text-sm text-slate-700 min-w-0">
                   <p className="font-medium">
                     {item.drug_name}
+                    <CatalogueTag code={item.drug_code} />
                     {item.auto_approved && (
-                      <span className="ml-2 text-xs font-semibold text-green-700 bg-green-100 rounded px-1.5 py-0.5">Auto-approved</span>
+                      <span className="ml-2 text-xs font-semibold text-green-700 bg-green-100 rounded px-1.5 py-0.5">{tr("Auto-approved")}</span>
                     )}
-                    {item.is_low_stock && <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">⚠ Low stock</span>}
+                    {item.is_low_stock && <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">{tr("⚠ Low stock")}</span>}
                   </p>
                   <p className="text-xs text-slate-400">
                     {item.quantity_on_hand} {item.unit}
@@ -703,7 +709,7 @@ export default function InventoryTab() {
                     {" · last restocked "}{item.last_restocked_at ? formatDateTime(item.last_restocked_at) : "never"}
                   </p>
                   {item.pending_delete_request && (
-                    <p className="text-xs font-semibold text-amber-700 uppercase mt-0.5">Deletion requested</p>
+                    <p className="text-xs font-semibold text-amber-700 uppercase mt-0.5">{tr("Deletion requested")}</p>
                   )}
                   {item.notes && <p className="text-xs text-slate-500 mt-0.5">{item.notes}</p>}
                 </div>
@@ -714,7 +720,7 @@ export default function InventoryTab() {
                     onClick={() => adjustQuantity(item, -1)}
                     disabled={busyId === item.id || item.quantity_on_hand <= 0}
                     className="w-6 h-6 text-sm border border-slate-300 rounded disabled:opacity-30"
-                    title="Decrease quantity by 1"
+                    title={tr("Decrease quantity by 1")}
                   >
                     −
                   </button>
@@ -723,13 +729,13 @@ export default function InventoryTab() {
                     onClick={() => adjustQuantity(item, 1)}
                     disabled={busyId === item.id}
                     className="w-6 h-6 text-sm border border-slate-300 rounded disabled:opacity-30"
-                    title="Increase quantity by 1 (restock)"
+                    title={tr("Increase quantity by 1 (restock)")}
                   >
                     +
                   </button>
                 </div>
-                <button onClick={() => setModal({ mode: "edit", initial: item })} className="text-xs text-blue-700 whitespace-nowrap">Edit</button>
-                <button onClick={() => handleDelete(item)} className="text-xs text-red-700 whitespace-nowrap">Delete</button>
+                <button onClick={() => setModal({ mode: "edit", initial: item })} className="text-xs text-blue-700 whitespace-nowrap">{tr("Edit")}</button>
+                <button onClick={() => handleDelete(item)} className="text-xs text-red-700 whitespace-nowrap">{tr("Delete")}</button>
               </div>
             </div>
           ))}

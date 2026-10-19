@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import SignaturePad from "../components/SignaturePad";
+import { roleLabel } from "../lib/role";
 import { dataUrlToPngBlob } from "../lib/image";
 import {
   getCurrentUser,
@@ -13,9 +14,39 @@ import {
   uploadMyPhoto,
   deleteMyPhoto,
 } from "../api/client";
+import { tr } from "../lib/i18n";
 
 // Matches the backend limit in routers/profile.py (MAX_SIGNATURE_BYTES).
 const MAX_SIGNATURE_BYTES = 500 * 1024;
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_EDGE = 900; // px: a signature never needs more, and it keeps the PNG small
+
+// Reads a picture of a signature (PNG, JPEG or WebP) and returns it as a PNG data URL, scaled
+// down if it is large. The server stores PNG only, so other formats are converted here.
+function fileToPngDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      reject(new Error("Choose a PNG, JPEG or WebP image."));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That file could not be read as an image."));
+    };
+    img.src = url;
+  });
+}
 
 // Any authenticated staff member's own profile. Route is wrapped in
 // <Protected> only (no RequirePage) — a signature isn't a "console page",
@@ -24,8 +55,13 @@ const MAX_SIGNATURE_BYTES = 500 * 1024;
 export default function Profile() {
   const [user, setUser] = useState(() => getCurrentUser());
   const [sigUrl, setSigUrl] = useState(null);
+  // Bumped after an upload so the load effects re-fetch when has_signature /
+  // has_photo stay true (replacing an image doesn't flip the flag).
+  const [sigVer, setSigVer] = useState(0);
+  const [photoVer, setPhotoVer] = useState(0);
   const [replacing, setReplacing] = useState(false);
   const [draft, setDraft] = useState(null); // data-URL from the pad, or null
+  const [uploadPreview, setUploadPreview] = useState(null); // data-URL of an uploaded picture, or null
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const sigUrlRef = useRef(null);
@@ -69,7 +105,7 @@ export default function Profile() {
     return () => {
       cancelled = true;
     };
-  }, [hasSignature]);
+  }, [hasSignature, sigVer]);
 
   useEffect(
     () => () => {
@@ -100,7 +136,7 @@ export default function Profile() {
     return () => {
       cancelled = true;
     };
-  }, [hasPhoto]);
+  }, [hasPhoto, photoVer]);
 
   useEffect(
     () => () => {
@@ -117,6 +153,7 @@ export default function Profile() {
     } catch {
       setUser(getCurrentUser());
     }
+    window.dispatchEvent(new Event("mb-profile-updated")); // sidebar avatar re-fetches
   }
 
   async function saveProfile() {
@@ -139,6 +176,7 @@ export default function Profile() {
     setError("");
     try {
       await uploadMyPhoto(file);
+      setPhotoVer((v) => v + 1);
       await syncUser();
     } catch (err) {
       setError(err?.response?.data?.detail || "Could not upload that photo. Try again.");
@@ -161,6 +199,20 @@ export default function Profile() {
     }
   }
 
+  async function handlePickImage(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // the same file can be chosen again
+    if (!file) return;
+    setError("");
+    try {
+      const dataUrl = await fileToPngDataUrl(file);
+      setDraft(dataUrl);
+      setUploadPreview(dataUrl);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function handleSave() {
     const blob = dataUrlToPngBlob(draft);
     if (!blob) {
@@ -168,14 +220,16 @@ export default function Profile() {
       return;
     }
     if (blob.size > MAX_SIGNATURE_BYTES) {
-      setError("That signature image is too large — draw a simpler one.");
+      setError("That signature image is too large. Draw a simpler one or use a smaller picture.");
       return;
     }
     setBusy(true);
     setError("");
     try {
       await uploadMySignature(blob);
+      setSigVer((v) => v + 1);
       setDraft(null);
+      setUploadPreview(null);
       setReplacing(false);
       await syncUser();
     } catch (err) {
@@ -215,22 +269,22 @@ export default function Profile() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Profile</h1>
+        <h1 className="page-title">{tr("Profile")}</h1>
         <p className="text-sm text-slate-500">
-          Signed in as {user.full_name} · {user.role}
+          Signed in as {user.full_name} · {roleLabel(user.role)}
           {user.facility ? ` · ${user.facility}` : ""}
         </p>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 max-w-lg">
-        <h2 className="font-semibold text-slate-800 mb-3">Your profile</h2>
+        <h2 className="font-semibold text-slate-800 mb-3">{tr("Your profile")}</h2>
 
         <div className="flex items-start gap-4 mb-4">
           <div className="shrink-0">
             {photoUrl ? (
               <img
                 src={photoUrl}
-                alt="Your profile photo"
+                alt={tr("Your profile photo")}
                 className="w-20 h-20 rounded-full object-cover border border-slate-200 bg-white"
               />
             ) : (
@@ -267,7 +321,7 @@ export default function Profile() {
               rows={3}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="e.g. 10 years in family medicine, fluent in Malay and Mandarin."
+              placeholder={tr("e.g. 10 years in family medicine, fluent in Malay and Mandarin.")}
               className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm mb-2"
             />
             <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -299,7 +353,7 @@ export default function Profile() {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 max-w-lg">
-        <h2 className="font-semibold text-slate-800 mb-3">Your signature</h2>
+        <h2 className="font-semibold text-slate-800 mb-3">{tr("Your signature")}</h2>
         {error && <div className="alert-error mb-3">{error}</div>}
 
         {hasSignature && !replacing ? (
@@ -307,12 +361,12 @@ export default function Profile() {
             {sigUrl ? (
               <img
                 src={sigUrl}
-                alt="Your saved signature"
+                alt={tr("Your saved signature")}
                 className="border border-slate-200 rounded-lg bg-white"
                 style={{ width: 360, height: 140, objectFit: "contain" }}
               />
             ) : (
-              <p className="text-sm text-slate-400">Loading…</p>
+              <p className="text-sm text-slate-400">{tr("Loading…")}</p>
             )}
             <div className="mt-3 flex gap-2">
               <button
@@ -340,7 +394,26 @@ export default function Profile() {
 
         {showPad && (
           <>
-            <SignaturePad onChange={setDraft} />
+            <SignaturePad onChange={(d) => { setUploadPreview(null); setDraft(d); }} />
+            <div className="mt-3">
+              <label htmlFor="sig-upload" className="field-label">{tr("Or upload a picture of your signature")}</label>
+              <input
+                id="sig-upload" type="file" accept="image/png,image/jpeg,image/webp"
+                onChange={handlePickImage} disabled={busy}
+                className="block text-sm text-slate-700"
+              />
+              <p className="mt-1 text-xs text-slate-400">{tr("PNG, JPEG or WebP. Sign on plain white paper and crop close for the best result.")}</p>
+            </div>
+            {uploadPreview && (
+              <div className="mt-3">
+                <p className="text-xs text-slate-500 mb-1">{tr("Preview of the uploaded picture. Press Save to use it.")}</p>
+                <img
+                  src={uploadPreview} alt={tr("Uploaded signature preview")}
+                  className="border border-slate-200 rounded-lg bg-white"
+                  style={{ width: 360, height: 140, objectFit: "contain" }}
+                />
+              </div>
+            )}
             <div className="mt-3 flex gap-2">
               <button
                 type="button"

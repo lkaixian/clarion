@@ -25,6 +25,7 @@ const TABS = [
   { key: "displays", label: "Waiting Room Displays" },
   { key: "staff", label: "Staff Roster" },
   { key: "hospital", label: "Hospital Settings" },
+  { key: "booking", label: "Online booking" },
   { key: "access", label: "Access Control" },
   { key: "announcements", label: "Announcements" },
 ];

@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   getSections,
   getStaffRoster, getStaffClockHistory, updateStaffMember,
-  updateStaffProfile, uploadStaffPhoto, getStaffPhotoBlob,
+  updateStaffProfile, uploadStaffPhoto, getStaffPhotoBlob, resetStaffPassword,
 } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
+import StepUpForm from "./StepUpForm";
+import AdminAccountsPanel from "./AdminAccountsPanel";
+import { tr } from "../../lib/i18n";
 
 // duration_minutes is server-computed (ClockEventOut) — never re-derive it
 // client-side, this just formats what's already on the object. null means
@@ -51,6 +54,12 @@ export default function StaffRosterTab() {
   const [photoUrlById, setPhotoUrlById] = useState({});
   const [photoUploadingId, setPhotoUploadingId] = useState(null);
   const photoUrlsRef = useRef({});
+  // One-time temporary password just issued: { id, email, password } | null.
+  // Held only in this state (never stored), cleared when dismissed or replaced.
+  const [resetResult, setResetResult] = useState(null);
+  const [resettingId, setResettingId] = useState(null);
+  const [resetError, setResetError] = useState({});
+  const [stepUpFor, setStepUpFor] = useState(null); // staff id whose step-up form is open
 
   useEffect(
     () => () => {
@@ -85,6 +94,24 @@ export default function StaffRosterTab() {
       }));
     } finally {
       setSectionSavingId(null);
+    }
+  }
+
+  async function issueTemporaryPassword(member, stepUp) {
+    setResettingId(member.id);
+    setResetError((prev) => ({ ...prev, [member.id]: "" }));
+    try {
+      const r = await resetStaffPassword(member.id, stepUp);
+      setStepUpFor(null);
+      setResetResult({ id: member.id, email: r.email, password: r.temporary_password });
+      setStaff((prev) => prev.map((x) => (x.id === member.id ? { ...x, must_change_password: true } : x)));
+    } catch (err) {
+      setResetError((prev) => ({
+        ...prev,
+        [member.id]: err?.response?.data?.detail || "Could not reset the password.",
+      }));
+    } finally {
+      setResettingId(null);
     }
   }
 
@@ -161,11 +188,12 @@ export default function StaffRosterTab() {
   }
 
   return (
-    <Section title="Staff Roster">
+    <>
+    <Section title={tr("Staff Roster")}>
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : staff.length === 0 ? (
-        <p className="text-sm text-slate-400">No clinicians or records officers on file for this facility yet.</p>
+        <p className="text-sm text-slate-400">{tr("No clinicians or records officers on file for this facility yet.")}</p>
       ) : (
         <div className="space-y-2">
           {staff.map((s) => (
@@ -181,7 +209,7 @@ export default function StaffRosterTab() {
                     {/* Same amber "needs attention" convention as InventoryTab's
                         low-stock flag and WardsTab's high-occupancy badge. */}
                     {s.must_change_password && (
-                      <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">⚠ Pending first login</span>
+                      <span className="ml-2 text-xs font-semibold text-amber-700 uppercase">{tr("⚠ Pending first login")}</span>
                     )}
                   </p>
                   <p className="text-xs text-slate-400">{s.email}</p>
@@ -195,7 +223,7 @@ export default function StaffRosterTab() {
                   ) : s.last_clock_out_at ? (
                     <span className="text-slate-500">Last clocked out {formatDateTime(s.last_clock_out_at)}</span>
                   ) : (
-                    <span className="text-slate-400">Clocked out</span>
+                    <span className="text-slate-400">{tr("Clocked out")}</span>
                   )}
                 </span>
               </button>
@@ -204,14 +232,14 @@ export default function StaffRosterTab() {
                   Kept outside the toggle <button> (no nested interactives). */}
               {SECTIONABLE_ROLES.includes(s.role) && (
                 <div className="border-t border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
-                  <label className="text-xs font-medium text-slate-500">Section</label>
+                  <label className="text-xs font-medium text-slate-500">{tr("Section")}</label>
                   <select
                     value={s.section || ""}
                     disabled={sectionSavingId === s.id}
                     onChange={(e) => changeSection(s, e.target.value)}
                     className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   >
-                    <option value="">— All sections —</option>
+                    <option value="">{tr("— All sections —")}</option>
                     {/* Preserve an assigned-but-now-inactive section as an option. */}
                     {s.section && !sectionNames.includes(s.section) && (
                       <option value={s.section}>{s.section} (inactive)</option>
@@ -227,6 +255,38 @@ export default function StaffRosterTab() {
                       {sectionMsg[s.id]}
                     </span>
                   )}
+                </div>
+              )}
+
+              <div className="border-t border-slate-200 px-3 py-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setResetError((p) => ({ ...p, [s.id]: "" })); setStepUpFor(s.id); }}
+                  disabled={resettingId === s.id}
+                  className="text-xs border border-slate-300 rounded-lg px-2 py-1 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Reset password
+                </button>
+              </div>
+              {stepUpFor === s.id && (
+                <StepUpForm
+                  title={`Issue a temporary password for ${s.full_name}. Their current password stops working and they are signed out everywhere.`}
+                  busy={resettingId === s.id}
+                  error={resetError[s.id]}
+                  onSubmit={(stepUp) => issueTemporaryPassword(s, stepUp)}
+                  onCancel={() => setStepUpFor(null)}
+                />
+              )}
+              {resetResult?.id === s.id && (
+                <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-1" role="status">
+                  <p>
+                    Temporary password for <b>{resetResult.email}</b> (shown once — give it to them in person):
+                  </p>
+                  <p className="font-mono text-sm break-all select-all">{resetResult.password}</p>
+                  <p>{tr("They must choose a new password at their next sign-in.")}</p>
+                  <button type="button" onClick={() => setResetResult(null)} className="underline">
+                    Done, hide it
+                  </button>
                 </div>
               )}
 
@@ -257,7 +317,7 @@ export default function StaffRosterTab() {
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <textarea
                         rows={2}
-                        placeholder="Bio / working experience (shown to patients on the booking screen)"
+                        placeholder={tr("Bio / working experience (shown to patients on the booking screen)")}
                         value={profileDraftById[s.id]?.bio ?? ""}
                         onChange={(e) =>
                           setProfileDraftById((prev) => ({
@@ -269,7 +329,7 @@ export default function StaffRosterTab() {
                       />
                       <input
                         type="email"
-                        placeholder="Internal contact email (not shown to patients)"
+                        placeholder={tr("Internal contact email (not shown to patients)")}
                         value={profileDraftById[s.id]?.contact_email ?? ""}
                         onChange={(e) =>
                           setProfileDraftById((prev) => ({
@@ -302,9 +362,9 @@ export default function StaffRosterTab() {
                   </div>
 
                   {historyLoading && !historyById[s.id] ? (
-                    <p className="text-xs text-slate-400">Loading history...</p>
+                    <p className="text-xs text-slate-400">{tr("Loading history...")}</p>
                   ) : (historyById[s.id] || []).length === 0 ? (
-                    <p className="text-xs text-slate-400">No clock events on file yet.</p>
+                    <p className="text-xs text-slate-400">{tr("No clock events on file yet.")}</p>
                   ) : (
                     <ul className="space-y-1">
                       {historyById[s.id].map((ev) => (
@@ -324,5 +384,7 @@ export default function StaffRosterTab() {
         </div>
       )}
     </Section>
+    <AdminAccountsPanel />
+    </>
   );
 }

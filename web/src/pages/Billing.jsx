@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import SearchSelect from "../components/SearchSelect";
 import {
   getCurrentUser,
   listPatients,
@@ -15,6 +16,8 @@ import {
   getChargeMasterItems,
   createChargeMasterItem,
   updateChargeMasterItem,
+  importChargeMasterFile,
+  getChargeMasterTemplate,
   createBill,
   listBills,
   getBill,
@@ -24,6 +27,7 @@ import {
   voidBill,
   recordPayment,
   voidPayment,
+  requestRefund,
   createClaim,
   updateClaim,
   submitClaim,
@@ -32,6 +36,8 @@ import {
   voidClaim,
 } from "../api/client";
 import { formatDateTime } from "../lib/format";
+import { toCents } from "../lib/money";
+import { tr } from "../lib/i18n";
 
 const BILL_STATUS_STYLE = {
   open: "bg-blue-100 text-blue-800",
@@ -125,8 +131,8 @@ export default function Billing() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Billing</h1>
-        <p className="text-sm text-slate-500">Charge master, invoices, payments, and insurance/panel claims.</p>
+        <h1 className="page-title">{tr("Billing")}</h1>
+        <p className="text-sm text-slate-500">{tr("Charge master, invoices, payments, and insurance/panel claims.")}</p>
       </div>
 
       {notice && (
@@ -143,7 +149,7 @@ export default function Billing() {
       )}
 
       <div className="card mb-6">
-        <h2 className="font-semibold text-slate-800 mb-3">Patient</h2>
+        <h2 className="font-semibold text-slate-800 mb-3">{tr("Patient")}</h2>
         {patientId ? (
           <div className="flex items-center justify-between border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm">
             <span>{patientLabel || patientId}</span>
@@ -166,7 +172,7 @@ export default function Billing() {
       {patientId && (
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-800">Bills</h2>
+            <h2 className="font-semibold text-slate-800">{tr("Bills")}</h2>
             {canWriteBills && (
               <button
                 onClick={() => setShowNewBillForm(!showNewBillForm)}
@@ -192,9 +198,9 @@ export default function Billing() {
           )}
 
           {billsLoading ? (
-            <p className="text-sm text-slate-400">Loading bills…</p>
+            <p className="text-sm text-slate-400">{tr("Loading bills…")}</p>
           ) : bills.length === 0 ? (
-            <p className="text-sm text-slate-400">No bills for this patient yet.</p>
+            <p className="text-sm text-slate-400">{tr("No bills for this patient yet.")}</p>
           ) : (
             <div className="space-y-2">
               {bills.map((bill) => (
@@ -237,7 +243,7 @@ export default function Billing() {
       {canManageChargeMaster && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4">
           <button onClick={() => setShowChargeMaster(!showChargeMaster)} className="w-full flex items-center justify-between text-left">
-            <span className="font-semibold text-slate-800">Charge Master</span>
+            <span className="font-semibold text-slate-800">{tr("Charge Master")}</span>
             <span className="text-xs text-slate-400">{showChargeMaster ? "Hide" : "Show"}</span>
           </button>
 
@@ -245,7 +251,7 @@ export default function Billing() {
             <div className="mt-4">
               <div className="space-y-2 mb-4">
                 {chargeMasterItems.length === 0 ? (
-                  <p className="text-sm text-slate-400">No charge master items yet.</p>
+                  <p className="text-sm text-slate-400">{tr("No charge master items yet.")}</p>
                 ) : (
                   chargeMasterItems.map((item) => (
                     <div
@@ -281,6 +287,7 @@ export default function Billing() {
                   ))
                 )}
               </div>
+              <ChargeMasterImport onDone={(n) => { loadChargeMaster(); showMsg("success", `${n} charge master items imported.`); }} />
               <ChargeMasterAddForm onSuccess={() => { loadChargeMaster(); showMsg("success", "Charge master item added."); }} onError={(msg) => showMsg("error", msg)} />
             </div>
           )}
@@ -309,7 +316,7 @@ function PatientPicker({ canBrowsePatients, onSelect }) {
       <div className="flex gap-2">
         <input
           type="text"
-          placeholder="Patient ID (from Reception check-in)"
+          placeholder={tr("Patient ID (from Reception check-in)")}
           className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
           value={manualId}
           onChange={(e) => setManualId(e.target.value.trim())}
@@ -338,7 +345,7 @@ function PatientPicker({ canBrowsePatients, onSelect }) {
     <div>
       <input
         type="text"
-        placeholder="Search by name or NRIC…"
+        placeholder={tr("Search by name or NRIC…")}
         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-1"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -375,18 +382,18 @@ function NewBillForm({ patientId, onCancel, onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-4 grid gap-3 bg-slate-50">
       <div>
-        <label className="field-label">Encounter ID (optional)</label>
+        <label className="field-label">{tr("Encounter ID (optional)")}</label>
         <input
           type="text"
           className="field-input"
           value={encounterId}
           onChange={(e) => setEncounterId(e.target.value.trim())}
-          placeholder="Link this bill to a visit, if any"
+          placeholder={tr("Link this bill to a visit, if any")}
         />
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="btn-primary">Create Bill</button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
+        <button disabled={busy} className="btn-primary">{tr("Create Bill")}</button>
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">{tr("Cancel")}</button>
       </div>
     </form>
   );
@@ -405,6 +412,22 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
       showMsg("success", "Line item voided.");
     } catch (err) {
       showMsg("error", err?.response?.data?.detail || "Failed to void item.");
+    }
+  }
+
+  async function handleRefund(payment) {
+    const max = (payment.amount_cents / 100).toFixed(2);
+    const amount = window.prompt(`Refund how much (RM)? Up to ${max} of this payment.`, max);
+    if (amount === null) return;
+    const cents = toCents(amount);
+    if (cents === null) return showMsg("error", "Enter an amount in RM, for example 25.00.");
+    const reason = window.prompt("Reason for the refund:");
+    if (!reason || !reason.trim()) return;
+    try {
+      await requestRefund(payment.id, { amount_cents: cents, reason });
+      showMsg("success", "Refund requested. An admin must approve it in Cashier > Refunds.");
+    } catch (err) {
+      showMsg("error", err?.response?.data?.detail || "Failed to request the refund.");
     }
   }
 
@@ -472,19 +495,19 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
           </h2>
           <p className="text-xs text-slate-500">
             {bill.patient_full_name || bill.patient_id}
-            <Link to={`/patients/${bill.patient_id}`} className="ml-2 text-blue-700 hover:underline">View Record</Link>
+            <Link to={`/patients/${bill.patient_id}`} className="ml-2 text-blue-700 hover:underline">{tr("View Record")}</Link>
             <span className="ml-2">· Opened {formatDateTime(bill.created_at)} by {bill.created_by_name}</span>
             {bill.encounter_id && <span className="ml-2">· Encounter {bill.encounter_id}</span>}
           </p>
         </div>
         {canWriteBills && bill.status === "open" && (
           <div className="flex gap-2">
-            <button onClick={handleFinalize} className="text-xs bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg">Finalize</button>
-            <button onClick={handleVoidBill} className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">Void bill</button>
+            <button onClick={handleFinalize} className="text-xs bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg">{tr("Finalize")}</button>
+            <button onClick={handleVoidBill} className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">{tr("Void bill")}</button>
           </div>
         )}
         {canWriteBills && bill.status === "finalized" && (
-          <button onClick={handleVoidBill} className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">Void bill</button>
+          <button onClick={handleVoidBill} className="text-xs border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">{tr("Void bill")}</button>
         )}
       </div>
 
@@ -493,16 +516,16 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4 text-center">
-        <TotalTile label="Total" value={rm(bill.total_cents)} />
-        <TotalTile label="Paid" value={rm(bill.paid_cents)} tone="green" />
-        <TotalTile label="Claimed (pending)" value={rm(bill.claimed_pending_cents)} tone="amber" />
-        <TotalTile label="Amount Due" value={rm(bill.amount_due_cents)} />
-        <TotalTile label="Patient Due Now" value={rm(bill.patient_due_cents)} tone="blue" />
+        <TotalTile label={tr("Total")} value={rm(bill.total_cents)} />
+        <TotalTile label={tr("Paid")} value={rm(bill.paid_cents)} tone="green" />
+        <TotalTile label={tr("Claimed (pending)")} value={rm(bill.claimed_pending_cents)} tone="amber" />
+        <TotalTile label={tr("Amount Due")} value={rm(bill.amount_due_cents)} />
+        <TotalTile label={tr("Patient Due Now")} value={rm(bill.patient_due_cents)} tone="blue" />
       </div>
 
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
+          <h3 className="text-sm font-semibold text-slate-700">{tr("Line Items")}</h3>
           {canWriteBills && bill.status === "open" && (
             <button onClick={() => setShowAddItem(!showAddItem)} className="text-xs bg-blue-800 text-white px-3 py-1 rounded-lg">
               {showAddItem ? "Cancel" : "Add item"}
@@ -518,7 +541,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
           />
         )}
         {activeItems.length === 0 && voidedItems.length === 0 ? (
-          <p className="text-sm text-slate-400">No line items yet.</p>
+          <p className="text-sm text-slate-400">{tr("No line items yet.")}</p>
         ) : (
           <div className="space-y-1">
             {[...activeItems, ...voidedItems].map((item) => (
@@ -531,7 +554,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
                 <div className="flex items-center gap-3">
                   <span className="font-medium text-slate-800">{rm(item.amount_cents)}</span>
                   {canWriteBills && !item.voided_at && bill.status !== "voided" && (
-                    <button onClick={() => handleVoidItem(item.id)} className="text-xs text-red-700 hover:underline">Void</button>
+                    <button onClick={() => handleVoidItem(item.id)} className="text-xs text-red-700 hover:underline">{tr("Void")}</button>
                   )}
                 </div>
               </div>
@@ -542,7 +565,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
 
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-700">Payments</h3>
+          <h3 className="text-sm font-semibold text-slate-700">{tr("Payments")}</h3>
           {canWriteBills && bill.status !== "voided" && (
             <button onClick={() => setShowRecordPayment(!showRecordPayment)} className="text-xs bg-blue-800 text-white px-3 py-1 rounded-lg">
               {showRecordPayment ? "Cancel" : "Record payment"}
@@ -558,7 +581,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
           />
         )}
         {activePayments.length === 0 && voidedPayments.length === 0 ? (
-          <p className="text-sm text-slate-400">No payments recorded yet.</p>
+          <p className="text-sm text-slate-400">{tr("No payments recorded yet.")}</p>
         ) : (
           <div className="space-y-1">
             {[...activePayments, ...voidedPayments].map((p) => (
@@ -571,8 +594,11 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-medium text-slate-800">{rm(p.amount_cents)}</span>
-                  {canWriteBills && !p.voided_at && (
-                    <button onClick={() => handleVoidPayment(p.id)} className="text-xs text-red-700 hover:underline">Void</button>
+                  {canWriteBills && !p.voided_at && ["cash", "card", "online", "other"].includes(p.method) && (
+                    <button onClick={() => handleRefund(p)} className="text-xs text-blue-800 hover:underline">{tr("Refund")}</button>
+                  )}
+                  {canWriteBills && !p.voided_at && p.method !== "online" && (
+                    <button onClick={() => handleVoidPayment(p.id)} className="text-xs text-red-700 hover:underline">{tr("Void")}</button>
                   )}
                 </div>
               </div>
@@ -583,7 +609,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-700">Insurance / Panel Claims</h3>
+          <h3 className="text-sm font-semibold text-slate-700">{tr("Insurance / Panel Claims")}</h3>
           {canManageClaims && bill.status !== "voided" && (
             <button onClick={() => setShowAddClaim(!showAddClaim)} className="text-xs bg-blue-800 text-white px-3 py-1 rounded-lg">
               {showAddClaim ? "Cancel" : "New claim"}
@@ -599,7 +625,7 @@ function BillDetail({ bill, canWriteBills, canManageClaims, onChanged, showMsg }
           />
         )}
         {bill.claims.length === 0 ? (
-          <p className="text-sm text-slate-400">No claims on this bill.</p>
+          <p className="text-sm text-slate-400">{tr("No claims on this bill.")}</p>
         ) : (
           <div className="space-y-2">
             {bill.claims.map((claim) => (
@@ -684,34 +710,32 @@ function AddItemForm({ bill, onCancel, onSuccess, onError }) {
     <form onSubmit={handleSubmit} className="border border-slate-200 rounded-lg p-4 mb-3 grid gap-3 bg-slate-50">
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="field-label">Source</label>
+          <label className="field-label">{tr("Source")}</label>
           <select
             className="field-input"
             value={sourceType}
             onChange={(e) => { setSourceType(e.target.value); setSelectedId(""); }}
           >
-            <option value="charge_master">Charge master item</option>
-            <option value="service_request">Signed-off ancillary result</option>
-            <option value="pharmacy_item">Pharmacy inventory item</option>
+            <option value="charge_master">{tr("Charge master item")}</option>
+            <option value="service_request">{tr("Signed-off ancillary result")}</option>
+            <option value="pharmacy_item">{tr("Pharmacy inventory item")}</option>
           </select>
         </div>
         <div>
-          <label className="field-label">Item</label>
-          <select required className="field-input" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-            <option value="">-- select --</option>
-            {options.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
+          <label htmlFor="bill-item" className="field-label">{tr("Item")}</label>
+          <SearchSelect
+            id="bill-item" required options={options} value={selectedId} onChange={setSelectedId}
+            placeholder={`Type to search ${options.length} item${options.length === 1 ? "" : "s"}`}
+          />
         </div>
         <div>
-          <label className="field-label">Quantity</label>
+          <label className="field-label">{tr("Quantity")}</label>
           <input type="number" min="1" step="1" className="field-input" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
         </div>
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="btn-primary">Add Item</button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
+        <button disabled={busy} className="btn-primary">{tr("Add Item")}</button>
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">{tr("Cancel")}</button>
       </div>
     </form>
   );
@@ -752,26 +776,26 @@ function RecordPaymentForm({ bill, onCancel, onSuccess, onError }) {
           <input required type="number" step="0.01" min="0.01" className="field-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
         <div>
-          <label className="field-label">Method</label>
+          <label className="field-label">{tr("Method")}</label>
           <select className="field-input" value={method} onChange={(e) => setMethod(e.target.value)}>
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="insurance">Insurance</option>
-            <option value="panel">Panel</option>
-            <option value="other">Other</option>
+            <option value="cash">{tr("Cash")}</option>
+            <option value="card">{tr("Card")}</option>
+            <option value="insurance">{tr("Insurance")}</option>
+            <option value="panel">{tr("Panel")}</option>
+            <option value="other">{tr("Other")}</option>
           </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="field-label">Reference No. (optional)</label>
+          <label className="field-label">{tr("Reference No. (optional)")}</label>
           <input type="text" className="field-input" value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} />
         </div>
         {(method === "insurance" || method === "panel") && settleableClaims.length > 0 && (
           <div>
-            <label className="field-label">Settles Claim (optional)</label>
+            <label className="field-label">{tr("Settles Claim (optional)")}</label>
             <select className="field-input" value={claimId} onChange={(e) => setClaimId(e.target.value)}>
-              <option value="">-- none --</option>
+              <option value="">{tr("-- none --")}</option>
               {settleableClaims.map((c) => (
                 <option key={c.id} value={c.id}>{c.payer_name} ({rm(c.claim_amount_cents)})</option>
               ))}
@@ -780,8 +804,8 @@ function RecordPaymentForm({ bill, onCancel, onSuccess, onError }) {
         )}
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="btn-primary">Record Payment</button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
+        <button disabled={busy} className="btn-primary">{tr("Record Payment")}</button>
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">{tr("Cancel")}</button>
       </div>
     </form>
   );
@@ -817,9 +841,9 @@ function AddClaimForm({ bill, onCancel, onSuccess, onError }) {
           <input required type="text" className="field-input" value={payerName} onChange={(e) => setPayerName(e.target.value)} />
         </div>
         <div>
-          <label className="field-label">Claim Amount (RM)</label>
+          <label className="field-label">{tr("Claim Amount (RM)")}</label>
           <input required type="number" step="0.01" min="0.01" className="field-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <p className="text-[10px] text-slate-400 mt-1">May cover part of the bill (copay) — the rest stays owed by the patient until this claim settles.</p>
+          <p className="text-[10px] text-slate-400 mt-1">{tr("May cover part of the bill (copay) — the rest stays owed by the patient until this claim settles.")}</p>
         </div>
       </div>
       <div>
@@ -827,8 +851,8 @@ function AddClaimForm({ bill, onCancel, onSuccess, onError }) {
         <textarea rows={2} className="field-input" value={notes} onChange={(e) => setNotes(e.target.value)}></textarea>
       </div>
       <div className="flex gap-2">
-        <button disabled={busy} className="btn-primary">Create Claim</button>
-        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">Cancel</button>
+        <button disabled={busy} className="btn-primary">{tr("Create Claim")}</button>
+        <button type="button" onClick={onCancel} className="text-sm border border-slate-300 px-4 py-2 rounded-lg">{tr("Cancel")}</button>
       </div>
     </form>
   );
@@ -865,7 +889,7 @@ function ClaimRow({ claim, canManageClaims, onAction, onUpdated, onError }) {
           <span className="text-xs text-slate-500 ml-2">{rm(claim.claim_amount_cents)}</span>
         </div>
         {canManageClaims && claim.status === "draft" && !editing && (
-          <button onClick={() => setEditing(true)} className="text-xs text-blue-700 hover:underline">Edit</button>
+          <button onClick={() => setEditing(true)} className="text-xs text-blue-700 hover:underline">{tr("Edit")}</button>
         )}
       </div>
       {claim.notes && <p className="text-xs text-slate-600 mt-1 italic">{claim.notes}</p>}
@@ -874,19 +898,19 @@ function ClaimRow({ claim, canManageClaims, onAction, onUpdated, onError }) {
         <form onSubmit={handleSaveEdit} className="mt-2 flex flex-wrap items-end gap-2">
           <input type="text" className="border border-slate-300 rounded px-2 py-1 text-sm" value={payerName} onChange={(e) => setPayerName(e.target.value)} />
           <input type="number" step="0.01" min="0.01" className="w-28 border border-slate-300 rounded px-2 py-1 text-sm" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button disabled={busy} className="text-xs bg-blue-800 text-white px-3 py-1 rounded disabled:opacity-50">Save</button>
-          <button type="button" onClick={() => setEditing(false)} className="text-xs border border-slate-300 px-3 py-1 rounded">Cancel</button>
+          <button disabled={busy} className="text-xs bg-blue-800 text-white px-3 py-1 rounded disabled:opacity-50">{tr("Save")}</button>
+          <button type="button" onClick={() => setEditing(false)} className="text-xs border border-slate-300 px-3 py-1 rounded">{tr("Cancel")}</button>
         </form>
       ) : (
         canManageClaims && (
           <div className="flex gap-2 mt-2">
             {claim.status === "draft" && (
-              <button onClick={() => onAction(claim.id, "submit", false)} className="text-xs bg-amber-700 hover:bg-amber-600 text-white px-2 py-1 rounded">Submit</button>
+              <button onClick={() => onAction(claim.id, "submit", false)} className="text-xs bg-amber-700 hover:bg-amber-600 text-white px-2 py-1 rounded">{tr("Submit")}</button>
             )}
             {claim.status === "submitted" && (
               <>
-                <button onClick={() => onAction(claim.id, "approve", false)} className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded">Approve</button>
-                <button onClick={() => onAction(claim.id, "reject", true)} className="text-xs border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded">Reject</button>
+                <button onClick={() => onAction(claim.id, "approve", false)} className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded">{tr("Approve")}</button>
+                <button onClick={() => onAction(claim.id, "reject", true)} className="text-xs border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded">{tr("Reject")}</button>
               </>
             )}
             {claim.status === "approved" && (
@@ -895,15 +919,141 @@ function ClaimRow({ claim, canManageClaims, onAction, onUpdated, onError }) {
                     "paid" via a linked Payment (record one below with method
                     insurance/panel and this claim selected as "Settles
                     Claim"), so "paid" always has a real amount behind it. */}
-                <span className="text-xs text-slate-400 italic self-center">Record a settling payment below to mark this paid</span>
-                <button onClick={() => onAction(claim.id, "reject", true)} className="text-xs border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded">Reject</button>
+                <span className="text-xs text-slate-400 italic self-center">{tr("Record a settling payment below to mark this paid")}</span>
+                <button onClick={() => onAction(claim.id, "reject", true)} className="text-xs border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded">{tr("Reject")}</button>
               </>
             )}
             {["draft", "submitted", "approved", "rejected"].includes(claim.status) && (
-              <button onClick={() => onAction(claim.id, "void", true)} className="text-xs border border-slate-300 text-slate-600 hover:bg-slate-100 px-2 py-1 rounded">Void</button>
+              <button onClick={() => onAction(claim.id, "void", true)} className="text-xs border border-slate-300 text-slate-600 hover:bg-slate-100 px-2 py-1 rounded">{tr("Void")}</button>
             )}
           </div>
         )
+      )}
+    </div>
+  );
+}
+
+export function ChargeMasterImport({ onDone }) {
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function run(f, dryRun) {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await importChargeMasterFile(f, dryRun);
+      if (dryRun) {
+        setResult(r);
+      } else {
+        setFile(null);
+        setResult(null);
+        onDone(r.added);
+      }
+    } catch (err) {
+      setResult(null);
+      setError(err?.response?.data?.detail || "The file could not be checked.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadTemplate() {
+    try {
+      const url = URL.createObjectURL(await getChargeMasterTemplate());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "charge-master-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not download the template.");
+    }
+  }
+
+  return (
+    <div className="mt-2 pt-4 border-t border-slate-200 mb-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="cm-import-file" className="text-sm font-medium text-slate-800">{tr("Import from Excel")}</label>
+        <input
+          id="cm-import-file"
+          type="file"
+          accept=".xlsx"
+          disabled={busy}
+          className="text-sm"
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            setFile(f);
+            setResult(null);
+            setError("");
+            if (f) run(f, true);
+          }}
+        />
+        <button type="button" onClick={downloadTemplate} className="text-sm text-blue-700 underline">
+          Download template
+        </button>
+      </div>
+
+      <details className="mt-2 text-sm text-slate-600">
+        <summary className="cursor-pointer text-blue-700">{tr("What the file must look like")}</summary>
+        <div className="mt-2 space-y-1">
+          <p>{tr("First row holds the column names. Order does not matter.")}</p>
+          <ul className="list-disc ml-5">
+            <li><b>{tr("category")}</b> {tr("(required): consultation or misc")}</li>
+            <li><b>{tr("name")}</b> (required): up to 255 characters</li>
+            <li><b>{tr("price")}</b> (required): RM, up to 2 decimals</li>
+            <li><b>{tr("code")}</b>{tr(": optional, up to 64 characters")}</li>
+            <li><b>{tr("active")}</b>{tr(": yes or no, blank means yes")}</li>
+          </ul>
+          <p>
+            Rows are only added to your facility. A row with the same category and code (or the same
+            category and name when a code is missing) is skipped, never overwritten. If any row has an
+            error, nothing is added.
+          </p>
+        </div>
+      </details>
+
+      {busy && <p className="mt-2 text-sm text-slate-500" role="status">Checking {file?.name}...</p>}
+      {error && <p className="mt-2 text-sm text-red-700" role="alert">{error}</p>}
+
+      {result && !busy && (
+        <div className="mt-3 text-sm" role="status">
+          {result.error_count > 0 ? (
+            <>
+              <p className="text-red-700 font-medium">
+                {result.error_count} row(s) have problems. Nothing was added. Fix the file and choose it again.
+              </p>
+              <ul className="mt-1 list-disc ml-5 text-slate-700">
+                {result.errors.map((e) => (
+                  <li key={e.row}>Row {e.row}: {e.message}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p className="text-slate-800">
+                {result.would_add} new item(s), {result.skipped_duplicates} duplicate(s) will be skipped.
+              </p>
+              {result.preview.length > 0 && (
+                <ul className="mt-1 text-slate-600">
+                  {result.preview.map((r) => (
+                    <li key={r.row}>{r.name} ({r.category}) {rm(r.unit_price_cents)}</li>
+                  ))}
+                  {result.would_add > result.preview.length && <li>and {result.would_add - result.preview.length} more</li>}
+                </ul>
+              )}
+              <button
+                type="button"
+                disabled={busy || result.would_add === 0}
+                onClick={() => run(file, false)}
+                className="mt-2 bg-slate-800 text-white text-sm px-3 py-1 rounded disabled:opacity-50"
+              >
+                {result.would_add === 0 ? "Nothing new to add" : `Add ${result.would_add} items`}
+              </button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -935,14 +1085,14 @@ function ChargeMasterAddForm({ onSuccess, onError }) {
   return (
     <form onSubmit={handleSubmit} className="mt-2 pt-4 border-t border-slate-200 flex flex-wrap items-end gap-3">
       <div>
-        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Category</label>
+        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">{tr("Category")}</label>
         <select className="w-36 border border-slate-300 rounded px-2 py-1 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="consultation">Consultation</option>
-          <option value="misc">Misc / Admin</option>
+          <option value="consultation">{tr("Consultation")}</option>
+          <option value="misc">{tr("Misc / Admin")}</option>
         </select>
       </div>
       <div>
-        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Item Name</label>
+        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">{tr("Item Name")}</label>
         <input required type="text" className="w-48 border border-slate-300 rounded px-2 py-1 text-sm" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
@@ -953,7 +1103,7 @@ function ChargeMasterAddForm({ onSuccess, onError }) {
         <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Price (RM)</label>
         <input required type="number" step="0.01" min="0" className="w-24 border border-slate-300 rounded px-2 py-1 text-sm" value={price} onChange={(e) => setPrice(e.target.value)} />
       </div>
-      <button disabled={busy} className="bg-slate-800 text-white text-sm px-3 py-1 rounded disabled:opacity-50 h-[30px]">Add Item</button>
+      <button disabled={busy} className="bg-slate-800 text-white text-sm px-3 py-1 rounded disabled:opacity-50 h-[30px]">{tr("Add Item")}</button>
     </form>
   );
 }

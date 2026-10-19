@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getRolePermissions, updateRolePermissions } from "../../api/client";
 import { Section } from "./_shared";
+import { roleLabel } from "../../lib/role";
+import { tr } from "../../lib/i18n";
 
 // ---------- Access Control (role → console-page matrix) ----------
 // Per-facility control over which console pages each staff role can open
@@ -15,10 +17,6 @@ import { Section } from "./_shared";
 // P3.6) -- harmless (the column still rendered, just with a blank header),
 // fixed in passing while touching this line for reporting.
 const PAGE_LABELS = { patients: "Patients", reception: "Reception", pharmacy: "Pharmacy", ancillary: "Ancillary", dental: "Dental", billing: "Billing", reporting: "Reporting", dashboard: "Dashboard" };
-
-function roleLabel(role) {
-  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 // Order-independent comparison of two allowed_pages lists.
 function samePages(a, b) {
@@ -100,11 +98,11 @@ export default function AccessControlTab() {
   }
 
   if (loading) {
-    return <Section title="Access Control"><p className="text-sm text-slate-400">Loading...</p></Section>;
+    return <Section title={tr("Access Control")}><p className="text-sm text-slate-400">{tr("Loading...")}</p></Section>;
   }
 
   return (
-    <Section title="Access Control">
+    <Section title={tr("Access Control")}>
       <p className="text-sm text-slate-500 mb-4 max-w-2xl">
         Controls which console pages each staff role can open at this facility.
         Changes take effect the next time that user signs in.
@@ -112,14 +110,14 @@ export default function AccessControlTab() {
 
       {error && <div className="alert-error mb-3">{error}</div>}
       {justSaved && !dirty && (
-        <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">Access control saved.</div>
+        <div className="bg-green-50 text-green-700 text-sm p-2 rounded mb-3">{tr("Access control saved.")}</div>
       )}
 
       <div className="overflow-x-auto">
         <table className="text-sm border-collapse">
           <thead>
             <tr className="text-slate-500">
-              <th className="text-left font-medium px-3 py-2">Role</th>
+              <th className="text-left font-medium px-3 py-2">{tr("Role")}</th>
               {columns.map((page) => (
                 <th key={page} className="font-medium px-3 py-2 text-center">
                   {PAGE_LABELS[page] || roleLabel(page)}
