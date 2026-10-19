@@ -13,7 +13,7 @@ Development of Patient Information Management System (UTHM HealthCare) for Pusat
 Kesihatan Universiti, Universiti Tun Hussein Onn Malaysia, Parit Raja and Kampus
 Cawangan Pagoh.
 **Document:** Jadual Ketiga — Jadual Teknikal Tender (Perkhidmatan). Source file:
-`062026JadualTeknikalHealthcare.xlsm` (sheet `ben-up-003H`).
+`docs/source/062026JadualTeknikalHealthcare.xlsm` (sheet `ben-up-003H`).
 
 ## Buyer & scale
 - **Buyer:** Pusat Kesihatan Universiti (PKU), UTHM — a university health centre.

@@ -40,7 +40,7 @@ class SettingsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (auth.isAuthenticated) ...[
-              if (auth.user?.role == 'patient') ...[
+              if (auth.user?.patientId != null) ...[
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -101,6 +101,9 @@ class SettingsScreen extends StatelessWidget {
                     selected: selected,
                     onSelected: (_) => localeProvider.setLocale(locale),
                     selectedColor: context.palette.primary,
+                    // The default tick is near-black, which disappears on the light-theme primary.
+                    checkmarkColor:
+                        Theme.of(context).brightness == Brightness.dark ? null : Colors.white,
                     labelStyle: TextStyle(color: selected ? Colors.white : context.palette.textBody),
                   );
                 }).toList(),
@@ -114,10 +117,11 @@ class SettingsScreen extends StatelessWidget {
                 width: double.infinity,
                 child: SegmentedButton<ThemeMode>(
                   segments: [
-                    ButtonSegment(value: ThemeMode.light, label: Text(l10n.themeModeLight)),
-                    ButtonSegment(value: ThemeMode.dark, label: Text(l10n.themeModeDark)),
-                    ButtonSegment(value: ThemeMode.system, label: Text(l10n.themeModeSystem)),
+                    ButtonSegment(value: ThemeMode.light, label: _SegmentLabel(l10n.themeModeLight)),
+                    ButtonSegment(value: ThemeMode.dark, label: _SegmentLabel(l10n.themeModeDark)),
+                    ButtonSegment(value: ThemeMode.system, label: _SegmentLabel(l10n.themeModeSystem)),
                   ],
+                  showSelectedIcon: false,
                   selected: {themeProvider.themeMode},
                   onSelectionChanged: (selection) =>
                       context.read<ThemeProvider>().setThemeMode(selection.first),
@@ -167,4 +171,16 @@ class _SettingsBox extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One-line label that shrinks instead of breaking a word across lines.
+class _SegmentLabel extends StatelessWidget {
+  const _SegmentLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(text, maxLines: 1, softWrap: false),
+      );
 }

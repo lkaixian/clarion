@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:provider/provider.dart';
 
 import '../l10n/generated/app_localizations.dart';
@@ -10,11 +11,12 @@ import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
+import 'nric_scan_screen.dart';
 import 'self_register_manual_required_screen.dart';
 import '../widgets/common.dart';
 import '../widgets/password_rules.dart';
 
-enum _Step { details, otp, photos, password }
+enum _Step { details, otp, pending }
 
 /// Self-service registration for a patient who doesn't yet have a
 /// CLARION login — today, only staff can create one, in person, via
@@ -64,6 +66,16 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _loading = false;
+  bool _photoCheck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // A failed lookup keeps the simpler no-photo flow; the server enforces the real rule.
+    context.read<ApiClient>().selfRegisterPhotoCheck().then((on) {
+      if (mounted) setState(() => _photoCheck = on);
+    }).catchError((_) {});
+  }
 
   @override
   void dispose() {
@@ -95,11 +107,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
     setState(() => _loading = true);
     try {
       final api = context.read<ApiClient>();
-      await api.selfRegisterStart(
-        nationalId: nric,
-        fullName: fullName,
-        email: email,
-      );
+      await api.claimStart(nationalId: nric, fullName: fullName, email: email);
       if (!mounted) return;
       setState(() => _step = _Step.otp);
     } on ApiException catch (e) {
@@ -111,26 +119,44 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
     }
   }
 
+  /// An approved result is already a login; a pending one waits for verification.
+  Future<void> _handleClaimResult(Map<String, dynamic> data) async {
+    if (data['status'] == 'approved') {
+      final done = AppLocalizations.of(context).selfRegisterSuccessSnack;
+      await context.read<AuthProvider>().completeWithLoginResponse(data['session'] as Map<String, dynamic>);
+      _showSnack(done);
+      return;
+    }
+    setState(() => _step = _Step.pending);
+  }
+
   Future<void> _verifyOtp() async {
     final l10n = AppLocalizations.of(context);
     final otpCode = _otpController.text.trim();
-    if (otpCode.isEmpty) {
+    final newPassword = _newPasswordController.text;
+    if (otpCode.isEmpty || newPassword.isEmpty || _confirmPasswordController.text.isEmpty) {
       _showSnack(l10n.allFieldsRequired);
+      return;
+    }
+    if (newPassword != _confirmPasswordController.text) {
+      _showSnack(l10n.passwordsDoNotMatch);
+      return;
+    }
+    if (!passwordMeetsRules(newPassword)) {
+      _showSnack(l10n.passwordRulesNotMet);
       return;
     }
 
     setState(() => _loading = true);
     try {
-      final api = context.read<ApiClient>();
-      final data = await api.selfRegisterVerifyOtp(
-        nationalId: _nricController.text.trim(),
-        otpCode: otpCode,
-      );
+      final data = await context.read<ApiClient>().claimVerifyOtp(
+            nationalId: _nricController.text.trim(),
+            email: _emailController.text.trim(),
+            otpCode: otpCode,
+            password: newPassword,
+          );
       if (!mounted) return;
-      setState(() {
-        _photoAttemptsRemaining = data['photo_attempts_remaining'] as int?;
-        _step = _Step.photos;
-      });
+      await _handleClaimResult(data);
     } on ApiException catch (e) {
       _showSnack(e.message);
     } catch (_) {
@@ -138,6 +164,18 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Live on-device NRIC check (nothing is uploaded): the scan screen returns
+  /// the details the user confirmed, which only pre-fill the fields. The
+  /// server still verifies everything.
+  Future<void> _scanCard() async {
+    final found = await Navigator.of(context).push<Map<String, String>>(
+      MaterialPageRoute(builder: (_) => const NricScanScreen()),
+    );
+    if (found == null || !mounted) return;
+    if (found['nric']!.isNotEmpty) _nricController.text = found['nric']!;
+    if (found['name']!.isNotEmpty) _fullNameController.text = found['name']!;
   }
 
   Future<void> _takePhoto({required bool isFront}) async {
@@ -169,13 +207,14 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
     setState(() => _loading = true);
     try {
       final api = context.read<ApiClient>();
-      await api.selfRegisterVerifyPhotos(
+      final data = await api.claimVerifyPhotos(
         nationalId: _nricController.text.trim(),
+        email: _emailController.text.trim(),
         frontImagePath: front.path,
         backImagePath: back.path,
       );
       if (!mounted) return;
-      setState(() => _step = _Step.password);
+      await _handleClaimResult(data);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 403) {
@@ -204,48 +243,6 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
     }
   }
 
-  Future<void> _completeRegistration() async {
-    final l10n = AppLocalizations.of(context);
-    final newPassword = _newPasswordController.text;
-    final confirmPassword = _confirmPasswordController.text;
-
-    if (newPassword.isEmpty || confirmPassword.isEmpty) {
-      _showSnack(l10n.allFieldsRequired);
-      return;
-    }
-    if (newPassword != confirmPassword) {
-      _showSnack(l10n.passwordsDoNotMatch);
-      return;
-    }
-    if (!passwordMeetsRules(newPassword)) {
-      _showSnack(l10n.passwordRulesNotMet);
-      return;
-    }
-
-    setState(() => _loading = true);
-    try {
-      final api = context.read<ApiClient>();
-      final data = await api.selfRegisterComplete(
-        nationalId: _nricController.text.trim(),
-        newPassword: newPassword,
-      );
-      if (!mounted) return;
-      // Same shape as POST /auth/login — treat exactly like a successful
-      // login rather than bouncing back to LoginScreen. app.dart's
-      // `_onAuthChanged` pops this pushed screen back to the root the
-      // moment `status` flips to `authenticated`, revealing Home /
-      // SeniorHome underneath.
-      await context.read<AuthProvider>().completeWithLoginResponse(data);
-      _showSnack(l10n.selfRegisterSuccessSnack);
-    } on ApiException catch (e) {
-      _showSnack(e.message);
-    } catch (_) {
-      _showSnack(l10n.selfRegisterCompleteFailedGeneric);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -258,8 +255,7 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           child: switch (_step) {
             _Step.details => _buildDetailsStep(l10n),
             _Step.otp => _buildOtpStep(l10n),
-            _Step.photos => _buildPhotosStep(l10n),
-            _Step.password => _buildPasswordStep(l10n),
+            _Step.pending => _buildPendingStep(l10n),
           },
         ),
       ),
@@ -274,18 +270,36 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           l10n.selfRegisterDetailsStepDesc,
           style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _scanCard,
+          icon: const Icon(Icons.document_scanner_outlined),
+          label: Text(l10n.selfRegisterScanButton),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.selfRegisterScanPrivacy,
+          style: TextStyle(fontSize: 12, color: context.palette.textMuted),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _nricController,
           keyboardType: TextInputType.text,
           autocorrect: false,
-          textCapitalization: TextCapitalization.none,
+          textCapitalization: TextCapitalization.characters,
+          // dashes and spaces are dropped as the NRIC is typed
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
+            TextInputFormatter.withFunction((o, n) => n.copyWith(text: n.text.toUpperCase())),
+          ],
           decoration: InputDecoration(labelText: l10n.nricLabel, hintText: l10n.nricLabel),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _fullNameController,
-          textCapitalization: TextCapitalization.words,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [TextInputFormatter.withFunction((o, n) => n.copyWith(text: n.text.toUpperCase()))],
           decoration: InputDecoration(labelText: l10n.fullNameLabel, hintText: l10n.fullNameLabel),
         ),
         const SizedBox(height: 12),
@@ -327,6 +341,35 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
           ],
           decoration: InputDecoration(labelText: l10n.otpCodeLabel, hintText: l10n.otpCodeLabel),
         ),
+        const SizedBox(height: 12),
+        Text(l10n.selfRegisterPasswordStepDesc, style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _newPasswordController,
+          obscureText: _obscureNew,
+          decoration: InputDecoration(
+            labelText: l10n.newPasswordLabel,
+            hintText: l10n.newPasswordLabel,
+            suffixIcon: IconButton(
+              icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+              onPressed: () => setState(() => _obscureNew = !_obscureNew),
+            ),
+          ),
+        ),
+        PasswordRules(controller: _newPasswordController),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmPasswordController,
+          obscureText: _obscureConfirm,
+          decoration: InputDecoration(
+            labelText: l10n.confirmNewPasswordLabel,
+            hintText: l10n.confirmNewPasswordLabel,
+            suffixIcon: IconButton(
+              icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -337,6 +380,19 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
                 : Text(l10n.selfRegisterVerifyOtpButton),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildPendingStep(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.selfRegisterPendingDesc, style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4)),
+        if (_photoCheck) ...[
+          const SizedBox(height: 20),
+          _buildPhotosStep(l10n),
+        ],
       ],
     );
   }
@@ -393,55 +449,6 @@ class _SelfRegisterScreenState extends State<SelfRegisterScreen> {
             child: _loading
                 ? const ButtonSpinner()
                 : Text(l10n.selfRegisterSubmitPhotosButton),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordStep(AppLocalizations l10n) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.selfRegisterPasswordStepDesc,
-          style: TextStyle(fontSize: 13, color: context.palette.textMuted, height: 1.4),
-        ),
-        const SizedBox(height: 24),
-        TextField(
-          controller: _newPasswordController,
-          obscureText: _obscureNew,
-          decoration: InputDecoration(
-            labelText: l10n.newPasswordLabel,
-            hintText: l10n.newPasswordLabel,
-            suffixIcon: IconButton(
-              icon: Icon(_obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-              onPressed: () => setState(() => _obscureNew = !_obscureNew),
-            ),
-          ),
-        ),
-        PasswordRules(controller: _newPasswordController),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _confirmPasswordController,
-          obscureText: _obscureConfirm,
-          decoration: InputDecoration(
-            labelText: l10n.confirmNewPasswordLabel,
-            hintText: l10n.confirmNewPasswordLabel,
-            suffixIcon: IconButton(
-              icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _loading ? null : _completeRegistration,
-            child: _loading
-                ? const ButtonSpinner()
-                : Text(l10n.selfRegisterCompleteButton),
           ),
         ),
       ],

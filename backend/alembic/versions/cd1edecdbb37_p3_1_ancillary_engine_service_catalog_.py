@@ -132,19 +132,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("service_results", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_service_results_patient_id"))
-        batch_op.drop_index(batch_op.f("ix_service_results_facility_name"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("service_results")
 
-    with op.batch_alter_table("service_requests", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_service_requests_status"))
-        batch_op.drop_index(batch_op.f("ix_service_requests_patient_id"))
-        batch_op.drop_index(batch_op.f("ix_service_requests_ordering_facility_name"))
-        batch_op.drop_index(batch_op.f("ix_service_requests_module"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("service_requests")
 
-    with op.batch_alter_table("service_catalog_items", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_service_catalog_items_module"))
-        batch_op.drop_index(batch_op.f("ix_service_catalog_items_facility_name"))
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table("service_catalog_items")

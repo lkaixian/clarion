@@ -185,6 +185,7 @@ def _serialize_inventory_item(
         "id": item.id,
         "facility_name": item.facility_name,
         "drug_name": item.drug_name,
+        "drug_code": item.drug_code,
         "quantity_on_hand": item.quantity_on_hand,
         "unit": item.unit,
         "reorder_threshold": item.reorder_threshold,
@@ -265,7 +266,8 @@ def _apply_restock(
     effective_unit_cost = unit_cost_paid if unit_cost_paid is not None else item.unit_cost
     cost = float(effective_unit_cost or 0.0) * quantity
 
-    item.quantity_on_hand += quantity
+    # SQL arithmetic, not read-modify-write: a restock racing a dispense must not lose either.
+    item.quantity_on_hand = models.MedicineInventoryItem.quantity_on_hand + quantity
     item.last_restocked_at = now
     item.updated_by = current_user.id
 
@@ -281,11 +283,11 @@ def _apply_restock(
         .first()
     )
     if budget is None:
-        budget = models.MedicineBudget(
-            facility_name=facility, allocated_amount=0.0, procurement_spend=0.0,
-        )
-        db.add(budget)
-    budget.procurement_spend = float(budget.procurement_spend or 0.0) + cost
+        db.add(models.MedicineBudget(
+            facility_name=facility, allocated_amount=0.0, procurement_spend=cost, updated_by=current_user.id,
+        ))
+        return cost
+    budget.procurement_spend = models.MedicineBudget.procurement_spend + cost
     budget.updated_by = current_user.id
     return cost
 
@@ -333,6 +335,7 @@ def _serialize_purchase_proposal(
         "proposed_drug_name": proposal.proposed_drug_name,
         "proposed_unit": proposal.proposed_unit,
         "proposed_barcode": proposal.proposed_barcode,
+        "drug_code": proposal.drug_code,
         "quantity": proposal.quantity,
         "unit_cost": proposal.unit_cost,
         "reason": proposal.reason,

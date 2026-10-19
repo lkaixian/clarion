@@ -12,15 +12,21 @@ at the DB level for the 6 patient-linked tables:
 Also verifies that un-cascaded foreign keys (such as AuditLog.patient_id)
 are untouched and retain their non-cascading behavior.
 """
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import pytest
 import sqlalchemy as sa
 
 from app import audit, models
 from conftest import _make_patient
 
 
+# SQLite only: it needs PRAGMA foreign_keys, and the audit_logs row the test plants
+# makes MariaDB refuse the delete outright (audit rows pin their patient, by design).
+@pytest.mark.skipif(not str(os.environ.get("DATABASE_URL", "sqlite")).startswith("sqlite"),
+                    reason="uses SQLite PRAGMA foreign_keys")
 def test_patient_raw_sql_delete_cascades_to_all_six_tables(db_session, make_user):
     """Create one patient and one valid row in each of the 6 patient-linked
     tables. Deleting the patient via a raw SQL DELETE (with SQLite foreign_keys

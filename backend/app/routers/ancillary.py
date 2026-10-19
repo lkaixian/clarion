@@ -28,6 +28,7 @@ immutable; a correction is a new ClinicalRecordAnnotation with
 target_type='service_result' (routers/patients.py::_ANNOTATION_MODEL),
 never an edit here.
 """
+import hashlib
 import logging
 import mimetypes
 from datetime import datetime, timedelta, timezone
@@ -39,19 +40,22 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.exc import StaleDataError
 
 from .. import models, schemas, auth, seal, hl7v2, hl7_client
 from ..database import get_db
 from ..audit import log_access
 from ..storage import (
     BUCKET_DOCUMENTS,
+    BUCKET_SCRATCH,
     ObjectNotFound,
     ObjectStoreError,
     apply_object_meta,
     get_object_store,
     sanitize_filename,
 )
-from ._uploads import enforce_upload_size, sniff_document_mime
+from ._uploads import enforce_upload_size, sniff_document_mime, sniff_result_file
+from .notifications import notify
 from ..clinical_access import _hidden_author_facilities
 from ..printing import build_sample_label_png
 from .patients import SAFE_DOCUMENT_MEDIA_TYPES
@@ -103,7 +107,7 @@ def _load_request_with_relations(db: Session, request_id: str) -> Optional[model
         db.query(models.ServiceRequest)
         .options(
             joinedload(models.ServiceRequest.catalog_item),
-            joinedload(models.ServiceRequest.result),
+            joinedload(models.ServiceRequest.result).selectinload(models.ServiceResult.attachments),
             joinedload(models.ServiceRequest.patient),
             joinedload(models.ServiceRequest.dicom_study),
         )
@@ -370,7 +374,7 @@ def list_service_requests(
 
     q = db.query(models.ServiceRequest).options(
         joinedload(models.ServiceRequest.catalog_item),
-        joinedload(models.ServiceRequest.result),
+        joinedload(models.ServiceRequest.result).selectinload(models.ServiceResult.attachments),
         joinedload(models.ServiceRequest.patient),
         joinedload(models.ServiceRequest.dicom_study),
     )
@@ -460,6 +464,8 @@ def get_service_request_label(
         national_id=req.patient.national_id,
         item_name=req.catalog_item.name,
         request_id=req.id,
+        created_at=req.created_at,
+        created_by=req.requested_by_name,
     )
     return Response(content=png_bytes, media_type="image/png")
 
@@ -514,6 +520,27 @@ def sign_off_service_request(
     if payload.signature_b64 and not current_user.signature_object_key:
         save_signature_from_b64(db, current_user, payload.signature_b64)
 
+    # Files uploaded earlier via POST /requests/{id}/attachments: must be this
+    # signer's own, still pending, for this request.
+    pending = []
+    if payload.attachment_ids:
+        wanted = set(payload.attachment_ids)
+        pending = (
+            db.query(models.ServiceResultAttachment)
+            .filter(
+                models.ServiceResultAttachment.id.in_(wanted),
+                models.ServiceResultAttachment.service_request_id == req.id,
+                models.ServiceResultAttachment.service_result_id.is_(None),
+                models.ServiceResultAttachment.uploaded_by == current_user.id,
+            )
+            .all()
+        )
+        if len(pending) != len(wanted):
+            raise HTTPException(
+                status_code=400,
+                detail="An attached file is missing or expired — upload it again and retry.",
+            )
+
     now = datetime.now(timezone.utc)
     result = models.ServiceResult(
         service_request_id=req.id,
@@ -550,10 +577,67 @@ def sign_off_service_request(
         copy_signature_snapshot(current_user, f"service-results/{result.id}.png"),
         "signature",
     )
+    staged_keys = []
+    if pending:
+        store = get_object_store()
+        try:
+            for att in pending:
+                data = store.get(BUCKET_SCRATCH, att.file_object_key)
+                if hashlib.sha256(data).hexdigest() != att.file_sha256:
+                    # scratch is not WORM: never seal bytes that differ from what was staged
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=409,
+                        detail="An attached file changed after upload — remove it and upload it again.",
+                    )
+                # Key is derived from att.id only (stable across retries), so a retried
+                # sign-off overwrites instead of adding another locked WORM object.
+                meta = store.put(
+                    BUCKET_DOCUMENTS, f"service-results/att/{att.id}/{att.filename}",
+                    data, mime=att.file_mime or "application/octet-stream",
+                )
+                staged_keys.append(att.file_object_key)
+                apply_object_meta(att, meta, "file")
+                att.service_result_id = result.id
+        except ObjectNotFound:
+            db.rollback()  # staged copy expired from scratch (7 days) or was removed
+            raise HTTPException(
+                status_code=400,
+                detail="An attached file expired — remove it and upload it again.",
+            )
+        except (ObjectStoreError, OSError, ValueError):
+            # ponytail: a copy already written to the WORM bucket stays there
+            # (retention) as an unreferenced object; sweep if it ever matters.
+            db.rollback()
+            raise HTTPException(status_code=503, detail="Attachment storage is temporarily unavailable. Try again.")
+        try:
+            db.flush()  # the seal below reads result.attachments
+        except StaleDataError:  # the uploader deleted a staged file mid sign-off
+            db.rollback()
+            raise HTTPException(status_code=409, detail="An attached file changed during sign-off. Retry.")
+
     seal.seal("service_result", result)
     req.status = "signed_off"
     db.add(result)
+    # Tell whoever ordered it (skip a self-order). Same transaction as the sign-off.
+    if (
+        req.requested_by and req.requested_by != current_user.id
+        and req.requested_by_role in SIGNOFF_ROLES  # a receptionist is not a clinical reader
+    ):
+        item = req.catalog_item.name if req.catalog_item else req.module
+        who = req.patient.full_name if req.patient else "Patient"
+        notify(
+            db, req.requested_by, "result_ready", f"Result ready: {item}",
+            body=f"{who} - CRITICAL" if result.flag_critical else who,
+            link=f"/patients/{req.patient_id}", urgent=bool(result.flag_critical),
+            facility=req.ordering_facility_name,
+        )
     db.commit()
+    for key in staged_keys:  # scratch is not WORM, so this can really delete
+        try:
+            get_object_store().delete(BUCKET_SCRATCH, key)
+        except Exception:  # noqa: BLE001 -- the 7-day scratch expiry catches leftovers
+            pass
     req = _load_request_with_relations(db, req.id)
 
     flags = " ".join(f for f, on in (("critical", result.flag_critical), ("abnormal", result.flag_abnormal)) if on)
@@ -685,6 +769,177 @@ def get_result_document(
     }
     if result.file_bytes:
         headers["Content-Length"] = str(result.file_bytes)
+    return StreamingResponse(stream, media_type=media_type, headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# Result attachments at sign-off: stage -> (sign-off links + seals) -> download
+# ---------------------------------------------------------------------------
+MAX_RESULT_ATTACHMENTS = 10
+_STAGING_TTL = timedelta(days=7)  # matches the scratch bucket's expiry
+
+
+def _my_staged(db: Session, request_id: str, user: models.User):
+    """This user's still-pending, still-fetchable staged files for a request."""
+    return (
+        db.query(models.ServiceResultAttachment)
+        .filter(
+            models.ServiceResultAttachment.service_request_id == request_id,
+            models.ServiceResultAttachment.service_result_id.is_(None),
+            models.ServiceResultAttachment.uploaded_by == user.id,
+            models.ServiceResultAttachment.created_at >= datetime.now(timezone.utc) - _STAGING_TTL,
+        )
+    )
+
+
+@router.post("/requests/{request_id}/attachments", response_model=schemas.AttachmentOut, status_code=201)
+async def upload_result_attachment(
+    request_id: str,
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    """Stage one file for the sign-off form (a photo of the lab's own paper
+    slip, a docx/txt/json/pdf report, DICOM, HL7). Held in the 7-day scratch
+    bucket until sign-off copies it into the WORM documents bucket; removable
+    until then. The type is decided server-side from the file's own bytes."""
+    req = _request_or_404(db, request_id, current_user, require_same_facility=True)
+    if req.status != "ordered":
+        raise HTTPException(status_code=400, detail=f"Request is already '{req.status}'")
+    if _my_staged(db, req.id, current_user).count() >= MAX_RESULT_ATTACHMENTS:
+        raise HTTPException(status_code=409, detail=f"At most {MAX_RESULT_ATTACHMENTS} files per result.")
+
+    enforce_upload_size(file, MAX_RESULT_UPLOAD_BYTES, "File")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Empty file.")
+    if len(raw) > MAX_RESULT_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"File too large — max {MAX_RESULT_UPLOAD_BYTES // (1024 * 1024)}MB"
+        )
+    mime = sniff_result_file(raw, file.filename)
+    safe_name = sanitize_filename(file.filename, fallback="result")
+
+    att = models.ServiceResultAttachment(
+        service_request_id=req.id, filename=safe_name, file_mime=mime, uploaded_by=current_user.id,
+    )
+    db.add(att)
+    db.flush()  # need att.id for the object key
+    try:
+        meta = await run_in_threadpool(
+            get_object_store().put, BUCKET_SCRATCH, f"result-staging/{req.id}/{att.id}/{safe_name}", raw, mime=mime,
+        )
+    except (ObjectStoreError, OSError, ValueError):
+        db.rollback()
+        raise HTTPException(status_code=503, detail="File storage is temporarily unavailable.")
+    apply_object_meta(att, meta, "file")
+    db.commit()
+    db.refresh(att)
+
+    log_access(
+        db, req.patient_id, current_user.id, current_user.role, "ancillary_result_attachment_staged",
+        detail=f"request_id={req.id} attachment_id={att.id}", actor_facility=current_user.facility,
+    )
+    return att
+
+
+@router.get("/requests/{request_id}/attachments", response_model=List[schemas.AttachmentOut])
+def list_my_staged_attachments(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    """Files this user has staged for the request but not signed off with, so
+    the sign-off form can show (and remove) them after a close/reopen."""
+    req = _request_or_404(db, request_id, current_user, require_same_facility=True)
+    return _my_staged(db, req.id, current_user).order_by(models.ServiceResultAttachment.created_at).all()
+
+
+@router.delete("/requests/{request_id}/attachments/{attachment_id}")
+def delete_pending_attachment(
+    request_id: str,
+    attachment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    """Remove a file you staged but have not signed off with yet. Once a
+    result is signed the attachment is part of the sealed record: no delete."""
+    att = (
+        db.query(models.ServiceResultAttachment)
+        .filter(
+            models.ServiceResultAttachment.id == attachment_id,
+            models.ServiceResultAttachment.service_request_id == request_id,
+            models.ServiceResultAttachment.service_result_id.is_(None),
+            models.ServiceResultAttachment.uploaded_by == current_user.id,
+        )
+        .first()
+    )
+    if att is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    key = att.file_object_key
+    db.delete(att)
+    db.commit()
+    if key:
+        try:
+            get_object_store().delete(BUCKET_SCRATCH, key)
+        except Exception:  # noqa: BLE001 -- scratch expiry cleans up
+            pass
+    return {"status": "ok"}
+
+
+@router.get("/requests/{request_id}/attachments/{attachment_id}")
+def get_result_attachment(
+    request_id: str,
+    attachment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*SIGNOFF_ROLES)),
+):
+    """Download one attachment. Always `Content-Disposition: attachment` +
+    nosniff; only PDFs/images get their real type, everything else is
+    octet-stream, so an uploaded .json/.docx can never render in our origin."""
+    req = _request_or_404(db, request_id, current_user, require_same_facility=False)
+    if req.ordering_facility_name != current_user.facility:
+        if req.ordering_facility_name in _hidden_author_facilities(db, current_user.facility):
+            raise HTTPException(status_code=404, detail="Attachment not found")
+    att = (
+        db.query(models.ServiceResultAttachment)
+        .filter(
+            models.ServiceResultAttachment.id == attachment_id,
+            models.ServiceResultAttachment.service_request_id == req.id,
+        )
+        .first()
+    )
+    if att is None or not att.file_object_key:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if att.service_result_id is None:  # still staged: only its uploader can see it
+        if att.uploaded_by != current_user.id:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        bucket = BUCKET_SCRATCH
+    else:
+        bucket = BUCKET_DOCUMENTS
+    try:
+        stream = get_object_store().open_stream(bucket, att.file_object_key)
+    except (ObjectNotFound, ValueError):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    except ObjectStoreError:
+        raise HTTPException(status_code=503, detail="Document storage is temporarily unavailable.")
+
+    try:
+        log_access(
+            db, req.patient_id, current_user.id, current_user.role, "view_ancillary_result_attachment",
+            detail=f"request_id={req.id} attachment_id={att.id}", actor_facility=current_user.facility,
+        )
+    except Exception:
+        stream.close()
+        raise
+
+    media_type = att.file_mime if att.file_mime in SAFE_DOCUMENT_MEDIA_TYPES else "application/octet-stream"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{sanitize_filename(att.filename, fallback="result")}"',
+        "X-Content-Type-Options": "nosniff",
+    }
+    if att.file_bytes:
+        headers["Content-Length"] = str(att.file_bytes)
     return StreamingResponse(stream, media_type=media_type, headers=headers)
 
 

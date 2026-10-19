@@ -11,10 +11,10 @@ Every external reference, checked. Grouped by topic. Raw research transcript wit
 full citation set: `scratchpad/agy-research-full.md` (Part 1 = A–C, Part 2 = D–G).
 
 ## Tender & codebase
-- `062026JadualTeknikalHealthcare.xlsm` — UTHM/13(PKU)/P/05/001/2026 (extract → [[Tender Clauses Section 10]])
+- `docs/source/062026JadualTeknikalHealthcare.xlsm` — UTHM/13(PKU)/P/05/001/2026 (extract → [[Tender Clauses Section 10]])
 - CLARION static security audit, Aug 2026 → [[Security Audit]] (`scratchpad/security-audit.md`)
 - Target on-prem architecture, Aug 2026 → [[On-Prem Architecture]] (`scratchpad/architecture.md`)
-- `gemin-text.txt` (repo root) — the Gemini HIE thread → [[Nationwide Health Information Exchange]]
+- `docs/source/gemin-text.txt` — the Gemini HIE thread → [[Nationwide Health Information Exchange]]
 
 ## PHP / CodeIgniter 4
 - [CodeIgniter 4 — RESTful handling](https://codeigniter.com/user_guide/incoming/restful.html)

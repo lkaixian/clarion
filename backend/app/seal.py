@@ -84,6 +84,13 @@ def _message(kind: str, row, sealed_at) -> bytes:
     if note_fields:
         note = getattr(row, "consultation_note", None)
         doc["note"] = None if note is None else {f: _norm(getattr(note, f, None)) for f in note_fields}
+    if kind == "service_result":
+        files = sorted(
+            f"{a.file_sha256 or ''}|{a.filename}|{a.file_mime or ''}"
+            for a in (getattr(row, "attachments", None) or [])
+        )
+        if files:  # absent key == no attachments, so seals made before this still verify
+            doc["attachments"] = files
     return "|".join([
         "clarion-seal-v1", kind, row.id, str(_norm(sealed_at)), row.signature_sha256 or "",
         sigs.content_hash(doc),

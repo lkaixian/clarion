@@ -90,9 +90,6 @@ def downgrade() -> None:
         batch_op.drop_column('clinician_id')
         batch_op.drop_column('department')
 
-    with op.batch_alter_table('announcements', schema=None) as batch_op:
-        batch_op.drop_index('ix_announcements_facility_starts')
-        batch_op.drop_index(batch_op.f('ix_announcements_facility_name'))
-
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table('announcements')
     # ### end Alembic commands ###

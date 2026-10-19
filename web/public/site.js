@@ -31,6 +31,20 @@ async function sample() {
   };
 }
 
+// ---- maintenance log (static /maintenance/log.json, written by scripts/upgrade.sh) ----
+// [{start, end|null, title}]. An entry with no `end` is an upgrade in progress. Static on
+// purpose: it still answers while the backend is stopped.
+let maintLog = [];
+const activeMaint = () => maintLog.find(m => !m.end);
+
+async function loadMaint() {
+  try {
+    const r = await fetch("/maintenance/log.json", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const j = r.ok ? await r.json() : [];
+    maintLog = Array.isArray(j) ? j : [];
+  } catch { /* no log => no maintenance */ }
+}
+
 function paintDetails(c) {
   if (!c) return;
   document.querySelectorAll("[data-typical]").forEach(e => {
@@ -48,12 +62,22 @@ function paintDetails(c) {
       const name = document.createElement("span");
       name.textContent = ch.label;
       const val = document.createElement("b");
-      val.textContent = ch.status === "disabled" ? "Not enabled"
-        : ch.status !== "up" ? "Down"
-        : "Up · " + ch.ms + " ms" + (ch.typical_ms !== undefined ? ` (usually ${ch.typical_ms} ms)` : "");
-      li.append(dot, name, val);
+      val.textContent = ch.status === "disabled" ? "Not enabled" : ch.status !== "up" ? "Down" : "Up";
+      li.append(dot, name);
+      if (ch.status !== "disabled") {
+        const pct = document.createElement("span");
+        pct.className = "st-pct"; pct.dataset.pct = "api." + ch.id;
+        li.append(pct);
+      }
+      li.append(val);
+      if (ch.status !== "disabled") {
+        const bars = document.createElement("div");
+        bars.className = "st-bars"; bars.dataset.bars = "api." + ch.id;
+        li.append(bars);
+      }
       return li;
     }));
+    if (lastHist) paintBars();  // the list was just rebuilt; redraw its bars
   }
 }
 
@@ -65,8 +89,9 @@ function paint(res) {
   if (srv) srv.textContent = res.__server == null ? "\u2014" : res.__server + " ms";
   for (const [id, v] of Object.entries(res)) {
     if (id.startsWith("__")) continue;
-    document.querySelectorAll(`[data-dot="${id}"]`).forEach(e => (e.className = "dot " + (v === "off" || v === undefined ? "off" : v === null ? "down" : "up")));
-    document.querySelectorAll(`[data-val="${id}"]`).forEach(e => (e.textContent = v === undefined ? "Unknown" : v === "off" ? "Not enabled" : v === null ? "Down"
+    const m = activeMaint() && v !== "off";
+    document.querySelectorAll(`[data-dot="${id}"]`).forEach(e => (e.className = "dot " + (m && v === null ? "maint" : v === "off" || v === undefined ? "off" : v === null ? "down" : "up")));
+    document.querySelectorAll(`[data-val="${id}"]`).forEach(e => (e.textContent = m && v === null ? "Upgrading" : v === undefined ? "Unknown" : v === "off" ? "Not enabled" : v === null ? "Down"
       : (id === "api" && document.querySelector("[data-metric]") ? "Up" : "Up · " + v + " ms")));
   }
   const banner = document.getElementById("overall");
@@ -74,9 +99,11 @@ function paint(res) {
     const core = CORE.filter(k => res[k] !== "off");
     const down = core.filter(k => res[k] === null);
     const apiDown = res.api === null;
-    const kind = down.length === 0 ? "" : apiDown ? "down" : "warn";
-    const title = down.length === 0 ? "We're fully operational" : apiDown ? "Major outage" : "Partial outage";
-    const sub = down.length === 0 ? "We're not aware of any issues affecting our systems."
+    const mt = activeMaint();
+    const kind = mt ? "maint" : down.length === 0 ? "" : apiDown ? "down" : "warn";
+    const title = mt ? "Upgrade in progress" : down.length === 0 ? "We're fully operational" : apiDown ? "Major outage" : "Partial outage";
+    const sub = mt ? (mt.title || "We're upgrading CLARION. Some features may be unavailable for a few minutes.")
+      : down.length === 0 ? "We're not aware of any issues affecting our systems."
       : "Some parts of CLARION are not responding. See the affected components below.";
     const t = banner.querySelector("[data-title]");
     if (t) {
@@ -85,7 +112,7 @@ function paint(res) {
       banner.querySelector("[data-sub]").textContent = sub;
     } else {
       banner.className = "banner " + kind;
-      banner.textContent = down.length === 0 ? "All systems operational" : title;
+      banner.textContent = mt ? title : down.length === 0 ? "All systems operational" : title;
     }
   }
   document.querySelectorAll("[data-checked]").forEach(e => (e.textContent = "Checked " + new Date().toLocaleTimeString()));
@@ -95,11 +122,20 @@ function paint(res) {
 // ---- 90-day history bars (server-side samples, GET /api/status/history) ----
 function isoDay(d) { return d.toISOString().slice(0, 10); }
 
-function paintHistory(h) {
+let lastHist = null;
+function paintHistory(h) { lastHist = h; paintBars(); }
+
+function paintBars() {
+  const h = lastHist;
   const tip = document.getElementById("st-tip");
   const days = [];
   for (let i = 89; i >= 0; i--) days.push(isoDay(new Date(Date.now() - i * 86400000)));
   const incidents = [];
+  const maintDays = new Set();
+  for (const m of maintLog) {
+    for (let t = Date.parse(m.start); t <= (m.end ? Date.parse(m.end) : Date.now()); t += 86400000) maintDays.add(isoDay(new Date(t)));
+    maintDays.add(isoDay(new Date(m.end || Date.now())));
+  }
 
   document.querySelectorAll("[data-bars]").forEach(el => {
     const comp = el.dataset.bars;
@@ -115,9 +151,9 @@ function paintHistory(h) {
       } else {
         const up = 100 * (1 - r.bad / r.total);
         total += r.total; bad += r.bad;
-        i.className = up >= 99.9 ? "ok" : up >= 95 ? "part" : "out";
-        label = `${up.toFixed(2)}% uptime`;
-        if (up < 99.9) incidents.push({ d, comp, up, kind: up >= 95 ? "Partial outage" : "Major outage" });
+        i.className = maintDays.has(d) ? "maint" : up >= 99.9 ? "ok" : up >= 95 ? "part" : "out";
+        label = maintDays.has(d) ? `${up.toFixed(2)}% uptime (scheduled upgrade)` : `${up.toFixed(2)}% uptime`;
+        if (up < 99.9 && !maintDays.has(d) && !comp.includes(".")) incidents.push({ d, comp, up, kind: up >= 95 ? "Partial outage" : "Major outage" });
       }
       const show = e => {
         const r2 = i.getBoundingClientRect();
@@ -137,13 +173,26 @@ function paintHistory(h) {
     }));
     const pct = document.querySelector(`[data-pct="${comp}"]`);
     if (pct) pct.textContent = total ? `${(100 * (1 - bad / total)).toFixed(2)}% uptime` : "";
+    if (comp.includes(".") && !total) el.title = "No history yet";
   });
 
   const list = document.getElementById("incidents");
   if (list) {
     const names = { api: "API", database: "Database", object_store: "File storage", cache: "Cache & rate limiting", local_ai: "Local AI" };
     incidents.sort((a, b) => (a.d < b.d ? 1 : -1));
-    list.replaceChildren(...(incidents.length ? incidents.map(x => {
+    const fmt = s => new Date(s).toLocaleString(undefined, { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const upgrades = maintLog.slice().sort((a, b) => (a.start < b.start ? 1 : -1)).map(m => {
+      const li = document.createElement("li");
+      const b = document.createElement("b");
+      b.textContent = (m.end ? "Scheduled upgrade" : "Upgrade in progress") + (m.title ? ": " + m.title : "");
+      const w = document.createElement("span");
+      w.className = "when";
+      w.textContent = m.end ? `${fmt(m.start)} – ${fmt(m.end)} · ${Math.max(1, Math.round((Date.parse(m.end) - Date.parse(m.start)) / 60000))} min`
+        : `Started ${fmt(m.start)} · still running`;
+      li.append(b, w);
+      return li;
+    });
+    list.replaceChildren(...upgrades, ...(incidents.length ? incidents.map(x => {
       const li = document.createElement("li");
       const b = document.createElement("b");
       b.textContent = `${names[x.comp] || x.comp}: ${x.kind}`;
@@ -152,11 +201,12 @@ function paintHistory(h) {
       w.textContent = `${new Date(x.d + "T00:00:00Z").toLocaleDateString(undefined, { month: "long", day: "numeric", timeZone: "UTC" })} · ${x.up.toFixed(2)}% of checks passed that day`;
       li.append(b, w);
       return li;
-    }) : (() => { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No incidents in the last 90 days."; return [li]; })()));
+    }) : upgrades.length ? [] : (() => { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No incidents in the last 90 days."; return [li]; })()));
   }
 }
 
 async function loadHistory() {
+  await loadMaint();
   try {
     const r = await fetch("/api/status/history?days=90", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (r.ok) paintHistory(await r.json());
@@ -164,6 +214,7 @@ async function loadHistory() {
 }
 
 async function tick() {
+  await loadMaint();
   paint(await sample());
 }
 
@@ -219,4 +270,17 @@ document.addEventListener("DOMContentLoaded", () => {
     tabs.forEach(x => x.setAttribute("aria-selected", String(x === t)));
     document.querySelectorAll(".panel-tour").forEach(p => (p.hidden = p.id !== t.getAttribute("aria-controls")));
   }));
+
+  // ---- module screenshots: click a module to open its screen ----
+  const mv = document.getElementById("modview");
+  if (mv && mv.showModal) {
+    document.querySelectorAll("button.mod").forEach(b => b.addEventListener("click", () => {
+      document.getElementById("mv-t").textContent = b.dataset.title;
+      document.getElementById("mv-d").textContent = b.dataset.desc;
+      const i = document.getElementById("mv-i");
+      i.src = b.dataset.img; i.alt = b.dataset.title + " screen";
+      mv.showModal();
+    }));
+    mv.addEventListener("click", e => { if (e.target === mv) mv.close(); }); // click on backdrop
+  }
 });

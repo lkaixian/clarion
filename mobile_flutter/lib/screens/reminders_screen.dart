@@ -10,6 +10,7 @@ import '../services/api_client.dart';
 import '../services/api_exception.dart';
 import '../services/mysejahtera_launcher.dart';
 import '../theme/app_theme.dart';
+import '../widgets/booking_labels.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/common.dart';
 
@@ -490,7 +491,7 @@ class _RemindersScreenState extends State<RemindersScreen>
                       ),
                       TextButton.icon(
                         onPressed: _addAppointment,
-                        icon: const Icon(Icons.add, size: 18),
+                        icon: const Icon(Icons.add),
                         label: Text(l10n.addAppointmentAction),
                       ),
                     ],
@@ -611,6 +612,31 @@ class _ClinicAppointmentCard extends StatelessWidget {
   /// card picks up the new pending state.
   final VoidCallback onRescheduleRequested;
 
+  Future<void> _confirmCancel(BuildContext context) async {
+    final api = context.read<ApiClient>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.bkCancelTitle),
+        content: Text(l10n.bkCancelBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.bkKeepAppointment)),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(l10n.bkCancelAppointment)),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await api.cancelBookingAppointment(appointment.id);
+      if (!context.mounted) return;
+      context.snack(l10n.bkCancelled);
+      onRescheduleRequested(); // re-syncs the list
+    } catch (e) {
+      if (!context.mounted) return;
+      context.snack(e is ApiException ? e.message : l10n.bookAppointmentGenericError);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final venue = appointment.venue;
@@ -641,8 +667,8 @@ class _ClinicAppointmentCard extends StatelessWidget {
                   children: [
                     Text(
                       venue != null && venue.trim().isNotEmpty
-                          ? '${appointment.facilityName} — $venue'
-                          : appointment.facilityName,
+                          ? '${appointment.facilityDisplayName ?? appointment.facilityName} — $venue'
+                          : appointment.facilityDisplayName ?? appointment.facilityName,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
@@ -662,6 +688,29 @@ class _ClinicAppointmentCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         l10n.appointmentReasonLabel(reason),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.palette.textMuted,
+                        ),
+                      ),
+                    ],
+                    if (appointment.bookingCategory != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        bookingCategoryLabel(l10n, appointment.bookingCategory!),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.palette.primary,
+                        ),
+                      ),
+                    ],
+                    if (appointment.attendeeName != null && appointment.attendeeName!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.bkForPerson(
+                          bookingPersonLabel(l10n, appointment.attendeeName!, appointment.attendeeRelationship),
+                        ),
                         style: TextStyle(
                           fontSize: 12,
                           color: context.palette.textMuted,
@@ -732,6 +781,17 @@ class _ClinicAppointmentCard extends StatelessWidget {
           // resolved (accepted/rejected) one -- and a resolved outcome
           // doesn't block filing a fresh request afterwards.
           _RescheduleSection(appointment: appointment, l10n: l10n, onRescheduleRequested: onRescheduleRequested),
+          if (appointment.selfBooked && appointment.scheduledAt.isAfter(DateTime.now()))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('cancel-${appointment.id}'),
+                style: TextButton.styleFrom(foregroundColor: context.palette.emergency),
+                onPressed: () => _confirmCancel(context),
+                icon: const Icon(Icons.event_busy_outlined, size: 18),
+                label: Text(l10n.bkCancelAppointment),
+              ),
+            ),
         ],
       ),
     );
@@ -837,7 +897,7 @@ class _RescheduleSection extends StatelessWidget {
             child: TextButton.icon(
               style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32)),
               onPressed: () => _openDialog(context),
-              icon: const Icon(Icons.event_repeat, size: 16),
+              icon: const Icon(Icons.event_repeat),
               label: Text(l10n.requestRescheduleButton, style: const TextStyle(fontSize: 12)),
             ),
           ),

@@ -13,8 +13,12 @@ ai/summarize.py:
    `generate_text(...) or _fallback...` -- an unreachable Ollama server or a
    malformed model response must degrade, not break a public,
    unauthenticated registration endpoint).
-2. Tesseract fallback (Ollama/the vision model unavailable, or the LLM
-   call/parse failed):
+2. RapidOCR (PaddleOCR detection+recognition models over ONNX Runtime, CPU,
+   models bundled in the wheel, no network): the default on a node with no
+   Ollama (the Pi). Reads card photos far more reliably than Tesseract
+   (glare, perspective, small print) and needs ~100 MB RAM. Same output
+   shape as the Tesseract path -- `method` is "rapidocr".
+3. Tesseract fallback (RapidOCR missing, or it found no IC number):
    adapts ai/ocr.py's `extract_text_from_image` for in-memory bytes (this
    module never writes the uploaded photo to disk -- see
    self_registration.py's verify-photos docstring for why), then applies a
@@ -22,7 +26,7 @@ ai/summarize.py:
    via pure Tesseract is unreliable -- best-effort only (longest
    all-uppercase, non-boilerplate, digit-free line). Every result carries a
    `method` ("llm" | "tesseract") and `name_confidence` ("high" | "low") so
-   the caller can be stricter about a Tesseract-derived name match if it
+   the caller can be stricter about an OCR-derived name match if it
    wants to; today the caller (self_registration.py) treats both the same
    for simplicity, but the fields are there for a future tightening.
 
@@ -39,6 +43,7 @@ import io
 import json
 import logging
 import re
+import threading
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -198,6 +203,26 @@ def _guess_name_from_text(text: str) -> Optional[str]:
     return max(candidates, key=len)
 
 
+def name_on_card(expected: str, raw_text: Optional[str], threshold: float = 0.85) -> bool:
+    """True if `expected` (the name already on the patient record) appears in the
+    OCR text of the card. Compared as letters only: RapidOCR drops the spaces
+    between words, so "AHMAD BIN ABDULLAH" can come back as "AHMADBINABDULLAH".
+    Used instead of guessing which line is the name -- the expected name is
+    known, so this asks the narrower question "is it printed on this card?"."""
+    import difflib
+
+    want = re.sub(r"[^A-Z]", "", (expected or "").upper())
+    if len(want) < 4 or not raw_text:
+        return False
+    for line in raw_text.splitlines():
+        got = re.sub(r"[^A-Z]", "", line.upper())
+        if not got:
+            continue
+        if want in got or difflib.SequenceMatcher(None, want, got).ratio() >= threshold:
+            return True
+    return False
+
+
 def _find_ic_number_in_text(text: str) -> Optional[str]:
     for match in _IC_CANDIDATE_RE.finditer(text):
         digits = _extract_digits(match.group(0))
@@ -248,6 +273,61 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict:
     }
 
 
+# RapidOCR: one lazily-built engine per process (model load is ~1 s), and a
+# small gate so a burst of unauthenticated uploads can't pin every Pi core.
+_RAPID_MAX_EDGE = 1000          # px; measured on a Pi 4: halves the time on 12 MP phone photos, same reads
+_RAPID_GATE = threading.Semaphore(2)
+_rapid_engine = None
+_rapid_lock = threading.Lock()
+_rapid_missing = False
+
+
+def _get_rapid_engine():
+    global _rapid_engine, _rapid_missing
+    if _rapid_engine is not None or _rapid_missing:
+        return _rapid_engine
+    with _rapid_lock:
+        if _rapid_engine is None and not _rapid_missing:
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                _rapid_engine = RapidOCR()
+            except Exception:  # noqa: BLE001 -- not installed / model load failed => fall back
+                logger.warning("nric_ocr: rapidocr_onnxruntime unavailable -- using Tesseract.")
+                _rapid_missing = True
+    return _rapid_engine
+
+
+def _extract_via_rapidocr(image_bytes: bytes) -> Optional[dict]:
+    """None if RapidOCR is unavailable or errors (caller falls back to
+    Tesseract); otherwise a result dict whose ic_number may still be None."""
+    engine = _get_rapid_engine()
+    if engine is None:
+        return None
+    try:
+        import numpy as np
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image.thumbnail((_RAPID_MAX_EDGE, _RAPID_MAX_EDGE))
+        with _RAPID_GATE:
+            found, _ = engine(np.asarray(image))
+    except Exception:  # noqa: BLE001 -- never raise out to a public endpoint
+        logger.exception("nric_ocr: RapidOCR failed")
+        return None
+
+    # found: [[box, text, score], ...] or None. Read top-to-bottom, left-to-right.
+    rows = sorted(found or [], key=lambda r: (round(min(p[1] for p in r[0]) / 12), min(p[0] for p in r[0])))
+    raw_text = "\n".join(r[1] for r in rows)
+    logger.debug("nric_ocr: rapidocr raw_text=%r", raw_text)  # sensitive; DEBUG only (see tesseract path)
+    return {
+        "ic_number": _find_ic_number_in_text(raw_text),
+        "name": _guess_name_from_text(raw_text),
+        "method": "rapidocr",
+        "name_confidence": "low",
+        "raw_text": raw_text,
+    }
+
+
 def extract_nric_fields(image_bytes: bytes, media_type: str = "image/jpeg") -> dict:
     """Public entry point. Tries the local-LLM path first; falls back to
     Tesseract if Ollama is unreachable or the LLM extraction fails. Always
@@ -260,4 +340,9 @@ def extract_nric_fields(image_bytes: bytes, media_type: str = "image/jpeg") -> d
     llm_result = _extract_via_llm(image_bytes, media_type)
     if llm_result is not None:
         return llm_result
-    return _extract_via_tesseract(image_bytes)
+    rapid = _extract_via_rapidocr(image_bytes)
+    if rapid is not None and rapid["ic_number"]:
+        return rapid
+    tess = _extract_via_tesseract(image_bytes)
+    # RapidOCR read the card but found no IC: let Tesseract have a go, keep whichever found one.
+    return tess if tess["ic_number"] or rapid is None else rapid

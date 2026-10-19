@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../l10n/generated/app_localizations.dart';
 import '../theme/app_theme.dart';
 
 /// 20dp white spinner shown inside a primary button while its action runs.
@@ -32,4 +34,13 @@ extension ContextX on BuildContext {
   /// Pushes [screen] on the nearest [Navigator] with a standard Material route.
   Future<T?> pushScreen<T>(Widget screen) =>
       Navigator.of(this).push<T>(MaterialPageRoute<T>(builder: (_) => screen));
+}
+
+/// "Today", "Yesterday", "N days ago" (up to [maxDaysAgo]), else "d MMM yyyy".
+String relativeDay(AppLocalizations l10n, DateTime t, DateTime now, String locale, {int maxDaysAgo = 30}) {
+  final days = DateTime(now.year, now.month, now.day).difference(DateTime(t.year, t.month, t.day)).inDays;
+  if (days == 0) return l10n.dayToday;
+  if (days == 1) return l10n.dayYesterday;
+  if (days > 1 && days <= maxDaysAgo) return l10n.daysAgo(days);
+  return DateFormat('d MMM yyyy', locale).format(t);
 }

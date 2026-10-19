@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/generated/app_localizations.dart';
@@ -6,6 +7,7 @@ import '../models/audit_log_entry.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 import '../widgets/loading_view.dart';
 
 /// Builds the "who" line for one audit-log row -- mirrors the fallback
@@ -179,6 +181,7 @@ IconData _actionIcon(String action) {
       return Icons.badge_outlined;
     case 'register_nfc_card':
     case 'revoke_nfc_card':
+    case 'update_nfc_card':
       return Icons.nfc;
     default:
       return Icons.history;
@@ -197,14 +200,109 @@ String _prettyAction(String action) {
   return spaced[0].toUpperCase() + spaced.substring(1);
 }
 
-/// `GET /patients/{id}/audit-log` — lets a patient see exactly who accessed
-/// their record and when (the transparency half of the PDPA-aligned design
-/// described in the backend). Redesigned from a plain text dump into
-/// color-coded, icon-led cards: each row shows *when*, *who* (name + role +
-/// facility when available, with the same "unverified emergency responder"
-/// distinction the web console's `formatAuditActor` makes), and a visual
-/// signal for whether the access looks routine or worth a second look — see
-/// [_severityOf].
+// ---------------------------------------------------------------------------
+// Pure view-model helpers (tested in test/audit_log_logic_test.dart).
+// ---------------------------------------------------------------------------
+
+/// Single-choice tag filter. Actions not covered by any tag (e.g. staff
+/// clock-in) only appear under [all].
+enum AuditTag { all, emergency, views, changes, account, failed }
+
+const _viewActions = {
+  'view_full_record',
+  'view_document',
+  'view_document_file',
+  'generate_handover_brief',
+  'run_interaction_check',
+};
+const _accountActions = {
+  'change_password',
+  'update_own_profile',
+  'register_nfc_card',
+  'revoke_nfc_card',
+  'update_nfc_card',
+};
+
+/// Which tag an action belongs to; [AuditTag.all] means "no specific tag".
+AuditTag auditTagOf(String action) {
+  if (action == 'emergency_access_failed') return AuditTag.failed;
+  if (action == 'emergency_access' || action == 'emergency_access_nfc') return AuditTag.emergency;
+  if (_accountActions.contains(action) || action.startsWith('password_reset')) return AuditTag.account;
+  if (_viewActions.contains(action)) return AuditTag.views;
+  if (action.startsWith('add_') ||
+      action.startsWith('update_') ||
+      action == 'create_patient' ||
+      action == 'upload_document') {
+    return AuditTag.changes;
+  }
+  return AuditTag.all;
+}
+
+/// A failed attempt, or any row from an unverified responder.
+bool auditNeedsAttention(AuditLogEntry e) =>
+    e.action == 'emergency_access_failed' || _isUnverifiedResponder(e);
+
+Map<AuditTag, int> auditTagCounts(List<AuditLogEntry> entries) {
+  final counts = {for (final t in AuditTag.values) t: 0};
+  counts[AuditTag.all] = entries.length;
+  for (final e in entries) {
+    final t = auditTagOf(e.action);
+    if (t != AuditTag.all) counts[t] = counts[t]! + 1;
+  }
+  return counts;
+}
+
+List<AuditLogEntry> filterAudit(
+  List<AuditLogEntry> entries, {
+  AuditTag tag = AuditTag.all,
+  bool attentionOnly = false,
+}) =>
+    [
+      for (final e in entries)
+        if ((tag == AuditTag.all || auditTagOf(e.action) == tag) && (!attentionOnly || auditNeedsAttention(e))) e,
+    ];
+
+/// Consecutive entries by the same actor doing the same action on one day.
+/// Entries are newest first, so `entries.first` is the latest.
+class AuditRow {
+  AuditRow(this.entries);
+  final List<AuditLogEntry> entries;
+  AuditLogEntry get latest => entries.first;
+  int get count => entries.length;
+}
+
+class AuditDay {
+  AuditDay(this.day, this.rows);
+  final DateTime day;
+  final List<AuditRow> rows;
+}
+
+/// Sorts newest first, groups by local calendar day and collapses
+/// consecutive same actor + action entries inside a day.
+List<AuditDay> groupAuditByDay(List<AuditLogEntry> entries) {
+  final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+  final sorted = [...entries]..sort((a, b) => (b.time ?? epoch).compareTo(a.time ?? epoch));
+  final days = <AuditDay>[];
+  for (final e in sorted) {
+    final t = e.time ?? epoch;
+    final day = DateTime(t.year, t.month, t.day);
+    if (days.isEmpty || days.last.day != day) days.add(AuditDay(day, []));
+    final rows = days.last.rows;
+    final last = rows.isEmpty ? null : rows.last.latest;
+    if (last != null && last.actor == e.actor && last.action == e.action) {
+      rows.last.entries.add(e);
+    } else {
+      rows.add(AuditRow([e]));
+    }
+  }
+  return days;
+}
+
+// ---------------------------------------------------------------------------
+
+/// `GET /patients/{id}/audit-log` -- who accessed the patient's record and
+/// when. A pinned filter bar (time window, tag, needs-attention), a one-line
+/// summary, then rows grouped by day with a thin severity edge.
 class AuditLogScreen extends StatefulWidget {
   const AuditLogScreen({super.key});
 
@@ -217,6 +315,9 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
   // history can be years of rows).
   static const _windows = [(7, '7d'), (30, '30d'), (365, '1y'), (2555, '7y')];
   int _days = 7;
+  AuditTag _tag = AuditTag.all;
+  bool _attentionOnly = false;
+  final _expanded = <String>{};
 
   void _load() {
     final patientId = context.read<AuthProvider>().user?.patientId;
@@ -231,290 +332,320 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  String _tagLabel(AppLocalizations l10n, AuditTag t) => switch (t) {
+        AuditTag.all => l10n.auditTagAll,
+        AuditTag.emergency => l10n.auditTagEmergency,
+        AuditTag.views => l10n.auditTagViews,
+        AuditTag.changes => l10n.auditTagChanges,
+        AuditTag.account => l10n.auditTagAccount,
+        AuditTag.failed => l10n.auditTagFailed,
+      };
+
+  String _windowLabel(AppLocalizations l10n) => switch (_days) {
+        7 => l10n.auditWindow7d,
+        30 => l10n.auditWindow30d,
+        365 => l10n.auditWindow1y,
+        _ => l10n.auditWindow7y,
+      };
+
+  void _showInfo() {
+    final l10n = AppLocalizations.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.auditInfoTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.auditLogLegendIntro),
+            const SizedBox(height: 12),
+            for (final sev in _AuditSeverity.values.reversed)
+              Builder(builder: (_) {
+                final st = _styleFor(dialogContext, sev, l10n);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(width: 4, height: 24, color: st.color),
+                      const SizedBox(width: 10),
+                      Icon(st.icon, size: 20, color: st.color),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(st.label)),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(MaterialLocalizations.of(dialogContext).closeButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipRow(List<Widget> chips) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [for (final c in chips) Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: c)],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final patientState = context.watch<PatientProvider>();
+    final state = context.watch<PatientProvider>();
+    final p = context.palette;
+    final all = state.auditLog;
+    final counts = auditTagCounts(all);
+    final tag = counts[_tag] == 0 ? AuditTag.all : _tag;
+    final attentionCount = all.where(auditNeedsAttention).length;
+    final filtered = filterAudit(all, tag: tag, attentionOnly: _attentionOnly);
+    final locale = Localizations.localeOf(context).toString();
+    final now = DateTime.now();
+
+    Widget body;
+    if (state.isLoadingAuditLog) {
+      body = const LoadingView();
+    } else if (state.auditLogError) {
+      body = ErrorRetryView(message: l10n.auditLoadError, onRetry: _load);
+    } else if (all.isEmpty) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(l10n.noAccessLogged, style: TextStyle(color: p.textMuted)),
+        ),
+      );
+    } else if (filtered.isEmpty) {
+      body = Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(l10n.auditNoMatches, style: TextStyle(color: p.textMuted)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => setState(() {
+                _tag = AuditTag.all;
+                _attentionOnly = false;
+              }),
+              child: Text(l10n.auditClearFilters),
+            ),
+          ],
+        ),
+      );
+    } else {
+      final groups = groupAuditByDay(filtered);
+      body = CustomScrollView(
+        slivers: [
+          for (final g in groups)
+            SliverMainAxisGroup(
+              slivers: [
+                SliverResizingHeader(
+                  child: Container(
+                    width: double.infinity,
+                    color: p.background,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        relativeDay(l10n, g.day, now, locale, maxDaysAgo: 1),
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: p.textMuted),
+                      ),
+                    ),
+                  ),
+                ),
+                SliverList.builder(
+                  itemCount: g.rows.length,
+                  itemBuilder: (context, i) {
+                    final row = g.rows[i];
+                    final key = '${row.latest.timestamp}|${row.latest.actor}|${row.latest.action}';
+                    return _AuditRowTile(
+                      row: row,
+                      l10n: l10n,
+                      expanded: _expanded.contains(key),
+                      onTap: () => setState(() => _expanded.contains(key) ? _expanded.remove(key) : _expanded.add(key)),
+                    );
+                  },
+                ),
+              ],
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.auditLogTitle)),
+      appBar: AppBar(
+        title: Text(l10n.auditLogTitle),
+        actions: [
+          IconButton(
+            tooltip: l10n.auditInfoTooltip,
+            onPressed: _showInfo,
+            icon: const Icon(Icons.info_outline),
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Wrap(
-              spacing: 8,
+          Container(
+            decoration: BoxDecoration(
+              color: p.surface,
+              border: Border(bottom: BorderSide(color: p.border)),
+            ),
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Column(
               children: [
-                for (final (days, label) in _windows)
-                  ChoiceChip(
-                    label: Text(label),
-                    selected: _days == days,
-                    onSelected: (_) {
-                      setState(() => _days = days);
-                      _load();
-                    },
+                _chipRow([
+                  for (final (days, label) in _windows)
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: _days == days,
+                      onSelected: (_) {
+                        setState(() => _days = days);
+                        _load();
+                      },
+                    ),
+                  FilterChip(
+                    avatar: const Icon(Icons.priority_high, size: 18),
+                    label: Text('${l10n.auditNeedsAttention} $attentionCount'),
+                    selected: _attentionOnly,
+                    onSelected: attentionCount == 0 && !_attentionOnly
+                        ? null
+                        : (v) => setState(() => _attentionOnly = v),
                   ),
+                ]),
+                _chipRow([
+                  for (final t in AuditTag.values)
+                    ChoiceChip(
+                      label: Text('${_tagLabel(l10n, t)} ${counts[t]}'),
+                      selected: tag == t,
+                      onSelected: counts[t] == 0 ? null : (_) => setState(() => _tag = t),
+                    ),
+                ]),
               ],
             ),
           ),
-          Expanded(
-            child: patientState.isLoadingAuditLog
-                ? const LoadingView()
-                : patientState.auditLog.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        l10n.noAccessLogged,
-                        style: TextStyle(color: context.palette.textMuted),
-                      ),
-                    ),
-                  )
-                : Column(
-                    children: [
-                      _LegendBar(l10n: l10n),
-                      Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          itemCount: patientState.auditLog.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (context, i) => _AuditEntryCard(
-                            entry: patientState.auditLog[i],
-                            l10n: l10n,
-                          ),
+          if (!state.isLoadingAuditLog && !state.auditLogError && all.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  l10n.auditSummary(all.length, _windowLabel(l10n), attentionCount),
+                  style: TextStyle(fontSize: 13, color: p.textBody),
+                ),
+              ),
+            ),
+          Expanded(child: body),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditRowTile extends StatelessWidget {
+  const _AuditRowTile({required this.row, required this.l10n, required this.expanded, required this.onTap});
+
+  final AuditRow row;
+  final AppLocalizations l10n;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final entry = row.latest;
+    final style = _styleFor(context, _severityOf(entry), l10n);
+    final locale = Localizations.localeOf(context).toString();
+    final t = entry.time;
+    final timeText = t == null ? entry.timestamp : DateFormat.Hm(locale).format(t);
+    final trailing = row.count > 1 ? l10n.auditCollapsedCount(row.count, timeText) : timeText;
+    final detail = entry.detail;
+    final showDetail =
+        detail != null && detail.isNotEmpty && !(_isUnverifiedResponder(entry) && detail.startsWith('org='));
+
+    return Semantics(
+      container: true,
+      expanded: expanded,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border(left: BorderSide(color: style.color, width: 3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(_actionIcon(entry.action), size: 20, color: style.color),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _prettyAction(entry.action),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: p.textPrimary),
                         ),
+                        Text(
+                          _formatActor(entry, l10n),
+                          maxLines: expanded ? 3 : 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: p.textBody),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(trailing, style: TextStyle(fontSize: 12, color: p.textMuted)),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 20, color: p.textMuted),
+                ],
+              ),
+              if (expanded)
+                Padding(
+                  padding: const EdgeInsets.only(left: 30, top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(style.icon, size: 14, color: style.color),
+                          const SizedBox(width: 4),
+                          Text(style.label,
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: style.color)),
+                        ],
+                      ),
+                      if (entry.fieldsAccessed.isNotEmpty)
+                        Text(l10n.fieldsLabel(entry.fieldsAccessed.join(', ')),
+                            style: TextStyle(fontSize: 12, color: p.textMuted)),
+                      if (showDetail)
+                        Text(l10n.auditDetailLabel(detail), style: TextStyle(fontSize: 12, color: p.textMuted)),
+                      Text(
+                        row.count > 1
+                            ? l10n.auditTimesLabel(row.entries
+                                .map((e) => e.time == null ? e.timestamp : DateFormat.Hms(locale).format(e.time!))
+                                .join(', '))
+                            : (t == null ? entry.timestamp : DateFormat('d MMM yyyy, HH:mm:ss', locale).format(t)),
+                        style: TextStyle(fontSize: 12, color: p.textMuted),
                       ),
                     ],
                   ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendBar extends StatelessWidget {
-  const _LegendBar({required this.l10n});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: BoxDecoration(
-        color: context.palette.surface,
-        border: Border(bottom: BorderSide(color: context.palette.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.auditLogLegendIntro,
-            style: TextStyle(fontSize: 11, color: context.palette.textFaint),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              _LegendDot(
-                color: context.palette.success,
-                label: l10n.auditSeverityRoutine,
-              ),
-              _LegendDot(
-                color: context.palette.attention,
-                label: l10n.auditSeverityAttention,
-              ),
-              _LegendDot(
-                color: context.palette.emergency,
-                label: l10n.auditSeverityCritical,
-              ),
+                ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  const _LegendDot({required this.color, required this.label});
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: context.palette.textMuted,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AuditEntryCard extends StatelessWidget {
-  const _AuditEntryCard({required this.entry, required this.l10n});
-
-  final AuditLogEntry entry;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final severity = _severityOf(entry);
-    final style = _styleFor(context, severity, l10n);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.palette.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 3,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Left accent bar — the primary, always-visible severity signal
-            // (color alone), backed up by the icon badge + text chip below
-            // so this isn't a color-only indicator.
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: style.color,
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(12),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: style.bg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _actionIcon(entry.action),
-                            size: 18,
-                            color: style.color,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _prettyAction(entry.action),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: context.palette.textPrimary,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: style.bg,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            style.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: style.color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 14,
-                          color: context.palette.textFaint,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            _formatActor(entry, l10n),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.palette.textBody,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (entry.fieldsAccessed.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.fieldsLabel(entry.fieldsAccessed.join(', ')),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.palette.textMuted,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.schedule,
-                          size: 12,
-                          color: context.palette.textFaint,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          entry.timestamp,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.palette.textFaint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

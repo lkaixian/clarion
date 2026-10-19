@@ -61,6 +61,14 @@ h2.t{font-size:clamp(1.6rem,3.5vw,2.2rem);line-height:1.2;color:var(--navy);marg
 .mods{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr))}
 .mod{display:flex;align-items:center;gap:.7rem;background:#fff;border:1px solid var(--line);border-radius:12px;padding:.8rem 1rem;font-weight:600;font-size:.95rem}
 .mod .ic{color:var(--teal)}
+button.mod{cursor:pointer;font:inherit;font-weight:600;text-align:left;color:inherit;transition:border-color .15s,box-shadow .15s}
+button.mod:hover,button.mod:focus-visible{border-color:var(--teal);box-shadow:0 2px 10px rgba(0,70,124,.12)}
+#modview{border:0;border-radius:14px;padding:1.25rem;width:min(60rem,94vw);max-height:92vh;overflow:auto}
+#modview::backdrop{background:rgba(10,20,40,.65)}
+#modview img{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;display:block;margin-top:.75rem}
+#modview #mv-i[src*="mobile"]{max-width:20rem;margin-inline:auto}
+#modview h3{margin:0 2rem .25rem 0}
+.mv-x{position:absolute;top:.6rem;right:.8rem;font-size:1.6rem;line-height:1;background:none;border:0;cursor:pointer;color:var(--navy)}
 
 /* flow */
 .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:.75rem}

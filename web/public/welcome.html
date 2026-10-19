@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLARION | Emergency-first clinic system</title>
-<meta name="description" content="CLARION is an emergency-first, on-premises clinic information system. Demo environment.">
+<meta name="description" content="CLARION is an emergency-first, on-premises clinic information system.">
 <meta name="theme-color" content="#00467c">
 <link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png">
 <link rel="apple-touch-icon" href="/brand/icon-180.png">
-<link rel="stylesheet" href="/site.css?v=3">
-<link rel="stylesheet" href="/motion.css?v=3">
-<script src="/site.js?v=3"></script>
+<link rel="stylesheet" href="/site.css?v=4">
+<link rel="stylesheet" href="/motion.css?v=4">
+<script src="/site.js?v=4"></script>
 </head>
 <body>
 
@@ -35,10 +35,11 @@
   <div class="wrap">
     <div>
       <span class="eyebrow">Clinical Access, Records &amp; Information Operations Network</span>
-      <h1 id="h">Clinic records that still work when the network doesn't.</h1>
-      <p class="lead">CLARION puts a patient's critical facts in a responder's hands in seconds, keeps every access on the record, and runs entirely on your own hardware. No cloud AI, no data leaving the building.</p>
+      <h1 id="h">One patient record across every clinic, even when the network is down.</h1>
+      <p class="lead">Scan a card and a responder sees blood type, allergies and medications in seconds. Patients register, book and pay from any phone or browser, iPhone included. Every access is audited, and it all runs on your own hardware with no cloud AI.</p>
       <div class="cta">
         <a class="btn big" href="/login">Sign in <svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#arrow"/></svg></a>
+        <a class="btn big ghost" href="/register">Create account</a>
         <a class="btn big ghost" href="/get-app">Get the app</a>
         <a class="btn big ghost" href="/status.html">View system status</a>
       </div>
@@ -46,8 +47,8 @@
 
     <figure class="frame">
       <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
-      <img src="/brand/shot-patient.webp" width="1560" height="1170" alt="CLARION patient record showing conditions, medications, a severe penicillin allergy and a visit timeline that includes read-only entries from other clinics">
-      <figcaption class="muted">The patient record. Fictional demo data.</figcaption>
+      <img src="/brand/hero-record.webp" width="1400" height="900" alt="CLARION patient record showing conditions, medications, a severe penicillin allergy and a visit timeline that includes read-only entries from other clinics">
+      <figcaption class="muted">The patient record.</figcaption>
     </figure>
   </div>
 </section>
@@ -92,7 +93,7 @@
     <div class="head" data-reveal>
       <span class="eyebrow">Product tour</span>
       <h2 class="t" id="t">See what staff see.</h2>
-      <p class="lead">Real screens from the running system. Fictional patients only.</p>
+      <p class="lead">Real screens from the running system.</p>
     </div>
     <div class="tabs" role="tablist" aria-label="Product tour" data-reveal>
       <button class="tab" role="tab" id="tab-record" aria-controls="pn-record" aria-selected="true">Patient record</button>
@@ -137,22 +138,28 @@
       <p class="lead">From the front desk to the imaging viewer, every team works on the same patient record under role-based access.</p>
     </div>
     <div class="mods">
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dashboard"/></svg>Dashboard</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#frontdesk"/></svg>Front desk</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#consultation"/></svg>Consultation</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pharmacy"/></svg>Pharmacy</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#admin"/></svg>Admin</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#billing"/></svg>Billing</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#procedure"/></svg>Procedure</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#laboratory"/></svg>Laboratory</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#xray"/></svg>X-ray</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#physio"/></svg>Physiotherapy</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dental"/></svg>Dental</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#reporting"/></svg>Reporting</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#mobile"/></svg>Mobile app</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#calling"/></svg>Calling system</div>
-      <div class="mod" data-reveal><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pacs"/></svg>PACS imaging</div>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/dashboard.webp" data-title="Dashboard" data-desc="Live queue, wait times, clinic load and an operational health score for your facility." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dashboard"/></svg>Dashboard</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/frontdesk.webp" data-title="Front desk" data-desc="Check-in, queue tickets, wards and beds, and admissions in one place." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#frontdesk"/></svg>Front desk</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/consultation.webp" data-title="Consultation" data-desc="The patient record the clinician works from: conditions, medications, allergies and a cross-clinic timeline." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#consultation"/></svg>Consultation</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/pharmacy.webp" data-title="Pharmacy" data-desc="Dispensing, medicine inventory and purchasing, with medication-safety checks." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pharmacy"/></svg>Pharmacy</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/admin.webp" data-title="Admin" data-desc="Facility settings, staff, roles and page access, all scoped to your own facility." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#admin"/></svg>Admin</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/billing.webp" data-title="Billing" data-desc="Charge master, bills, payments and claims, with Excel import for price lists." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#billing"/></svg>Billing</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/procedure.webp" data-title="Procedure" data-desc="Order and sign off procedures, with a catalogue per department." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#procedure"/></svg>Procedure</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/laboratory.webp" data-title="Laboratory" data-desc="Lab orders and signed-off results that flow straight into the patient record." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#laboratory"/></svg>Laboratory</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/xray.webp" data-title="X-ray" data-desc="Imaging requests and reports linked to the patient." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#xray"/></svg>X-ray</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/physio.webp" data-title="Physiotherapy" data-desc="Physiotherapy orders and session results." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#physio"/></svg>Physiotherapy</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/dental.webp" data-title="Dental" data-desc="Tooth chart with signed entries and treatment history." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#dental"/></svg>Dental</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/reporting.webp" data-title="Reporting" data-desc="Operational and statutory reports, exportable." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#reporting"/></svg>Reporting</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/mobile.webp" data-title="Mobile app" data-desc="The patient view on a phone: records, bills, bookings and the emergency card." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#mobile"/></svg>Mobile app</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/calling.webp" data-title="Calling system" data-desc="A public waiting-room display that shows who is being called." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#calling"/></svg>Calling system</button>
+      <button type="button" class="mod" data-reveal data-img="/brand/modules/pacs.webp" data-title="PACS imaging" data-desc="Imaging requests and the embedded DICOM viewer. Screen shown: the imaging worklist." aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="/brand/sprite.svg#pacs"/></svg>PACS imaging</button>
     </div>
+    <p class="muted" style="margin-top:1rem">Select a module to see its screen.</p>
+    <dialog id="modview" aria-labelledby="mv-t">
+      <form method="dialog"><button class="mv-x" aria-label="Close">&times;</button></form>
+      <h3 id="mv-t"></h3><p id="mv-d" class="muted"></p>
+      <img id="mv-i" alt="" width="1400" height="900">
+    </dialog>
   </div>
 </section>
 
@@ -171,7 +178,7 @@
           <li>Download a visit summary as PDF</li>
           <li>Read clinic announcements</li>
         </ul>
-        <a class="btn" href="/login">Patient sign-in</a>
+        <a class="btn" href="/login">Patient sign-in</a> <a class="btn ghost" href="/register">Create account</a>
       </article>
       <article class="card panel" data-reveal>
         <h3>For clinic staff</h3>
@@ -231,9 +238,9 @@
 <section class="alt" aria-labelledby="a">
   <div class="wrap">
     <div class="head" data-reveal>
-      <span class="eyebrow">How this demo is hosted</span>
+      <span class="eyebrow">How it is hosted</span>
       <h2 class="t" id="a">A small server, a secure tunnel.</h2>
-      <p class="lead">This demo runs on a Raspberry Pi. There is no open port on the network; visitors reach it only through an outbound-only tunnel.</p>
+      <p class="lead">CLARION runs on a Raspberry Pi. There is no open port on the network; visitors reach it only through an outbound-only tunnel.</p>
     </div>
     <div class="flow" role="list">
       <div class="step" role="listitem" data-reveal><b>You</b><span>Browser or phone</span></div>
@@ -252,7 +259,6 @@
 <footer>
   <div class="wrap">
     <a class="brand" href="/"><img src="/brand/mark.png" alt=""><span>CLARION</span></a>
-    <p>Demo environment. All patient data is fictional.</p>
     <p><a href="/status.html">Status</a> &nbsp;·&nbsp; <a href="/login">Sign in</a></p>
   </div>
 </footer>

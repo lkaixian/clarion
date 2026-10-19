@@ -33,6 +33,7 @@ MariaDB's online-DDL for secondary indexes). ``downgrade`` drops them.
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy.exc import OperationalError
 
 
 revision: str = "d5e8a1c4b6f2"
@@ -66,4 +67,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for name, table, _cols in reversed(_INDEXES):
-        op.drop_index(name, table_name=table)
+        try:
+            op.drop_index(name, table_name=table)
+        except OperationalError as exc:
+            # MariaDB error 1553: the index also backs a foreign key (creating it replaced
+            # the FK's own implicit index), so it cannot be dropped. Leaving a redundant
+            # index behind is harmless; anything else is a real failure.
+            if getattr(exc.orig, "args", (None,))[0] != 1553:
+                raise

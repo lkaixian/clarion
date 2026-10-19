@@ -1,6 +1,6 @@
 # UTHM HealthCare — Tender Technical Schedule (working reference)
 
-Source: `062026JadualTeknikalHealthcare.xlsm` (sheet `ben-up-003H`), extracted verbatim.
+Source: `docs/source/062026JadualTeknikalHealthcare.xlsm` (sheet `ben-up-003H`), extracted verbatim.
 Tender **UTHM/13(PKU)/P/05/001/2026** — *Supply, Delivery, Installation, Testing,
 Commissioning Software for the Development of Patient Information Management System
 (UTHM HealthCare) for Pusat Kesihatan Universiti, UTHM Parit Raja and Kampus

@@ -37,12 +37,20 @@ def _serialize_appointment(a: models.Appointment, db: Session) -> dict:
     # one place both the create and list/patch responses funnel through, so
     # every AppointmentOut-shaped response includes it consistently.
     latest_request = _latest_reschedule_request(db, a.id)
+
+    def _at(dt):
+        # TZDateTime reads back NAIVE (UTC) on SQLite/MariaDB, which Dart's
+        # DateTime.parse reads as local time. Online-booking rows (booking_category
+        # set) are therefore emitted as aware UTC; staff-published rows keep the
+        # historical naive shape so existing web console behaviour is unchanged.
+        return _to_aware_utc(dt) if (dt is not None and a.booking_category) else dt
+
     return {
         "id": a.id,
         "patient_id": a.patient_id,
         "facility_name": a.facility_name,
         "venue": a.venue,
-        "scheduled_at": a.scheduled_at,
+        "scheduled_at": _at(a.scheduled_at),
         "reason": a.reason,
         "fasting_required": a.fasting_required,
         "fasting_hours": a.fasting_hours,
@@ -50,10 +58,14 @@ def _serialize_appointment(a: models.Appointment, db: Session) -> dict:
         "extra_reminder_hours_before": a.extra_reminder_hours_before,
         "status": a.status,
         "created_by": a.created_by,
-        "created_at": a.created_at,
+        "created_at": _at(a.created_at),
         "department": a.department,
         "clinician_id": a.clinician_id,
         "self_booked": a.self_booked,
+        "booking_category": a.booking_category,
+        "attendee_name": a.attendee_name,
+        "attendee_relationship": a.attendee_relationship,
+        "attendee_dob": a.attendee_dob,
         "previous_scheduled_at": a.previous_scheduled_at,
         "reschedule_reason_code": a.reschedule_reason_code,
         "reschedule_reason_other": a.reschedule_reason_other,

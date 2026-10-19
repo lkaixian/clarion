@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// A friendly, UI-ready wrapper around whatever Dio throws.
@@ -53,10 +55,22 @@ class ApiException implements Exception {
 
   factory ApiException.fromDioException(DioException e) {
     final status = e.response?.statusCode;
-    final data = e.response?.data;
+    var data = e.response?.data;
+    // Downloads (PDFs) use ResponseType.bytes, so a JSON error body arrives as
+    // raw bytes. Decode it, otherwise the server's message is lost and the
+    // user only sees Dio's generic "Client error - the request contains bad syntax".
+    if (data is List<int>) {
+      try {
+        data = jsonDecode(utf8.decode(data));
+      } catch (_) {
+        data = null;
+      }
+    }
     final responseData = data is Map<String, dynamic> ? data : null;
 
-    String detail = e.message ?? 'Network error';
+    String detail = e.type == DioExceptionType.badResponse
+        ? 'The server could not complete this request (error ${status ?? '?'}).'
+        : (e.message ?? 'Network error');
     final rawDetail = data is Map ? data['detail'] : null;
     if (rawDetail is String) {
       if (rawDetail.trim().isNotEmpty) detail = rawDetail;

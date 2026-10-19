@@ -24,8 +24,11 @@ from sqlalchemy.orm import Session
 from .. import auth, mfa, models, schemas
 from ..audit import log_access
 from ..database import get_db
-from ..email_service import send_security_notice_email
+from ..email_service import send_mfa_email_code, send_security_notice_email
 from ..rate_limit import limiter
+from .. import account_lock
+import html as _html
+from fastapi.responses import HTMLResponse
 from .auth_router import _complete_login, _REFRESH_COOKIE_NAME, _verify_ldap_existing_user
 
 router = APIRouter(prefix="/auth", tags=["auth-security"])
@@ -210,6 +213,24 @@ def _reauth(db: Session, user: models.User, password: str, code: str) -> None:
     _clear_failures(db, user)
 
 
+def require_stepup(db: Session, actor: models.User, password: str, code: str) -> str:
+    """Re-authenticate the acting admin before a credential-reset action: their own
+    password + a current authenticator (or recovery) code. An admin who has not
+    enrolled an authenticator (MFA not enforced for the role) is asked for the
+    password only. Failures count toward the actor's own lockout. Returns the
+    factor used ("totp" | "recovery" | "password") for the audit row."""
+    if not mfa.is_enrolled(actor):
+        _reauth_password(db, actor, password)
+        return "password"
+    _check_not_locked(db, actor)
+    factor = _verify_password(db, actor, password) and _accept_code(db, actor, code or "")
+    if not factor:
+        _record_failure(db, actor, "mfa_reauth_failed")
+        raise HTTPException(status_code=400, detail="Password or code is incorrect")
+    _clear_failures(db, actor)
+    return factor
+
+
 # ---- login-time (authenticated by the challenge token) ----------------------
 
 @router.post("/mfa/verify", response_model=schemas.Token)
@@ -225,6 +246,119 @@ def mfa_verify(request: Request, response: Response, payload: schemas.MfaCodeReq
     _clear_failures(db, user)
     log_access(db, user.patient_id, user.id, user.role, "mfa_verified",
                detail=f"factor={factor}", actor_facility=user.facility)
+    fp = auth.client_fingerprint(request.headers.get("user-agent"))
+    return _complete_login(db, request, response, user, fp, mfa_ok=True)
+
+
+_LOCK_HEADERS = {"Referrer-Policy": "no-referrer", "Cache-Control": "no-store"}
+_LOCK_PAGE = (
+    "<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<title>CLARION account</title><body style='font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem'>"
+    "{body}</body></html>"
+)
+
+
+@router.get("/account-lock", response_class=HTMLResponse)
+def account_lock_page(token: str = ""):
+    """Confirmation page for the email link (a GET never changes state: mail scanners prefetch links)."""
+    if account_lock.read_lock_token(token) is None:
+        return HTMLResponse(_LOCK_PAGE.format(body="<h1>Link expired</h1><p>This link is no longer valid. "
+                                                   "If you think someone else used your record, choose "
+                                                   "Forgot password in the app to secure it.</p>"),
+                            status_code=400, headers=_LOCK_HEADERS)
+    body = ("<h1>Lock this account?</h1><p>This signs the account out everywhere and stops it from being used "
+            "until you reset the password with a code sent to your email.</p>"
+            "<form method=post><input type=hidden name=token value='" + _html.escape(token, quote=True) + "'>"
+            "<button type=submit style='font-size:1.1rem;padding:.8rem 1.2rem'>Yes, lock the account</button></form>")
+    return HTMLResponse(_LOCK_PAGE.format(body=body), headers=_LOCK_HEADERS)
+
+
+@router.post("/account-lock", response_class=HTMLResponse)
+@limiter.limit("10/minute")
+async def account_lock_confirm(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    parsed = account_lock.read_lock_token(str(form.get("token", "")))
+    user = db.query(models.User).filter(models.User.id == parsed[0]).first() if parsed else None
+    if user is None or parsed[1] != mfa.password_marker(user):
+        # unknown, expired, or already used (a lock or a password reset changes the marker)
+        return HTMLResponse(_LOCK_PAGE.format(body="<h1>Link expired</h1><p>This link is no longer valid.</p>"),
+                            status_code=400, headers=_LOCK_HEADERS)
+    now = _now_naive()
+    if user.owner_locked_at is None:
+        user.owner_locked_at = now
+        user.password_changed_at = now  # kills every access token already issued
+        db.add(user)
+        db.commit()
+        auth.revoke_all_refresh_tokens_for_user(db, user)
+        log_access(db, user.patient_id, user.id, user.role, "account_locked_by_owner", actor_facility=user.facility)
+    return HTMLResponse(_LOCK_PAGE.format(
+        body="<h1>Account locked</h1><p>It is signed out everywhere. To use it again, open the CLARION app "
+             "and choose <strong>Forgot password</strong>.</p>"), headers=_LOCK_HEADERS)
+
+
+# Email second factor. Reuses the user's otp_* columns (the password-reset OTP lives there too);
+# the stored hash is domain-separated so a reset code can never satisfy this and vice versa.
+_EMAIL_PURPOSE = "mfa-email:"
+
+
+@router.post("/mfa/email/send")
+@limiter.limit("5/minute")
+def mfa_email_send(request: Request, payload: schemas.MfaTokenRequest, db: Session = Depends(get_db)):
+    user = _challenge_user(db, payload.mfa_token)
+    target = mfa.email_target(db, user)
+    if target is None:
+        raise HTTPException(status_code=400, detail="Email codes are not available for this account.")
+    now = _now_naive()
+    window = timedelta(minutes=auth.OTP_REQUEST_WINDOW_MINUTES)
+    if not user.otp_request_window_start or now - user.otp_request_window_start > window:
+        user.otp_request_window_start, user.otp_request_count = now, 0
+    if (user.otp_request_count or 0) >= auth.OTP_MAX_REQUESTS_PER_WINDOW:
+        db.add(user)
+        db.commit()
+        raise HTTPException(status_code=429, detail="Too many code requests. Try again in a few minutes.")
+    code = auth.generate_otp_code()
+    user.otp_request_count = (user.otp_request_count or 0) + 1
+    user.otp_code_hash = auth.hash_otp_code(_EMAIL_PURPOSE + code)
+    user.otp_expires_at = now + timedelta(minutes=auth.OTP_EXPIRY_MINUTES)
+    user.otp_attempt_count = 0
+    db.add(user)
+    db.commit()
+    if not send_mfa_email_code(target, user.full_name or "there", code):
+        raise HTTPException(status_code=503, detail="We could not send the email. Try again shortly.")
+    log_access(db, user.patient_id, user.id, user.role, "mfa_email_code_sent", actor_facility=user.facility)
+    return {"status": "ok", "email_hint": mfa.mask_email(target)}
+
+
+@router.post("/mfa/email/verify", response_model=schemas.Token)
+@limiter.limit("10/minute")
+def mfa_email_verify(request: Request, response: Response, payload: schemas.MfaCodeRequest,
+                     db: Session = Depends(get_db)):
+    user = _challenge_user(db, payload.mfa_token)
+    if mfa.email_target(db, user) is None:
+        raise HTTPException(status_code=400, detail="Email codes are not available for this account.")
+    _check_not_locked(db, user)
+    code = payload.code.strip().replace(" ", "")
+    live = bool(user.otp_code_hash and user.otp_expires_at and _now_naive() <= user.otp_expires_at)
+    good = live and auth.verify_otp_code(_EMAIL_PURPOSE + code, user.otp_code_hash)
+    # Single use: this compare-and-set is the only way a code is honoured.
+    won = good and db.query(models.User).filter(
+        models.User.id == user.id, models.User.otp_code_hash == user.otp_code_hash,
+    ).update({"otp_code_hash": None, "otp_expires_at": None, "otp_attempt_count": 0},
+             synchronize_session=False) == 1
+    db.commit()
+    if not won:
+        if live:
+            user.otp_attempt_count = (user.otp_attempt_count or 0) + 1
+            if user.otp_attempt_count >= auth.OTP_MAX_VERIFY_ATTEMPTS:
+                user.otp_code_hash, user.otp_expires_at, user.otp_attempt_count = None, None, 0
+            db.add(user)
+            db.commit()
+        _record_failure(db, user, "mfa_email_failed")
+        raise HTTPException(status_code=401, detail="Invalid code")
+    db.refresh(user)
+    _clear_failures(db, user)
+    log_access(db, user.patient_id, user.id, user.role, "mfa_verified", detail="factor=email",
+               actor_facility=user.facility)
     fp = auth.client_fingerprint(request.headers.get("user-agent"))
     return _complete_login(db, request, response, user, fp, mfa_ok=True)
 
@@ -322,22 +456,44 @@ def mfa_regenerate_recovery_codes(request: Request, payload: schemas.PasswordAnd
 
 
 @router.post("/mfa/reset/{user_id}")
-def admin_reset_mfa(user_id: str, db: Session = Depends(get_db),
+@limiter.limit("10/minute")
+def admin_reset_mfa(request: Request, user_id: str, payload: schemas.AdminStepUp,
+                    db: Session = Depends(get_db),
                     current_user: models.User = Depends(auth.require_roles("admin"))):
     """Lost phone AND recovery codes: an admin clears the user's MFA (they are
     prompted to enrol again at next sign-in if their role requires it) and
-    every session of theirs is revoked. The user is emailed."""
+    every session of theirs is revoked. The user is emailed.
+
+    Needs the acting admin's own password + authenticator code (step-up), and
+    never targets the admin's own account -- a sole admin recovers through the
+    host script (db/reset_admin_password.py --mfa-only)."""
+    from .admin import _require_facility
+
+    facility = _require_facility(current_user)  # 400 for an admin with no facility; never skipped
     target = db.query(models.User).filter(models.User.id == user_id).first()
-    if target is None or (current_user.facility and target.facility != current_user.facility):
+    if target is None or target.facility != facility:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You can't reset your own authenticator here. Ask another administrator.")
+    if target.role == "admin" and target.must_change_password:
+        # A temporary password is outstanding (or the account never signed in). Clearing the
+        # authenticator now would let whoever holds that password enrol their own at sign-in.
+        raise HTTPException(
+            status_code=409,
+            detail="This administrator has a pending password change. They must sign in and set a "
+                   "password first, or an operator must reset them from the server.",
+        )
+    factor = require_stepup(db, current_user, payload.password, payload.code)
     target.mfa_secret_enc = None
     target.mfa_enabled_at = None
     target.mfa_last_step = None
     db.query(models.MfaRecoveryCode).filter_by(user_id=target.id).delete()
+    target.password_changed_at = _now_naive()  # evict live access tokens too, not just refresh tokens
     db.commit()
     auth.revoke_all_refresh_tokens_for_user(db, target)
     log_access(db, target.patient_id, current_user.id, current_user.role, "mfa_reset_by_admin",
-               detail=f"target={target.id}", actor_facility=current_user.facility)
+               detail=f"target={target.id} role={target.role} factor={factor}",
+               actor_facility=current_user.facility)
     _notify(target, "An administrator reset two-step verification on your CLARION account.")
     return {"status": "mfa_reset"}
 

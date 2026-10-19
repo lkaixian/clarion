@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/audit_log_entry.dart';
 import '../models/emergency_card.dart';
+import '../models/nfc_card.dart';
 import '../models/patient.dart';
 import '../services/api_client.dart';
 import '../services/api_exception.dart';
@@ -27,13 +28,15 @@ class PatientProvider extends ChangeNotifier {
 
   List<AuditLogEntry> auditLog = [];
   bool isLoadingAuditLog = false;
+  bool auditLogError = false;
 
   /// Read-only view of physical NFC cards staff have registered against
   /// this patient (see backend `GET /emergency/nfc/{patient_id}`) — a
   /// patient can't register/revoke these themselves (admin-only, via the
   /// web console), but should be able to see they exist.
-  List<Map<String, dynamic>> nfcCards = [];
+  List<NfcCard> nfcCards = [];
   bool isLoadingNfcCards = false;
+  bool nfcCardsError = false;
 
   Timer? _cardPollTimer;
 
@@ -53,7 +56,7 @@ class PatientProvider extends ChangeNotifier {
         handoverBrief = null;
       }
       try {
-        nfcCards = await _api.listNfcCards(patientId);
+        nfcCards = sortNfcCards(await _api.listNfcCards(patientId));
       } catch (_) {
         nfcCards = [];
       }
@@ -63,6 +66,21 @@ class PatientProvider extends ChangeNotifier {
       recordError = 'Unexpected error: $e';
     } finally {
       isLoadingRecord = false;
+      notifyListeners();
+    }
+  }
+
+  /// Reloads just the NFC cards (status/expiry change server-side over time).
+  Future<void> loadNfcCards(String patientId) async {
+    isLoadingNfcCards = true;
+    nfcCardsError = false;
+    notifyListeners();
+    try {
+      nfcCards = sortNfcCards(await _api.listNfcCards(patientId));
+    } catch (_) {
+      nfcCardsError = true;
+    } finally {
+      isLoadingNfcCards = false;
       notifyListeners();
     }
   }
@@ -236,11 +254,13 @@ class PatientProvider extends ChangeNotifier {
 
   Future<void> loadAuditLog(String patientId, {int? days}) async {
     isLoadingAuditLog = true;
+    auditLogError = false;
     notifyListeners();
     try {
       auditLog = await _api.getAuditLog(patientId, days: days);
     } catch (_) {
       auditLog = [];
+      auditLogError = true;
     } finally {
       isLoadingAuditLog = false;
       notifyListeners();

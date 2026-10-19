@@ -44,9 +44,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('refresh_tokens', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_refresh_tokens_user_id'))
-        batch_op.drop_index(batch_op.f('ix_refresh_tokens_token_hash'))
-        batch_op.drop_index(batch_op.f('ix_refresh_tokens_expires_at'))
-
+    # drop_table removes the table's indexes; dropping them first fails on MariaDB when an index backs a FK.
     op.drop_table('refresh_tokens')

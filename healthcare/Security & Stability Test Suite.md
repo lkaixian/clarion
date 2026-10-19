@@ -107,6 +107,12 @@ Cases are written against the **running stack**, not the code:
 > **2026-09-16** — first execution on a Windows host without Docker: 117 PASS (34 live + 83 via pytest),
 > 20 PARTIAL, 1 FAIL (CI bandit gate drift), 70 blocked pending a composed stack. Details + 6 new findings:
 > [[Test Suite Run Report 2026-09-16]]. Status per case: CSV columns `run_status_2026-09-16` / `run_evidence`.
+> **2026-09-16 (later)** — the suite is now also **executable**: `qa/blackbox/` (34 passing black-box
+> pytest cases, 7 skipped: 4 docker, 1 slow, 2 environment) boots the stack as a subprocess against a
+> throwaway SQLite DB and re-proves the cases live (JWT forgery, refresh replay/revocation, rate-limit
+> bursts, audit append-only triggers, CORS/CRLF/h2c/SQLi probes, alembic round-trip via `--run-slow`).
+> Runbook + case-ID mapping: `qa/blackbox/README.md`. Docker-blocked cases remain stubs pending a
+> Docker-equipped session.
 
 ## S-A. Authentication & session  (Security)
 

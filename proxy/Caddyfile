@@ -162,6 +162,16 @@
 		reverse_proxy mpi:8100
 	}
 
+	# Maintenance flag + log for the status page. Static files the operator
+	# script writes (scripts/upgrade.sh), so they answer even while the
+	# backend is stopped mid-upgrade. Read-only mount; no-store so the
+	# status page sees the flag flip immediately.
+	handle /maintenance/* {
+		root * /srv
+		header Cache-Control "no-store"
+		file_server
+	}
+
 	# Everything else: the static SPA container. Compress only here -- keep
 	# compression off the /api responses (BREACH-class caution; low risk
 	# given bearer-header auth, but free to avoid).
