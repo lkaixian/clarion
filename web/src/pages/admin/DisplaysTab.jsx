@@ -5,6 +5,7 @@ import {
 } from "../../api/client";
 import { formatDateTime } from "../../lib/format";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Waiting Room Displays ----------
 // Shareable, revocable tokens for a public lobby big-screen (/display/{token}
@@ -40,7 +41,7 @@ function DisplayRow({ display, onRevoke }) {
               {display.show_full_names ? "Full names" : "Masked names"}
             </span>
             {display.revoked && (
-              <span className="ml-2 text-xs font-semibold uppercase text-red-700">Revoked</span>
+              <span className="ml-2 text-xs font-semibold uppercase text-red-700">{tr("Revoked")}</span>
             )}
           </p>
           <p className="text-xs text-slate-400">Created {formatDateTime(display.created_at)}</p>
@@ -54,7 +55,7 @@ function DisplayRow({ display, onRevoke }) {
               <button onClick={copy} className="text-xs text-blue-700">
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button onClick={() => onRevoke(display)} className="text-xs text-red-700">Revoke</button>
+              <button onClick={() => onRevoke(display)} className="text-xs text-red-700">{tr("Revoke")}</button>
             </>
           )}
         </div>
@@ -113,7 +114,7 @@ export default function WaitingRoomDisplaysTab() {
   }
 
   return (
-    <Section title="Waiting Room Displays">
+    <Section title={tr("Waiting Room Displays")}>
       <p className="text-sm text-slate-500 mb-4 max-w-2xl">
         Generate a shareable link for a public lobby screen. It shows who's being called and who's
         waiting, refreshing on its own — no login needed. Revoke a link to kill it instantly.
@@ -121,13 +122,13 @@ export default function WaitingRoomDisplaysTab() {
 
       <form onSubmit={create} className="flex flex-wrap items-end gap-3 mb-4">
         <div>
-          <label className="field-label">Scope</label>
+          <label className="field-label">{tr("Scope")}</label>
           <select
             className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={section}
             onChange={(e) => setSection(e.target.value)}
           >
-            <option value="">Whole facility</option>
+            <option value="">{tr("Whole facility")}</option>
             {sectionNames.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
@@ -153,15 +154,15 @@ export default function WaitingRoomDisplaysTab() {
       {error && <div className="alert-error mb-3">{error}</div>}
       {newUrl && (
         <div className="bg-green-50 border border-green-200 text-green-800 text-sm p-3 rounded mb-3">
-          <p className="font-medium mb-1">New display link created</p>
+          <p className="font-medium mb-1">{tr("New display link created")}</p>
           <p className="font-mono break-all">{newUrl}</p>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : displays.length === 0 ? (
-        <p className="text-sm text-slate-400">No displays yet — create one above.</p>
+        <p className="text-sm text-slate-400">{tr("No displays yet — create one above.")}</p>
       ) : (
         <div className="space-y-2">
           {displays.map((d) => <DisplayRow key={d.id} display={d} onRevoke={revoke} />)}

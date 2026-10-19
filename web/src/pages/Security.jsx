@@ -4,6 +4,7 @@ import {
   getMfaStatus, mfaSetupStart, mfaSetupConfirm, mfaDisable, mfaRegenerateRecoveryCodes,
   getSessions, revokeSession, revokeOtherSessions,
 } from "../api/client";
+import { tr } from "../lib/i18n";
 
 const INPUT = "border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600";
 const BTN = "bg-blue-800 hover:bg-blue-900 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50";
@@ -27,20 +28,20 @@ function RecoveryCodes({ codes, onDone }) {
   const [downloaded, setDownloaded] = useState(false);
   return (
     <div className="mt-4">
-      <p className="text-sm text-slate-700 mb-2">Save these recovery codes now — they are shown only once. Each works one time.</p>
+      <p className="text-sm text-slate-700 mb-2">{tr("Save these recovery codes now — they are shown only once. Each works one time.")}</p>
       <ul className="grid grid-cols-2 gap-2 font-mono text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3 select-all">
         {codes.map((c) => <li key={c}>{c}</li>)}
       </ul>
       <div className="flex gap-2 flex-wrap items-center">
-        <button className={BTN2} onClick={() => navigator.clipboard?.writeText(codes.join("\n"))}>Copy</button>
+        <button className={BTN2} onClick={() => navigator.clipboard?.writeText(codes.join("\n"))}>{tr("Copy")}</button>
         {/* Download is what unlocks the button below -- copying alone doesn't. */}
         <a className={BTN} download="clarion-recovery-codes.txt" onClick={() => setDownloaded(true)}
           href={`data:text/plain;charset=utf-8,${encodeURIComponent(codes.join("\n") + "\n")}`}>
           Download codes
         </a>
-        <button className={BTN} onClick={onDone} disabled={!downloaded}>I have saved them</button>
+        <button className={BTN} onClick={onDone} disabled={!downloaded}>{tr("I have saved them")}</button>
       </div>
-      {!downloaded && <p className="text-xs text-slate-500 mt-2">Download the codes to continue.</p>}
+      {!downloaded && <p className="text-xs text-slate-500 mt-2">{tr("Download the codes to continue.")}</p>}
     </div>
   );
 }
@@ -70,11 +71,11 @@ function MfaCard() {
       setSetup(null); setCode(""); setCodes(r.recovery_codes);
     });
 
-  if (!status) return <section className="bg-white border border-slate-200 rounded-xl p-5">Loading…</section>;
+  if (!status) return <section className="bg-white border border-slate-200 rounded-xl p-5">{tr("Loading…")}</section>;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5">
-      <h2 className="font-semibold text-slate-800">Two-step verification (authenticator app)</h2>
+      <h2 className="font-semibold text-slate-800">{tr("Two-step verification (authenticator app)")}</h2>
       <p className="text-sm text-slate-600 mt-1">
         {status.enabled ? "On." : "Off."}{" "}
         {status.required && "Required for your role."}
@@ -89,24 +90,24 @@ function MfaCard() {
           e.preventDefault();
           run(async () => { setSetup(await mfaSetupStart(password)); setPassword(""); });
         }}>
-          <label htmlFor="sec-pw" className="block text-sm text-slate-700 mb-1">Confirm your password to begin</label>
+          <label htmlFor="sec-pw" className="block text-sm text-slate-700 mb-1">{tr("Confirm your password to begin")}</label>
           <div className="flex gap-2 flex-wrap">
             <input id="sec-pw" type="password" autoComplete="current-password" className={INPUT}
               value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button className={BTN} disabled={busy || !password}>Set up</button>
+            <button className={BTN} disabled={busy || !password}>{tr("Set up")}</button>
           </div>
         </form>
       )}
 
       {setup && (
         <form className="mt-4" onSubmit={(e) => { e.preventDefault(); confirmSetup(code); }}>
-          <img alt="QR code for your authenticator app" className="w-40 h-40 border border-slate-200 rounded-lg"
+          <img alt={tr("QR code for your authenticator app")} className="w-40 h-40 border border-slate-200 rounded-lg"
             src={`data:image/png;base64,${setup.qr_png_base64}`} />
           <details className="text-xs text-slate-600 my-2">
-            <summary className="cursor-pointer">Enter the key manually</summary>
+            <summary className="cursor-pointer">{tr("Enter the key manually")}</summary>
             <code className="block mt-1 break-all select-all">{setup.secret}</code>
           </details>
-          <label htmlFor="sec-code" className="block text-sm text-slate-700 mb-1">6-digit code</label>
+          <label htmlFor="sec-code" className="block text-sm text-slate-700 mb-1">{tr("6-digit code")}</label>
           <input id="sec-code" className={`${INPUT} w-40 tracking-widest`} value={code} maxLength={6}
             inputMode="numeric" autoComplete="one-time-code"
             onChange={(e) => {
@@ -115,8 +116,8 @@ function MfaCard() {
               if (/^\d{6}$/.test(v.trim())) confirmSetup(v); // six digits: verify automatically
             }} />
           <div className="mt-3 flex gap-2">
-            <button className={BTN} disabled={busy || code.trim().length !== 6}>Turn on</button>
-            <button type="button" className={BTN2} onClick={() => { setSetup(null); setCode(""); }}>Cancel</button>
+            <button className={BTN} disabled={busy || code.trim().length !== 6}>{tr("Turn on")}</button>
+            <button type="button" className={BTN2} onClick={() => { setSetup(null); setCode(""); }}>{tr("Cancel")}</button>
           </div>
         </form>
       )}
@@ -125,8 +126,8 @@ function MfaCard() {
         <div className="mt-3">
           {!action ? (
             <div className="flex gap-2 flex-wrap">
-              <button className={BTN2} onClick={() => setAction("regen")}>New recovery codes</button>
-              {!status.required && <button className={BTN2} onClick={() => setAction("disable")}>Turn off</button>}
+              <button className={BTN2} onClick={() => setAction("regen")}>{tr("New recovery codes")}</button>
+              {!status.required && <button className={BTN2} onClick={() => setAction("disable")}>{tr("Turn off")}</button>}
             </div>
           ) : (
             <form onSubmit={(e) => {
@@ -138,18 +139,18 @@ function MfaCard() {
                 load();
               });
             }}>
-              <p className="text-sm text-slate-700 mb-2">Confirm with your password and a current code.</p>
+              <p className="text-sm text-slate-700 mb-2">{tr("Confirm with your password and a current code.")}</p>
               <div className="flex gap-2 flex-wrap">
-                <input aria-label="Password" type="password" autoComplete="current-password" className={INPUT}
+                <input aria-label={tr("Password")} type="password" autoComplete="current-password" className={INPUT}
                   value={password} onChange={(e) => setPassword(e.target.value)} />
-                <input aria-label="Code" className={`${INPUT} w-36`} value={code} inputMode="text" maxLength={11}
+                <input aria-label={tr("Code")} className={`${INPUT} w-36`} value={code} inputMode="text" maxLength={11}
                   autoComplete="one-time-code" onChange={(e) => setCode(e.target.value)} />
               </div>
               <div className="mt-3 flex gap-2">
                 <button className={BTN} disabled={busy || !password || code.trim().length < 6}>
                   {action === "disable" ? "Turn off" : "Generate"}
                 </button>
-                <button type="button" className={BTN2} onClick={() => { setAction(null); setPassword(""); setCode(""); }}>Cancel</button>
+                <button type="button" className={BTN2} onClick={() => { setAction(null); setPassword(""); setCode(""); }}>{tr("Cancel")}</button>
               </div>
             </form>
           )}
@@ -173,25 +174,25 @@ function SessionsCard() {
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="font-semibold text-slate-800">Signed-in devices</h2>
+        <h2 className="font-semibold text-slate-800">{tr("Signed-in devices")}</h2>
         <button className={BTN2} disabled={!sessions || sessions.length < 2} onClick={act(revokeOtherSessions)}>
           Sign out everywhere else
         </button>
       </div>
       {msg && <p role="alert" className="text-sm text-red-700 mt-2">{msg}</p>}
-      {!sessions ? <p className="text-sm text-slate-600 mt-2">Loading…</p> : (
+      {!sessions ? <p className="text-sm text-slate-600 mt-2">{tr("Loading…")}</p> : (
         <ul className="divide-y divide-slate-100 mt-2">
           {sessions.map((s) => (
             <li key={s.id} className="py-2 flex items-center justify-between gap-3 text-sm">
               <div>
                 <div className="font-medium text-slate-800">
-                  {deviceLabel(s.user_agent)} {s.current && <span className="text-green-700 text-xs ml-1">(this device)</span>}
+                  {deviceLabel(s.user_agent)} {s.current && <span className="text-green-700 text-xs ml-1">{tr("(this device)")}</span>}
                 </div>
                 <div className="text-xs text-slate-500">
                   {s.ip || "unknown IP"} · last active {s.issued_at ? new Date(s.issued_at).toLocaleString() : "—"}
                 </div>
               </div>
-              {!s.current && <button className={BTN2} onClick={act(() => revokeSession(s.id))}>Sign out</button>}
+              {!s.current && <button className={BTN2} onClick={act(() => revokeSession(s.id))}>{tr("Sign out")}</button>}
             </li>
           ))}
         </ul>
@@ -203,7 +204,7 @@ function SessionsCard() {
 export default function Security() {
   return (
     <Layout>
-      <h1 className="text-xl font-semibold text-slate-900 mb-4">Account security</h1>
+      <h1 className="text-xl font-semibold text-slate-900 mb-4">{tr("Account security")}</h1>
       <div className="space-y-4 max-w-2xl">
         <MfaCard />
         <SessionsCard />

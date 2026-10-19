@@ -4,6 +4,7 @@ import {
   getSections,
 } from "../../api/client";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Consultation rooms ("Bilik") ----------
 // Physical consult rooms reception round-robins walk-in check-ins across
@@ -50,24 +51,24 @@ function RoomModal({ mode, initial, onClose, onSaved, sectionNames = [] }) {
           {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="field-label">Room name<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Room name")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="text"
-              placeholder="e.g. Bilik A"
+              placeholder={tr("e.g. Bilik A")}
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="field-label">Department tag (optional)</label>
+            <label className="field-label">{tr("Department tag (optional)")}</label>
             <select
               className="field-input"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
             >
-              <option value="">— any department —</option>
+              <option value="">{tr("— any department —")}</option>
               {/* Keep an existing out-of-list value selectable so a PATCH
                   doesn't silently wipe a room tagged before sections changed. */}
               {department && !sectionNames.includes(department) && (
@@ -123,13 +124,13 @@ export default function RoomsTab() {
 
   return (
     <Section
-      title="Consultation Rooms"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add Room</button>}
+      title={tr("Consultation Rooms")}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">{tr("+ Add Room")}</button>}
     >
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : rooms.length === 0 ? (
-        <p className="text-sm text-slate-400">No consultation rooms yet — add one above (e.g. Bilik A–E).</p>
+        <p className="text-sm text-slate-400">{tr("No consultation rooms yet — add one above (e.g. Bilik A–E).")}</p>
       ) : (
         <div className="space-y-2">
           {rooms.map((room) => (
@@ -142,15 +143,15 @@ export default function RoomsTab() {
               <div className="text-sm text-slate-700 min-w-0">
                 <p className="font-medium">
                   {room.room_name}
-                  {!room.active && <span className="ml-2 text-xs font-semibold text-slate-500 uppercase">Inactive</span>}
+                  {!room.active && <span className="ml-2 text-xs font-semibold text-slate-500 uppercase">{tr("Inactive")}</span>}
                 </p>
                 <p className="text-xs text-slate-400">
                   {room.department || "Any department"} · {room.waiting_today} in queue today
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <button onClick={() => setModal({ mode: "edit", initial: room })} className="text-xs text-blue-700">Edit</button>
-                <button onClick={() => handleDelete(room)} className="text-xs text-red-700">Delete</button>
+                <button onClick={() => setModal({ mode: "edit", initial: room })} className="text-xs text-blue-700">{tr("Edit")}</button>
+                <button onClick={() => handleDelete(room)} className="text-xs text-red-700">{tr("Delete")}</button>
               </div>
             </div>
           ))}

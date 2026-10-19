@@ -13,6 +13,7 @@ import AccessControlTab from "./admin/AccessControlTab";
 import AnnouncementsTab from "./admin/AnnouncementsTab";
 import OnlineBookingTab from "./admin/OnlineBookingTab";
 import RespondersTab from "./admin/RespondersTab";
+import { tr } from "../lib/i18n";
 
 // Facility-scoped admin console — appointments monitoring, medicine
 // inventory, ward/bed capacity, and staff roster, all auto-scoped
@@ -25,8 +26,8 @@ export default function AdminConsole() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Admin Console</h1>
-        <p className="text-sm text-slate-500">Facility-wide monitoring and management for your hospital.</p>
+        <h1 className="page-title">{tr("Admin Console")}</h1>
+        <p className="text-sm text-slate-500">{tr("Facility-wide monitoring and management for your hospital.")}</p>
       </div>
 
       <TabBar active={activeTab} onChange={setActiveTab} />

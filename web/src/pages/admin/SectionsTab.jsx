@@ -3,6 +3,7 @@ import {
   getSections, createSection, updateSection, deleteSection,
 } from "../../api/client";
 import { Section } from "./_shared";
+import { tr } from "../../lib/i18n";
 
 // ---------- Sections (front-desk registration counters) ----------
 // Admin-managed list of the hospital's front-desk counters (e.g. General
@@ -47,7 +48,7 @@ function SectionModal({ mode, initial, onClose, onSaved }) {
           {error && <div className="alert-error">{error}</div>}
 
           <div>
-            <label className="field-label">Section name<span className="text-red-600"> *</span></label>
+            <label className="field-label">{tr("Section name")}<span className="text-red-600"> *</span></label>
             <input
               className="field-input"
               type="text"
@@ -98,8 +99,8 @@ export default function SectionsTab() {
 
   return (
     <Section
-      title="Sections"
-      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">+ Add section</button>}
+      title={tr("Sections")}
+      action={<button onClick={() => setModal({ mode: "add", initial: null })} className="btn-primary">{tr("+ Add section")}</button>}
     >
       <p className="text-sm text-slate-500 mb-4 max-w-2xl">
         Front-desk registration counters for this hospital (e.g. General Registration, O&G, ICU).
@@ -108,9 +109,9 @@ export default function SectionsTab() {
       </p>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{tr("Loading...")}</p>
       ) : sections.length === 0 ? (
-        <p className="text-sm text-slate-400">No sections yet — add one above (e.g. General Registration).</p>
+        <p className="text-sm text-slate-400">{tr("No sections yet — add one above (e.g. General Registration).")}</p>
       ) : (
         <div className="space-y-2">
           {sections.map((section) => (
@@ -129,8 +130,8 @@ export default function SectionsTab() {
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <button onClick={() => setModal({ mode: "edit", initial: section })} className="text-xs text-blue-700">Edit</button>
-                <button onClick={() => handleDelete(section)} className="text-xs text-red-700">Delete</button>
+                <button onClick={() => setModal({ mode: "edit", initial: section })} className="text-xs text-blue-700">{tr("Edit")}</button>
+                <button onClick={() => handleDelete(section)} className="text-xs text-red-700">{tr("Delete")}</button>
               </div>
             </div>
           ))}

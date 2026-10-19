@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getWardMap, admitPatient, dischargeAdmission, updateAdmission } from "../api/client";
 import { formatDateTime } from "../lib/format";
+import { tr } from "../lib/i18n";
 
 // Match Reception.jsx's QUEUE_BOARD_POLL_MS — the ward map is a live board,
 // same "responsive in a demo, not hammering the backend" tradeoff.
@@ -67,7 +68,7 @@ function AdmitPanel({ wardName, bedNumber, onAdmit, onCancel, busy, error }) {
         type="text"
         value={ic}
         onChange={(e) => setIc(e.target.value)}
-        placeholder="Patient IC number e.g. 520314-01-1234"
+        placeholder={tr("Patient IC number e.g. 520314-01-1234")}
         className="field-input"
         autoFocus
       />
@@ -117,7 +118,7 @@ function OccupiedPanel({ map, bed, wardName, onDischarge, onMove, onCancel, busy
             onChange={(e) => { setWardId(e.target.value); setMoveBed(""); }}
             className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
           >
-            <option value="">Choose a ward…</option>
+            <option value="">{tr("Choose a ward…")}</option>
             {allWards.map((w) => (
               <option key={w.id} value={w.id}>{w.label}</option>
             ))}
@@ -231,7 +232,7 @@ export default function WardMap({ mode = "interactive" }) {
   const handleMove = (admissionId, wardId, bedNumber) =>
     run(() => updateAdmission(admissionId, { ward_id: wardId, bed_number: bedNumber }));
 
-  if (loading) return <p className="text-sm text-slate-400">Loading ward map…</p>;
+  if (loading) return <p className="text-sm text-slate-400">{tr("Loading ward map…")}</p>;
   if (!map || map.floors.length === 0) {
     return (
       <p className="text-sm text-slate-400">
@@ -244,7 +245,7 @@ export default function WardMap({ mode = "interactive" }) {
     return (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-slate-50 border-slate-200" /> Empty</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-slate-50 border-slate-200" /> {tr("Empty")}</span>
           <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-green-100 border-green-300" /> &lt; 75%</span>
           <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-amber-100 border-amber-300" /> 75–90%</span>
           <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-red-100 border-red-300" /> ≥ 90%</span>

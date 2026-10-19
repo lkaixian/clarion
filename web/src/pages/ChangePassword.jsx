@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { changePassword, getCurrentUser, logout, errorMessage } from "../api/client";
 import PasswordRules, { passwordMeetsRules } from "../components/PasswordRules";
+import { tr } from "../lib/i18n";
 
 
 // Shown right after sign-in when the account must set its own password
@@ -40,8 +41,8 @@ export default function ChangePassword() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-sm border border-slate-200">
-        <img src="/brand/logo-full.png" alt="CLARION" className="w-40 mx-auto mb-2" />
-        <h1 className="text-lg font-semibold text-slate-800 text-center">Set your password</h1>
+        <img src="/brand/logo-full.png" alt={tr("CLARION")} className="w-40 mx-auto mb-2" />
+        <h1 className="text-lg font-semibold text-slate-800 text-center">{tr("Set your password")}</h1>
         <p className="text-sm text-slate-500 text-center mb-6">
           {user?.full_name ? `${user.full_name}, choose` : "Choose"} a new password before continuing.
         </p>

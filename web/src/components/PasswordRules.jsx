@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 // Password policy checklist. Keep in step with backend
 // schemas.password_rule_failures (8+ chars, 1 number, 1 capital, 1 of !@#$*.?).
 export const PASSWORD_SPECIALS = "!@#$*.?";
@@ -13,7 +14,7 @@ export const passwordMeetsRules = (v) => RULES.every(([, ok]) => ok(v));
 
 export default function PasswordRules({ value }) {
   return (
-    <ul className="mt-2 space-y-1 text-xs" aria-label="Password requirements">
+    <ul className="mt-2 space-y-1 text-xs" aria-label={tr("Password requirements")}>
       {RULES.map(([label, ok]) => {
         const met = ok(value);
         return (

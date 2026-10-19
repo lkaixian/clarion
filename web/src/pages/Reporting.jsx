@@ -17,6 +17,7 @@ import {
   listNotifiableDiseaseCandidates, listNotifiableDiseaseReports,
   createNotifiableDiseaseReport, markNotifiableDiseaseSubmitted, getNotifiableDiseaseDocumentBlob,
 } from "../api/client";
+import { tr } from "../lib/i18n";
 
 function emptyFilterValue(type) {
   if (type === "enum") return [];
@@ -85,7 +86,7 @@ function FilterInput({ spec, value, onChange }) {
       <div className="flex gap-2">
         <input type="date" value={value?.from || ""} onChange={(e) => onChange({ ...value, from: e.target.value })}
           className="border border-slate-300 rounded px-2 py-1 text-xs" />
-        <span className="text-xs text-slate-400 self-center">to</span>
+        <span className="text-xs text-slate-400 self-center">{tr("to")}</span>
         <input type="date" value={value?.to || ""} onChange={(e) => onChange({ ...value, to: e.target.value })}
           className="border border-slate-300 rounded px-2 py-1 text-xs" />
       </div>
@@ -94,9 +95,9 @@ function FilterInput({ spec, value, onChange }) {
   if (spec.type === "number") {
     return (
       <div className="flex gap-2">
-        <input type="number" placeholder="min" value={value?.min ?? ""} onChange={(e) => onChange({ ...value, min: e.target.value })}
+        <input type="number" placeholder={tr("min")} value={value?.min ?? ""} onChange={(e) => onChange({ ...value, min: e.target.value })}
           className="w-20 border border-slate-300 rounded px-2 py-1 text-xs" />
-        <input type="number" placeholder="max" value={value?.max ?? ""} onChange={(e) => onChange({ ...value, max: e.target.value })}
+        <input type="number" placeholder={tr("max")} value={value?.max ?? ""} onChange={(e) => onChange({ ...value, max: e.target.value })}
           className="w-20 border border-slate-300 rounded px-2 py-1 text-xs" />
       </div>
     );
@@ -104,14 +105,14 @@ function FilterInput({ spec, value, onChange }) {
   if (spec.type === "bool") {
     return (
       <select value={value} onChange={(e) => onChange(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs">
-        <option value="">Any</option>
-        <option value="true">Yes</option>
-        <option value="false">No</option>
+        <option value="">{tr("Any")}</option>
+        <option value="true">{tr("Yes")}</option>
+        <option value="false">{tr("No")}</option>
       </select>
     );
   }
   return (
-    <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="contains..."
+    <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={tr("contains...")}
       className="border border-slate-300 rounded px-2 py-1 text-xs w-full" />
   );
 }
@@ -167,10 +168,10 @@ function NotifiableDiseasePanel() {
 
   return (
     <div className="mt-6 bg-white rounded-xl border border-slate-200 p-4">
-      <h2 className="text-sm font-semibold text-slate-700 mb-1">Notifiable disease reports</h2>
+      <h2 className="text-sm font-semibold text-slate-700 mb-1">{tr("Notifiable disease reports")}</h2>
       <p className="text-xs text-slate-400 mb-3">
         Suggested from diagnoses matching MOH's notifiable disease list -- file, then submit at{" "}
-        <a href="https://enotifikasi.moh.gov.my" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">enotifikasi.moh.gov.my</a>{" "}
+        <a href="https://enotifikasi.moh.gov.my" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">{tr("enotifikasi.moh.gov.my")}</a>{" "}
         (no public API exists to do this automatically) and mark it done here.
       </p>
       {error && (
@@ -182,28 +183,28 @@ function NotifiableDiseasePanel() {
 
       {candidates.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs font-semibold text-slate-500 mb-1">Candidates</div>
+          <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Candidates")}</div>
           <div className="space-y-2">
             {candidates.map((c) => (
               <div key={c.condition_id} className="text-sm border border-slate-100 rounded-lg p-2">
                 <div className="flex items-center justify-between gap-2">
                   <span>{c.patient_name} -- {c.matched_disease} <span className="text-xs text-slate-400">({c.condition_name})</span></span>
-                  <button onClick={() => startFiling(c)} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded shrink-0">File</button>
+                  <button onClick={() => startFiling(c)} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded shrink-0">{tr("File")}</button>
                 </div>
                 {filingCondition?.condition_id === c.condition_id && (
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     <div>
-                      <div className="text-xs text-slate-500">Onset date</div>
+                      <div className="text-xs text-slate-500">{tr("Onset date")}</div>
                       <input type="text" value={onsetDate} onChange={(e) => setOnsetDate(e.target.value)}
-                        placeholder="YYYY-MM-DD" className="border border-slate-300 rounded px-2 py-1 text-xs w-32" />
+                        placeholder={tr("YYYY-MM-DD")} className="border border-slate-300 rounded px-2 py-1 text-xs w-32" />
                     </div>
                     <div className="flex-1 min-w-[120px]">
-                      <div className="text-xs text-slate-500">Notes</div>
+                      <div className="text-xs text-slate-500">{tr("Notes")}</div>
                       <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
                         className="border border-slate-300 rounded px-2 py-1 text-xs w-full" />
                     </div>
-                    <button onClick={confirmFiling} className="text-xs bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded">Confirm</button>
-                    <button onClick={() => setFilingCondition(null)} className="text-xs text-slate-500 hover:underline">Cancel</button>
+                    <button onClick={confirmFiling} className="text-xs bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded">{tr("Confirm")}</button>
+                    <button onClick={() => setFilingCondition(null)} className="text-xs text-slate-500 hover:underline">{tr("Cancel")}</button>
                   </div>
                 )}
               </div>
@@ -212,8 +213,8 @@ function NotifiableDiseasePanel() {
         </div>
       )}
 
-      <div className="text-xs font-semibold text-slate-500 mb-1">Filed</div>
-      {reports.length === 0 && <p className="text-xs text-slate-400">None filed yet.</p>}
+      <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Filed")}</div>
+      {reports.length === 0 && <p className="text-xs text-slate-400">{tr("None filed yet.")}</p>}
       <div className="space-y-1">
         {reports.map((r) => (
           <div key={r.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 py-1">
@@ -222,9 +223,9 @@ function NotifiableDiseasePanel() {
               <span className={`text-xs ${r.status === "submitted" ? "text-green-600" : "text-amber-600"}`}>({r.status})</span>
             </span>
             <div className="flex gap-2 shrink-0">
-              <button onClick={() => openDocument(r.id)} className="text-xs text-blue-700 hover:underline">PDF</button>
+              <button onClick={() => openDocument(r.id)} className="text-xs text-blue-700 hover:underline">{tr("PDF")}</button>
               {r.status !== "submitted" && (
-                <button onClick={() => markSubmitted(r.id)} className="text-xs text-slate-500 hover:underline">Mark submitted</button>
+                <button onClick={() => markSubmitted(r.id)} className="text-xs text-slate-500 hover:underline">{tr("Mark submitted")}</button>
               )}
             </div>
           </div>
@@ -378,8 +379,8 @@ export default function Reporting() {
   return (
     <Layout>
       <div className="mb-6">
-        <h1 className="page-title">Reporting</h1>
-        <p className="text-sm text-slate-500">Canned operational reports and a custom report builder, scoped to your facility.</p>
+        <h1 className="page-title">{tr("Reporting")}</h1>
+        <p className="text-sm text-slate-500">{tr("Canned operational reports and a custom report builder, scoped to your facility.")}</p>
       </div>
 
       {error && (
@@ -392,14 +393,14 @@ export default function Reporting() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <label className="block text-xs font-semibold text-slate-500 mb-1">Dataset</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">{tr("Dataset")}</label>
             <select value={datasetKey} onChange={(e) => setDatasetKey(e.target.value)}
               className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
               {datasets.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
             </select>
 
             <div className="mt-4">
-              <div className="text-xs font-semibold text-slate-500 mb-1">Fields</div>
+              <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Fields")}</div>
               <div className="space-y-1 max-h-48 overflow-y-auto">
                 {Object.entries(fieldSpecs).map(([key, spec]) => (
                   <label key={key} className="flex items-center gap-2 text-sm">
@@ -412,7 +413,7 @@ export default function Reporting() {
 
             {groupableFields.length > 0 && (
               <div className="mt-4">
-                <div className="text-xs font-semibold text-slate-500 mb-1">Group by</div>
+                <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Group by")}</div>
                 <div className="space-y-1">
                   {groupableFields.map(([key, spec]) => (
                     <label key={key} className="flex items-center gap-2 text-sm">
@@ -430,17 +431,17 @@ export default function Reporting() {
             )}
 
             <div className="mt-4">
-              <div className="text-xs font-semibold text-slate-500 mb-1">Sort</div>
+              <div className="text-xs font-semibold text-slate-500 mb-1">{tr("Sort")}</div>
               <div className="flex gap-2">
                 <select value={sortField} onChange={(e) => setSortField(e.target.value)}
                   className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs">
-                  <option value="">None</option>
+                  <option value="">{tr("None")}</option>
                   {sortOptions.map((k) => <option key={k} value={k}>{fieldSpecs[k]?.label || k}</option>)}
                 </select>
                 <select value={sortDir} onChange={(e) => setSortDir(e.target.value)}
                   className="border border-slate-300 rounded px-2 py-1 text-xs">
-                  <option value="asc">Asc</option>
-                  <option value="desc">Desc</option>
+                  <option value="asc">{tr("Asc")}</option>
+                  <option value="desc">{tr("Desc")}</option>
                 </select>
               </div>
             </div>
@@ -460,7 +461,7 @@ export default function Reporting() {
 
           {filterableFields.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="text-xs font-semibold text-slate-500 mb-2">Filters</div>
+              <div className="text-xs font-semibold text-slate-500 mb-2">{tr("Filters")}</div>
               <div className="space-y-3">
                 {filterableFields.map(([key, spec]) => (
                   <div key={key}>
@@ -477,23 +478,23 @@ export default function Reporting() {
           )}
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-xs font-semibold text-slate-500 mb-2">Saved templates</div>
+            <div className="text-xs font-semibold text-slate-500 mb-2">{tr("Saved templates")}</div>
             <div className="space-y-1 mb-3 max-h-40 overflow-y-auto">
-              {templates.length === 0 && <p className="text-xs text-slate-400">None saved for this dataset yet.</p>}
+              {templates.length === 0 && <p className="text-xs text-slate-400">{tr("None saved for this dataset yet.")}</p>}
               {templates.map((t) => (
                 <div key={t.id} className="flex items-center justify-between text-sm gap-2">
                   <button onClick={() => loadTemplate(t)} className="text-blue-700 hover:underline truncate text-left">
                     {t.name}{t.is_shared && <span className="text-xs text-slate-400"> (shared)</span>}
                   </button>
                   {t.editable && (
-                    <button onClick={() => removeTemplate(t)} className="text-xs text-red-500 hover:underline shrink-0">Delete</button>
+                    <button onClick={() => removeTemplate(t)} className="text-xs text-red-500 hover:underline shrink-0">{tr("Delete")}</button>
                   )}
                 </div>
               ))}
             </div>
             <div className="flex gap-2">
               <input type="text" value={templateName} onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="Template name" className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs" />
+                placeholder={tr("Template name")} className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs" />
               <button onClick={saveTemplate} disabled={saving || !templateName.trim() || !fields.length}
                 className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 px-2 py-1 rounded">
                 Save
@@ -508,7 +509,7 @@ export default function Reporting() {
 
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl border border-slate-200 p-4 min-h-[200px]">
-            {!result && <p className="text-sm text-slate-400">Pick fields and run the report to see results here.</p>}
+            {!result && <p className="text-sm text-slate-400">{tr("Pick fields and run the report to see results here.")}</p>}
             {result && (
               <>
                 <div className="flex items-center justify-between mb-3">
@@ -518,8 +519,8 @@ export default function Reporting() {
                       className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 px-3 py-1.5 rounded">
                       {narrating ? "Narrating..." : "✨ Narrate"}
                     </button>
-                    <button onClick={() => doExport("pdf")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Export PDF</button>
-                    <button onClick={() => doExport("excel")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">Export Excel</button>
+                    <button onClick={() => doExport("pdf")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">{tr("Export PDF")}</button>
+                    <button onClick={() => doExport("excel")} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded">{tr("Export Excel")}</button>
                   </div>
                 </div>
                 {narrative && (
@@ -547,7 +548,7 @@ export default function Reporting() {
                       ))}
                     </tbody>
                   </table>
-                  {result.rows.length === 0 && <p className="text-sm text-slate-400 py-4">No rows matched.</p>}
+                  {result.rows.length === 0 && <p className="text-sm text-slate-400 py-4">{tr("No rows matched.")}</p>}
                 </div>
               </>
             )}
