@@ -375,3 +375,18 @@ def test_staff_federation_routes_need_the_patients_consent(
 
     _consent(db_session, patient.id, False)  # withdrawn
     assert test_client.get(url, headers=auth_headers(clin)).status_code == 403
+
+
+def test_a_hospital_can_retract_only_its_own_pointers_for_a_patient(central):
+    seed_a = _facility(central, "hosp-w-a")
+    seed_b = _facility(central, "hosp-w-b")
+    pkey = secrets.token_hex(32)
+    for fid, seed, ref in (("hosp-w-a", seed_a, "va1"), ("hosp-w-b", seed_b, "vb1")):
+        r = _signed(central, fid, seed, "PUT", "/pointers", _pointer(fid, seed, pkey, ref, _iso(1)))
+        assert r.status_code == 200, r.text
+
+    assert _signed(central, "hosp-w-a", seed_a, "DELETE", f"/patients/{pkey}").json() == {"removed": 1}
+    left = _signed(central, "hosp-w-b", seed_b, "GET", f"/patients/{pkey}").json()
+    assert [p["facility_id"] for p in left] == ["hosp-w-b"]
+    assert _signed(central, "hosp-w-a", seed_a, "DELETE", f"/patients/{pkey}").json() == {"removed": 0}
+    assert central.delete(f"/patients/{pkey}").status_code == 401  # unsigned

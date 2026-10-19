@@ -1182,6 +1182,10 @@ class EmergencyToken(Base):
     # are registered again, so they cannot be revoked offline.
     nfc_revocation_id = Column(String(32), nullable=True, index=True)
     nfc_tag_type = Column(String(16), nullable=True)  # ntag21x | ntag424 | unknown, as seen at registration
+    # Digest of the plaintext last sealed for this card and the byte budget it was built with: lets the
+    # card list say the tag is out of date when the patient's critical data has since changed.
+    tag_digest = Column(String(16), nullable=True)
+    tag_budget = Column(Integer, nullable=True)
     scope = Column(JSON, default=lambda: ["allergies", "medications", "conditions", "blood_type"])
     expires_at = Column(TZDateTime, nullable=False)
     revoked = Column(Boolean, default=False)
@@ -2589,7 +2593,7 @@ class ConsentRecord(Base):
     patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
     purpose = Column(String(64), nullable=False, index=True)
     granted = Column(Boolean, nullable=False)          # True = grant, False = withdrawal
-    source = Column(String(32), nullable=False)        # registration | portal | staff
+    source = Column(String(32), nullable=False)        # registration | portal | staff | guardian
     note = Column(Text, nullable=True)
     recorded_by = Column(String(36), nullable=True)    # users.id -- the patient's own id, or the staff who recorded it
     recorded_by_role = Column(String(64), nullable=True)

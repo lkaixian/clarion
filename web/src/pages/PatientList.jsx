@@ -368,7 +368,8 @@ function MyConsultationRoom() {
     setBusy(true);
     setError("");
     try {
-      const data = await startConsultationSession({ room_id: Number(roomId) });
+      // Room ids are UUID strings; Number() turned them into NaN -> null -> 422.
+      const data = await startConsultationSession({ room_id: roomId });
       setState(data);
     } catch (err) {
       setError(err?.response?.data?.detail || "Could not start the session.");
@@ -560,7 +561,7 @@ function deriveDobFromNric(nric) {
 export default function PatientList() {
   const [patients, setPatients] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false });
+  const [form, setForm] = useState({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false, share_across_facilities: false });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   // University SMP/SMS/e-klinik-panel/Registrar eligibility check (tender
@@ -631,7 +632,7 @@ export default function PatientList() {
     try {
       await createPatient(form);
       setShowForm(false);
-      setForm({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false });
+      setForm({ national_id: "", full_name: "", date_of_birth: "", blood_type: "", senior_citizen_mode: false, share_across_facilities: false });
       setEligibility(null);
       refresh(crossFacilitySearch ? breakGlassReason : undefined);
     } catch (err) {
@@ -766,6 +767,11 @@ export default function PatientList() {
             <input type="checkbox" checked={form.senior_citizen_mode}
               onChange={(e) => setForm({ ...form, senior_citizen_mode: e.target.checked })} />
             Enable senior-citizen mode (physical card fallback)
+          </label>
+          <label className="flex items-center gap-2 col-span-2 text-sm text-slate-600">
+            <input type="checkbox" checked={form.share_across_facilities}
+              onChange={(e) => setForm({ ...form, share_across_facilities: e.target.checked })} />
+            The patient agrees other CLARION facilities may see their visit history (ask first)
           </label>
           <button className="bg-blue-800 text-white rounded-lg py-2 col-span-2 font-medium">Create</button>
         </form>

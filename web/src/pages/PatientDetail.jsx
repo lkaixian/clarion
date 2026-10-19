@@ -2111,7 +2111,7 @@ export default function PatientDetail() {
         <Section title="Demographics, sponsor and dependants">
           <PatientDemographics patientId={id} demographics={patient.demographics} onChanged={refresh} />
         </Section>
-        {["admin", "records_officer"].includes(currentUser?.role) && (
+        {["admin", "records_officer", "clinician"].includes(currentUser?.role) && (
           <Section title="Sharing with other facilities"><SharingConsent patientId={id} /></Section>
         )}
         </>
@@ -2268,6 +2268,9 @@ export default function PatientDetail() {
                       <span className={`ml-2 text-xs ${n.revoked ? "text-red-600" : "text-green-700"}`}>
                         {n.revoked ? "REVOKED" : "active"}
                       </span>
+                      {n.tag_stale && !n.revoked && (
+                        <span className="ml-2 text-xs font-semibold text-amber-700">⚠ Card is out of date: register it again to rewrite it</span>
+                      )}
                       <p className="text-xs text-slate-400 mt-0.5">Scope: {n.scope.join(", ")} · valid until {n.grant_valid_until}</p>
                     </div>
                     {!n.revoked && isStaff && (

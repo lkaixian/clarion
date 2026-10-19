@@ -23,13 +23,14 @@ SQL-side pagination -- not before.
 from __future__ import annotations
 
 import hashlib
+import hmac
 from dataclasses import dataclass, field as dc_field
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from . import models
+from . import auth, models
 
 _MAX_ROWS = 5000
 
@@ -352,6 +353,12 @@ def _matches_filter(f: Field, value: Any, spec: Any) -> bool:
     return bool(spec) and str(spec).lower() in str(value or "").lower()
 
 
+_PSEUDONYM_KEY = hashlib.sha256(b"clarion-report-pseudonym-v1|" + auth.SECRET_KEY.encode()).digest()
+# Anonymized grouped reports drop any group smaller than this: a count of 1 or 2
+# in a small clinic points at a person.
+MIN_CELL = 5
+
+
 def _pseudonym(value: Any) -> Optional[str]:
     """A stable, non-reversible stand-in for a PII value ("data
     anonymization"). Same pseudonym for the same raw value within one
@@ -359,15 +366,11 @@ def _pseudonym(value: Any) -> Optional[str]:
     disease still lets you count distinct cases -- without carrying the
     real name/NRIC into the export.
 
-    ponytail: unsalted hash -- adequate for de-identifying an ad-hoc
-    compliance export; if this ever needs to resist a dictionary attack
-    against a small name-space (unlikely for a full name/NRIC, but a
-    genuine requirement for a stronger anonymization guarantee), swap in a
-    per-facility keyed HMAC, same upgrade path app/audit_hash.py already
-    uses for the audit chain."""
+    Keyed (HMAC with a key derived from SECRET_KEY), so someone holding an
+    export cannot confirm a guessed name or NRIC by hashing it themselves."""
     if value is None:
         return None
-    return "Case-" + hashlib.sha256(str(value).encode()).hexdigest()[:8]
+    return "Case-" + hmac.new(_PSEUDONYM_KEY, str(value).encode(), hashlib.sha256).hexdigest()[:8]
 
 
 def run_report(
@@ -434,6 +437,12 @@ def run_report(
         columns = [{"key": k, "label": dataset.fields[k].label, "type": dataset.fields[k].type} for k in fields]
         out_rows = [[_jsonsafe(dataset.fields[k].getter(r)) for k in fields] for r in rows]
 
+    suppressed = 0
+    if anonymize and group_by:
+        count_idx = len(group_by)
+        kept = [r for r in out_rows if r[count_idx] >= MIN_CELL]
+        suppressed, out_rows = len(out_rows) - len(kept), kept
+
     if anonymize:
         pii_idx = [i for i, c in enumerate(columns) if dataset.fields.get(c["key"]) and dataset.fields[c["key"]].pii]
         for row in out_rows:
@@ -449,7 +458,8 @@ def run_report(
         reverse = sort.get("dir") == "desc"
         out_rows.sort(key=lambda row: (row[idx] is None, row[idx]), reverse=reverse)
 
-    return {"dataset": dataset_key, "columns": columns, "rows": out_rows, "row_count": len(out_rows), "truncated": len(rows) >= _MAX_ROWS}
+    return {"dataset": dataset_key, "columns": columns, "rows": out_rows, "row_count": len(out_rows), "truncated": len(rows) >= _MAX_ROWS,
+            "suppressed_groups": suppressed}
 
 
 def _jsonsafe(v: Any) -> Any:

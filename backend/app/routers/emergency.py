@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import secrets
 import re
@@ -725,6 +726,9 @@ def register_nfc_card(
     )
     if blob_plain:
         tag_blob = tag_crypto.seal(f"{expiry}|{blob_plain}", auth.canonical_nfc_uid(payload.nfc_uid))
+    grant.tag_digest = _tag_digest(blob_plain)  # of "" too: a card written empty goes stale once data appears
+    grant.tag_budget = budget
+    db.commit()
 
     return {
         "id": grant.id,
@@ -1006,7 +1010,21 @@ def list_nfc_cards(
         .all()
     )
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    return [_nfc_card_out(g, now) for g in grants]
+    patient = db.query(models.Patient).filter_by(id=patient_id).first() if grants else None
+    resolved, discontinued = _resolved_discontinued_ids(db, patient_id) if grants else (set(), set())
+    out = []
+    for g in grants:
+        card = _nfc_card_out(g, now)
+        # None = unknown (card registered before this check, or nothing was written).
+        card["tag_stale"] = None if not (g.tag_digest and g.tag_budget and patient) else (
+            _tag_digest(_build_compact_tag_text(patient, set(g.scope or []), resolved, discontinued, g.tag_budget)[0])
+            != g.tag_digest)
+        out.append(card)
+    return out
+
+
+def _tag_digest(plain: str) -> str:
+    return hashlib.sha256(plain.encode()).hexdigest()[:16]
 
 
 def _nfc_card_out(g: "models.EmergencyToken", now: datetime) -> dict:

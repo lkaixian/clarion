@@ -385,9 +385,12 @@ class PatientCreate(BaseModel):
     state_code: Optional[str] = Field(default=None, max_length=32)
     sponsor_code: Optional[str] = Field(default=None, max_length=32)
     sponsor_member_no: Optional[str] = Field(default=None, max_length=64)
+    # Asked at the desk: the patient agrees other CLARION facilities may see their visit history.
+    share_across_facilities: bool = False
 
 
 class PatientOut(PatientCreate):
+    share_across_facilities: Optional[bool] = Field(default=None, exclude=True)  # input-only; consent lives in the ledger
     id: str
     created_at: datetime
     email: Optional[str] = None
