@@ -378,8 +378,8 @@ export const getCurrentCardStatus = (patientId) =>
 // Registration is staff-only; scanning (by a responder's NFC-capable
 // phone) requires no auth, same design as the QR flow.
 export const listNfcCards = (patientId) => client.get(`/emergency/nfc/${patientId}`).then((r) => r.data);
-export const registerNfcCard = (patientId, nfcUid, scope, tagType = "unknown") =>
-  client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope, tag_type: tagType }).then((r) => r.data);
+export const registerNfcCard = (patientId, nfcUid, scope, tagType = "unknown", tagMaxBytes) =>
+  client.post("/emergency/nfc/register", { patient_id: patientId, nfc_uid: nfcUid, scope, tag_type: tagType, tag_max_bytes: tagMaxBytes }).then((r) => r.data);
 // Revoke by the grant id (from listNfcCards) -- the raw UID is stored
 // hashed server-side and never returned to the client (Security Audit M7).
 export const revokeNfcCard = (tokenId) => client.post(`/emergency/nfc/revoke/${tokenId}`).then((r) => r.data);
@@ -611,6 +611,15 @@ export const clockOut = () => client.post("/staff/clock-out").then((r) => r.data
 // Admin-only facility staff roster + per-staff clock history. History is
 // fetched on demand per staff member (not eagerly for the whole roster) —
 // callers should only call this when a row is actually expanded.
+export const getConsent = (patientId) => client.get("/pdpa/consent", { params: { patient_id: patientId } }).then((r) => r.data);
+export const recordConsent = (patientId, purpose, granted, note) =>
+  client.post("/pdpa/consent", { patient_id: patientId, purpose, granted, note }).then((r) => r.data);
+// Time-boxed community responder logins (guard / volunteer): emergency scan only.
+export const listResponders = () => client.get("/admin/responders").then((r) => r.data);
+export const createResponder = (body) => client.post("/admin/responders", body).then((r) => r.data);
+export const updateResponderExpiry = (id, expiresAt) =>
+  client.patch(`/admin/responders/${id}`, { expires_at: expiresAt }).then((r) => r.data);
+export const revokeResponder = (id) => client.post(`/admin/responders/${id}/revoke`).then((r) => r.data);
 export const getStaffRoster = () => client.get("/admin/staff").then((r) => r.data);
 export const getStaffClockHistory = (userId) => client.get(`/admin/staff/${userId}/clock-history`).then((r) => r.data);
 // Partial staff edit — currently only `{ section: string | null }` (pin a
@@ -742,6 +751,10 @@ export const updateMyProfile = (payload) => client.put("/me/profile", payload).t
 
 export const getMyPhotoBlob = () => authedBlobUrl("/me/photo");
 
+// Own hospital's display name + the logo an admin set in Hospital Settings
+// (name falls back to the facility name). Staff only; patients get nulls.
+export const getMyHospital = () => client.get("/me/hospital").then((r) => r.data);
+
 export const uploadMyPhoto = (file) => {
   const form = new FormData();
   form.append("file", file);
@@ -756,6 +769,13 @@ export const getStaffPhotoBlob = (userId) => authedBlobUrl(`/staff/${userId}/pho
 
 // Admin editing a roster member's bio/contact_email/photo -- see
 // getStaffRoster/updateStaffMember above for the rest of the roster API.
+// Admin issues a one-time temporary password (shown once, forced change at next sign-in).
+// `stepUp` = { password, code }: the acting admin's own password + authenticator code.
+export const resetStaffPassword = (userId, stepUp) =>
+  client.post(`/admin/staff/${userId}/reset-password`, stepUp).then((r) => r.data);
+export const resetUserMfa = (userId, stepUp) =>
+  client.post(`/auth/mfa/reset/${userId}`, stepUp).then((r) => r.data);
+export const getOtherAdmins = () => client.get("/admin/admins").then((r) => r.data);
 export const updateStaffProfile = (userId, payload) =>
   client.patch(`/admin/staff/${userId}/profile`, payload).then((r) => r.data);
 export const uploadStaffPhoto = (userId, file) => {
@@ -883,6 +903,33 @@ export const uploadAncillaryResultDocument = (requestId, file) => {
 export const getAncillaryResultDocumentBlob = (requestId) =>
   client.get(`/ancillary/requests/${requestId}/result/document`, { responseType: "blob" }).then((r) => r.data);
 
+// Result files staged at sign-off (any of PDF/image/TXT/JSON/DOCX/DICOM/HL7),
+// then referenced by id in signOffAncillaryResult({ attachment_ids }).
+export const stageResultAttachment = (requestId, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post(`/ancillary/requests/${requestId}/attachments`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+export const listStagedAttachments = (requestId) =>
+  client.get(`/ancillary/requests/${requestId}/attachments`).then((r) => r.data);
+export const deleteResultAttachment = (requestId, attachmentId) =>
+  client.delete(`/ancillary/requests/${requestId}/attachments/${attachmentId}`).then((r) => r.data);
+export const getResultAttachmentBlob = (requestId, attachmentId) =>
+  client
+    .get(`/ancillary/requests/${requestId}/attachments/${attachmentId}`, { responseType: "blob" })
+    .then((r) => r.data);
+
+// --- In-app inbox (result ready, ...). Own rows only. ---------------------
+export const getNotifications = (limit = 50) =>
+  client.get("/notifications", { params: { limit } }).then((r) => r.data);
+export const getUnreadCount = () => client.get("/notifications/unread-count").then((r) => r.data.unread);
+export const markNotificationRead = (id) => client.post(`/notifications/${id}/read`).then((r) => r.data);
+export const markAllNotificationsRead = () => client.post("/notifications/read-all").then((r) => r.data);
+
 export const getAncillaryStats = () => client.get("/ancillary/stats").then((r) => r.data);
 
 // P4.7 PACS/DICOM imaging -- sits on top of an xray ServiceRequest
@@ -935,6 +982,19 @@ export const getChargeMasterItems = ({ category, includeInactive } = {}) =>
   client
     .get("/billing/charge-master", { params: { category, include_inactive: includeInactive || undefined } })
     .then((r) => r.data);
+// Excel import: dry run first (default), then the same file again with dryRun=false.
+export const importChargeMasterFile = (file, dryRun) => {
+  const form = new FormData();
+  form.append("file", file);
+  return client
+    .post("/billing/charge-master/import", form, {
+      params: { dry_run: dryRun },
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+export const getChargeMasterTemplate = () =>
+  client.get("/billing/charge-master/import-template", { responseType: "blob" }).then((r) => r.data);
 export const createChargeMasterItem = (body) => client.post("/billing/charge-master", body).then((r) => r.data);
 export const updateChargeMasterItem = (itemId, body) =>
   client.patch(`/billing/charge-master/${itemId}`, body).then((r) => r.data);
@@ -1018,4 +1078,116 @@ export const getNotifiableDiseaseDocumentBlob = (reportId) =>
 export const getDashboardSummary = () => client.get("/dashboard/summary").then((r) => r.data);
 export const getDashboardFlowForecast = () => client.get("/dashboard/flow-forecast").then((r) => r.data);
 
+export const listDrugs = ({ q, category, limit = 25, offset = 0 } = {}) =>
+  client.get("/drugs", { params: { q: q || undefined, category: category || undefined, limit, offset } }).then((r) => r.data);
+export const getDrug = (code) => client.get(`/drugs/${encodeURIComponent(code)}`).then((r) => r.data);
+export const listProducts = ({ q, category, limit = 25, offset = 0 } = {}) =>
+  client.get("/products", { params: { q: q || undefined, category: category || undefined, limit, offset } }).then((r) => r.data);
+export const getProduct = (code) => client.get(`/products/${encodeURIComponent(code)}`).then((r) => r.data);
+export const listFeeSchedules = ({ q, part, limit = 25, offset = 0 } = {}) =>
+  client.get("/fee-schedules", { params: { q: q || undefined, part: part || undefined, limit, offset } }).then((r) => r.data);
+export const listReferenceKinds = () => client.get("/reference").then((r) => r.data);
+export const getReferenceList = (kind, { q, parent } = {}) =>
+  client.get(`/reference/${encodeURIComponent(kind)}`, { params: { q: q || undefined, parent: parent || undefined } }).then((r) => r.data);
+// Payments: patient self-service (/payments) and cashier side (/billing).
+export const getMyBills = () => client.get("/payments/my-bills").then((r) => r.data);
+export const getMyPaymentHistory = () => client.get("/payments/my-history").then((r) => r.data);
+export const createPaymentIntent = (billId, body) =>
+  client.post(`/payments/bills/${billId}/intents`, body).then((r) => r.data);
+export const simulatePayment = (intentId, outcome) =>
+  client.post(`/payments/intents/${intentId}/simulate`, { outcome }).then((r) => r.data);
+export const cancelPaymentIntent = (intentId) =>
+  client.post(`/payments/intents/${intentId}/cancel`).then((r) => r.data);
+export const getReceipt = (paymentId) => client.get(`/payments/receipts/${paymentId}`).then((r) => r.data);
+export const getReceiptPdf = (paymentId) =>
+  client.get(`/payments/receipts/${paymentId}/pdf`, { responseType: "blob" }).then((r) => r.data);
+export const emailReceipt = (paymentId) => client.post(`/payments/receipts/${paymentId}/email`).then((r) => r.data);
+export const getReconciliation = ({ day, days, tzOffsetMinutes } = {}) =>
+  client.get("/billing/reconciliation", { params: { day: day || undefined, days: days || undefined, tz_offset_minutes: tzOffsetMinutes } })
+    .then((r) => r.data);
+export const getReconciliationPdf = ({ day, days, tzOffsetMinutes } = {}) =>
+  client.get("/billing/reconciliation/pdf", {
+    params: { day: day || undefined, days: days || undefined, tz_offset_minutes: tzOffsetMinutes }, responseType: "blob",
+  }).then((r) => r.data);
+export const getOutstanding = () => client.get("/billing/outstanding").then((r) => r.data);
+export const listRefunds = (status) =>
+  client.get("/billing/refunds", { params: { status: status || undefined } }).then((r) => r.data);
+export const requestRefund = (paymentId, body) =>
+  client.post(`/billing/payments/${paymentId}/refunds`, body).then((r) => r.data);
+export const approveRefund = (id, note) => client.post(`/billing/refunds/${id}/approve`, { note: note || null }).then((r) => r.data);
+export const rejectRefund = (id, note) => client.post(`/billing/refunds/${id}/reject`, { note: note || null }).then((r) => r.data);
+export const listDeposits = (patientId) =>
+  client.get("/billing/deposits", { params: { patient_id: patientId || undefined } }).then((r) => r.data);
+export const createDeposit = (body) => client.post("/billing/deposits", body).then((r) => r.data);
+export const applyDeposit = (id, body) => client.post(`/billing/deposits/${id}/apply`, body).then((r) => r.data);
+export const refundDeposit = (id, body) => client.post(`/billing/deposits/${id}/refund`, body).then((r) => r.data);
 export default client;
+
+
+// ---- HIS registry, CPOE orders, purchasing, forms ----
+export const updateDemographics = (patientId, body) =>
+  client.patch(`/patients/${patientId}/demographics`, body).then((r) => r.data);
+export const listSponsors = ({ activeOnly = true } = {}) =>
+  client.get("/sponsors", { params: { active_only: activeOnly } }).then((r) => r.data);
+export const listDependants = (patientId) => client.get(`/patients/${patientId}/dependants`).then((r) => r.data);
+export const addDependant = (patientId, body) =>
+  client.post(`/patients/${patientId}/dependants`, body).then((r) => r.data);
+export const removeDependant = (patientId, linkId) => client.delete(`/patients/${patientId}/dependants/${linkId}`);
+export const getAdmissionMovements = (admissionId) =>
+  client.get(`/reception/admissions/${admissionId}/movements`).then((r) => r.data);
+
+export const listPatientOrders = (patientId) => client.get(`/patients/${patientId}/orders`).then((r) => r.data);
+export const createOrder = (patientId, body) => client.post(`/patients/${patientId}/orders`, body).then((r) => r.data);
+export const listOrders = ({ status = "ordered", orderType } = {}) =>
+  client.get("/orders", { params: { status, order_type: orderType || undefined } }).then((r) => r.data);
+export const completeOrder = (orderId, note) =>
+  client.post(`/orders/${orderId}/complete`, { note: note || null }).then((r) => r.data);
+export const cancelOrder = (orderId, reason) =>
+  client.post(`/orders/${orderId}/cancel`, { reason }).then((r) => r.data);
+
+export const listSuppliers = () => client.get("/purchasing/suppliers").then((r) => r.data);
+export const createSupplier = (body) => client.post("/purchasing/suppliers", body).then((r) => r.data);
+export const listPurchaseOrders = (status) =>
+  client.get("/purchasing/orders", { params: { status: status || undefined } }).then((r) => r.data);
+export const createPurchaseOrder = (body) => client.post("/purchasing/orders", body).then((r) => r.data);
+export const placePurchaseOrder = (id) => client.post(`/purchasing/orders/${id}/place`).then((r) => r.data);
+export const cancelPurchaseOrder = (id) => client.post(`/purchasing/orders/${id}/cancel`).then((r) => r.data);
+export const receivePurchaseOrder = (id, lines) =>
+  client.post(`/purchasing/orders/${id}/receive`, { lines }).then((r) => r.data);
+
+export const listForms = ({ includeInactive = false } = {}) =>
+  client.get("/forms", { params: { include_inactive: includeInactive } }).then((r) => r.data);
+export const createForm = (body) => client.post("/forms", body).then((r) => r.data);
+export const deactivateForm = (id) => client.post(`/forms/${id}/deactivate`).then((r) => r.data);
+export const submitFormResponse = (patientId, formId, values, encounterId) =>
+  client.post(`/patients/${patientId}/forms/${formId}/responses`, { values, encounter_id: encounterId || null })
+    .then((r) => r.data);
+export const listFormResponses = (patientId) =>
+  client.get(`/patients/${patientId}/form-responses`).then((r) => r.data);
+
+// Online booking v2: per-hospital booking switch, coordinates and per-category
+// weekly timetable. PUT replaces the whole object (services + hours) atomically.
+export const getBookingAdminSettings = () => client.get("/booking/admin/settings").then((r) => r.data);
+export const saveBookingAdminSettings = (body) => client.put("/booking/admin/settings", body).then((r) => r.data);
+
+// ---- patient self-registration: a pending "claim" (same public API; no app needed) --------
+const _reg = (path, body) => axios.post(`${API_BASE}/auth/self-register/${path}`, body, { withCredentials: true }).then((r) => r.data);
+export const selfRegisterConfig = () => axios.get(`${API_BASE}/auth/self-register/config`).then((r) => r.data);
+export const claimStart = (nationalId, fullName, email) =>
+  _reg("claim/start", { national_id: nationalId, full_name: fullName, email });
+// -> {status:"approved", session} (signed in) or {status:"pending", photo_check}
+// the password is chosen here, by whoever proves the inbox
+export const claimVerifyOtp = (nationalId, email, otpCode, password) =>
+  _reg("claim/verify-otp", { national_id: nationalId, email, otp_code: otpCode, password }).then(_claimResult);
+export const claimVerifyPhotos = (nationalId, email, front, back) => {
+  const f = new FormData();
+  f.append("national_id", nationalId); f.append("email", email);
+  f.append("front_image", front); f.append("back_image", back);
+  return axios.post(`${API_BASE}/auth/self-register/claim/verify-photos`, f, { withCredentials: true }).then((r) => r.data).then(_claimResult);
+};
+function _claimResult(d) { if (d.session) storeSession(d.session); return d; }
+
+// staff: pending claims on a patient record
+export const listRegistrationClaims = (patientId) => client.get(`/auth/patients/${patientId}/registration-claims`).then((r) => r.data);
+export const decideRegistrationClaim = (patientId, claimId, action) =>
+  client.post(`/auth/patients/${patientId}/registration-claims/${claimId}/${action}`).then((r) => r.data);

@@ -100,4 +100,23 @@ void main() {
     await lock.unlock('r');
     expect(prompts.length, 2);
   });
+
+  test('backgrounding ends the grace window, but not a prompt already on screen', () async {
+    final prompts = <String>[];
+    final lock = _lock(now: now, prompts: prompts);
+    await lock.unlock('r');
+    lock.lockIfIdle(); // app paused
+    await lock.unlock('r');
+    expect(prompts.length, 2);
+
+    late DeviceLock shown;
+    shown = _lock(now: now, prompts: prompts, auth: (_) async {
+      shown.lockIfIdle(); // the platform backgrounds the app while its dialog is up
+      return true;
+    });
+    // The prompt was passed, but the app went to the background meanwhile: no grace window.
+    expect(await shown.unlock('r'), DeviceLockResult.denied);
+    await shown.unlock('r');
+    expect(prompts.length, 4);
+  });
 }

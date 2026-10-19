@@ -313,14 +313,24 @@ def test_origin_refuses_to_serve_a_visit_without_consent_and_audits_it(
                               headers={"content-type": r.headers.get("content-type", "application/json")})
 
     monkeypatch.setattr(mpi_client, "_client_factory", lambda: httpx.Client(transport=httpx.MockTransport(route)))
+    # Without consent nothing is published: central never learns the visit exists.
     with _identity("hosp-c", seed_c, name="Hospital C"):
         mpi_client._publish_job({"encounter_id": enc.id})
+    with _identity("hosp-d", seed_d):
+        mpi_client._key_cache.clear()
+        assert mpi_client.lookup(nric) == []
+
+    # Consent given at sign-off time (pointer published), then withdrawn.
+    _consent(db_session, patient.id, True)
+    with _identity("hosp-c", seed_c, name="Hospital C"):
+        mpi_client._publish_job({"encounter_id": enc.id})
+    _consent(db_session, patient.id, False)
 
     with _identity("hosp-d", seed_d):
         mpi_client._key_cache.clear()
         pointer = mpi_client.lookup(nric)[0]
 
-        # Never asked -> denied, and it looks like an unknown visit to the caller.
+        # Withdrawn -> denied, and it looks like an unknown visit to the caller.
         with pytest.raises(mpi_client.MpiError):
             mpi_client.fetch_visit(nric, pointer)
         assert "federation_peer_denied_no_consent" in _audit_actions(db_session, patient.id)
