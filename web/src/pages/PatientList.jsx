@@ -190,7 +190,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
           #{ticket.queue_number} · {ticket.patient_full_name}
         </p>
         <form onSubmit={submit} className="space-y-3">
-          {error && <div className="alert-error">{error}</div>}
+          {error && <div role="alert" className="alert-error">{error}</div>}
           <div>
             <label className="field-label">Note (optional)</label>
             <textarea
@@ -212,7 +212,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
               {recording ? "● Stop dictation" : transcribing ? "Transcribing..." : "🎙 Dictate SOAP (on-prem AI)"}
             </button>
             {lastTranscript && (
-              <span className="text-xs text-slate-400 truncate" title={lastTranscript}>
+              <span className="text-xs text-slate-500 truncate" title={lastTranscript}>
                 Heard: “{lastTranscript}”
               </span>
             )}
@@ -271,12 +271,12 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
                 {cdsHint.hint ? (
                   <p className="whitespace-pre-line">{cdsHint.hint}</p>
                 ) : (
-                  <p className="text-slate-400">No AI hint available (local model not running).</p>
+                  <p className="text-slate-500">No AI hint available (local model not running).</p>
                 )}
                 {cdsHint.allergy_conflicts.map((c, i) => (
                   <p key={i} className="text-red-700 font-medium">⚠ {c}</p>
                 ))}
-                <p className="text-slate-400 italic">{cdsHint.disclaimer}</p>
+                <p className="text-slate-500 italic">{cdsHint.disclaimer}</p>
               </div>
             )}
           </div>
@@ -310,7 +310,7 @@ function CompleteConsultationModal({ ticket, onClose, onDone }) {
           {!hasSignature && (
             <div>
               <SignaturePad onChange={setSigDataUrl} />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 You have no saved signature — draw one (also saved to your profile).
               </p>
             </div>
@@ -422,14 +422,14 @@ function MyConsultationRoom() {
   if (!state) {
     return (
       <div className="card mb-6">
-        <p className="text-sm text-slate-400">Loading your consultation room…</p>
+        <p className="text-sm text-slate-500">Loading your consultation room…</p>
       </div>
     );
   }
 
   return (
     <div className="card mb-6">
-      {error && <div className="alert-error mb-3">{error}</div>}
+      {error && <div role="alert" className="alert-error mb-3">{error}</div>}
 
       {!active ? (
         <>
@@ -468,7 +468,7 @@ function MyConsultationRoom() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-slate-800">
               You're in {state.room.room_name}
-              <span className="ml-2 text-xs font-normal text-slate-400">
+              <span className="ml-2 text-xs font-normal text-slate-500">
                 {state.room.department || "Any"} · {state.room.waiting_today} waiting today
               </span>
             </h2>
@@ -482,7 +482,7 @@ function MyConsultationRoom() {
           </div>
 
           {state.tickets.length === 0 ? (
-            <p className="text-sm text-slate-400">No patients in the queue yet.</p>
+            <p className="text-sm text-slate-500">No patients in the queue yet.</p>
           ) : (
             <div className="space-y-2">
               {state.tickets.map((t) => {
@@ -496,7 +496,7 @@ function MyConsultationRoom() {
                         <span className="ml-2 text-xs text-slate-500">{t.reason || "—"}</span>
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                       </p>
-                      <p className="text-xs text-slate-400">checked in {formatTime(t.checked_in_at)}</p>
+                      <p className="text-xs text-slate-500">checked in {formatTime(t.checked_in_at)}</p>
                     </div>
                     {actionable && (
                       <div className="flex items-center gap-3 shrink-0">
@@ -662,13 +662,14 @@ export default function PatientList() {
         <div className="flex items-center gap-3">
           <input
             type="text"
-            placeholder="Search by name or NRIC..."
+            aria-label="Search patients by name or NRIC" placeholder="Search by name or NRIC..."
             className="border rounded-lg px-3 py-2 text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <button
             onClick={() => { setShowForm((s) => !s); setEligibility(null); }}
+            aria-expanded={showForm} aria-controls="new-patient-form"
             className="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
           >
             {showForm ? "Cancel" : "+ New Patient (One-Click Intake)"}
@@ -694,6 +695,7 @@ export default function PatientList() {
               type="text"
               required
               autoFocus
+              aria-label="Reason for searching across all facilities"
               placeholder="Reason for looking across all facilities (logged to this patient's audit trail)…"
               className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm flex-1"
               value={breakGlassReason}
@@ -718,10 +720,10 @@ export default function PatientList() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-xl p-5 mb-6 grid grid-cols-2 gap-4">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded col-span-2">{error}</div>}
+        <form id="new-patient-form" onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-xl p-5 mb-6 grid grid-cols-2 gap-4">
+          {error && <div role="alert" className="bg-red-50 text-red-700 text-sm p-2 rounded col-span-2">{error}</div>}
           <div className="col-span-2 flex gap-2">
-            <input required placeholder="NRIC (e.g. 520314-01-1234)" className="border rounded-lg px-3 py-2 flex-1"
+            <input required aria-label="NRIC" placeholder="NRIC (e.g. 520314-01-1234)" className="border rounded-lg px-3 py-2 flex-1"
               value={form.national_id}
               onChange={(e) => { setForm({ ...form, national_id: e.target.value }); setEligibility(null); }} />
             <button type="button" onClick={runEligibilityCheck}
@@ -751,17 +753,17 @@ export default function PatientList() {
               )}
             </div>
           )}
-          <input required placeholder="Full name" className="border rounded-lg px-3 py-2 col-span-2"
+          <input required aria-label="Full name" placeholder="Full name" className="border rounded-lg px-3 py-2 col-span-2"
             value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           {derivedDob ? (
             <div className="border rounded-lg px-3 py-2 text-sm text-slate-600 bg-slate-50 flex items-center">
-              DOB {derivedDob} <span className="text-xs text-slate-400 ml-1">(auto-detected from NRIC)</span>
+              DOB {derivedDob} <span className="text-xs text-slate-500 ml-1">(auto-detected from NRIC)</span>
             </div>
           ) : (
-            <input placeholder="Date of birth (YYYY-MM-DD)" className="border rounded-lg px-3 py-2"
+            <input aria-label="Date of birth" placeholder="Date of birth (YYYY-MM-DD)" className="border rounded-lg px-3 py-2"
               value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
           )}
-          <input placeholder="Blood type (e.g. O+)" className="border rounded-lg px-3 py-2"
+          <input aria-label="Blood type" placeholder="Blood type (e.g. O+)" className="border rounded-lg px-3 py-2"
             value={form.blood_type} onChange={(e) => setForm({ ...form, blood_type: e.target.value })} />
           <label className="flex items-center gap-2 col-span-2 text-sm text-slate-600">
             <input type="checkbox" checked={form.senior_citizen_mode}
@@ -778,22 +780,22 @@ export default function PatientList() {
       )}
 
       {loading ? (
-        <p className="text-slate-400">Loading...</p>
+        <p className="text-slate-500">Loading...</p>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y">
           {patients.length === 0 ? (
-            <p className="p-5 text-slate-400 text-sm">No patients yet — create one above.</p>
+            <p className="p-5 text-slate-500 text-sm">No patients yet — create one above.</p>
           ) : filteredPatients.length === 0 ? (
             // Distinct from the "zero patients in the system" state above —
             // this means the search just didn't match anything, not that
             // the clinic has no patients on file.
-            <p className="p-5 text-slate-400 text-sm">No patients match "{search}".</p>
+            <p className="p-5 text-slate-500 text-sm">No patients match "{search}".</p>
           ) : null}
           {filteredPatients.map((p) => (
             <Link key={p.id} to={`/patients/${p.id}`} className="flex items-center justify-between p-4 hover:bg-slate-50">
               <div>
                 <p className="font-medium text-slate-800">{p.full_name}</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   {p.national_id ? `NRIC ${p.national_id} · ` : ""}DOB {p.date_of_birth} · {p.blood_type || "blood type unknown"}
                 </p>
               </div>
