@@ -29,7 +29,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import auth, models, schemas
+from .. import auth, models, mpi_client, schemas
 from ..audit import log_access
 from ..clinical_access import _facility_known_patient_ids_select, _patient_known_to_facility
 from ..database import get_db
@@ -54,14 +54,33 @@ def _staff_may_reach_patient(db: Session, current_user: models.User, patient_id:
     return _patient_known_to_facility(db, patient_id, current_user.facility)
 
 
+_AGE_OF_MAJORITY = 18
+
+
+def _is_guardian_of_minor(db: Session, current_user: models.User, patient_id: str) -> bool:
+    """The signed-in patient is the recorded guardian of `patient_id`
+    (a PatientDependant link) and that dependant is under 18."""
+    from .emergency import _age_from_dob  # lazy: emergency imports this module's neighbours
+    if not current_user.patient_id:
+        return False
+    linked = db.query(models.PatientDependant.id).filter_by(
+        patient_id=current_user.patient_id, dependant_id=patient_id).first()
+    child = db.query(models.Patient.date_of_birth).filter_by(id=patient_id).first()
+    age = _age_from_dob(child[0]) if child else None
+    return bool(linked) and age is not None and age < _AGE_OF_MAJORITY
+
+
 def _resolve_target_patient(db: Session, current_user: models.User, patient_id: Optional[str],
-                            *, scope_staff: bool = True) -> str:
-    """A patient always acts on their own record; staff must name a patient,
-    and (when `scope_staff`) that patient must be in the staff member's
-    facility scope."""
+                            *, scope_staff: bool = True, allow_guardian: bool = False) -> str:
+    """A patient always acts on their own record (or, with `allow_guardian`, on
+    a minor dependant they are the recorded guardian of); staff must name a
+    patient, and (when `scope_staff`) that patient must be in the staff
+    member's facility scope."""
     if current_user.role == "patient":
         if patient_id and patient_id != current_user.patient_id:
-            raise HTTPException(status_code=403, detail="Patients can only act on their own record")
+            if not (allow_guardian and _is_guardian_of_minor(db, current_user, patient_id)):
+                raise HTTPException(status_code=403, detail="Patients can only act on their own record")
+            return patient_id
         if not current_user.patient_id:
             raise HTTPException(status_code=400, detail="This account is not linked to a patient")
         return current_user.patient_id
@@ -127,7 +146,7 @@ def get_consent(
 ):
     if current_user.role not in ("patient",) + _DSR_STAFF_ROLES + ("clinician",):
         raise HTTPException(status_code=403, detail="Not permitted")
-    pid = _resolve_target_patient(db, current_user, patient_id)
+    pid = _resolve_target_patient(db, current_user, patient_id, allow_guardian=True)
     if current_user.role != "patient":
         log_access(db, pid, current_user.id, current_user.role, "view_consent_ledger",
                    actor_facility=current_user.facility)
@@ -144,15 +163,22 @@ def record_consent(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if current_user.role not in ("patient",) + _DSR_STAFF_ROLES:
+    # Front-line clinicians may record the one consent asked at the desk (sharing
+    # with other facilities); every other purpose stays with admin / records officer.
+    staff_ok = _DSR_STAFF_ROLES + (("clinician",) if payload.purpose == "cross_facility_sharing" else ())
+    if current_user.role not in ("patient",) + staff_ok:
         raise HTTPException(status_code=403, detail="Not permitted")
     if payload.purpose not in models.CONSENT_PURPOSES:
         raise HTTPException(status_code=400,
                             detail=f"purpose must be one of {list(models.CONSENT_PURPOSES)}")
-    pid = _resolve_target_patient(db, current_user, payload.patient_id)
+    pid = _resolve_target_patient(db, current_user, payload.patient_id, allow_guardian=True)
+    if current_user.role == "patient":
+        source = "portal" if pid == current_user.patient_id else "guardian"
+    else:
+        source = "staff"
     row = models.ConsentRecord(
         patient_id=pid, purpose=payload.purpose, granted=payload.granted,
-        source="portal" if current_user.role == "patient" else "staff",
+        source=source,
         note=payload.note, recorded_by=current_user.id, recorded_by_role=current_user.role,
         created_at=datetime.now(timezone.utc),
     )
@@ -161,7 +187,11 @@ def record_consent(
     db.refresh(row)
     log_access(db, pid, current_user.id, current_user.role,
                "consent_granted" if payload.granted else "consent_withdrawn",
-               detail=f"purpose={payload.purpose}", actor_facility=current_user.facility)
+               detail=f"purpose={payload.purpose}" + (" on_behalf_of_minor" if source == "guardian" else ""),
+               actor_facility=current_user.facility)
+    if payload.purpose == "cross_facility_sharing":
+        # Late grant: publish the visits signed here before it. Withdrawal: take our pointers off central.
+        (mpi_client.enqueue_backfill if payload.granted else mpi_client.enqueue_withdraw)(db, pid)
     return row
 
 

@@ -36,8 +36,8 @@ export default function SharingConsent({ patientId }) {
         <span>
           The patient agrees that other CLARION facilities may view their visit history.
           <span className="block text-xs text-slate-500">
-            Ask them first. Only visits signed after this is ticked are shared. Withdrawing stops new access straight away; visits already listed at the central
-            index stay there but can no longer be opened.
+            Ask them first. Ticking it also shares their latest visits from this facility; withdrawing stops
+            access straight away and removes this facility's entries from the central index.
           </span>
         </span>
       </label>

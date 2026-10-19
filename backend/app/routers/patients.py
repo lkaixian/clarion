@@ -11,8 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, auth, seal
+from ..demographics import DEMOGRAPHIC_FIELDS, validate_demographics
 from ..database import get_db
 from ..audit import log_access
+from ..catalogue_link import relink_on_update, resolve_drug_code
 from ..ai.nric_ocr import dob_from_ic_number
 from ..storage import (
     BUCKET_DOCUMENTS,
@@ -199,6 +201,7 @@ def _serialize_patient(
         "email": p.email, "emergency_contact_name": p.emergency_contact_name,
         "emergency_contact_phone": p.emergency_contact_phone,
         "emergency_contact_relationship": p.emergency_contact_relationship,
+        "demographics": {f: getattr(p, f) for f in DEMOGRAPHIC_FIELDS},
         "conditions": [
             _serialize_condition(c, db, current_user, ann_groups.get(c.id), present_here)
             for c in p.conditions if _visible(c)
@@ -396,6 +399,10 @@ def create_patient(
     current_user: models.User = Depends(auth.require_roles("admin", "records_officer", "clinician")),
 ):
     data = payload.model_dump()
+    share = data.pop("share_across_facilities")
+    # Only what the caller actually sent: an omitted postcode must not look like "cleared".
+    data.update(validate_demographics(
+        db, {k: data[k] for k in DEMOGRAPHIC_FIELDS if k in payload.model_fields_set}, current_user.facility))
 
     # An empty-string national_id isn't a real NRIC -- treat it the same as
     # "no NRIC provided" (NULL) rather than a real value. Patient.national_id
@@ -463,6 +470,14 @@ def create_patient(
     db.refresh(patient)
     log_access(db, patient.id, current_user.id, current_user.role, "create_patient",
                actor_facility=current_user.facility)
+    if share:
+        db.add(models.ConsentRecord(
+            patient_id=patient.id, purpose="cross_facility_sharing", granted=True, source="registration",
+            recorded_by=current_user.id, recorded_by_role=current_user.role,
+            created_at=datetime.now(timezone.utc)))
+        db.commit()
+        log_access(db, patient.id, current_user.id, current_user.role, "consent_granted",
+                   detail="purpose=cross_facility_sharing at registration", actor_facility=current_user.facility)
     return patient
 
 
@@ -594,7 +609,7 @@ def _serialize_condition(c: models.Condition, db: Session, current_user, anns=()
 def _serialize_medication(m: models.MedicationStatement, db: Session, current_user, anns=(), present_here=None) -> dict:
     ann_list = list(anns or [])
     return {
-        "id": m.id, "drug_name": m.drug_name, "dosage": m.dosage,
+        "id": m.id, "drug_name": m.drug_name, "drug_code": m.drug_code, "dosage": m.dosage,
         "frequency": m.frequency, "prescribed_by_facility": m.prescribed_by_facility,
         "start_date": m.start_date, "active": m.active,
         "critical_for_emergency": m.critical_for_emergency,
@@ -769,6 +784,7 @@ def add_medication(
     # facility (mirrors add_condition/add_allergy -- an unattributable row is
     # PATCH-immutable to everyone rather than forgeable).
     med_data = payload.model_dump()
+    med_data["drug_code"] = resolve_drug_code(db, med_data["drug_code"], med_data["drug_name"])
     med = models.MedicationStatement(
         patient_id=patient_id,
         recorded_by_facility=current_user.facility or None,
@@ -798,6 +814,7 @@ def update_medication(
     _guard_cross_facility_amend(db, patient_id, med, current_user, "medication")
 
     submitted_fields = payload.model_dump(exclude_unset=True)
+    relink_on_update(db, submitted_fields, med.drug_name, med.drug_code)
     for field, value in submitted_fields.items():
         setattr(med, field, value)
 

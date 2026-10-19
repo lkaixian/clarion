@@ -179,6 +179,58 @@ def _publish_job(payload: dict) -> None:
 
 jobs.register(JOB_KIND, _publish_job)
 
+WITHDRAW_KIND = "mpi_withdraw_patient"
+
+
+def _withdraw_job(payload: dict) -> None:
+    """Retract this hospital's pointers for one patient at central."""
+    if _cfg() is None:
+        return
+    from .routers.federation import _has_sharing_consent  # lazy: routers import this module
+    db = SessionLocal()
+    try:
+        patient = db.query(models.Patient).filter_by(id=payload["patient_id"]).first()
+        if patient is None or not patient.national_id:
+            return
+        if _has_sharing_consent(db, patient.id):
+            return  # consent was granted again since this was queued: keep the pointers
+        resp = _call("DELETE", f"/patients/{patient_key(patient.national_id)}")
+        if 400 <= resp.status_code < 500 and resp.status_code not in (401, 408, 429):
+            logger.error("MPI rejected withdrawal for patient %s with %s", patient.id, resp.status_code)
+            return
+        if resp.status_code != 200:
+            raise MpiError(f"central answered {resp.status_code}")
+    finally:
+        db.close()
+
+
+jobs.register(WITHDRAW_KIND, _withdraw_job)
+
+
+def enqueue_withdraw(db, patient_id: str) -> None:
+    """Consent withdrawn: take this hospital's pointers for the patient off central."""
+    if not enabled():
+        return
+    try:
+        jobs.enqueue(db, WITHDRAW_KIND, {"patient_id": patient_id})
+    except Exception:  # noqa: BLE001
+        logger.exception("could not enqueue MPI withdrawal for patient %s", patient_id)
+
+
+def enqueue_backfill(db, patient_id: str) -> None:
+    """Consent granted late: publish the (newest few) visits signed here before it was."""
+    if not enabled():
+        return
+    recent = (
+        db.query(models.Encounter.id)
+        .filter(models.Encounter.patient_id == patient_id,
+                models.Encounter.facility_name == facility_name(),
+                models.Encounter.signed_by.isnot(None))
+        .order_by(models.Encounter.started_at.desc()).limit(3).all()
+    )
+    for (encounter_id,) in recent:
+        enqueue_publish(db, encounter_id)
+
 
 def enqueue_publish(db, encounter_id: str) -> None:
     """Best-effort: a sign-off must never fail because central is down."""

@@ -279,6 +279,18 @@ def publish_pointer(payload: PointerIn, db: Session = Depends(get_db),
     return {"kept": min(len(rows), POINTERS_PER_PATIENT)}
 
 
+@app.delete("/patients/{patient_key}")
+def withdraw_patient(patient_key: str, db: Session = Depends(get_db),
+                     caller: Facility = Depends(authenticated_facility)):
+    """A hospital retracts ITS OWN pointers for one patient (consent withdrawn).
+    The caller's facility id is the only thing that can ever be deleted."""
+    if not _HEX64.match(patient_key):
+        raise HTTPException(status_code=422, detail="Bad patient key")
+    removed = db.query(Pointer).filter_by(patient_key=patient_key, facility_id=caller.id).delete()
+    db.commit()
+    return {"removed": removed}
+
+
 @app.get("/patients/{patient_key}", response_model=List[PointerOut])
 def lookup_patient(patient_key: str, db: Session = Depends(get_db),
                    caller: Facility = Depends(authenticated_facility)):

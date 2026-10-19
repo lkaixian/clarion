@@ -398,3 +398,39 @@ def test_tag_max_bytes_out_of_range_is_rejected(test_client, db_session, make_us
         json={"patient_id": patient.id, "nfc_uid": _uid(), "tag_max_bytes": 4},
     )
     assert resp.status_code == 422
+
+
+def test_card_list_flags_a_tag_that_no_longer_matches_the_patient(test_client, db_session, make_user, auth_headers):
+    staff = make_user(role="clinician", facility="H14")
+    patient = _patient(db_session, full_name="M7 Stale", blood_type="O+")
+    _present(db_session, patient, "H14")
+    uid = _uid()
+    assert _register(test_client, auth_headers, staff, patient.id, uid).status_code == 200
+
+    def stale():
+        cards = test_client.get(f"/emergency/nfc/{patient.id}", headers=auth_headers(staff)).json()
+        return cards[0]["tag_stale"]
+
+    assert stale() is False  # just written
+    db_session.add(models.AllergyIntolerance(
+        patient_id=patient.id, substance="Penicillin", severity="severe", critical_for_emergency=True))
+    db_session.commit()
+    assert stale() is True  # a new life-threatening allergy the card does not show
+    assert _register(test_client, auth_headers, staff, patient.id, uid).status_code == 200  # rewritten
+    assert stale() is False
+
+
+def test_card_written_empty_goes_stale_when_critical_data_appears(test_client, db_session, make_user, auth_headers):
+    staff = make_user(role="clinician", facility="H15")
+    patient = _patient(db_session, full_name="M7 EmptyCard")
+    _present(db_session, patient, "H15")
+    assert _register(test_client, auth_headers, staff, patient.id, _uid()).status_code == 200
+
+    def stale():
+        return test_client.get(f"/emergency/nfc/{patient.id}", headers=auth_headers(staff)).json()[0]["tag_stale"]
+
+    assert stale() is False
+    db_session.add(models.AllergyIntolerance(
+        patient_id=patient.id, substance="Latex", severity="severe", critical_for_emergency=True))
+    db_session.commit()
+    assert stale() is True

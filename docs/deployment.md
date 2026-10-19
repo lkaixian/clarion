@@ -369,10 +369,17 @@ a DPO register, and a flag-only retention schedule.
   row. Each hospital checks its own copy of the ledger, so record the consent
   at every hospital that holds the patient. **Consent is also checked when a
   visit is signed off:** with no grant on file the pointer is not published to
-  central at all, so central never learns the visit exists. A visit signed
-  before consent was given stays unpublished (it is not back-filled); tick the
-  box on the patient's Demographics tab (admin / records officer) and the next
-  sign-off publishes.
+  central at all, so central never learns the visit exists. Consent is
+  asked on the New Patient form (`share_across_facilities`, recorded with source
+  `registration`) and can be ticked later on the patient's Demographics tab (admin,
+  records officer or clinician; no other purpose is open to clinicians). Granting
+  it queues the newest three visits signed here; withdrawing queues
+  `DELETE /patients/{key}` at central, which removes only the caller's own pointers.
+  **Guardians:** a signed-in patient who is the recorded guardian (a
+  `PatientDependant` link) of someone under 18 may view and record consent for
+  that child via `/pdpa/consent` (ledger source `guardian`, audited as
+  `on_behalf_of_minor`). Data-subject requests for the child are not opened
+  up this way.
 - **Data-subject requests** — `POST /pdpa/requests` (patient or staff),
   `kind ∈ {access, correction, portability, withdraw_consent, objection}` —
   **`erasure` is rejected.** 21-day SLA (`due_at`), `+14` via

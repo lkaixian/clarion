@@ -324,6 +324,35 @@ def test_anonymize_replaces_pii_fields_only(test_client, make_user, auth_headers
     assert row[1] == "outpatient"  # non-PII field untouched
 
 
+def test_anonymized_pseudonym_is_keyed_not_a_plain_hash(test_client, make_user, auth_headers, db_session):
+    import hashlib
+    facility = _facility()
+    patient = _make_patient(db_session, full_name="Ah Kow")
+    _encounter(db_session, patient.id, facility, encounter_type="outpatient")
+    clinician = make_user(role="clinician", facility=facility)
+    resp = test_client.post(
+        "/reports/run", json={"dataset": "encounters", "fields": ["patient_name"], "anonymize": True},
+        headers=auth_headers(clinician))
+    assert resp.json()["rows"][0][0] != "Case-" + hashlib.sha256(b"Ah Kow").hexdigest()[:8]
+
+
+def test_anonymized_groups_below_the_minimum_cell_are_dropped(test_client, make_user, auth_headers, db_session):
+    facility = _facility()
+    patient = _make_patient(db_session, full_name="Cell Pat")
+    for _ in range(5):
+        _encounter(db_session, patient.id, facility, encounter_type="outpatient")
+    _encounter(db_session, patient.id, facility, encounter_type="emergency")  # a group of one
+    clinician = make_user(role="clinician", facility=facility)
+    body = {"dataset": "encounters", "fields": ["encounter_type"], "group_by": ["encounter_type"]}
+
+    plain = test_client.post("/reports/run", json=body, headers=auth_headers(clinician)).json()
+    assert {r[0] for r in plain["rows"]} == {"outpatient", "emergency"}
+
+    anon = test_client.post("/reports/run", json={**body, "anonymize": True}, headers=auth_headers(clinician)).json()
+    assert [r[0] for r in anon["rows"]] == ["outpatient"]
+    assert anon["suppressed_groups"] == 1 and anon["row_count"] == 1
+
+
 def test_dataset_specs_expose_pii_flag(test_client, make_user, auth_headers):
     facility = _facility()
     clinician = make_user(role="clinician", facility=facility)
@@ -481,3 +510,27 @@ def test_narrative_requires_reporting_role(test_client, make_user, auth_headers)
         headers=auth_headers(receptionist),
     )
     assert resp.status_code == 403
+
+
+def test_excel_export_survives_forbidden_sheet_title_chars():
+    """Dataset labels such as "A / B" used to 500 openpyxl's sheet-title setter."""
+    import io
+    import openpyxl
+    from app import report_export
+
+    result = {"columns": [{"key": "n", "label": "N"}], "rows": [[1]]}
+    for title in ("Visits / Encounters", "a\b?c*d[e]f:g", "'quoted'", "x" * 80, "///"):
+        wb = openpyxl.load_workbook(io.BytesIO(report_export.render_excel(title, result)))
+        name = wb.active.title
+        assert 0 < len(name) <= 31 and not any(ch in name for ch in "\/?*[]:")
+
+
+def test_report_timestamps_are_ddmmyyyy_hhmm_malaysia_time():
+    from datetime import datetime, timezone
+    from app.report_export import _fmt_dt
+
+    # 15:24 UTC is 23:24 in Kuala Lumpur (UTC+8, no DST); 24-hour clock, zero padded
+    assert _fmt_dt(datetime(2026, 10, 10, 15, 24, 40, tzinfo=timezone.utc)) == "10-10-2026 23:24"
+    assert _fmt_dt("2026-10-10T15:24:40.123456+00:00") == "10-10-2026 23:24"
+    assert _fmt_dt(datetime(2026, 1, 5, 0, 7)) == "05-01-2026 08:07"  # naive = UTC
+    assert _fmt_dt(None) == "-"
