@@ -1,3 +1,4 @@
+import { parseEmergencyQr } from "../lib/emergencyQr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import {
@@ -29,7 +30,6 @@ const DEPARTMENT_OPTIONS = ["General", "Emergency", "Pharmacy", "Lab"];
 // The two QR payload schemes this app emits (see emergency.py /
 // reception.py). A reception check-in only makes sense for an emergency
 // card; a station QR is the patient-side self-check-in code.
-const EMERGENCY_QR_PREFIX = "CLARION-EMERGENCY:";
 const STATION_QR_PREFIX = "CLARION-STATION:";
 
 // No "serving" status -- only waiting|called|done|cancelled are ever set
@@ -219,7 +219,12 @@ function CheckinForm({ onCheckedIn, departmentOptions, lockedSection }) {
       setError("That's a self-check-in station QR, not a patient card.");
       return;
     }
-    setValue(raw.startsWith(EMERGENCY_QR_PREFIX) ? raw.slice(EMERGENCY_QR_PREFIX.length) : raw);
+    const ref = parseEmergencyQr(raw);
+    if (ref === null) {
+      setError("That's not a CLARION emergency card QR.");
+      return;
+    }
+    setValue(ref);
     setError("");
   }, []);
 

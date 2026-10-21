@@ -696,5 +696,18 @@
  "wants to manage your account": "உங்கள் கணக்கை நிர்வகிக்க விரும்புகிறார்",
  "Could not approve.": "அங்கீகரிக்க முடியவில்லை.",
  "You are no longer acting for that profile.": "அந்தச் சுயவிவரத்தின் சார்பாக நீங்கள் இனி செயல்படவில்லை.",
- "Switch back to your own profile to change an email address.": "மின்னஞ்சல் முகவரியை மாற்ற முதலில் உங்கள் சொந்த சுயவிவரத்திற்குத் திரும்பவும்."
+ "Switch back to your own profile to change an email address.": "மின்னஞ்சல் முகவரியை மாற்ற முதலில் உங்கள் சொந்த சுயவிவரத்திற்குத் திரும்பவும்.",
+ "Call 999": "999 ஐ அழை",
+ "Call 112": "112 ஐ அழை",
+ "Medical emergency card": "மருத்துவ அவசர அட்டை",
+ "This card is not valid or has expired. If this is an emergency, call 999.": "இந்த அட்டை செல்லாது அல்லது காலாவதியாகிவிட்டது. அவசரம் என்றால் 999 ஐ அழைக்கவும்.",
+ "Could not load. Call 999 now.": "ஏற்ற முடியவில்லை. உடனே 999 ஐ அழைக்கவும்.",
+ "Retry": "மீண்டும் முயல்",
+ "Medical conditions": "மருத்துவ நிலைகள்",
+ "Emergency contact": "அவசரத் தொடர்பு",
+ "Call": "அழை",
+ "Viewing: basic information": "பார்ப்பது: அடிப்படைத் தகவல்",
+ "Responder? Sign in to see more": "முதலுதவியாளரா? மேலும் காண உள்நுழையவும்",
+ "Get the CLARION app": "CLARION செயலியைப் பெறுங்கள்",
+ "None recorded as critical": "முக்கியமானதாகப் பதிவு எதுவும் இல்லை"
 }

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession, errorMessage } from "../api/client";
 import { landingPathFor } from "../lib/access";
+import { afterLoginPath } from "../lib/emergencyQr";
 import { useLang } from "../lib/i18n";
 import LanguageSelect from "../components/LanguageSelect";
 
@@ -55,7 +56,7 @@ export default function Login() {
 
   function finish(data) {
     // A temporary password must be replaced first; the API refuses everything else until then.
-    navigate(data.user.must_change_password ? "/change-password" : landingPathFor(data.user));
+    navigate(afterLoginPath(data.user, window.location.search, landingPathFor));
   }
 
   function backToStart(message = "") {

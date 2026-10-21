@@ -23,6 +23,7 @@ import Cashier from "./pages/Cashier";
 import Orders from "./pages/Orders";
 import Purchasing from "./pages/Purchasing";
 import FormsAdmin from "./pages/FormsAdmin";
+import EmergencyPublic from "./pages/EmergencyPublic";
 import Family from "./pages/Family";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
@@ -86,6 +87,8 @@ export default function App() {
         {/* Public big-screen waiting-room board — no auth, deliberately
             OUTSIDE <Protected>: a lobby TV has no logged-in user. The page
             itself calls the unauthenticated /display/{token} endpoint. */}
+        {/* Public emergency card page: no login, no Layout. */}
+        <Route path="/e/:ref" element={<EmergencyPublic />} />
         <Route path="/display/:token" element={<WaitingRoomDisplay />} />
         <Route path="/patients" element={<Protected><RequirePage page="patients"><PatientList /></RequirePage></Protected>} />
         {/* Not wrapped in RequirePage: a patient must be able to open their

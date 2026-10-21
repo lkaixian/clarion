@@ -56,4 +56,26 @@ describe("profile session", () => {
       expect(sessionStorage.getItem("mb_notice")).toMatch(/no longer act/);
     } finally { window.location = loc; sessionStorage.clear(); }
   });
+
+  it("a 401 outside /e/ still refreshes and retries", async () => {
+    axios.post.mockClear();
+    axios.post.mockResolvedValue({ data: { access_token: "t5", user: { patient_id: "p1" } } });
+    inst.request.mockResolvedValue({ data: "retried" });
+    const r = await handler({ response: { status: 401 }, config: { url: "/patients", headers: {} } });
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(r.data).toBe("retried");
+  });
+
+  it("a 401 on the public /e/ page is passed through: no refresh, no redirect", async () => {
+    axios.post.mockClear();
+    const loc = window.location;
+    delete window.location;
+    window.location = { pathname: "/e/REF1", href: "" };
+    try {
+      const err = { response: { status: 401 }, config: { url: "/emergency/scan", headers: {} } };
+      await expect(handler(err)).rejects.toBe(err);
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(window.location.href).toBe("");
+    } finally { window.location = loc; }
+  });
 });

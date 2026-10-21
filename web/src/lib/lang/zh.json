@@ -696,5 +696,18 @@
  "wants to manage your account": "想要管理您的账户",
  "Could not approve.": "无法批准。",
  "You are no longer acting for that profile.": "您已不再代表该资料。",
- "Switch back to your own profile to change an email address.": "请先切换回您本人的资料再更改电子邮件。"
+ "Switch back to your own profile to change an email address.": "请先切换回您本人的资料再更改电子邮件。",
+ "Call 999": "拨打 999",
+ "Call 112": "拨打 112",
+ "Medical emergency card": "医疗急救卡",
+ "This card is not valid or has expired. If this is an emergency, call 999.": "此卡无效或已过期。如属紧急情况，请拨打 999。",
+ "Could not load. Call 999 now.": "无法加载。请立即拨打 999。",
+ "Retry": "重试",
+ "Medical conditions": "病症",
+ "Emergency contact": "紧急联系人",
+ "Call": "拨打",
+ "Viewing: basic information": "当前查看：基本信息",
+ "Responder? Sign in to see more": "急救人员？登录查看更多",
+ "Get the CLARION app": "获取 CLARION 应用",
+ "None recorded as critical": "没有记录的重要事项"
 }

@@ -98,7 +98,7 @@ function actAsBody() {
   return u?.acting_for ? { act_as: u.patient_id } : {};
 }
 
-function refreshAccessToken() {
+export function refreshAccessToken() {
   if (!refreshInFlight) {
     refreshInFlight = axios
       // While acting for a family profile the refreshed token must keep acting for it.
@@ -145,6 +145,8 @@ const landingFor = (u) => (u?.patient_id ? `/patients/${u.patient_id}` : "/");
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // The public emergency page (/e/...) must never be redirected or refreshed away.
+    if (window.location.pathname.startsWith("/e/")) return Promise.reject(error);
     const requestUrl = error.config?.url || "";
     const isUnauthenticatedAuthCall = UNAUTHENTICATED_AUTH_PATHS.some((path) => requestUrl.includes(path));
 
@@ -293,6 +295,9 @@ export function logout() {
   // network call succeeding.
   axios.post(`${API_BASE}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
 }
+
+// ---- public emergency page (the ref is a QR card reference or an NFC tag public_ref) (no login; a stored token, if any, buys a higher tier) ----
+export const scanEmergencyCard = (ref) => client.post("/emergency/scan", { card_reference: ref }).then((r) => r.data);
 
 // ---- family profiles ---------------------------------------------------------
 export const getProfiles = () => client.get("/profiles").then((r) => r.data);

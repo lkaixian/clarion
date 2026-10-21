@@ -696,5 +696,18 @@
  "wants to manage your account": "mahu menguruskan akaun anda",
  "Could not approve.": "Tidak dapat meluluskan.",
  "You are no longer acting for that profile.": "Anda tidak lagi bertindak untuk profil itu.",
- "Switch back to your own profile to change an email address.": "Kembali ke profil anda sendiri untuk menukar alamat e-mel."
+ "Switch back to your own profile to change an email address.": "Kembali ke profil anda sendiri untuk menukar alamat e-mel.",
+ "Call 999": "Hubungi 999",
+ "Call 112": "Hubungi 112",
+ "Medical emergency card": "Kad kecemasan perubatan",
+ "This card is not valid or has expired. If this is an emergency, call 999.": "Kad ini tidak sah atau telah tamat tempoh. Jika ini kecemasan, hubungi 999.",
+ "Could not load. Call 999 now.": "Tidak dapat dimuatkan. Hubungi 999 sekarang.",
+ "Retry": "Cuba lagi",
+ "Medical conditions": "Keadaan perubatan",
+ "Emergency contact": "Hubungan kecemasan",
+ "Call": "Hubungi",
+ "Viewing: basic information": "Paparan: maklumat asas",
+ "Responder? Sign in to see more": "Responden? Log masuk untuk lihat lagi",
+ "Get the CLARION app": "Dapatkan aplikasi CLARION",
+ "None recorded as critical": "Tiada direkodkan sebagai kritikal"
 }
