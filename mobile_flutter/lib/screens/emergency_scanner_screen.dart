@@ -5,7 +5,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:nfc_manager/nfc_manager.dart' show NfcAvailability;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../models/emergency_scan_result.dart';
@@ -15,17 +14,20 @@ import '../services/api_exception.dart';
 import '../services/device_lock.dart';
 import '../services/nfc_service.dart';
 import '../services/offline_read_log.dart';
+import '../services/scan_location.dart';
 import '../services/tag_crypto.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common.dart' show EmptyText;
 import '../widgets/loading_view.dart';
 import '../widgets/record_widgets.dart';
+import '../widgets/scan_result_view.dart';
 import '../widgets/scan_widgets.dart';
 import 'scan_hub_screen.dart' show QrKind, parseClarionQr;
 
 const _kNameKey = 'mb_responder_name';
 const _kOrgKey = 'mb_responder_org';
 const _kAskedKey = 'mb_responder_asked';
+const _kLocAskedKey = 'mb_scan_loc_asked';
+const _kLocShareKey = 'mb_scan_loc_share';
 
 enum _Mode { qr, nfc }
 
@@ -45,7 +47,11 @@ class EmergencyScannerScreen extends StatefulWidget {
     this.initialTag,
     this.initialCardReference,
     this.deliberateTap = false,
+    this.locationSource = const GeolocatorScanLocationSource(),
   });
+
+  /// Where the scanner's position comes from (a fake in tests).
+  final ScanLocationSource locationSource;
 
   /// A card tapped while locked / app closed (see services/launch_tag.dart):
   /// skips the tap step and goes straight to the lookup.
@@ -91,12 +97,37 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
   // True when _result came from a tag's own on-card text (no network).
   bool _resultIsOffline = false;
 
+  // ---- location sharing (never blocks a scan; see _lookup) ----
+  /// A fix younger than this may go out with the scan.
+  static const _fixMaxAge = Duration(minutes: 2);
+
+  /// A scan waits at most this long for a warm-up already in flight.
+  static const _warmGrace = Duration(milliseconds: 500);
+
+  /// How long after the result is shown we keep trying for a position.
+  static const _followUpWindow = Duration(seconds: 20);
+  static const _followUpPause = Duration(seconds: 2);
+
+  ScanLocationSource get _source => widget.locationSource;
+  LocPermission _perm = LocPermission.denied;
+  bool _share = true;
+  ScanFix? _fix;
+  ScanLocStatus? _locStatus;
+  double? _sharedAccuracyM; // accuracy of the position that was sent
+  Future<void> _locReady = Future<void>.value();
+  Future<void>? _warming;
+  int _scanSeq = 0; // which scan the status line belongs to
+  bool _disposed = false;
+  Timer? _pauseTimer;
+  Completer<void>? _pauseDone;
+
   @override
   void initState() {
     super.initState();
+    _locReady = _initLocation();
     // Online now? Top up the cached tag keys and flush queued offline reads.
     context.read<AuthProvider>().syncOfflineTagData();
-    unawaited(_loadIdentity());
+    unawaited(_loadIdentity().then((_) => _maybeAskLocation()));
     final tag = widget.initialTag;
     final ref = widget.initialCardReference;
     if (tag != null) {
@@ -114,6 +145,9 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
 
   @override
   void dispose() {
+    _disposed = true;
+    _pauseTimer?.cancel();
+    if (_pauseDone?.isCompleted == false) _pauseDone!.complete();
     _rearm?.cancel();
     _gen++;
     _manual.dispose();
@@ -184,6 +218,193 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     org.dispose();
   }
 
+  // ---- location -----------------------------------------------------------
+
+  bool get _canLocate => _share && _perm == LocPermission.granted;
+
+  /// Reads the saved choice and the permission, then warms a fix if allowed.
+  /// Never prompts and never throws.
+  Future<void> _initLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _share = prefs.getBool(_kLocShareKey) ?? false; // off until the explanation is accepted
+      _perm = await _source.checkPermission();
+    } catch (_) {}
+    await _warm();
+  }
+
+  /// First time only, on the scan screen itself: say why, then ask.
+  Future<void> _maybeAskLocation() async {
+    if (!mounted || _phase != _Phase.scanning) return;
+    await _locReady;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || _phase != _Phase.scanning) return;
+    if (prefs.getBool(_kLocAskedKey) ?? false) return;
+    await _explainAndAccept();
+  }
+
+  /// The disclosure sheet. Sharing stays off until it is accepted once.
+  Future<void> _explainAndAccept() async {
+    final l10n = AppLocalizations.of(context);
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final allow = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.scanLocPromptTitle,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ctx.palette.textPrimary)),
+              const SizedBox(height: 8),
+              Text(l10n.scanLocPromptBody, style: TextStyle(fontSize: 15, color: ctx.palette.textBody, height: 1.4)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                key: const Key('scan-loc-allow'),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(l10n.scanLocAllow),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                key: const Key('scan-loc-notnow'),
+                style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(l10n.scanLocNotNow),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await prefs.setBool(_kLocAskedKey, true);
+    if (allow == true) {
+      if (mounted) setState(() => _share = true);
+      await prefs.setBool(_kLocShareKey, true);
+      await _requestAndWarm();
+    }
+  }
+
+  Future<void> _requestAndWarm() async {
+    _perm = await _source.requestPermission();
+    if (mounted) setState(() {});
+    await _warm();
+  }
+
+  Future<void> _toggleShare(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (on && !(prefs.getBool(_kLocAskedKey) ?? false)) {
+      // Never accepted the explanation: show it instead of switching on.
+      await _explainAndAccept();
+      return;
+    }
+    setState(() => _share = on);
+    await prefs.setBool(_kLocShareKey, on);
+    if (on && _perm != LocPermission.granted) {
+      await _requestAndWarm();
+    } else if (on) {
+      unawaited(_warm());
+    }
+  }
+
+  /// Fetches the cached then a fresh position in the background. Joins a
+  /// warm-up already running.
+  Future<void> _warm() => _warming ??= () async {
+        try {
+          if (!_canLocate) return;
+          _accept(await _source.lastKnown());
+          if (_disposed || !_canLocate) return;
+          _accept(await _source.current());
+        } catch (_) {
+          // The source must not throw; a scan never depends on this.
+        } finally {
+          _warming = null;
+        }
+      }();
+
+  void _accept(ScanFix? f) {
+    if (f == null || !f.isValid) return;
+    final cur = _fix;
+    if (cur == null || !f.at.isBefore(cur.at)) _fix = f;
+  }
+
+  ScanFix? get _freshFix {
+    final f = _fix;
+    return (f != null && _canLocate && f.isYoungerThan(_fixMaxAge)) ? f : null;
+  }
+
+  Future<void> _pause(Duration d) {
+    final done = _pauseDone = Completer<void>();
+    _pauseTimer = Timer(d, () {
+      if (!done.isCompleted) done.complete();
+    });
+    return done.future;
+  }
+
+  /// No fix at scan time: keep trying for a while after the result is up and
+  /// send it ONCE with the scan's token (the server texts the contact).
+  Future<void> _followUp(ApiClient api, String? token, int seq) async {
+    void status(ScanLocStatus s) {
+      if (mounted && seq == _scanSeq) setState(() => _locStatus = s);
+    }
+
+    if (token == null) return status(ScanLocStatus.unavailable);
+    final deadline = DateTime.now().add(_followUpWindow);
+    var attempts = 0;
+    while (!_disposed && _canLocate && attempts++ < 10) {
+      var fix = _freshFix;
+      if (fix == null) {
+        await _warm();
+        fix = _freshFix;
+      }
+      if (fix != null) {
+        try {
+          // The token is one-use: ONE attempt per scan. Any failure (400:
+          // used / expired / card revoked) just ends sharing, quietly. The
+          // bearer of a signed-in session is attached by ApiClient as usual.
+          await api.shareScanLocation(token, fix.toJson());
+          if (mounted && seq == _scanSeq) _sharedAccuracyM = fix.accuracyM;
+          return status(ScanLocStatus.shared);
+        } catch (_) {
+          return status(ScanLocStatus.unavailable);
+        }
+      }
+      if (DateTime.now().isAfter(deadline)) break;
+      await _pause(_followUpPause);
+    }
+    if (!_disposed && !_share) return status(ScanLocStatus.off);
+    status(ScanLocStatus.unavailable);
+  }
+
+  /// A short, bounded wait for a warm-up that is already running, so a scan
+  /// started the instant the screen opens can still carry the cached fix.
+  Future<void> _briefWarmWait() async {
+    final w = _warming ?? _locReady; // _locReady also covers the prefs/permission read
+    if (_freshFix != null) return;
+    final c = Completer<void>();
+    final t = Timer(_warmGrace, () {
+      if (!c.isCompleted) c.complete();
+    });
+    unawaited(w.whenComplete(() {
+      if (!c.isCompleted) c.complete();
+    }));
+    await c.future;
+    t.cancel();
+  }
+
+  ScanLocStatus _initialLocStatus(bool sent) {
+    if (sent) return ScanLocStatus.shared;
+    if (!_share) return ScanLocStatus.off;
+    return switch (_perm) {
+      LocPermission.granted => ScanLocStatus.sharing,
+      LocPermission.serviceOff => ScanLocStatus.unavailable,
+      _ => ScanLocStatus.denied,
+    };
+  }
+
   // ---- scanning ----------------------------------------------------------
 
   /// Re-arms whichever input the current mode uses.
@@ -225,7 +446,10 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       _tagKind = null;
       _legacyTag = false;
       _resultIsOffline = false;
+      _locStatus = null;
     });
+    _scanSeq++;
+    unawaited(_warm());
     _arm();
   }
 
@@ -380,23 +604,49 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
       _result = null;
       _resultIsOffline = false;
     });
+    final seq = ++_scanSeq;
+    _locStatus = null;
     try {
       final api = context.read<ApiClient>();
-      final raw = cardReference != null
-          ? await api.scanEmergencyCard(cardReference: cardReference, responderName: _name, responderOrg: _org)
-          : await api.scanNfcCard(
+      // Only a cached/warm fix goes out with the scan; at most a short wait for
+      // a warm-up already running. A scan never waits on GPS beyond that.
+      await _briefWarmWait();
+      if (!mounted || gen != _gen) return;
+      final fix = _freshFix;
+      Future<Map<String, dynamic>> post(Map<String, dynamic>? location) => cardReference != null
+          ? api.scanEmergencyCard(
+              cardReference: cardReference, responderName: _name, responderOrg: _org, location: location)
+          : api.scanNfcCard(
               nfcUid: nfcUid!,
               responderName: _name,
               responderOrg: _org,
               // The tag carries its own record: don't make a responder wait
               // out the client's 12 s default when the network is down.
               timeout: offlineNdefText != null ? _offlineFallbackTimeout : null,
+              location: location,
             );
+      var sent = fix != null;
+      _sharedAccuracyM = fix?.accuracyM;
+      Map<String, dynamic> raw;
+      try {
+        raw = await post(fix?.toJson());
+      } on ApiException catch (e) {
+        // A position the server refuses must never cost the scan.
+        if (fix == null || e.statusCode != 422) rethrow;
+        sent = false;
+        _sharedAccuracyM = null;
+        raw = await post(null);
+      }
       if (!mounted || gen != _gen) return;
+      final result = EmergencyScanResult.fromJson(raw);
       setState(() {
-        _result = EmergencyScanResult.fromJson(raw);
+        _result = result;
         _phase = _Phase.result;
+        _locStatus = _initialLocStatus(sent);
       });
+      if (!sent && _locStatus == ScanLocStatus.sharing) {
+        unawaited(_followUp(api, result.locationToken, seq));
+      }
     } on ApiException catch (e) {
       if (!mounted || gen != _gen) return;
       // Only a genuine no-response outage may fall back to the on-tag record;
@@ -498,7 +748,21 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
                 ),
               ),
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilterChip(
+              key: const Key('share-location-chip'),
+              avatar: Icon(_share ? Icons.my_location : Icons.location_off_outlined, size: 18),
+              tooltip: l10n.scanShareLocationTip,
+              label: Text(l10n.scanShareLocationChip),
+              selected: _share,
+              showCheckmark: true,
+              materialTapTargetSize: MaterialTapTargetSize.padded,
+              onSelected: _toggleShare,
+            ),
+          ),
+          const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -616,347 +880,15 @@ class _EmergencyScannerScreenState extends State<EmergencyScannerScreen> {
     );
   }
 
-  /// Result: what a responder acts on first (blood type, allergies,
-  /// conditions, medications) in large type, then emergency contacts.
   Widget _buildResult(AppLocalizations l10n, EmergencyScanResult result) {
-    final omitted = result.omittedNonCritical;
-    final p = context.palette;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (_resultIsOffline)
-          _Banner(
-            icon: Icons.wifi_off,
-            text: l10n.scanResultOfflineBanner,
-            color: p.emergency,
-            background: p.emergencyBg,
-            bold: true,
-          ),
-        if (_legacyTag) const LegacyTagBanner(),
-        if (_tagKind != null && !_tagKind!.hasReadCounter)
-          _Banner(
-            icon: Icons.warning_amber_rounded,
-            text: l10n.nfcBasicTagWarning,
-            color: p.attention,
-            background: p.attentionBg,
-          ),
-        _ScanResultHeader(result: result, l10n: l10n),
-        const SizedBox(height: 16),
-        _CategorySection(
-          title: l10n.allergiesTitle,
-          icon: Icons.warning_amber_rounded,
-          iconColor: p.emergency,
-          backgroundColor: p.emergencyBg,
-          borderColor: p.emergency,
-          omittedNotice: (omitted['allergies'] ?? 0) > 0 ? l10n.scanResultOmittedAllergies(omitted['allergies']!) : null,
-          child: result.allergies.isEmpty
-              ? EmptyText(l10n.noAllergies)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: result.allergies.map((a) {
-                    final reaction = a.reaction;
-                    final title = (reaction != null && reaction.trim().isNotEmpty)
-                        ? '${a.substance} (${a.severity}) · $reaction'
-                        : '${a.substance} (${a.severity})';
-                    return _ScanBulletLine(title);
-                  }).toList(),
-                ),
-        ),
-        _CategorySection(
-          title: l10n.activeConditionsTitle,
-          icon: Icons.medical_information_outlined,
-          iconColor: p.primary,
-          backgroundColor: p.surface,
-          borderColor: p.border,
-          omittedNotice: (omitted['conditions'] ?? 0) > 0 ? l10n.scanResultOmittedConditions(omitted['conditions']!) : null,
-          child: result.conditions.isEmpty
-              ? EmptyText(l10n.noConditions)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: result.conditions.map((c) => _ScanBulletLine(c)).toList(),
-                ),
-        ),
-        _CategorySection(
-          title: l10n.currentMedicationsTitle,
-          icon: Icons.medication_outlined,
-          iconColor: p.primary,
-          backgroundColor: p.chipBg,
-          borderColor: p.primaryLight,
-          omittedNotice:
-              (omitted['medications'] ?? 0) > 0 ? l10n.scanResultOmittedMedications(omitted['medications']!) : null,
-          child: result.medications.isEmpty
-              ? EmptyText(l10n.noActiveMedications)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: result.medications.map((m) {
-                    final doseFreq = joinNonEmpty([m.dosage, m.frequency], ', ');
-                    return _ScanBulletLine(doseFreq.isEmpty ? m.drugName : '${m.drugName} · $doseFreq');
-                  }).toList(),
-                ),
-        ),
-        if (result.contactPhone != null)
-          _CategorySection(
-            title: l10n.emergencyContactSectionTitle,
-            icon: Icons.contact_phone_outlined,
-            iconColor: p.primary,
-            backgroundColor: p.surface,
-            borderColor: p.border,
-            child: _ContactRow(result: result),
-          ),
-        const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: _scanAnother,
-          icon: const Icon(Icons.qr_code_scanner),
-          label: Text(l10n.scanAnotherCard),
-        ),
-      ],
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({
-    required this.icon,
-    required this.text,
-    required this.color,
-    required this.background,
-    this.bold = false,
-  });
-  final IconData icon;
-  final String text;
-  final Color color;
-  final Color background;
-  final bool bold;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                color: context.palette.textBody,
-                fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({required this.result});
-  final EmergencyScanResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final phone = result.contactPhone!;
-    final label = joinNonEmpty([result.contactName, result.contactRelationship], ' · ');
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (label.isNotEmpty) Text(label, style: TextStyle(fontSize: 17, color: context.palette.textPrimary)),
-              Text(
-                phone,
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: context.palette.textPrimary),
-              ),
-            ],
-          ),
-        ),
-        IconButton.filled(
-          tooltip: l10n.callContactLabel(result.contactName ?? phone),
-          icon: const Icon(Icons.call),
-          onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-        ),
-      ],
-    );
-  }
-}
-
-/// Name / date-of-birth / blood-type header for a scan result -- blood
-/// type is deliberately the most visually prominent element here (large,
-/// boxed, high-contrast against the primary-coloured header) since that's
-/// exactly the kind of at-a-glance fact a first responder scans a card
-/// for, before reading anything else.
-class _ScanResultHeader extends StatelessWidget {
-  const _ScanResultHeader({required this.result, required this.l10n});
-
-  final EmergencyScanResult result;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.primary,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  result.fullName,
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.scanResultAgeValue(
-                    result.age?.toString() ?? l10n.scanResultBloodTypeUnknown,
-                  ),
-                  style: const TextStyle(fontSize: 15, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          _BloodTypeBadge(bloodType: result.bloodType, l10n: l10n),
-        ],
-      ),
-    );
-  }
-}
-
-class _BloodTypeBadge extends StatelessWidget {
-  const _BloodTypeBadge({required this.bloodType, required this.l10n});
-
-  final String? bloodType;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasType = bloodType != null && bloodType!.trim().isNotEmpty;
-    // Deliberately NOT theme-aware: a fixed white chip on the primary-coloured
-    // header for maximum at-a-glance prominence in both themes, so its text
-    // stays on the light [AppColors] palette (dark-on-white) regardless.
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            l10n.scopeBloodType.toUpperCase(),
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted, letterSpacing: 0.5),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            hasType ? bloodType! : l10n.scanResultBloodTypeUnknown,
-            style: TextStyle(
-              fontSize: hasType ? 36 : 14,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One category card (Allergies / Medications / Conditions) in the scan
-/// result -- structurally the same idea as widgets/section_card.dart's
-/// `SectionCard`, but with per-category icon/colour and an optional
-/// omitted-items notice, neither of which SectionCard supports, so this is
-/// a sibling widget rather than a forced reuse of that one.
-class _CategorySection extends StatelessWidget {
-  const _CategorySection({
-    required this.title,
-    required this.icon,
-    required this.iconColor,
-    required this.backgroundColor,
-    required this.borderColor,
-    required this.child,
-    this.omittedNotice,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color iconColor;
-  final Color backgroundColor;
-  final Color borderColor;
-  final Widget child;
-  final String? omittedNotice;
-
-  @override
-  Widget build(BuildContext context) {
-    final notice = omittedNotice;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: iconColor),
-              const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: iconColor, fontSize: 16)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          child,
-          // Deliberately secondary styling (small, muted, italic) -- this
-          // is a "the list might be incomplete" caveat, not itself a piece
-          // of clinical data, so it must never visually compete with the
-          // actual allergy/medication/condition entries above it.
-          if (notice != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              notice,
-              style: TextStyle(fontSize: 11, color: context.palette.textMuted, fontStyle: FontStyle.italic, height: 1.3),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ScanBulletLine extends StatelessWidget {
-  const _ScanBulletLine(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text('•  $text', style: TextStyle(fontSize: 18, color: context.palette.textBody, height: 1.4)),
+    return ScanResultView(
+      result: result,
+      offline: _resultIsOffline,
+      legacyTag: _legacyTag,
+      basicTagWarning: _tagKind != null && !_tagKind!.hasReadCounter,
+      locStatus: _resultIsOffline ? null : _locStatus,
+      locAccuracyM: _sharedAccuracyM,
+      onScanAnother: _scanAnother,
     );
   }
 }

@@ -1964,6 +1964,53 @@ class AppLocalizationsTa extends AppLocalizations {
   String get familyBackToMine => 'என் சுயவிவரத்துக்குத் திரும்பு';
 
   @override
+  String get roleSwitchTitle => 'பங்கை மாற்று';
+
+  @override
+  String roleSwitchCurrent(String role) {
+    return 'பங்கு: $role';
+  }
+
+  @override
+  String get roleAdmin => 'நிர்வாகி';
+
+  @override
+  String get roleClinician => 'மருத்துவர்';
+
+  @override
+  String get roleRecordsOfficer => 'பதிவு அலுவலர்';
+
+  @override
+  String get roleReceptionist => 'வரவேற்பாளர்';
+
+  @override
+  String get rolePharmacist => 'மருந்தாளர்';
+
+  @override
+  String get roleEmergencyResponder => 'அவசரகால பதிலளிப்பவர் / துணை மருத்துவர்';
+
+  @override
+  String get rolePatient => 'நோயாளி';
+
+  @override
+  String get roleReauthTitle => 'நீங்கள்தான் என உறுதிசெய்யுங்கள்';
+
+  @override
+  String get roleReauthBody => 'இந்தப் பங்குக்கு மாற உங்கள் கடவுச்சொல்லை உள்ளிடவும்.';
+
+  @override
+  String get rolePasswordLabel => 'கடவுச்சொல்';
+
+  @override
+  String get roleCodeLabel => 'அங்கீகரிப்புக் குறியீடு';
+
+  @override
+  String get roleReauthConfirm => 'உறுதிசெய்';
+
+  @override
+  String get roleReauthRetry => 'உறுதிசெய்ய இயலவில்லை. மீண்டும் முயலவும்.';
+
+  @override
   String get familyAdd => 'குடும்ப உறுப்பினரைச் சேர்';
 
   @override
@@ -2065,4 +2112,165 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get writeOfflineTagNoUrlHint =>
       'இணைப்பு இல்லாமல், செயலி இல்லாத தொலைபேசியால் இந்த அட்டையைத் திறக்க முடியாது.';
+
+  @override
+  String get scanTierPublic =>
+      'அடிப்படை தகவல் மட்டும்';
+
+  @override
+  String get scanTierPublicHint =>
+      'இரத்த வகை, அவசரத் தொடர்பு போன்றவற்றைக் காண, மீட்பாளராக உள்நுழையவும்.';
+
+  @override
+  String get scanTierResponder =>
+      'மீட்பாளர்';
+
+  @override
+  String get scanTierParamedic =>
+      'துணை மருத்துவர்';
+
+  @override
+  String get scanTierClinical =>
+      'மருத்துவர்';
+
+  @override
+  String scanTierSemantics(String tier) {
+    return 'அணுகல் நிலை: $tier';
+  }
+
+  @override
+  String get scanNoneCritical =>
+      'முக்கியமானவை என எதுவும் பதிவாகவில்லை';
+
+  @override
+  String get scanNameHidden =>
+      'இந்த அணுகல் நிலையில் பெயர் காட்டப்படாது';
+
+  @override
+  String get scanSeveritySevere =>
+      'கடுமையான';
+
+  @override
+  String get scanSeverityModerate =>
+      'மிதமான';
+
+  @override
+  String get scanSeverityMild =>
+      'லேசான';
+
+  @override
+  String scanSeverityLabel(String severity) {
+    return 'தீவிரம்: $severity';
+  }
+
+  @override
+  String get scanNoContact =>
+      'அவசரத் தொடர்பு பதிவில் இல்லை';
+
+  @override
+  String get scanLocShared =>
+      'நோயாளியின் குடும்பத்துடன் இருப்பிடம் பகிரப்பட்டது';
+
+  @override
+  String get scanLocSharing =>
+      'இருப்பிடத்தைப் பகிர்கிறது...';
+
+  @override
+  String get scanLocOff =>
+      'இருப்பிடம் பகிரப்படவில்லை (பகிர்வு நிறுத்தப்பட்டுள்ளது)';
+
+  @override
+  String get scanLocDenied =>
+      'இருப்பிடம் பகிரப்படவில்லை (அனுமதி வழங்கப்படவில்லை)';
+
+  @override
+  String get scanLocUnavailable =>
+      'இருப்பிடம் பகிரப்படவில்லை (இருப்பிடம் கிடைக்கவில்லை)';
+
+  @override
+  String get scanLocPromptTitle =>
+      'ஸ்கேனுடன் உங்கள் இருப்பிடத்தைப் பகிரவா?';
+
+  @override
+  String get scanLocPromptBody =>
+      'நோயாளியின் குடும்பத்தினரும் பராமரிப்புக் குழுவும் உதவி எங்கே உள்ளது என்பதைப் பார்க்க, ஸ்கேனுடன் உங்கள் இருப்பிடத்தை CLARION அனுப்பும். இதை இயக்கினால், உங்கள் இருப்பிடம் நோயாளியின் அவசரத் தொடர்புக்கு வரைபட இணைப்பாக அனுப்பப்பட்டு, நோயாளிக்கும் அவர்களின் பராமரிப்புக் குழுவுக்கும் காட்டப்படும். அது 90 நாட்கள் வைத்திருக்கப்படும்; “என் இருப்பிடத்தைப் பகிர்” இயக்கத்தில் இருக்கும்போது அட்டையை ஸ்கேன் செய்தால் மட்டுமே அனுப்பப்படும்.';
+
+  @override
+  String get scanLocAllow =>
+      'அனுமதி';
+
+  @override
+  String get scanLocNotNow =>
+      'இப்போது வேண்டாம்';
+
+  @override
+  String get scanShareLocationChip =>
+      'என் இருப்பிடத்தைப் பகிர்';
+
+  @override
+  String get mapOpenFailed =>
+      'வரைபடச் செயலியைத் திறக்க முடியவில்லை.';
+
+  @override
+  String get openInMaps =>
+      'வரைபடத்தில் திற';
+
+  @override
+  String get notificationsTitle =>
+      'அறிவிப்புகள்';
+
+  @override
+  String get notificationsEmpty =>
+      'இன்னும் அறிவிப்புகள் இல்லை.';
+
+  @override
+  String get notificationsLoadError =>
+      'அறிவிப்புகளை ஏற்ற முடியவில்லை.';
+
+  @override
+  String get cardScanLocationsTitle =>
+      'என் அட்டை எங்கு ஸ்கேன் செய்யப்பட்டது';
+
+  @override
+  String get cardScanLocationsEmpty =>
+      'இன்னும் ஸ்கேன் இருப்பிடங்கள் இல்லை.';
+
+  @override
+  String get cardScanLocationsNote =>
+      'ஸ்கேன் செய்தவரின் தொலைபேசி அனுப்பியது, எனவே தோராயமாக இருக்கலாம்.';
+
+  @override
+  String cardScanLocationsAccuracy(int m) {
+    return 'துல்லியம் சுமார் $m மீ';
+  }
+
+  @override
+  String get cardScanLocationsError =>
+      'ஸ்கேன் இருப்பிடங்களை ஏற்ற முடியவில்லை.';
+
+  @override
+  String get scanWhoAnonymous =>
+      'உள்நுழையாத ஒருவர்';
+
+  @override
+  String roleChipSwitchTo(String role) {
+    return '$role பங்குக்கு மாறு';
+  }
+
+  @override
+  String get roleChipsGroupLabel =>
+      'உங்கள் பங்குகள்';
+
+  @override
+  String get scanShareLocationTip =>
+      'உங்கள் இருப்பிடத்தை நோயாளியின் அவசரத் தொடர்புக்கு வரைபட இணைப்பாக அனுப்பி, நோயாளிக்கும் அவர்களின் பராமரிப்புக் குழுவுக்கும் காட்டும். 90 நாட்கள் வைத்திருக்கப்படும். இது இயக்கத்தில் இருக்கும்போது அட்டையை ஸ்கேன் செய்தால் மட்டுமே அனுப்பப்படும்.';
+
+  @override
+  String scanLocSharedAccuracy(int m) {
+    return 'நோயாளியின் குடும்பத்துடன் இருப்பிடம் பகிரப்பட்டது (சுமார் $m மீ)';
+  }
+
+  @override
+  String get scanLocSharedApprox =>
+      'நோயாளியின் குடும்பத்துடன் இருப்பிடம் பகிரப்பட்டது (தோராயமாக)';
 }

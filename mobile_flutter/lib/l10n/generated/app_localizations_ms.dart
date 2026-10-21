@@ -1952,6 +1952,53 @@ class AppLocalizationsMs extends AppLocalizations {
   String get familyBackToMine => 'Kembali ke profil saya';
 
   @override
+  String get roleSwitchTitle => 'Tukar peranan';
+
+  @override
+  String roleSwitchCurrent(String role) {
+    return 'Peranan: $role';
+  }
+
+  @override
+  String get roleAdmin => 'Pentadbir';
+
+  @override
+  String get roleClinician => 'Doktor / klinisyen';
+
+  @override
+  String get roleRecordsOfficer => 'Pegawai rekod';
+
+  @override
+  String get roleReceptionist => 'Penyambut tetamu';
+
+  @override
+  String get rolePharmacist => 'Ahli farmasi';
+
+  @override
+  String get roleEmergencyResponder => 'Responden kecemasan / paramedik';
+
+  @override
+  String get rolePatient => 'Pesakit';
+
+  @override
+  String get roleReauthTitle => 'Sahkan ini anda';
+
+  @override
+  String get roleReauthBody => 'Masukkan kata laluan anda untuk bertukar ke peranan ini.';
+
+  @override
+  String get rolePasswordLabel => 'Kata laluan';
+
+  @override
+  String get roleCodeLabel => 'Kod pengesah';
+
+  @override
+  String get roleReauthConfirm => 'Sahkan';
+
+  @override
+  String get roleReauthRetry => 'Tidak dapat mengesahkan. Cuba lagi.';
+
+  @override
   String get familyAdd => 'Tambah ahli keluarga';
 
   @override
@@ -2052,4 +2099,165 @@ class AppLocalizationsMs extends AppLocalizations {
   @override
   String get writeOfflineTagNoUrlHint =>
       'Tanpa pautan, telefon tanpa aplikasi tidak dapat membuka kad ini.';
+
+  @override
+  String get scanTierPublic =>
+      'Maklumat asas sahaja';
+
+  @override
+  String get scanTierPublicHint =>
+      'Log masuk sebagai responden untuk melihat lebih banyak, seperti jenis darah dan kenalan kecemasan.';
+
+  @override
+  String get scanTierResponder =>
+      'Responden';
+
+  @override
+  String get scanTierParamedic =>
+      'Paramedik';
+
+  @override
+  String get scanTierClinical =>
+      'Pegawai klinikal';
+
+  @override
+  String scanTierSemantics(String tier) {
+    return 'Tahap akses: $tier';
+  }
+
+  @override
+  String get scanNoneCritical =>
+      'Tiada yang direkodkan sebagai kritikal';
+
+  @override
+  String get scanNameHidden =>
+      'Nama tidak dipaparkan pada tahap akses ini';
+
+  @override
+  String get scanSeveritySevere =>
+      'Teruk';
+
+  @override
+  String get scanSeverityModerate =>
+      'Sederhana';
+
+  @override
+  String get scanSeverityMild =>
+      'Ringan';
+
+  @override
+  String scanSeverityLabel(String severity) {
+    return 'Tahap keterukan: $severity';
+  }
+
+  @override
+  String get scanNoContact =>
+      'Tiada kenalan kecemasan direkodkan';
+
+  @override
+  String get scanLocShared =>
+      'Lokasi dikongsi dengan keluarga pesakit';
+
+  @override
+  String get scanLocSharing =>
+      'Sedang berkongsi lokasi...';
+
+  @override
+  String get scanLocOff =>
+      'Lokasi tidak dikongsi (perkongsian dimatikan)';
+
+  @override
+  String get scanLocDenied =>
+      'Lokasi tidak dikongsi (kebenaran tidak diberikan)';
+
+  @override
+  String get scanLocUnavailable =>
+      'Lokasi tidak dikongsi (kedudukan tidak tersedia)';
+
+  @override
+  String get scanLocPromptTitle =>
+      'Kongsi lokasi anda bersama imbasan?';
+
+  @override
+  String get scanLocPromptBody =>
+      'CLARION boleh menghantar kedudukan anda bersama imbasan supaya keluarga dan pasukan penjagaan pesakit dapat melihat di mana bantuan berada. Jika anda menghidupkannya, kedudukan anda dihantar kepada kenalan kecemasan pesakit sebagai pautan peta dan dipaparkan kepada pesakit serta pasukan penjagaannya. Ia disimpan selama 90 hari dan hanya dihantar apabila anda mengimbas kad dengan Kongsi lokasi saya dihidupkan.';
+
+  @override
+  String get scanLocAllow =>
+      'Benarkan';
+
+  @override
+  String get scanLocNotNow =>
+      'Bukan sekarang';
+
+  @override
+  String get scanShareLocationChip =>
+      'Kongsi lokasi saya';
+
+  @override
+  String get mapOpenFailed =>
+      'Tidak dapat membuka aplikasi peta.';
+
+  @override
+  String get openInMaps =>
+      'Buka dalam Peta';
+
+  @override
+  String get notificationsTitle =>
+      'Pemberitahuan';
+
+  @override
+  String get notificationsEmpty =>
+      'Tiada pemberitahuan lagi.';
+
+  @override
+  String get notificationsLoadError =>
+      'Tidak dapat memuatkan pemberitahuan.';
+
+  @override
+  String get cardScanLocationsTitle =>
+      'Di mana kad saya diimbas';
+
+  @override
+  String get cardScanLocationsEmpty =>
+      'Belum ada lokasi imbasan.';
+
+  @override
+  String get cardScanLocationsNote =>
+      'Dilaporkan oleh telefon pengimbas, jadi mungkin tidak tepat.';
+
+  @override
+  String cardScanLocationsAccuracy(int m) {
+    return 'Ketepatan kira-kira $m m';
+  }
+
+  @override
+  String get cardScanLocationsError =>
+      'Tidak dapat memuatkan lokasi imbasan.';
+
+  @override
+  String get scanWhoAnonymous =>
+      'Seseorang yang tidak log masuk';
+
+  @override
+  String roleChipSwitchTo(String role) {
+    return 'Tukar ke $role';
+  }
+
+  @override
+  String get roleChipsGroupLabel =>
+      'Peranan anda';
+
+  @override
+  String get scanShareLocationTip =>
+      'Menghantar kedudukan anda kepada kenalan kecemasan pesakit sebagai pautan peta dan memaparkannya kepada pesakit serta pasukan penjagaannya. Disimpan selama 90 hari. Hanya dihantar apabila anda mengimbas kad dengan ini dihidupkan.';
+
+  @override
+  String scanLocSharedAccuracy(int m) {
+    return 'Lokasi dikongsi dengan keluarga pesakit (kira-kira $m m)';
+  }
+
+  @override
+  String get scanLocSharedApprox =>
+      'Lokasi dikongsi dengan keluarga pesakit (anggaran)';
 }

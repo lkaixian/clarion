@@ -9,6 +9,7 @@ import '../widgets/common.dart';
 import 'audit_log_screen.dart';
 import 'edit_profile_screen.dart';
 import 'family_screen.dart';
+import 'notifications_screen.dart';
 import 'settings_screen.dart';
 import 'write_offline_tag_screen.dart';
 
@@ -87,6 +88,7 @@ class ProfileScreen extends StatelessWidget {
                   hasPatient ? () => context.pushScreen(const AuditLogScreen()) : null,
                   subtitle: noRecord,
                 ),
+                tile(Icons.notifications_none, l10n.notificationsTitle, () => context.pushScreen(const NotificationsScreen())),
                 if (user?.role == 'patient')
                   tile(Icons.family_restroom, l10n.familyTitle, () => context.pushScreen(const FamilyScreen())),
                 tile(Icons.settings_outlined, l10n.settingsTitle, () => context.pushScreen(const SettingsScreen())),

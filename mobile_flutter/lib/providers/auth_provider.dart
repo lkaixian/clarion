@@ -11,6 +11,16 @@ import '../services/token_storage.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
+/// Outcome of [AuthProvider.switchRole]: success (all defaults), an [error]
+/// message, or [reauth] (HTTP 428: password, plus code if [needsCode], required).
+class RoleSwitchResult {
+  const RoleSwitchResult({this.error, this.reauth = false, this.needsCode = false});
+  final String? error;
+  final bool reauth;
+  final bool needsCode;
+  bool get ok => error == null && !reauth;
+}
+
 /// Owns the login session: current user, restoring it on cold start, and
 /// the persisted "prefer Senior Citizen Mode" flag used to route straight
 /// into the simplified hub after login.
@@ -199,6 +209,9 @@ class AuthProvider extends ChangeNotifier {
     }
     await _tokenStorage.saveUser(userJson);
     await _tokenStorage.saveActivePatient(null); // a fresh login starts on its own profile
+    try {
+      await _tokenStorage.saveActiveRole(null); // the server lands on the last role
+    } catch (_) {}
     user = MBUser.fromJson(userJson);
     status = AuthStatus.authenticated;
     syncOfflineTagData();
@@ -337,6 +350,37 @@ class AuthProvider extends ChangeNotifier {
       return e.message;
     } catch (e) {
       return 'Unexpected error: $e';
+    }
+  }
+
+  /// `POST /auth/switch-role`: becomes [role] (drops any family profile) and
+  /// remembers it so refresh sends `act_role`. Returns an error message, or
+  /// null on success. Callers clear cached patient data afterwards.
+  /// A 428 comes back as [RoleSwitchResult.reauth]: ask for the password
+  /// (and code when [RoleSwitchResult.needsCode]) and call again. The
+  /// password is only passed through, never stored.
+  Future<RoleSwitchResult> switchRole(String role, {String? password, String? code}) async {
+    try {
+      final data = await _api.switchRole(role, password: password, code: code);
+      final userJson = data['user'] as Map<String, dynamic>;
+      await _tokenStorage.saveToken(data['access_token'] as String);
+      await _tokenStorage.saveUser(userJson);
+      await _tokenStorage.saveActivePatient(null);
+      try {
+        await _tokenStorage.saveActiveRole(role);
+      } catch (_) {} // best-effort: the server also remembers the last role
+      user = MBUser.fromJson(userJson);
+      syncOfflineTagData();
+      notifyListeners();
+      return const RoleSwitchResult();
+    } on ApiException catch (e) {
+      if (e.statusCode == 428) {
+        final d = e.data?['detail'];
+        return RoleSwitchResult(reauth: true, needsCode: d is Map && d['needs_code'] == true);
+      }
+      return RoleSwitchResult(error: e.message);
+    } catch (e) {
+      return RoleSwitchResult(error: 'Unexpected error: $e');
     }
   }
 

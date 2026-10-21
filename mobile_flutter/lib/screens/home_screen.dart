@@ -14,6 +14,7 @@ import '../widgets/loading_view.dart';
 import '../widgets/missing_profile_banner.dart';
 import '../widgets/record_widgets.dart';
 import '../widgets/profile_switcher.dart';
+import '../widgets/role_switcher.dart';
 import '../widgets/section_card.dart';
 import 'edit_profile_screen.dart';
 import 'emergency_screen.dart';
@@ -51,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final patientId = auth.user?.patientId;
     final patient = patientState.patient;
 
+    final user = auth.user;
+    final accent = (user != null && user.roles.length > 1)
+        ? roleStyleFor(Theme.of(context).brightness, user.role, tier: user.responderTier).accent
+        : null;
+    var needsHeader = true; // no record view of its own: show name + role chips above it
     Widget content;
     if (patientId == null) {
       content = const NoRecordNotice();
@@ -67,19 +73,18 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       final upcoming = remindersState.serverAppointments.where((a) => a.status == 'scheduled').toList();
       final brief = patientState.handoverBrief;
+      needsHeader = false;
       content = RefreshIndicator(
         onRefresh: () => refreshPatientData(context),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
           children: [
-            Text(
-              patient.fullName,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: context.palette.textPrimary),
+            _NameBlock(
+              name: patient.fullName,
+              subtitle: l10n.bloodTypeLabel(patient.bloodType ?? '—'),
+              accent: accent,
             ),
-            Text(
-              l10n.bloodTypeLabel(patient.bloodType ?? '—'),
-              style: TextStyle(fontSize: 13, color: context.palette.textMuted),
-            ),
+            const RoleChips(),
             if (!_profileBannerDismissed && auth.missingProfileFields.isNotEmpty) ...[
               const SizedBox(height: 12),
               MissingProfileBanner(
@@ -145,6 +150,24 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    if (needsHeader && accent != null) {
+      content = Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _NameBlock(name: user!.fullName, accent: accent),
+                const RoleChips(),
+              ],
+            ),
+          ),
+          Expanded(child: content),
+        ],
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(l10n.homeTitle), actions: const [ProfileSwitcherAction()]),
       body: Column(
@@ -168,6 +191,33 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           Expanded(child: content),
+        ],
+      ),
+    );
+  }
+}
+
+/// The user's name (and a subtitle), with a bar in the active role's colour
+/// beside it when the login holds several roles, so the current hat is visible.
+class _NameBlock extends StatelessWidget {
+  const _NameBlock({required this.name, this.subtitle, this.accent});
+  final String name;
+  final String? subtitle;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(left: accent == null ? 0 : 12),
+      decoration: accent == null ? null : BoxDecoration(border: Border(left: BorderSide(color: accent!, width: 4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: p.textPrimary)),
+          if (subtitle != null) Text(subtitle!, style: TextStyle(fontSize: 13, color: p.textMuted)),
         ],
       ),
     );

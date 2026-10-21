@@ -31,6 +31,15 @@ class TokenStorage {
 
   Future<String?> readActivePatient() => _storage.read(key: _activePatientKey);
 
+  // Multi-role logins: the role the user picked, sent as `act_role` on refresh.
+  static const _activeRoleKey = 'mb_active_role';
+
+  Future<void> saveActiveRole(String? role) => role == null
+      ? _storage.delete(key: _activeRoleKey)
+      : _storage.write(key: _activeRoleKey, value: role);
+
+  Future<String?> readActiveRole() => _storage.read(key: _activeRoleKey);
+
   Future<void> saveToken(String token) => _storage.write(key: _tokenKey, value: token);
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
@@ -54,5 +63,6 @@ class TokenStorage {
     await _storage.delete(key: _refreshTokenKey);
     await _storage.delete(key: _userKey);
     await _storage.delete(key: _activePatientKey);
+    await _storage.delete(key: _activeRoleKey);
   }
 }

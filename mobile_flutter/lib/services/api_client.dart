@@ -11,7 +11,9 @@ import '../models/booking.dart';
 import '../models/emergency_card.dart';
 import '../models/nfc_card.dart';
 import '../models/patient.dart';
+import '../models/app_notification.dart';
 import '../models/audit_log_entry.dart';
+import '../models/scan_location_entry.dart';
 import '../models/queue_ticket.dart';
 import '../models/server_appointment.dart';
 import 'api_exception.dart';
@@ -194,6 +196,10 @@ class ApiClient {
     final refreshToken = await _tokenStorage.readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) return null;
     final actAs = await _tokenStorage.readActivePatient();
+    String? actRole;
+    try {
+      actRole = await _tokenStorage.readActiveRole();
+    } catch (_) {} // best-effort: the server falls back to the last role
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/auth/refresh',
@@ -201,6 +207,7 @@ class ApiClient {
           'refresh_token': refreshToken,
           // Family profiles: keep acting for the selected profile.
           if (actAs != null && actAs.isNotEmpty) 'act_as': actAs,
+          if (actRole != null && actRole.isNotEmpty) 'act_role': actRole,
         },
       );
       final data = response.data!;
@@ -236,6 +243,9 @@ class ApiClient {
     }
   }
 
+  /// The underlying Dio, for tests that swap its adapter.
+  Dio get dioForTest => _dio;
+
   Future<T> _guard<T>(Future<T> Function() body) async {
     try {
       return await body();
@@ -265,6 +275,17 @@ class ApiClient {
           'relation_code': relationCode,
         });
         return FamilyProfile.fromJson(r.data!);
+      });
+
+  /// `POST /auth/switch-role` -> `{access_token, token_type, user}`.
+  /// Moving up to a staff role may need [password] (+ [code]): HTTP 428.
+  Future<Map<String, dynamic>> switchRole(String role, {String? password, String? code}) => _guard(() async {
+        final r = await _dio.post<Map<String, dynamic>>('/auth/switch-role', data: {
+          'role': role,
+          'password': ?password,
+          'code': ?code,
+        });
+        return r.data!;
       });
 
   /// `POST /profiles/switch` -> `{access_token, token_type, user}`.
@@ -769,10 +790,14 @@ class ApiClient {
 
   /// `POST /emergency/scan` — no auth required. Used by the QR/manual
   /// responder scanner.
+  ///
+  /// [location] is the scanner phone's `{lat, lng, accuracy_m?}` (see
+  /// ScanFix.toJson); omitted when there is none.
   Future<Map<String, dynamic>> scanEmergencyCard({
     required String cardReference,
     String? responderName,
     String? responderOrg,
+    Map<String, dynamic>? location,
   }) {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -781,9 +806,36 @@ class ApiClient {
           'card_reference': cardReference,
           if (responderName != null && responderName.isNotEmpty) 'responder_name': responderName,
           if (responderOrg != null && responderOrg.isNotEmpty) 'responder_org': responderOrg,
+          'location': ?location,
         },
       );
       return response.data!;
+    });
+  }
+
+  /// `POST /emergency/location` -- a position that arrived after the scan.
+  /// [token] is the scan response's `location_token` (valid ~15 min). Texts
+  /// the contact, so call at most once per scan.
+  Future<void> shareScanLocation(String token, Map<String, dynamic> location) {
+    return _guard(() async {
+      await _dio.post<dynamic>('/emergency/location', data: {'token': token, 'location': location});
+    });
+  }
+
+  /// `GET /emergency/locations/{patient_id}` -- where this patient's card was
+  /// scanned (as reported by the scanners' phones), newest first, max 50.
+  Future<List<ScanLocationEntry>> getScanLocations(String patientId) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/emergency/locations/$patientId');
+      return (response.data ?? []).cast<Map<String, dynamic>>().map(ScanLocationEntry.fromJson).toList();
+    });
+  }
+
+  /// `GET /notifications` -- the signed-in user's inbox, newest first.
+  Future<List<AppNotification>> getNotifications({int limit = 50}) {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>('/notifications', queryParameters: {'limit': limit});
+      return (response.data ?? []).cast<Map<String, dynamic>>().map(AppNotification.fromJson).toList();
     });
   }
 
@@ -801,6 +853,7 @@ class ApiClient {
     String? responderName,
     String? responderOrg,
     Duration? timeout,
+    Map<String, dynamic>? location,
   }) {
     return _guard(() async {
       final cancel = CancelToken();
@@ -812,6 +865,7 @@ class ApiClient {
             'nfc_uid': nfcUid,
             if (responderName != null && responderName.isNotEmpty) 'responder_name': responderName,
             if (responderOrg != null && responderOrg.isNotEmpty) 'responder_org': responderOrg,
+            'location': ?location,
           },
           cancelToken: cancel,
         );

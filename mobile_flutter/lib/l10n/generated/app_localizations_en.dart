@@ -1941,6 +1941,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get familyBackToMine => 'Back to my profile';
 
   @override
+  String get roleSwitchTitle => 'Switch role';
+
+  @override
+  String roleSwitchCurrent(String role) {
+    return 'Role: $role';
+  }
+
+  @override
+  String get roleAdmin => 'Administrator';
+
+  @override
+  String get roleClinician => 'Clinician';
+
+  @override
+  String get roleRecordsOfficer => 'Records officer';
+
+  @override
+  String get roleReceptionist => 'Receptionist';
+
+  @override
+  String get rolePharmacist => 'Pharmacist';
+
+  @override
+  String get roleEmergencyResponder => 'Emergency responder / paramedic';
+
+  @override
+  String get rolePatient => 'Patient';
+
+  @override
+  String get roleReauthTitle => 'Confirm it\'s you';
+
+  @override
+  String get roleReauthBody => 'Enter your password to switch to this role.';
+
+  @override
+  String get rolePasswordLabel => 'Password';
+
+  @override
+  String get roleCodeLabel => 'Authenticator code';
+
+  @override
+  String get roleReauthConfirm => 'Confirm';
+
+  @override
+  String get roleReauthRetry => 'Could not confirm. Try again.';
+
+  @override
   String get familyAdd => 'Add a family member';
 
   @override
@@ -2039,4 +2086,165 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get writeOfflineTagNoUrlHint =>
       'Without the link, a phone without the app cannot open this card.';
+
+  @override
+  String get scanTierPublic =>
+      'Basic information only';
+
+  @override
+  String get scanTierPublicHint =>
+      'Sign in as a responder to see more, such as blood type and emergency contact.';
+
+  @override
+  String get scanTierResponder =>
+      'Responder';
+
+  @override
+  String get scanTierParamedic =>
+      'Paramedic';
+
+  @override
+  String get scanTierClinical =>
+      'Clinician';
+
+  @override
+  String scanTierSemantics(String tier) {
+    return 'Access level: $tier';
+  }
+
+  @override
+  String get scanNoneCritical =>
+      'None recorded as critical';
+
+  @override
+  String get scanNameHidden =>
+      'Name not shown at this access level';
+
+  @override
+  String get scanSeveritySevere =>
+      'Severe';
+
+  @override
+  String get scanSeverityModerate =>
+      'Moderate';
+
+  @override
+  String get scanSeverityMild =>
+      'Mild';
+
+  @override
+  String scanSeverityLabel(String severity) {
+    return 'Severity: $severity';
+  }
+
+  @override
+  String get scanNoContact =>
+      'No emergency contact on file';
+
+  @override
+  String get scanLocShared =>
+      'Location shared with the patient\'s family';
+
+  @override
+  String get scanLocSharing =>
+      'Sharing location...';
+
+  @override
+  String get scanLocOff =>
+      'Location not shared (sharing is turned off)';
+
+  @override
+  String get scanLocDenied =>
+      'Location not shared (permission not allowed)';
+
+  @override
+  String get scanLocUnavailable =>
+      'Location not shared (no position available)';
+
+  @override
+  String get scanLocPromptTitle =>
+      'Share your location with the scan?';
+
+  @override
+  String get scanLocPromptBody =>
+      'CLARION can send your position with a scan so the patient\'s family and care team can see where help is. If you turn this on, your position is sent to the patient\'s emergency contact as a map link and shown to the patient and their care team. It is kept for 90 days and is sent only when you scan a card with Share my location on.';
+
+  @override
+  String get scanLocAllow =>
+      'Allow';
+
+  @override
+  String get scanLocNotNow =>
+      'Not now';
+
+  @override
+  String get scanShareLocationChip =>
+      'Share my location';
+
+  @override
+  String get mapOpenFailed =>
+      'Could not open a maps app.';
+
+  @override
+  String get openInMaps =>
+      'Open in Maps';
+
+  @override
+  String get notificationsTitle =>
+      'Notifications';
+
+  @override
+  String get notificationsEmpty =>
+      'No notifications yet.';
+
+  @override
+  String get notificationsLoadError =>
+      'Could not load notifications.';
+
+  @override
+  String get cardScanLocationsTitle =>
+      'Where my card was scanned';
+
+  @override
+  String get cardScanLocationsEmpty =>
+      'No scan locations yet.';
+
+  @override
+  String get cardScanLocationsNote =>
+      'Reported by the scanner\'s phone, so it may be approximate.';
+
+  @override
+  String cardScanLocationsAccuracy(int m) {
+    return 'Accurate to about $m m';
+  }
+
+  @override
+  String get cardScanLocationsError =>
+      'Could not load scan locations.';
+
+  @override
+  String get scanWhoAnonymous =>
+      'Someone not signed in';
+
+  @override
+  String roleChipSwitchTo(String role) {
+    return 'Switch to $role';
+  }
+
+  @override
+  String get roleChipsGroupLabel =>
+      'Your roles';
+
+  @override
+  String get scanShareLocationTip =>
+      'Sends your position to the patient\'s emergency contact as a map link and shows it to the patient and their care team. Kept for 90 days. Sent only when you scan a card with this on.';
+
+  @override
+  String scanLocSharedAccuracy(int m) {
+    return 'Location shared with the patient\'s family (about $m m)';
+  }
+
+  @override
+  String get scanLocSharedApprox =>
+      'Location shared with the patient\'s family (approximate)';
 }

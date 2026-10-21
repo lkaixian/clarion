@@ -122,6 +122,11 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <!-- Android 11+: openMap() (lib/services/map_launcher.dart) opens geo: links in any maps app. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
         <!-- CRITICAL for the MySejahtera launcher
              (lib/services/mysejahtera_launcher.dart, external_app_launcher
              package): its Android implementation calls

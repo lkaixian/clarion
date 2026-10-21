@@ -18,6 +18,7 @@ import '../widgets/common.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/scan_widgets.dart' show LegacyTagBanner;
 import '../widgets/section_card.dart';
+import 'card_scan_locations_screen.dart';
 
 /// Scope keys accepted by the backend's `POST /emergency/issue` endpoint
 /// (see backend/app/schemas.py::EmergencyProfileRequest). The scope is fixed:
@@ -288,6 +289,16 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                   if (patientState.isIssuingCard)
                     const Padding(padding: EdgeInsets.only(top: 16), child: LoadingView()),
                   if (card != null) _EmergencyCardResult(onRevoke: _revoke),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const Key('card-scan-locations'),
+                      onPressed: () => context.pushScreen(const CardScanLocationsScreen()),
+                      icon: const Icon(Icons.place_outlined),
+                      label: Text(l10n.cardScanLocationsTitle),
+                    ),
+                  ),
                 ],
               ),
             ),

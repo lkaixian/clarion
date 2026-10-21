@@ -80,6 +80,14 @@ class EmergencyScanResult {
   final String? contactPhone;
   final String? contactRelationship;
 
+  /// Access level the server granted this scan: public | responder |
+  /// paramedic | clinical. `null` for an offline tag read (no server involved).
+  final String? tier;
+
+  /// Valid ~15 min: lets the scanner's phone add a position that arrives after
+  /// the scan (`POST /emergency/location`). `null` offline / older server.
+  final String? locationToken;
+
   const EmergencyScanResult({
     required this.fullName,
     this.age,
@@ -91,6 +99,8 @@ class EmergencyScanResult {
     this.contactName,
     this.contactPhone,
     this.contactRelationship,
+    this.tier,
+    this.locationToken,
   });
 
   factory EmergencyScanResult.fromJson(Map<String, dynamic> json) => EmergencyScanResult(
@@ -107,6 +117,8 @@ class EmergencyScanResult {
         contactName: json['emergency_contact_name'] as String?,
         contactPhone: _nonEmpty(json['emergency_contact_phone'] as String?),
         contactRelationship: json['emergency_contact_relationship'] as String?,
+        tier: _nonEmpty(json['tier'] as String?),
+        locationToken: _nonEmpty(json['location_token'] as String?),
         // `omitted_non_critical` is new and additive -- may be entirely
         // absent from the response (older-shaped payload, or nothing was
         // omitted), in which case this just defaults to an empty map and

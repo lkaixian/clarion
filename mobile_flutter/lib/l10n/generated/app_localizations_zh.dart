@@ -1854,6 +1854,53 @@ class AppLocalizationsZh extends AppLocalizations {
   String get familyBackToMine => '返回我的档案';
 
   @override
+  String get roleSwitchTitle => '切换角色';
+
+  @override
+  String roleSwitchCurrent(String role) {
+    return '角色：$role';
+  }
+
+  @override
+  String get roleAdmin => '管理员';
+
+  @override
+  String get roleClinician => '临床医生';
+
+  @override
+  String get roleRecordsOfficer => '病历专员';
+
+  @override
+  String get roleReceptionist => '接待员';
+
+  @override
+  String get rolePharmacist => '药剂师';
+
+  @override
+  String get roleEmergencyResponder => '紧急救援人员 / 护理人员';
+
+  @override
+  String get rolePatient => '患者';
+
+  @override
+  String get roleReauthTitle => '确认是您本人';
+
+  @override
+  String get roleReauthBody => '请输入密码以切换到此角色。';
+
+  @override
+  String get rolePasswordLabel => '密码';
+
+  @override
+  String get roleCodeLabel => '验证器代码';
+
+  @override
+  String get roleReauthConfirm => '确认';
+
+  @override
+  String get roleReauthRetry => '无法确认，请重试。';
+
+  @override
   String get familyAdd => '添加家庭成员';
 
   @override
@@ -1947,4 +1994,165 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get writeOfflineTagNoUrlHint => '没有链接，未安装应用的手机无法打开此卡。';
+
+  @override
+  String get scanTierPublic =>
+      '仅显示基本信息';
+
+  @override
+  String get scanTierPublicHint =>
+      '以急救人员身份登录可查看更多信息，如血型和紧急联系人。';
+
+  @override
+  String get scanTierResponder =>
+      '急救人员';
+
+  @override
+  String get scanTierParamedic =>
+      '护理人员';
+
+  @override
+  String get scanTierClinical =>
+      '临床医生';
+
+  @override
+  String scanTierSemantics(String tier) {
+    return '访问级别：$tier';
+  }
+
+  @override
+  String get scanNoneCritical =>
+      '没有记录为关键的项目';
+
+  @override
+  String get scanNameHidden =>
+      '此访问级别不显示姓名';
+
+  @override
+  String get scanSeveritySevere =>
+      '严重';
+
+  @override
+  String get scanSeverityModerate =>
+      '中度';
+
+  @override
+  String get scanSeverityMild =>
+      '轻度';
+
+  @override
+  String scanSeverityLabel(String severity) {
+    return '严重程度：$severity';
+  }
+
+  @override
+  String get scanNoContact =>
+      '未登记紧急联系人';
+
+  @override
+  String get scanLocShared =>
+      '已向患者家属分享位置';
+
+  @override
+  String get scanLocSharing =>
+      '正在分享位置...';
+
+  @override
+  String get scanLocOff =>
+      '未分享位置（分享已关闭）';
+
+  @override
+  String get scanLocDenied =>
+      '未分享位置（未允许权限）';
+
+  @override
+  String get scanLocUnavailable =>
+      '未分享位置（无法获取位置）';
+
+  @override
+  String get scanLocPromptTitle =>
+      '扫描时分享您的位置？';
+
+  @override
+  String get scanLocPromptBody =>
+      'CLARION 可在扫描时发送您的位置，让患者的家人和医护团队知道救援在哪里。开启后，您的位置将以地图链接的形式发送给患者的紧急联系人，并显示给患者及其医护团队。位置会保存 90 天，且仅在您开启“分享我的位置”并扫描卡片时才会发送。';
+
+  @override
+  String get scanLocAllow =>
+      '允许';
+
+  @override
+  String get scanLocNotNow =>
+      '暂不';
+
+  @override
+  String get scanShareLocationChip =>
+      '分享我的位置';
+
+  @override
+  String get mapOpenFailed =>
+      '无法打开地图应用。';
+
+  @override
+  String get openInMaps =>
+      '在地图中打开';
+
+  @override
+  String get notificationsTitle =>
+      '通知';
+
+  @override
+  String get notificationsEmpty =>
+      '暂无通知。';
+
+  @override
+  String get notificationsLoadError =>
+      '无法加载通知。';
+
+  @override
+  String get cardScanLocationsTitle =>
+      '我的卡片在何处被扫描';
+
+  @override
+  String get cardScanLocationsEmpty =>
+      '暂无扫描位置。';
+
+  @override
+  String get cardScanLocationsNote =>
+      '由扫描者的手机上报，可能并不精确。';
+
+  @override
+  String cardScanLocationsAccuracy(int m) {
+    return '精度约 $m 米';
+  }
+
+  @override
+  String get cardScanLocationsError =>
+      '无法加载扫描位置。';
+
+  @override
+  String get scanWhoAnonymous =>
+      '未登录的人';
+
+  @override
+  String roleChipSwitchTo(String role) {
+    return '切换为$role';
+  }
+
+  @override
+  String get roleChipsGroupLabel =>
+      '您的角色';
+
+  @override
+  String get scanShareLocationTip =>
+      '将您的位置以地图链接的形式发送给患者的紧急联系人，并显示给患者及其医护团队。保存 90 天。仅在此选项开启时扫描卡片才会发送。';
+
+  @override
+  String scanLocSharedAccuracy(int m) {
+    return '已向患者家属分享位置（约 $m 米）';
+  }
+
+  @override
+  String get scanLocSharedApprox =>
+      '已向患者家属分享位置（大致位置）';
 }

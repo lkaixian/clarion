@@ -254,9 +254,11 @@ class _AuthGate extends StatelessWidget {
             // part of the simplified senior hub, it always uses standard
             // styling regardless of that preference.
             if (auth.mustChangePassword) return const ChangePasswordScreen();
-            return auth.prefersSeniorMode
-                ? SeniorHomeScreen(key: ValueKey(auth.user?.patientId))
-                : MainShell(key: ValueKey(auth.user?.patientId)); // fresh Home tab per profile
+            // Senior Mode is a patient-only hub; other active roles use the shell.
+            final key = ValueKey('${auth.user?.role}/${auth.user?.patientId}');
+            return auth.prefersSeniorMode && auth.user?.role == 'patient'
+                ? SeniorHomeScreen(key: key)
+                : MainShell(key: key); // fresh Home tab per role + profile
         }
       },
     );

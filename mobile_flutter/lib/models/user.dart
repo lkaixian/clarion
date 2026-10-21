@@ -26,6 +26,10 @@ class MBUser {
   // login's own; [homePatientId] is the login's own patient record.
   final bool actingFor;
   final String? homePatientId;
+  // Every role this login may act as (length 1 for ordinary accounts) and the
+  // responder tier ('community' | 'paramedic') when it holds that role.
+  final List<String> roles;
+  final String? responderTier;
 
   const MBUser({
     required this.id,
@@ -38,7 +42,9 @@ class MBUser {
     this.missingProfileFields = const [],
     this.actingFor = false,
     this.homePatientId,
-  });
+    List<String>? roles,
+    this.responderTier,
+  }) : roles = roles ?? const [];
 
   factory MBUser.fromJson(Map<String, dynamic> json) => MBUser(
         id: json['id'] as String,
@@ -53,6 +59,8 @@ class MBUser {
             .toList(),
         actingFor: json['acting_for'] as bool? ?? false,
         homePatientId: json['home_patient_id'] as String?,
+        roles: (json['roles'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [json['role'] as String],
+        responderTier: json['responder_tier'] as String?,
       );
 
   MBUser copyWith({bool? mustChangePassword, List<String>? missingProfileFields}) => MBUser(
@@ -66,6 +74,8 @@ class MBUser {
         missingProfileFields: missingProfileFields ?? this.missingProfileFields,
         actingFor: actingFor,
         homePatientId: homePatientId,
+        roles: roles,
+        responderTier: responderTier,
       );
 
   Map<String, dynamic> toJson() => {
@@ -79,5 +89,7 @@ class MBUser {
         'missing_profile_fields': missingProfileFields,
         'acting_for': actingFor,
         'home_patient_id': homePatientId,
+        'roles': roles,
+        'responder_tier': responderTier,
       };
 }

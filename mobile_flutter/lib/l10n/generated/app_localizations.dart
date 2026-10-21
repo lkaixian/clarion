@@ -3474,6 +3474,96 @@ abstract class AppLocalizations {
   /// **'Back to my profile'**
   String get familyBackToMine;
 
+  /// No description provided for @roleSwitchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch role'**
+  String get roleSwitchTitle;
+
+  /// No description provided for @roleSwitchCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Role: {role}'**
+  String roleSwitchCurrent(String role);
+
+  /// No description provided for @roleAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Administrator'**
+  String get roleAdmin;
+
+  /// No description provided for @roleClinician.
+  ///
+  /// In en, this message translates to:
+  /// **'Clinician'**
+  String get roleClinician;
+
+  /// No description provided for @roleRecordsOfficer.
+  ///
+  /// In en, this message translates to:
+  /// **'Records officer'**
+  String get roleRecordsOfficer;
+
+  /// No description provided for @roleReceptionist.
+  ///
+  /// In en, this message translates to:
+  /// **'Receptionist'**
+  String get roleReceptionist;
+
+  /// No description provided for @rolePharmacist.
+  ///
+  /// In en, this message translates to:
+  /// **'Pharmacist'**
+  String get rolePharmacist;
+
+  /// No description provided for @roleEmergencyResponder.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency responder / paramedic'**
+  String get roleEmergencyResponder;
+
+  /// No description provided for @rolePatient.
+  ///
+  /// In en, this message translates to:
+  /// **'Patient'**
+  String get rolePatient;
+
+  /// No description provided for @roleReauthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it's you'**
+  String get roleReauthTitle;
+
+  /// No description provided for @roleReauthBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password to switch to this role.'**
+  String get roleReauthBody;
+
+  /// No description provided for @rolePasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get rolePasswordLabel;
+
+  /// No description provided for @roleCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticator code'**
+  String get roleCodeLabel;
+
+  /// No description provided for @roleReauthConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get roleReauthConfirm;
+
+  /// No description provided for @roleReauthRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm. Try again.'**
+  String get roleReauthRetry;
+
   /// No description provided for @familyAdd.
   ///
   /// In en, this message translates to:
@@ -3653,6 +3743,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Without the link, a phone without the app cannot open this card.'**
   String get writeOfflineTagNoUrlHint;
+
+  /// No description provided for @scanTierPublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic information only'**
+  String get scanTierPublic;
+
+  /// No description provided for @scanTierPublicHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in as a responder to see more, such as blood type and emergency contact.'**
+  String get scanTierPublicHint;
+
+  /// No description provided for @scanTierResponder.
+  ///
+  /// In en, this message translates to:
+  /// **'Responder'**
+  String get scanTierResponder;
+
+  /// No description provided for @scanTierParamedic.
+  ///
+  /// In en, this message translates to:
+  /// **'Paramedic'**
+  String get scanTierParamedic;
+
+  /// No description provided for @scanTierClinical.
+  ///
+  /// In en, this message translates to:
+  /// **'Clinician'**
+  String get scanTierClinical;
+
+  /// No description provided for @scanTierSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Access level: {tier}'**
+  String scanTierSemantics(String tier);
+
+  /// No description provided for @scanNoneCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'None recorded as critical'**
+  String get scanNoneCritical;
+
+  /// No description provided for @scanNameHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Name not shown at this access level'**
+  String get scanNameHidden;
+
+  /// No description provided for @scanSeveritySevere.
+  ///
+  /// In en, this message translates to:
+  /// **'Severe'**
+  String get scanSeveritySevere;
+
+  /// No description provided for @scanSeverityModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get scanSeverityModerate;
+
+  /// No description provided for @scanSeverityMild.
+  ///
+  /// In en, this message translates to:
+  /// **'Mild'**
+  String get scanSeverityMild;
+
+  /// No description provided for @scanSeverityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity: {severity}'**
+  String scanSeverityLabel(String severity);
+
+  /// No description provided for @scanNoContact.
+  ///
+  /// In en, this message translates to:
+  /// **'No emergency contact on file'**
+  String get scanNoContact;
+
+  /// No description provided for @scanLocShared.
+  ///
+  /// In en, this message translates to:
+  /// **'Location shared with the patient's family'**
+  String get scanLocShared;
+
+  /// No description provided for @scanLocSharing.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing location...'**
+  String get scanLocSharing;
+
+  /// No description provided for @scanLocOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Location not shared (sharing is turned off)'**
+  String get scanLocOff;
+
+  /// No description provided for @scanLocDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Location not shared (permission not allowed)'**
+  String get scanLocDenied;
+
+  /// No description provided for @scanLocUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Location not shared (no position available)'**
+  String get scanLocUnavailable;
+
+  /// No description provided for @scanLocPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your location with the scan?'**
+  String get scanLocPromptTitle;
+
+  /// No description provided for @scanLocPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'CLARION can send your position with a scan so the patient's family and care team can see where help is. If you turn this on, your position is sent to the patient's emergency contact as a map link and shown to the patient and their care team. It is kept for 90 days and is sent only when you scan a card with Share my location on.'**
+  String get scanLocPromptBody;
+
+  /// No description provided for @scanLocAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get scanLocAllow;
+
+  /// No description provided for @scanLocNotNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get scanLocNotNow;
+
+  /// No description provided for @scanShareLocationChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Share my location'**
+  String get scanShareLocationChip;
+
+  /// No description provided for @mapOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open a maps app.'**
+  String get mapOpenFailed;
+
+  /// No description provided for @openInMaps.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Maps'**
+  String get openInMaps;
+
+  /// No description provided for @notificationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsTitle;
+
+  /// No description provided for @notificationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications yet.'**
+  String get notificationsEmpty;
+
+  /// No description provided for @notificationsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load notifications.'**
+  String get notificationsLoadError;
+
+  /// No description provided for @cardScanLocationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where my card was scanned'**
+  String get cardScanLocationsTitle;
+
+  /// No description provided for @cardScanLocationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No scan locations yet.'**
+  String get cardScanLocationsEmpty;
+
+  /// No description provided for @cardScanLocationsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported by the scanner's phone, so it may be approximate.'**
+  String get cardScanLocationsNote;
+
+  /// No description provided for @cardScanLocationsAccuracy.
+  ///
+  /// In en, this message translates to:
+  /// **'Accurate to about {m} m'**
+  String cardScanLocationsAccuracy(int m);
+
+  /// No description provided for @cardScanLocationsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load scan locations.'**
+  String get cardScanLocationsError;
+
+  /// No description provided for @scanWhoAnonymous.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone not signed in'**
+  String get scanWhoAnonymous;
+
+  /// No description provided for @roleChipSwitchTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to {role}'**
+  String roleChipSwitchTo(String role);
+
+  /// No description provided for @roleChipsGroupLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your roles'**
+  String get roleChipsGroupLabel;
+
+  /// No description provided for @scanShareLocationTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sends your position to the patient's emergency contact as a map link and shows it to the patient and their care team. Kept for 90 days. Sent only when you scan a card with this on.'**
+  String get scanShareLocationTip;
+
+  /// No description provided for @scanLocSharedAccuracy.
+  ///
+  /// In en, this message translates to:
+  /// **'Location shared with the patient's family (about {m} m)'**
+  String scanLocSharedAccuracy(int m);
+
+  /// No description provided for @scanLocSharedApprox.
+  ///
+  /// In en, this message translates to:
+  /// **'Location shared with the patient's family (approximate)'**
+  String get scanLocSharedApprox;
 }
 
 class _AppLocalizationsDelegate
