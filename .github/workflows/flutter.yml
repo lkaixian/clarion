@@ -38,3 +38,45 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+  build-apk:
+    name: Android debug build
+    needs: flutter   # only worth building once analyze + tests pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.1"
+          cache: true
+      - run: flutter pub get
+      - name: Build the APK
+        run: |
+          set +e
+          flutter build apk --debug 2>&1 | tee /tmp/build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            msg=$(tail -n 60 /tmp/build.log | cut -c1-220 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=flutter build output tail::${msg}"
+          fi
+          exit $rc
+      - name: The NFC launch filter got the configured host
+        run: |
+          f=$(find build -path '*merged_manifests*' -name AndroidManifest.xml | head -1)
+          echo "merged manifest: $f"
+          grep -n 'android:host' "$f"
+          grep -q 'android:host="clarion.larmkx.com"' "$f"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clarion-debug-apk
+          path: mobile_flutter/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
