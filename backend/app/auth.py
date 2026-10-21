@@ -483,7 +483,7 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
     if user is None:
         raise credentials_exception
 
-    # A time-boxed account (community responder) stops working the moment its
+    # A time-boxed role (community responder) stops working the moment its
     # window ends, on every authenticated request, whatever token it holds.
     if access_expired(user):
         raise HTTPException(
@@ -491,6 +491,16 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
             detail="Account access has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # The role this session acts as is the token's `role` claim, re-checked against what the
+    # account holds NOW: a role revoked (or lapsed) since the token was minted is a 401, never a
+    # silent fall-back to some other role. Single-role accounts are returned untouched.
+    claimed = payload.get("role")
+    if claimed is not None and claimed not in usable_roles(user):
+        raise credentials_exception
+    if len(all_roles(user)) > 1:
+        if claimed is None:
+            raise credentials_exception
+        user = RoleUser(user, claimed)
 
     if user.password_changed_at is not None:
         if token_pwd_changed_at is None:
@@ -528,15 +538,61 @@ def get_current_user_allow_pending_change(
     return _resolve_current_user(token, db)
 
 
-def access_expired(user: "models.User") -> bool:
-    """True once a time-boxed account's `access_expires_at` has passed.
-    Accounts with no expiry (NULL) never expire here."""
+def _expiry_passed(user: "models.User") -> bool:
     at = user.access_expires_at
     if at is None:
         return False
     if at.tzinfo is not None:
         at = at.astimezone(timezone.utc).replace(tzinfo=None)
     return at <= datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def all_roles(user: "models.User") -> "list[str]":
+    """Primary role first, then the extra ones, no duplicates."""
+    return list(dict.fromkeys([user.role, *(r.role for r in user.extra_roles)]))
+
+
+def usable_roles(user: "models.User") -> "list[str]":
+    """The roles that work right now. `access_expires_at` is the community-responder window, so
+    when it has passed only that role is dropped: a nurse who is also a lapsed guard keeps the rest."""
+    lapsed = _expiry_passed(user)
+    return [r for r in all_roles(user) if not (lapsed and r == "emergency_responder")]
+
+
+def access_expired(user: "models.User") -> bool:
+    """True when no role of the account works any more (a responder-only account past its window)."""
+    return not usable_roles(user)
+
+
+def pick_role(user: "models.User", requested: "str | None" = None) -> str:
+    """Role for a new session: the one asked for if the account may use it, else the one last used,
+    else the first usable. Raises if the account has none (callers check access_expired first)."""
+    usable = usable_roles(user)
+    for r in (requested, user.last_role):
+        if r in usable:
+            return r
+    return usable[0]
+
+
+class RoleUser:
+    """A multi-role account acting as ONE of its roles for this request. Reads like the real User
+    except `role` is the active role and `patient_id` is only visible while acting as a patient, so a
+    staff session can never be mistaken for the person's own patient record (and the reverse).
+    Writes to other attributes reach the real row; use `real_user()` to hand it to the session."""
+
+    def __init__(self, user, role):
+        object.__setattr__(self, "_user", user)
+        object.__setattr__(self, "role", role)
+        object.__setattr__(self, "patient_id", user.patient_id if role == "patient" else None)
+        object.__setattr__(self, "own_patient_id", user.patient_id)
+
+    def __getattr__(self, name):
+        return getattr(self._user, name)
+
+    def __setattr__(self, name, value):
+        if name in ("role", "patient_id"):
+            raise AttributeError(f"read-only: {name} follows the active role")
+        setattr(self._user, name, value)
 
 
 # A signed-in community responder (guard / volunteer) may use exactly these
@@ -578,8 +634,10 @@ class ActingUser:
 
 
 def real_user(user):
-    """The underlying User row, whether or not it is currently acting for someone."""
-    return user._user if isinstance(user, ActingUser) else user
+    """The underlying User row, whether or not it is currently acting for someone or as another role."""
+    while isinstance(user, (ActingUser, RoleUser)):
+        user = user._user
+    return user
 
 
 def act_as_claim(token: str):
@@ -593,7 +651,7 @@ def act_as_claim(token: str):
 
 # While acting for a dependant only these /auth routes work; everything else about the login
 # itself (password, 2FA, sessions) needs the account holder's own profile.
-ACTING_AUTH_PATHS = ("/auth/me", "/auth/refresh", "/auth/logout")
+ACTING_AUTH_PATHS = ("/auth/me", "/auth/refresh", "/auth/logout", "/auth/switch-role")
 
 
 def get_current_user(

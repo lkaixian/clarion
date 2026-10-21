@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 
 from .. import models, schemas, auth, permissions, mfa
 from ..rate_limit import limiter
@@ -40,7 +41,7 @@ from ..database import get_db
 from ..audit import log_access
 from ..catalogue_link import relink_on_update, resolve_drug_code
 from ..appointments import compute_reminder_offsets
-from ..clinical_access import _facility_known_patient_ids_select
+from ..clinical_access import _facility_known_patient_ids_select, _patient_known_to_facility
 from .profile import _persist_photo
 from ..inventory import (
     _get_inventory_item_or_404,
@@ -1636,7 +1637,7 @@ def _validated_responder_expiry(expires_at: datetime) -> datetime:
 def _get_responder_or_404(db: Session, user_id: str, facility: str) -> models.User:
     user = (
         db.query(models.User)
-        .filter(models.User.id == user_id, models.User.role == "emergency_responder",
+        .filter(models.User.id == user_id, models.user_has_role("emergency_responder"),
                 models.User.facility == facility)
         .first()
     )
@@ -1651,8 +1652,8 @@ def _responder_out(user: models.User) -> dict:
         exp = exp.replace(tzinfo=timezone.utc)  # stored as naive UTC; send it as an unambiguous instant
     return {
         "id": user.id, "email": user.email, "full_name": user.full_name, "facility": user.facility,
-        "access_expires_at": exp, "active": not auth.access_expired(user),
-        "must_change_password": user.must_change_password,
+        "access_expires_at": exp, "active": "emergency_responder" in auth.usable_roles(user),
+        "must_change_password": user.must_change_password, "tier": user.responder_tier or "community",
     }
 
 
@@ -1665,7 +1666,7 @@ def list_responders(
         return []
     users = (
         db.query(models.User)
-        .filter(models.User.role == "emergency_responder", models.User.facility == current_user.facility)
+        .filter(models.user_has_role("emergency_responder"), models.User.facility == current_user.facility)
         .order_by(models.User.full_name.asc())
         .all()
     )
@@ -1692,6 +1693,7 @@ def create_responder(
         facility=facility,
         must_change_password=True,
         access_expires_at=expires_at,
+        responder_tier=payload.tier,
     )
     db.add(user)
     try:
@@ -1702,7 +1704,7 @@ def create_responder(
     db.refresh(user)
     log_access(
         db, None, current_user.id, current_user.role, "create_responder_account",
-        detail=f"email={user.email} expires_at={expires_at.isoformat()}Z",
+        detail=f"email={user.email} expires_at={expires_at.isoformat()}Z tier={payload.tier}",
         actor_facility=current_user.facility,
     )
     return {**_responder_out(user), "temporary_password": temp_password}
@@ -1755,6 +1757,119 @@ def revoke_responder(
     return _responder_out(user)
 
 
+# ---------- One account, several roles ----------
+# A person who is, say, a nurse AND a patient (or a guard AND a patient) keeps ONE login and
+# switches role (POST /auth/switch-role). An admin adds or removes the extra roles here. The
+# account's primary role (User.role) never changes through these routes.
+
+def _get_account_or_404(db: Session, user_id: str, facility: str) -> models.User:
+    """An account in the admin's own facility, or a facility-less one (a patient's login, which
+    gets the admin's facility when it is given a staff role). Anything else is a generic 404."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user or user.facility not in (None, facility):
+        raise HTTPException(status_code=404, detail="Account not found")
+    return user
+
+
+@router.get("/users/{user_id}/roles")
+def list_account_roles(
+    user_id: str, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    user = _get_account_or_404(db, user_id, _require_facility(current_user))
+    return {"primary": user.role, "roles": auth.all_roles(user), "last_role": user.last_role}
+
+
+@router.post("/users/{user_id}/roles")
+def grant_account_role(
+    user_id: str, payload: schemas.RoleGrant, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    facility = _require_facility(current_user)
+    user = _get_account_or_404(db, user_id, facility)
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="An admin account is not given extra roles.")
+    if payload.role in auth.all_roles(user):
+        raise HTTPException(status_code=409, detail="The account already has that role.")
+
+    if payload.role == "patient":
+        if not payload.patient_id:
+            raise HTTPException(status_code=400, detail="patient_id is required for the patient role.")
+        if user.patient_id and user.patient_id != payload.patient_id:
+            raise HTTPException(status_code=409, detail="This account is already linked to another patient record.")
+        if not db.get(models.Patient, payload.patient_id):
+            raise HTTPException(status_code=404, detail="Patient not found")
+        if not _patient_known_to_facility(db, payload.patient_id, facility):
+            # Same need-to-know rule as the clinical record: only a patient this facility has dealt with.
+            raise HTTPException(status_code=403, detail="That patient has no record at your facility.")
+        taken = db.query(models.User.id).filter(
+            models.User.patient_id == payload.patient_id, models.User.id != user.id).first()
+        if taken:
+            raise HTTPException(status_code=409, detail="That patient record already has a login of its own.")
+        user.patient_id = payload.patient_id
+    else:
+        if user.facility is None:
+            # A patient's login becoming staff joins the admin's facility, but only if the admin's
+            # facility actually knows that patient (no staffing someone else's patients' logins).
+            if not user.patient_id or not _patient_known_to_facility(db, user.patient_id, facility):
+                raise HTTPException(status_code=404, detail="Account not found")
+            user.facility = facility
+        if payload.role == "emergency_responder":
+            if payload.expires_at is None:
+                raise HTTPException(status_code=400, detail="expires_at is required for the responder role.")
+            user.access_expires_at = _validated_responder_expiry(payload.expires_at)
+            user.responder_tier = payload.tier
+    user.extra_roles.append(models.UserRole(role=payload.role))
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:  # a concurrent grant of the same role / patient link
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Could not add the role; it may already exist.")
+    log_access(
+        db, user.patient_id if payload.role == "patient" else None, current_user.id, current_user.role,
+        "grant_account_role", detail=f"user={user.id} role={payload.role}"
+        + (f" tier={payload.tier}" if payload.role == "emergency_responder" else ""),
+        actor_facility=current_user.facility,
+    )
+    return {"primary": user.role, "roles": auth.all_roles(user)}
+
+
+@router.delete("/users/{user_id}/roles/{role}")
+def revoke_account_role(
+    user_id: str, role: str, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles("admin")),
+):
+    """Remove an extra role. Sessions acting as it stop working on their next request (the role is
+    re-checked every time); the account's other roles are untouched."""
+    user = _get_account_or_404(db, user_id, _require_facility(current_user))
+    row = next((r for r in user.extra_roles if r.role == role), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail="The account has no such extra role.")
+    user.extra_roles.remove(row)
+    if role == "emergency_responder":
+        user.access_expires_at = None
+        user.responder_tier = None
+    patient_id = user.patient_id
+    if role == "patient":
+        user.patient_id = None  # the login stops being the person's patient identity entirely
+    if user.last_role == role:
+        user.last_role = None
+    if user.role == "patient" and not user.extra_roles:
+        user.facility = None  # back to a plain patient login: no staff facility left on it
+    db.add(user)
+    try:
+        db.commit()
+    except StaleDataError:  # a concurrent revoke of the same role already removed it
+        db.rollback()
+        raise HTTPException(status_code=404, detail="The account has no such extra role.")
+    log_access(
+        db, patient_id if role == "patient" else None, current_user.id, current_user.role,
+        "revoke_account_role", detail=f"user={user.id} role={role}", actor_facility=current_user.facility,
+    )
+    return {"primary": user.role, "roles": auth.all_roles(user)}
+
+
 # ---------- Staff roster (read-only) ----------
 # Deliberately READ-ONLY: no admin-initiated clock actions and no account
 # editing/deactivation here -- staff clock themselves in/out via
@@ -1771,7 +1886,7 @@ def _get_roster_user_or_404(db: Session, user_id: str, facility: str) -> models.
         db.query(models.User)
         .filter(
             models.User.id == user_id,
-            models.User.role.in_(["clinician", "records_officer", "receptionist"]),
+            models.user_has_role(*["clinician", "records_officer", "receptionist"]),
             models.User.facility == facility,
         )
         .first()
@@ -1794,7 +1909,7 @@ def list_staff_roster(
     staff = (
         db.query(models.User)
         .filter(
-            models.User.role.in_(["clinician", "records_officer", "receptionist"]),
+            models.user_has_role(*["clinician", "records_officer", "receptionist"]),
             models.User.facility == current_user.facility,
         )
         .order_by(models.User.full_name.asc())
@@ -1972,7 +2087,7 @@ def reset_staff_password(
         db.query(models.User)
         .filter(
             models.User.id == user_id,
-            models.User.role.in_(["clinician", "records_officer", "receptionist", "admin"]),
+            models.user_has_role(*["clinician", "records_officer", "receptionist", "admin"]),
             models.User.facility == facility,
             models.User.id != current_user.id,
         )
@@ -2017,7 +2132,7 @@ def list_other_admins(
     facility = _require_facility(current_user)
     rows = (
         db.query(models.User)
-        .filter(models.User.role == "admin", models.User.facility == facility,
+        .filter(models.user_has_role("admin"), models.User.facility == facility,
                 models.User.id != current_user.id)
         .order_by(models.User.full_name)
         .all()

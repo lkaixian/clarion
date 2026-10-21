@@ -66,6 +66,7 @@ def _challenge_user(db: Session, token: str, want: Optional[str] = None) -> mode
 
 
 def _check_not_locked(db: Session, user: models.User) -> None:
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     now = _now_naive()
     if user.login_locked_until and now < user.login_locked_until:
         raise HTTPException(
@@ -82,16 +83,18 @@ def _check_not_locked(db: Session, user: models.User) -> None:
 
 
 def _record_failure(db: Session, user: models.User, action: str) -> None:
+    role, user = user.role, auth.real_user(user)
     user.login_failed_count = (user.login_failed_count or 0) + 1
     if user.login_failed_count >= auth.LOGIN_MAX_ATTEMPTS:
         user.login_locked_until = _now_naive() + timedelta(minutes=auth.LOGIN_LOCKOUT_MINUTES)
     db.add(user)
     db.commit()
-    log_access(db, user.patient_id, user.id, user.role, action,
+    log_access(db, user.patient_id, user.id, role, action,
                detail=f"count={user.login_failed_count}", actor_facility=user.facility)
 
 
 def _clear_failures(db: Session, user: models.User) -> None:
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     if user.login_failed_count or user.login_locked_until:
         user.login_failed_count = 0
         user.login_locked_until = None
@@ -103,6 +106,7 @@ def _accept_code(db: Session, user: models.User, code: str) -> Optional[str]:
     """"totp" / "recovery" when `code` is good, else None. Single use is
     enforced by an atomic UPDATE ... WHERE (rowcount 1 wins), not by a
     read-then-write, so concurrent workers can't both accept one code."""
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     if not mfa.is_enrolled(user):
         return None
     if mfa.looks_like_recovery_code(code):
@@ -157,6 +161,7 @@ def _new_recovery_codes(db: Session, user: models.User) -> list:
 
 
 def _begin_enrolment(db: Session, user: models.User) -> schemas.MfaEnrolStartOut:
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     if mfa.is_enrolled(user):
         raise HTTPException(status_code=409, detail="MFA is already enabled")
     secret = mfa.new_secret()
@@ -170,6 +175,7 @@ def _begin_enrolment(db: Session, user: models.User) -> schemas.MfaEnrolStartOut
 
 
 def _confirm_enrolment(db: Session, user: models.User, code: str) -> list:
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     if not user.mfa_secret_enc or user.mfa_enabled_at:
         raise HTTPException(status_code=409, detail="No MFA enrolment in progress")
     try:
@@ -192,6 +198,7 @@ def _confirm_enrolment(db: Session, user: models.User, code: str) -> list:
 
 
 def _verify_password(db: Session, user: models.User, password: str) -> bool:
+    user = auth.real_user(user)  # a multi-role session passes a role-wrapped user; the session needs the row
     if user.auth_source == "ldap":
         return bool(password) and _verify_ldap_existing_user(db, user, password)
     return auth.verify_password(password, user.hashed_password)
@@ -389,7 +396,7 @@ def mfa_status(db: Session = Depends(get_db), current_user: models.User = Depend
     remaining = db.query(models.MfaRecoveryCode).filter_by(user_id=current_user.id, used_at=None).count()
     return {
         "enabled": mfa.is_enrolled(current_user),
-        "required": mfa.role_requires_mfa(current_user.role),
+        "required": mfa.required_for(auth.real_user(current_user)),
         "recovery_codes_remaining": remaining,
     }
 
@@ -425,7 +432,7 @@ def mfa_setup_confirm(request: Request, payload: schemas.MfaCodeRequest = Body(.
 @limiter.limit("10/minute")
 def mfa_disable(request: Request, payload: schemas.PasswordAndCode, db: Session = Depends(get_db),
                 current_user: models.User = Depends(auth.get_current_user)):
-    if mfa.role_requires_mfa(current_user.role):
+    if mfa.required_for(auth.real_user(current_user)):  # any role of the account, not just the active one
         raise HTTPException(status_code=403, detail="MFA is required for your role and can't be turned off")
     if not mfa.is_enrolled(current_user):
         raise HTTPException(status_code=409, detail="MFA is not enabled")

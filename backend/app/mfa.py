@@ -63,14 +63,21 @@ def email_roles() -> set:
     return {r.strip() for r in raw.split(",") if r.strip()}
 
 
+def _roles_of(user) -> set:
+    """Every role the account holds (this runs before a session picks one)."""
+    return {user.role, *(r.role for r in getattr(user, "extra_roles", None) or [])}
+
+
 def email_target(db, user) -> Optional[str]:
     """Where an emailed code goes: the linked patient's own address, else the login email.
     None when the role may not use the email factor or no usable address exists."""
-    if user.role not in email_roles():
+    if not _roles_of(user) & email_roles():
         return None
     from . import models  # local import: mfa.py is loaded before models in some entry points
     addr = None
-    if getattr(user, "patient_id", None):
+    # Only a patient-only login trusts the patient record's address (staff can edit it); a login
+    # that also holds staff roles gets its codes at its own login email.
+    if getattr(user, "patient_id", None) and _roles_of(user) == {"patient"}:
         p = db.query(models.Patient.email).filter(models.Patient.id == user.patient_id).first()
         addr = p[0] if p else None
     addr = (addr or user.email or "").strip()
@@ -90,12 +97,17 @@ def role_requires_mfa(role: str) -> bool:
     return role in required_roles()
 
 
+def required_for(user) -> bool:
+    """MFA is required if ANY role the account holds requires it (not just the active one)."""
+    return any(role_requires_mfa(r) for r in _roles_of(user))
+
+
 def challenge_kind(user) -> Optional[str]:
     """None = no second factor; "verify" = enrolled, ask for a code;
     "enrol" = role requires MFA but the user has not set it up yet."""
     if is_enrolled(user):
         return "verify"
-    if role_requires_mfa(user.role):
+    if required_for(user):
         return "enrol"
     return None
 

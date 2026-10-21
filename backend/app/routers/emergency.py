@@ -1,12 +1,13 @@
 import base64
 import hashlib
+import hmac
 import io
 import os
 import secrets
 from urllib.parse import urlsplit
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import NamedTuple
+from typing import List, NamedTuple
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -31,34 +32,132 @@ _TIER_CEILING = {
     "public": frozenset({"allergies", "conditions"}),
     "responder": frozenset({"allergies", "conditions", "blood_type", "identity", "emergency_contact"}),
     "clinical": frozenset({"allergies", "conditions", "blood_type", "medications", "identity", "emergency_contact"}),
+    # An enrolled paramedic crew (User.responder_tier == "paramedic"): what a responder sees plus the
+    # active medications they need before treating. No other clinical access comes with it.
+    "paramedic": frozenset({"allergies", "conditions", "blood_type", "medications", "identity", "emergency_contact"}),
 }
 _TIER_BY_ROLE = {
     "emergency_responder": "responder", "receptionist": "responder",
     "clinician": "clinical", "admin": "clinical", "records_officer": "clinical", "pharmacist": "clinical",
 }
-# ponytail: no separate paramedic tier -- needs a User.responder_tier column once agencies enrol.
+# The paramedic tier is not a role of its own: it is an emergency_responder account whose admin set
+# responder_tier="paramedic" (POST /admin/responders, or a role grant), so every responder restriction
+# (allowed routes, expiry window, audit) applies to it unchanged.
+
+
+def _tier_for(current_user) -> str:
+    tier = _TIER_BY_ROLE.get(current_user.role, "public") if current_user else "public"
+    if current_user and current_user.role == "emergency_responder" and current_user.responder_tier == "paramedic":
+        tier = "paramedic"
+    return tier
 
 
 def _effective_scope(grant, current_user) -> "tuple[str, set]":
-    tier = _TIER_BY_ROLE.get(current_user.role, "public") if current_user else "public"
+    tier = _tier_for(current_user)
     return tier, (set(grant.scope or []) | {"identity", "emergency_contact"}) & _TIER_CEILING[tier]
 
 
-def _notify_patient_of_scan(db: Session, patient, tier: str, ident) -> None:
-    """Tell the patient's own account when anything above the public view was opened.
-    ponytail: patient's own account only; guardians of a minor need PatientDependant lookup."""
-    if tier == "public":
+# What the patient's contact is told about the scanner: a role, never a name.
+_WHO = {"public": "an unidentified person (position unverified)", "responder": "a responder",
+        "paramedic": "a paramedic", "clinical": "a clinician"}
+_LOCATION_TOKEN_MINUTES = 15
+_APPROX_ABOVE_M = 500  # a fix worse than this (or with no accuracy) is shown as approximate
+_MAX_LOCATIONS_PER_PATIENT_PER_10_MIN = 20
+_NOTE_DEDUP_MINUTES = 15          # an unread "card scanned" notice hides repeats this long ...
+_LOCATED_NOTE_DEDUP_MINUTES = 2   # ... but a located scan by an identified responder only this long
+_PUBLIC_LOCATION_SMS_WINDOW = timedelta(minutes=30)
+
+
+def _who(tier: str, facility: "str | None") -> str:
+    return _WHO.get(tier, "someone") + (f" ({facility})" if facility else "")
+
+
+def _loc_hash(token: str) -> str:
+    return hmac.new(auth.SECRET_KEY.encode(), b"scan-loc:" + token.encode(), hashlib.sha256).hexdigest()
+
+
+def _location_token(db: Session, patient, grant, tier: str, ident, current_user) -> str:
+    """Returned with every scan so the scanner's device can send its position LATER (a GPS fix that
+    was slow, or one that needed the user to tap "share"). An opaque random value (only its hash is
+    stored): it carries nothing readable, works ONCE, only for the scan it came from, only while that
+    card is still valid, and only for the same signed-in scanner when the scan was identified."""
+    token = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    db.query(models.ScanLocationGrant).filter(
+        models.ScanLocationGrant.expires_at < now - timedelta(days=1)).delete(synchronize_session=False)
+    db.add(models.ScanLocationGrant(
+        token_hash=_loc_hash(token), patient_id=patient.id, emergency_token_id=grant.id, tier=tier,
+        actor_user_id=current_user.id if current_user else None,
+        actor_role=ident.actor_role, actor_facility=ident.actor_facility,
+        expires_at=now + timedelta(minutes=_LOCATION_TOKEN_MINUTES)))
+    db.commit()
+    return token
+
+
+def _purge_old(db: Session) -> None:
+    """Retention, for EVERY patient (not only the one being written): scan positions, the contact
+    alert jobs that carry coordinates in their payload, and the notices that carry the map link."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=models.SCAN_LOCATION_KEEP_DAYS)
+    db.query(models.ScanLocation).filter(models.ScanLocation.created_at < cutoff).delete(synchronize_session=False)
+    db.query(models.Notification).filter(
+        models.Notification.kind.in_(("card_scanned", "contact_card_scanned")),
+        models.Notification.created_at < cutoff).delete(synchronize_session=False)
+    db.query(models.Job).filter(
+        models.Job.kind == contact_notify.JOB_KIND, models.Job.status.in_(("done", "failed")),
+        models.Job.created_at < datetime.now(timezone.utc) - timedelta(days=1)).delete(synchronize_session=False)
+
+
+def _record_location(db: Session, patient, tier: str, ident, loc) -> "dict | None":
+    """Store the scanner's reported position. None = not stored (this patient already got a burst of
+    them in the last 10 minutes), so a flood of fake rows can't push a genuine one out of the list."""
+    _purge_old(db)
+    burst = db.query(models.ScanLocation).filter(
+        models.ScanLocation.patient_id == patient.id,
+        models.ScanLocation.created_at >= datetime.now(timezone.utc) - timedelta(minutes=10)).count()
+    if burst >= _MAX_LOCATIONS_PER_PATIENT_PER_10_MIN:
+        db.commit()
+        return None
+    db.add(models.ScanLocation(
+        patient_id=patient.id, lat=loc.lat, lng=loc.lng, accuracy_m=loc.accuracy_m, tier=tier,
+        actor_role=ident.actor_role, actor_facility=ident.actor_facility))
+    db.commit()
+    return {"lat": loc.lat, "lng": loc.lng,
+            "approx": loc.accuracy_m is None or loc.accuracy_m > _APPROX_ABOVE_M}
+
+
+def _recent_public_location_sms(db: Session, patient_id: str) -> bool:
+    """True if a location text for this patient already went out recently (a public scanner's late
+    fix may only add one per window; an identified responder is not limited this way)."""
+    return db.query(models.Job).filter(
+        models.Job.kind == contact_notify.JOB_KIND,
+        models.Job.created_at >= datetime.now(timezone.utc) - _PUBLIC_LOCATION_SMS_WINDOW,
+        models.Job.payload.like(f'%"patient_id": "{patient_id}"%'), models.Job.payload.like('%"loc"%')).count() > 0
+
+
+def _notify_patient_of_scan(db: Session, patient, tier: str, ident, loc: "dict | None" = None) -> None:
+    """Tell the patient's own account when anything above the public view was opened, or when a
+    scanner's position came with the scan. A located scan by an identified responder is de-duplicated
+    over a much shorter window (2 min, not 15) so it is not hidden behind a bystander's earlier notice.
+    ponytail: the patient's own login(s) only; guardians of a minor need a PatientDependant lookup."""
+    if tier == "public" and not loc:
         return
-    account = db.query(models.User).filter(
-        models.User.patient_id == patient.id, models.User.role == "patient").first()
-    recent = account and db.query(models.Notification).filter(
-        models.Notification.user_id == account.id, models.Notification.kind == "card_scanned",
-        models.Notification.read_at.is_(None),
-        models.Notification.created_at >= datetime.now(timezone.utc) - timedelta(minutes=15)).first()
-    if account and not recent:
-        where = f" at {ident.actor_facility}" if ident.actor_facility else ""
+    accounts = db.query(models.User).filter(
+        models.User.patient_id == patient.id, models.user_has_role("patient")).all()
+    minutes = _LOCATED_NOTE_DEDUP_MINUTES if (loc and tier != "public") else _NOTE_DEDUP_MINUTES
+    where = f" at {ident.actor_facility}" if ident.actor_facility else ""
+    url = contact_notify.maps_url(loc["lat"], loc["lng"]) if loc else None
+    approx = ", approximate" if loc and loc.get("approx") else ""
+    for account in accounts:
+        recent = db.query(models.Notification).filter(
+            models.Notification.user_id == account.id, models.Notification.kind == "card_scanned",
+            models.Notification.read_at.is_(None),
+            models.Notification.created_at >= datetime.now(timezone.utc) - timedelta(minutes=minutes)).first()
+        if recent:
+            continue
         notify(db, account.id, "card_scanned", "Your emergency card was scanned",
-               body=f"Opened with {tier} access{where}.", urgent=True)
+               body=f"Opened with {tier} access{where}."
+               + (f" Where (reported by the scanner's phone{approx}): {url}" if url else ""),
+               link=url, urgent=True)
 
 
 def _require_patient_present_for_staff(db: Session, current_user: models.User, patient_id: str) -> None:
@@ -604,9 +703,16 @@ def scan_emergency_card(
     if tier == "public":
         result["omitted_non_critical"] = {}
 
-    _notify_patient_of_scan(db, patient, tier, ident)
+    loc = _record_location(db, patient, tier, ident, payload.location) if payload.location else None
+    _notify_patient_of_scan(db, patient, tier, ident, loc)
     # Every successful scan alerts the emergency contact (queued, never blocks or fails the scan).
-    family = contact_notify.safe_queue(db, patient)
+    family = contact_notify.safe_queue(
+        db, patient, location=loc, who=_who(tier, ident.actor_facility),
+        priority=bool(loc) and tier != "public", pub=tier == "public")
+    if family == "throttled" and loc:  # a dropped location text must not be silent
+        log_access(db, patient.id, ident.actor, ident.actor_role, "emergency_contact_alert_throttled",
+                   detail=f"tier={tier} located=1", actor_facility=ident.actor_facility)
+    result["location_token"] = _location_token(db, patient, grant, tier, ident, current_user)
     if tier != "public":  # the public tier must not learn whether a contact exists or was alerted recently
         result["family_notification"] = family
     log_access(
@@ -620,6 +726,76 @@ def scan_emergency_card(
     _audit_sharing_bypass_if_any(db, patient, ident)
 
     return result
+
+
+@router.post("/location")
+@limiter.limit("10/minute")  # per-IP; the real bounds are one use per token and the per-number SMS caps
+def share_scan_location(
+    request: Request,
+    payload: schemas.ScanLocationSend,
+    db: Session = Depends(get_db),
+    current_user: "models.User | None" = Depends(auth.get_optional_current_user),
+):
+    """A scanner's position that arrived AFTER the scan (slow GPS fix, or the user tapped "share").
+    Authorised by the one-use `location_token` that scan returned: it only ever reaches the patient
+    that scan was of, only while the card is still valid, and for an identified scan only from the
+    same signed-in scanner. Who it is attributed to (tier, role, facility) is what was recorded at
+    scan time, never what this request claims. The contact gets a "new location" text."""
+    gone = HTTPException(status_code=400, detail="This location link has expired. Scan the card again.")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row = db.query(models.ScanLocationGrant).filter(
+        models.ScanLocationGrant.token_hash == _loc_hash(payload.token)).first()
+    if row is None or row.used_at is not None or row.expires_at.replace(tzinfo=None) < now:
+        raise gone
+    card = db.get(models.EmergencyToken, row.emergency_token_id)
+    if card is None or card.revoked or card.expires_at < now:
+        raise gone
+    if row.actor_user_id and (current_user is None or current_user.id != row.actor_user_id):
+        raise gone
+    patient = db.get(models.Patient, row.patient_id)
+    won = db.query(models.ScanLocationGrant).filter(
+        models.ScanLocationGrant.id == row.id, models.ScanLocationGrant.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+    db.commit()
+    if patient is None or won != 1:
+        raise gone
+    tier = row.tier
+    ident = _ResponderAudit(
+        actor=row.actor_user_id or "public_unverified:location", actor_role=row.actor_role or "public_unverified",
+        actor_facility=row.actor_facility, detail_suffix="")
+    loc = _record_location(db, patient, tier, ident, payload.location)
+    if loc is None:  # a burst: stored nothing, told nobody
+        return {"status": "ok"}
+    _notify_patient_of_scan(db, patient, tier, ident, loc)
+    identified = row.actor_user_id is not None
+    if identified or not _recent_public_location_sms(db, patient.id):
+        family = contact_notify.safe_queue(db, patient, location=loc, who=_who(tier, ident.actor_facility),
+                                           priority=True, update=True, pub=not identified)
+        if family == "throttled":
+            log_access(db, patient.id, ident.actor, ident.actor_role, "emergency_contact_alert_throttled",
+                       detail=f"tier={tier} located=1 update=1", actor_facility=ident.actor_facility)
+    log_access(db, patient.id, ident.actor, ident.actor_role, "emergency_location_shared",
+               detail=f"tier={tier}", actor_facility=ident.actor_facility)
+    return {"status": "ok"}
+
+
+@router.get("/locations/{patient_id}", response_model=List[schemas.ScanLocationOut])
+def list_scan_locations(
+    patient_id: str, db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_page_access("patients")),
+):
+    """Where this patient's card was recently scanned (as reported by the scanners' devices), newest
+    first. The patient (or a guardian acting for them), or staff at a facility the patient is at."""
+    if current_user.role == "patient" and current_user.patient_id != patient_id:
+        raise HTTPException(status_code=403, detail="Cannot view another patient's scan locations")
+    _require_patient_present_for_staff(db, current_user, patient_id)
+    rows = (
+        db.query(models.ScanLocation).filter(models.ScanLocation.patient_id == patient_id)
+        .order_by(models.ScanLocation.created_at.desc()).limit(50).all()
+    )
+    log_access(db, patient_id, current_user.id, current_user.role, "view_scan_locations",
+               detail=f"rows={len(rows)}", actor_facility=current_user.facility)
+    return rows
 
 
 @router.post("/revoke/{card_reference}")
@@ -899,9 +1075,16 @@ def scan_nfc_card(
     if tier == "public":
         result["omitted_non_critical"] = {}
 
-    _notify_patient_of_scan(db, patient, tier, ident)
+    loc = _record_location(db, patient, tier, ident, payload.location) if payload.location else None
+    _notify_patient_of_scan(db, patient, tier, ident, loc)
     # Every successful scan alerts the emergency contact (queued, never blocks or fails the scan).
-    family = contact_notify.safe_queue(db, patient)
+    family = contact_notify.safe_queue(
+        db, patient, location=loc, who=_who(tier, ident.actor_facility),
+        priority=bool(loc) and tier != "public", pub=tier == "public")
+    if family == "throttled" and loc:  # a dropped location text must not be silent
+        log_access(db, patient.id, ident.actor, ident.actor_role, "emergency_contact_alert_throttled",
+                   detail=f"tier={tier} located=1", actor_facility=ident.actor_facility)
+    result["location_token"] = _location_token(db, patient, grant, tier, ident, current_user)
     if tier != "public":  # the public tier must not learn whether a contact exists or was alerted recently
         result["family_notification"] = family
     log_access(
@@ -962,7 +1145,7 @@ def get_tag_keys(
     # on a phone that is offline: the device treats `valid_until` as a hard stop
     # on top of key_max_age_hours.
     valid_until = None
-    if current_user.access_expires_at is not None:
+    if "emergency_responder" in auth.all_roles(auth.real_user(current_user)) and current_user.access_expires_at is not None:
         exp = current_user.access_expires_at
         if exp.tzinfo is not None:
             exp = exp.astimezone(timezone.utc).replace(tzinfo=None)

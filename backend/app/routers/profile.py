@@ -82,6 +82,7 @@ def _persist_signature_bytes(db: Session, user: models.User, raw: bytes) -> None
     (overwrite), record its object coordinates on the user row, commit.
     Shared by POST /me/signature and the `signature_b64`-on-first-use path in
     consultation / annotation sign-off."""
+    user = auth.real_user(user)  # may arrive role-wrapped from a multi-role session
     _validate_png_bytes(raw)
     try:
         meta = get_object_store().put(
@@ -205,7 +206,7 @@ def delete_my_signature(
     already-signed records keep their own snapshot copy regardless."""
     key = current_user.signature_object_key
     apply_object_meta(current_user, None, "signature")
-    db.add(current_user)
+    db.add(auth.real_user(current_user))
     db.commit()
     if key:
         try:
@@ -254,6 +255,7 @@ def _persist_photo(db: Session, user: models.User, file: UploadFile) -> None:
     """Validate + normalise + persist an uploaded profile photo, best-effort
     replacing any existing one. Shared by POST /me/photo and POST
     /admin/staff/{id}/photo. Commits the row."""
+    user = auth.real_user(user)  # may arrive role-wrapped from a multi-role session
     enforce_upload_size(file, MAX_PHOTO_BYTES, "Photo")
     raw = file.file.read()
     if not raw:
@@ -355,7 +357,7 @@ def update_my_profile(
     Never touches the login/auth email -- see schemas.MyProfileUpdate."""
     current_user.bio = payload.bio
     current_user.contact_email = payload.contact_email
-    db.add(current_user)
+    db.add(auth.real_user(current_user))
     db.commit()
 
     log_access(
@@ -400,7 +402,7 @@ def delete_my_photo(
 ):
     key = current_user.photo_object_key
     apply_object_meta(current_user, None, "photo")
-    db.add(current_user)
+    db.add(auth.real_user(current_user))
     db.commit()
     if key:
         try:

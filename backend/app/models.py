@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, DateTime, ForeignKey, Text, Boolean, JSON, Integer, Index,
-    UniqueConstraint, Float, Computed, BigInteger, Date, CheckConstraint, false
+    UniqueConstraint, Float, Computed, BigInteger, Date, CheckConstraint, false, or_, select
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship, validates
@@ -52,7 +52,7 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     role = Column(String(64), nullable=False)  # admin | clinician | records_officer | receptionist | patient | emergency_responder | pharmacist
     facility = Column(String(255), nullable=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=True, index=True)  # set if role == patient
+    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=True, unique=True, index=True)  # the patient record this login IS (one login per record)
 
     # Per-counter reception scoping (Malaysian government hospitals split
     # front-desk registration into specialty counters -- ICU, O&G, ortho,
@@ -217,7 +217,31 @@ class User(Base):
     # of silently provisioning two rows for one person.
     ldap_username = Column(String(255), unique=True, nullable=True)
 
+    # One person, several roles. `role` stays the account's PRIMARY role (unchanged for every
+    # existing row); further roles live in `user_roles`. The role a session acts as is a claim in
+    # its access token, re-checked against this set on every request (auth.usable_roles), and
+    # `last_role` is the one the person was last using, so a new sign-in lands where they left off.
+    last_role = Column(String(64), nullable=True)
+    # Only meaningful for the emergency_responder role: "community" (default; guard / volunteer)
+    # or "paramedic" (enrolled agency crew: also sees active medications).
+    responder_tier = Column(String(16), nullable=True)
+
     patient = relationship("Patient", back_populates="user_account", foreign_keys=[patient_id])
+    extra_roles = relationship("UserRole", cascade="all, delete-orphan", lazy="selectin")
+
+
+class UserRole(Base):
+    """A role held IN ADDITION to User.role (e.g. a nurse who is also a patient)."""
+    __tablename__ = "user_roles"
+
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    role = Column(String(64), primary_key=True)
+
+
+def user_has_role(*roles: str):
+    """SQL predicate: the account's primary role OR any extra role is one of `roles`. Use this,
+    not `User.role == x`, wherever accounts are looked up BY role."""
+    return or_(User.role.in_(roles), User.id.in_(select(UserRole.user_id).where(UserRole.role.in_(roles))))
 
 
 class LdapRoleMapping(Base):
@@ -3053,6 +3077,46 @@ class Notification(Base):
     urgent = Column(Boolean, nullable=False, default=False)
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc), index=True)
     read_at = Column(TZDateTime, nullable=True)
+
+
+class ScanLocation(Base):
+    """Where an emergency card was scanned, as reported by the SCANNER's own device (GPS / browser).
+    Unverified by nature: a client can send any coordinates, so every consumer shows it as "reported".
+    Sent to the patient and their emergency contact as a map link, and listed for the patient and
+    for staff who may see the patient. Rows older than SCAN_LOCATION_KEEP_DAYS are purged on insert."""
+    __tablename__ = "scan_locations"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    lat = Column(Float, nullable=False)
+    lng = Column(Float, nullable=False)
+    accuracy_m = Column(Float, nullable=True)
+    tier = Column(String(16), nullable=False)  # public | responder | paramedic | clinical
+    actor_role = Column(String(64), nullable=True)
+    actor_facility = Column(String(255), nullable=True)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+SCAN_LOCATION_KEEP_DAYS = 90
+
+
+class ScanLocationGrant(Base):
+    """The one-use right to send a position after a scan (POST /emergency/location). The token itself
+    is opaque and only its hash is stored. Bound to the scan's patient, card and tier and, for an
+    identified scan, to the signed-in scanner; expires in 15 minutes."""
+    __tablename__ = "scan_location_grants"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    emergency_token_id = Column(String(36), nullable=False)  # the card (EmergencyToken.id) that was scanned
+    tier = Column(String(16), nullable=False)
+    actor_user_id = Column(String(36), nullable=True)  # None = an unidentified scanner
+    actor_role = Column(String(64), nullable=True)
+    actor_facility = Column(String(255), nullable=True)
+    expires_at = Column(TZDateTime, nullable=False, index=True)
+    used_at = Column(TZDateTime, nullable=True)
+    created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class Sponsor(Base):

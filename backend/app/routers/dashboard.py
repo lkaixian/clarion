@@ -59,14 +59,14 @@ def _compute_summary(db: Session, facility: str) -> schemas.DashboardSummaryOut:
     )
 
     physicians_total = (
-        db.query(models.User).filter(models.User.role == "clinician", models.User.facility == facility).count()
+        db.query(models.User).filter(models.user_has_role("clinician"), models.User.facility == facility).count()
     )
     physicians_on_duty = (
         db.query(models.StaffClockEvent.user_id)
         .join(models.User, models.User.id == models.StaffClockEvent.user_id)
         .filter(
             models.StaffClockEvent.facility_name == facility, models.StaffClockEvent.clock_out_at.is_(None),
-            models.User.role == "clinician",
+            models.user_has_role("clinician"),
         ).distinct().count()
     )
 

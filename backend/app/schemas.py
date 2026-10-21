@@ -189,6 +189,11 @@ class UserOut(BaseModel):
     # Enforced server-side by auth.require_page_access (router-level in
     # main.py) -- this field is the client's copy of that same decision.
     allowed_pages: List[str] = []
+    # Every role this account can act as right now; `role` is the ACTIVE one. One entry for the
+    # (usual) single-role account, which clients then show no role switcher for.
+    roles: List[str] = []
+    # emergency_responder only: "community" or "paramedic" (see models.User.responder_tier).
+    responder_tier: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -265,6 +270,51 @@ class RefreshTokenRequest(BaseModel):
     sends no body at all."""
     refresh_token: Optional[str] = None
     act_as: Optional[str] = None  # keep acting for this profile (re-checked on every request)
+    act_role: Optional[str] = None  # keep acting as this role (used only if the account still holds it)
+
+
+class SwitchRoleRequest(BaseModel):
+    """POST /auth/switch-role: act as another role the account holds."""
+    role: str = Field(min_length=1, max_length=64)
+    # Needed only when moving from a low-trust role (patient / community responder) to a staff role:
+    # the account's password, plus its authenticator code if one is enrolled.
+    password: Optional[str] = None
+    code: Optional[str] = Field(default=None, max_length=16)
+
+    class Config:
+        extra = "forbid"
+
+
+# A role an admin may add to an existing account. "admin" is deliberately absent: nobody becomes an
+# admin by being granted a second role; an admin account is provisioned as one.
+GRANTABLE_ROLES = {"clinician", "records_officer", "receptionist", "pharmacist", "emergency_responder", "patient"}
+RESPONDER_TIERS = ("community", "paramedic")
+
+
+class RoleGrant(BaseModel):
+    """POST /admin/users/{id}/roles. `patient` needs `patient_id` (an existing record with no
+    login of its own); `emergency_responder` needs `expires_at` (same cap as /admin/responders)."""
+    role: str
+    patient_id: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    tier: str = "community"
+
+    @field_validator("role")
+    @classmethod
+    def _grantable(cls, v: str) -> str:
+        if v not in GRANTABLE_ROLES:
+            raise ValueError(f"role must be one of: {', '.join(sorted(GRANTABLE_ROLES))}")
+        return v
+
+    @field_validator("tier")
+    @classmethod
+    def _tier(cls, v: str) -> str:
+        if v not in RESPONDER_TIERS:
+            raise ValueError(f"tier must be one of: {', '.join(RESPONDER_TIERS)}")
+        return v
+
+    class Config:
+        extra = "forbid"
 
 
 # ---------- Patient account issuance / password reset ----------
@@ -1797,10 +1847,50 @@ class EmergencyProfileRequest(BaseModel):
         return v
 
 
+class ScanLocationIn(BaseModel):
+    """The scanner device's position. Finite, in range, and not the (0, 0) a failed fix reports."""
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    accuracy_m: Optional[float] = Field(default=None, ge=0, le=100000, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _not_null_island(self):
+        if self.lat == 0 and self.lng == 0:
+            raise ValueError("no position")
+        return self
+
+    class Config:
+        extra = "forbid"
+
+
+class ScanLocationSend(BaseModel):
+    """POST /emergency/location: a position that arrived after the scan (or needed a tap to allow)."""
+    token: str = Field(min_length=10, max_length=2000)
+    location: ScanLocationIn
+
+    class Config:
+        extra = "forbid"
+
+
+class ScanLocationOut(BaseModel):
+    id: str
+    lat: float
+    lng: float
+    accuracy_m: Optional[float] = None
+    tier: str
+    actor_role: Optional[str] = None
+    actor_facility: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class EmergencyScanRequest(BaseModel):
     card_reference: str
     responder_name: Optional[str] = None
     responder_org: Optional[str] = None
+    location: Optional[ScanLocationIn] = None  # the scanner's own position, if it has one
 
 
 # ---------- Emergency: NFC physical cards ----------
@@ -1865,6 +1955,7 @@ class NfcScanRequest(BaseModel):
     nfc_uid: str
     responder_name: Optional[str] = None
     responder_org: Optional[str] = None
+    location: Optional[ScanLocationIn] = None
 
     _check_nfc_uid = field_validator("nfc_uid")(_validated_nfc_uid)
 
@@ -2169,6 +2260,7 @@ class ResponderCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     email: EmailStr
     expires_at: datetime
+    tier: Literal["community", "paramedic"] = "community"
 
     class Config:
         extra = "forbid"
@@ -2191,6 +2283,7 @@ class ResponderOut(BaseModel):
     access_expires_at: Optional[datetime] = None
     active: bool
     must_change_password: bool = False
+    tier: str = "community"
 
 
 class ResponderIssued(ResponderOut):

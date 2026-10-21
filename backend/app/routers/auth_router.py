@@ -293,10 +293,15 @@ def _missing_profile_fields(user: models.User) -> list:
     ]
 
 
-def _user_out_for(db: Session, user: models.User, patient_id: Optional[str] = None) -> schemas.UserOut:
+def _user_out_for(db: Session, user: models.User, patient_id: Optional[str] = None,
+                  role: Optional[str] = None) -> schemas.UserOut:
     """The user as clients see it. When `patient_id` is a profile this patient login is acting
     for, `patient_id`/`full_name` describe that profile (so clients that read them need no
-    change) and `home_patient_id` is the login's own record."""
+    change) and `home_patient_id` is the login's own record. `role` = the role this session
+    acts as (default: the account's own pick); `roles` lists every role it may switch to."""
+    row = auth.real_user(user)
+    user = auth.RoleUser(row, auth.pick_role(row, role or user.role))
+    user.roles = auth.usable_roles(row)
     _with_missing_profile_fields(user)
     _attach_allowed_pages(db, user)
     _attach_has_signature(user)
@@ -479,7 +484,7 @@ def _complete_login(
     new_device = bool(fp) and not db.query(models.RefreshToken.id).filter_by(
         user_id=user.id, client_fingerprint=fp).first()
     result = _issue_login_response(db, response, user, fingerprint=fp, ip=ip, user_agent=ua, mfa_ok=mfa_ok)
-    log_access(db, user.patient_id, user.id, user.role, "login_success", actor_facility=user.facility)
+    log_access(db, user.patient_id, user.id, auth.pick_role(user), "login_success", actor_facility=user.facility)
     if new_device and user.email and not user.email.endswith((".test", ".invalid", ".demo")):
         try:
             send_new_signin_email(user.email, user.full_name,
@@ -496,6 +501,7 @@ def _issue_login_response(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
     mfa_ok: bool = False,
+    requested_role: Optional[str] = None,
 ) -> schemas.Token:
     """Shared by every successful-auth branch in login() (local, LDAP JIT,
     LDAP resync) and by POST /auth/refresh: mints the short-lived access
@@ -510,19 +516,16 @@ def _issue_login_response(
     nothing the client held), which the concurrent-refresh-race check
     (auth._is_concurrent_refresh_race) relies on. The login paths pass
     nothing and still get a freshly issued token."""
+    role = auth.pick_role(user, requested_role)
     token = auth.create_access_token(
-        {"sub": user.id, "role": user.role},
+        {"sub": user.id, "role": role},
         password_changed_at=user.password_changed_at,
     )
     if refresh_plaintext is None:
         refresh_plaintext, _row = auth.issue_refresh_token(
             db, user, fingerprint=fingerprint, ip=ip, user_agent=user_agent, mfa_ok=mfa_ok)
     _set_refresh_cookie(response, refresh_plaintext)
-    _with_missing_profile_fields(user)
-    _attach_allowed_pages(db, user)
-    _attach_has_signature(user)
-    _attach_has_photo(user)
-    return schemas.Token(access_token=token, user=user, refresh_token=refresh_plaintext)
+    return schemas.Token(access_token=token, user=_user_out_for(db, user, role=role), refresh_token=refresh_plaintext)
 
 
 @router.post("/login", response_model=Union[schemas.Token, schemas.MfaChallenge])
@@ -676,12 +679,14 @@ def refresh_access_token(
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     user, new_plaintext = result
-    issued = _issue_login_response(db, response, user, refresh_plaintext=new_plaintext, fingerprint=fp)
-    if body and body.act_as and may_act_for(db, user, body.act_as) and body.act_as != user.patient_id:
+    issued = _issue_login_response(db, response, user, refresh_plaintext=new_plaintext, fingerprint=fp,
+                                   requested_role=body.act_role if body else None)
+    if body and body.act_as and issued.user.role == "patient" and issued.user.patient_id \
+            and may_act_for(db, auth.RoleUser(user, "patient"), body.act_as) and body.act_as != issued.user.patient_id:
         # Keep the client acting for the profile it had selected (the link is re-checked here).
         issued.access_token = auth.create_access_token(
-            {"sub": user.id, "role": user.role, "act_as": body.act_as}, password_changed_at=user.password_changed_at)
-        issued.user = _user_out_for(db, user, body.act_as)
+            {"sub": user.id, "role": "patient", "act_as": body.act_as}, password_changed_at=user.password_changed_at)
+        issued.user = _user_out_for(db, user, body.act_as, role="patient")
     return issued
 
 
@@ -722,11 +727,39 @@ def me(
         if not may_act_for(db, current_user, act_as):
             raise HTTPException(status_code=403, detail="You can no longer act for this profile")
         return _user_out_for(db, current_user, act_as)
-    _with_missing_profile_fields(current_user)
-    _attach_allowed_pages(db, current_user)
-    _attach_has_signature(current_user)
-    _attach_has_photo(current_user)
-    return current_user
+    return _user_out_for(db, current_user)
+
+
+_LOW_TRUST_ROLES = ("patient", "emergency_responder")
+
+
+@router.post("/switch-role", response_model=schemas.Token)
+@limiter.limit("30/minute")
+def switch_role(request: Request, payload: schemas.SwitchRoleRequest, db: Session = Depends(get_db),
+                current_user=Depends(auth.get_current_user)):
+    """Act as another role this account holds (nurse -> patient, guard -> patient...). Returns a
+    fresh access token for that role and remembers it, so the next sign-in starts there. The role
+    is checked against what the account holds right now; a profile being acted for is dropped."""
+    user = auth.real_user(current_user)
+    if payload.role not in auth.usable_roles(user):
+        raise HTTPException(status_code=403, detail="This account does not have that role.")
+    if current_user.role in _LOW_TRUST_ROLES and payload.role not in _LOW_TRUST_ROLES:
+        # A token from a patient app / guard's scanner must not be enough to become staff: the second
+        # factor and password that protected the sign-in are asked for again.
+        from .auth_security import require_stepup  # lazy: auth_security imports this module
+        if not payload.password:
+            raise HTTPException(status_code=428, detail={
+                "detail": "Enter your password to switch to this role.", "reauth_required": True,
+                "needs_code": mfa.is_enrolled(user)})
+        require_stepup(db, user, payload.password, payload.code or "")
+    user.last_role = payload.role
+    db.add(user)
+    db.commit()
+    log_access(db, user.patient_id if payload.role == "patient" else None, user.id, payload.role,
+               "switch_role", detail=f"from={current_user.role}", actor_facility=user.facility)
+    token = auth.create_access_token({"sub": user.id, "role": payload.role},
+                                     password_changed_at=user.password_changed_at)
+    return schemas.Token(access_token=token, user=_user_out_for(db, user, role=payload.role))
 
 
 def _apply_new_password(db: Session, user: models.User, new_password: str, must_change: bool) -> None:
@@ -734,6 +767,7 @@ def _apply_new_password(db: Session, user: models.User, new_password: str, must_
     bookkeeping. Shared by staff-issued/regenerated accounts and
     self-service forgot-password, per the "same primitive" design — avoids
     the two flows drifting out of sync."""
+    user = auth.real_user(user)  # change_password hands in the session's (possibly role-wrapped) user
     user.hashed_password = auth.hash_password(new_password)
     user.must_change_password = must_change
     user.reset_attempt_count = 0
@@ -776,6 +810,12 @@ def issue_patient_account(
     user = db.query(models.User).filter(models.User.patient_id == patient_id).first()
 
     if user:
+        if auth.all_roles(user) != ["patient"]:
+            # The same login also carries staff / responder roles. Resetting it here would hand a
+            # records officer that person's staff access, so only its owner (or the staff reset) may.
+            raise HTTPException(
+                status_code=409,
+                detail="This person's login also holds other roles; its password cannot be reset from the patient record.")
         _apply_new_password(db, user, temp_password, must_change=True)
         action = "reissue_patient_account_password"
     else:
@@ -850,7 +890,9 @@ def request_password_reset_otp(request: Request, payload: schemas.PasswordResetO
     patient = _resolve_patient_by_nric(db, payload.national_id)
     user = db.query(models.User).filter(models.User.patient_id == patient.id).first() if patient else None
 
-    if not user:
+    # A login that also holds staff roles is not reset by a code sent to the patient record's email
+    # (staff can edit that address); it looks exactly like "no such account".
+    if not user or auth.all_roles(user) != ["patient"]:
         return _REQUEST_OTP_GENERIC_RESPONSE
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -918,7 +960,7 @@ def reset_password_with_otp(request: Request, payload: schemas.PasswordResetWith
     patient = _resolve_patient_by_nric(db, payload.national_id)
     user = db.query(models.User).filter(models.User.patient_id == patient.id).first() if patient else None
 
-    if not user or not user.otp_code_hash or not user.otp_expires_at:
+    if not user or auth.all_roles(user) != ["patient"] or not user.otp_code_hash or not user.otp_expires_at:
         raise HTTPException(status_code=400, detail=_RESET_WITH_OTP_GENERIC_ERROR)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)

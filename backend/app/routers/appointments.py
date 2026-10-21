@@ -448,7 +448,7 @@ def _clinicians_for(
     `department` or unscoped (User.section is NULL means "sees the whole
     facility" everywhere else this column is used -- see User.section's
     docstring -- so an unscoped clinician is a valid "general" pick too)."""
-    q = db.query(models.User).filter(models.User.role == "clinician", models.User.facility == facility_name)
+    q = db.query(models.User).filter(models.user_has_role("clinician"), models.User.facility == facility_name)
     if clinician_id:
         q = q.filter(models.User.id == clinician_id)
     elif department:

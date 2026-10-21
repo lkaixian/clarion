@@ -78,9 +78,9 @@ def _home(current_user) -> models.User:
     """The login itself (never the profile it is currently acting for), which must be a patient
     login with its own patient record."""
     user = auth.real_user(current_user)
-    if user.role != "patient" or not user.patient_id:
+    if current_user.role != "patient" or not user.patient_id:  # the ACTIVE role, not the primary
         raise HTTPException(status_code=403, detail="Only patient logins can manage family profiles")
-    return user
+    return auth.RoleUser(user, "patient")  # reads as the patient role even on a multi-role account
 
 
 def _profile(patient: models.Patient, *, link=None, is_self=False, has_own_login=False) -> dict:
@@ -151,7 +151,7 @@ def switch_profile(request: Request, payload: ProfileSwitch, db: Session = Depen
         waiting = link is not None and link.relation_code in SELF_SERVICE_RELATION_CODES and needs_approval(db, link)
         raise HTTPException(status_code=403,
                             detail="Waiting for their approval." if waiting else "You cannot act for this profile.")
-    claims = {"sub": user.id, "role": user.role}
+    claims = {"sub": user.id, "role": "patient"}  # _home() already required the patient role
     if payload.patient_id != user.patient_id:
         claims["act_as"] = payload.patient_id
         log_access(db, payload.patient_id, user.id, user.role, "switch_profile")

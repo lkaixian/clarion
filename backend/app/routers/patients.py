@@ -331,7 +331,7 @@ def list_booking_options(
     ]
     clinicians = (
         db.query(models.User)
-        .filter(models.User.role == "clinician", models.User.facility == facility_name)
+        .filter(models.user_has_role("clinician"), models.User.facility == facility_name)
         .order_by(models.User.full_name.asc())
         .all()
     )
@@ -361,7 +361,7 @@ def get_clinician_photo(
     row -- never leaks another staff member's photo through this path."""
     target = (
         db.query(models.User)
-        .filter(models.User.id == clinician_id, models.User.role == "clinician")
+        .filter(models.User.id == clinician_id, models.user_has_role("clinician"))
         .first()
     )
     if target is None or not target.photo_object_key:
