@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
 import '../config/app_config.dart';
+import '../models/family.dart';
 import '../models/bill.dart';
 import '../models/booking.dart';
 import '../models/emergency_card.dart';
@@ -140,6 +141,11 @@ class ApiClient {
             }
             onUnauthorized?.call();
           }
+          // Family profiles: the guardian link was removed while acting.
+          if (error.response?.statusCode == 403 &&
+              '${error.response?.data}'.contains('no longer act for this profile')) {
+            onActingLinkRemoved?.call();
+          }
           handler.next(error);
         },
       ),
@@ -160,6 +166,16 @@ class ApiClient {
   /// both exist.
   void Function()? onUnauthorized;
 
+  /// Fired on 403 "You can no longer act for this profile" (wired in main.dart).
+  void Function()? onActingLinkRemoved;
+
+  /// Fired after every token refresh with the refreshed user JSON and whether
+  /// the refresh asked to act as another profile (wired in main.dart).
+  void Function(Map<String, dynamic> user, bool askedActAs)? onSessionRefreshed;
+
+  /// Refreshes the session now (no `act_as` unless one is still stored).
+  Future<bool> refreshSession() async => await _attemptTokenRefresh() != null;
+
   // P2.5 (Security Audit M4): single-flight refresh, same reasoning as
   // web/src/api/client.js's `refreshInFlight` -- if several requests 401
   // around the same moment, they must all await the SAME refresh call
@@ -177,10 +193,15 @@ class ApiClient {
   Future<String?> _doTokenRefresh() async {
     final refreshToken = await _tokenStorage.readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) return null;
+    final actAs = await _tokenStorage.readActivePatient();
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/auth/refresh',
-        data: {'refresh_token': refreshToken},
+        data: {
+          'refresh_token': refreshToken,
+          // Family profiles: keep acting for the selected profile.
+          if (actAs != null && actAs.isNotEmpty) 'act_as': actAs,
+        },
       );
       final data = response.data!;
       final newAccessToken = data['access_token'] as String;
@@ -192,6 +213,7 @@ class ApiClient {
       }
       if (userJson != null) {
         await _tokenStorage.saveUser(userJson);
+        onSessionRefreshed?.call(userJson, actAs != null && actAs.isNotEmpty);
       }
       return newAccessToken;
     } on DioException {
@@ -221,6 +243,49 @@ class ApiClient {
       throw ApiException.fromDioException(e);
     }
   }
+
+  /// `GET /profiles` -> `{active_patient_id, profiles: [...]}`.
+  Future<List<FamilyProfile>> getProfiles() => _guard(() async {
+        final r = await _dio.get<Map<String, dynamic>>('/profiles');
+        return (r.data!['profiles'] as List<dynamic>)
+            .map((e) => FamilyProfile.fromJson(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  /// `POST /profiles` -- 409 IC already has a record, 400 max profiles, 422 validation.
+  Future<FamilyProfile> addProfile({
+    required String fullName,
+    required String dateOfBirth,
+    required String relationCode,
+  }) =>
+      _guard(() async {
+        final r = await _dio.post<Map<String, dynamic>>('/profiles', data: {
+          'full_name': fullName,
+          'date_of_birth': dateOfBirth,
+          'relation_code': relationCode,
+        });
+        return FamilyProfile.fromJson(r.data!);
+      });
+
+  /// `POST /profiles/switch` -> `{access_token, token_type, user}`.
+  Future<Map<String, dynamic>> switchProfile(String patientId) => _guard(() async {
+        final r = await _dio.post<Map<String, dynamic>>('/profiles/switch', data: {'patient_id': patientId});
+        return r.data!;
+      });
+
+  /// `GET /profiles/guardians` -- people who can act for me.
+  Future<List<Guardian>> getGuardians() => _guard(() async {
+        final r = await _dio.get<List<dynamic>>('/profiles/guardians');
+        return r.data!.map((e) => Guardian.fromJson(e as Map<String, dynamic>)).toList();
+      });
+
+  /// `POST /profiles/guardians/{id}/approve` -- I approve a carer who asked.
+  Future<void> approveGuardian(String linkId) =>
+      _guard(() async => _dio.post<void>('/profiles/guardians/$linkId/approve'));
+
+  /// `DELETE /profiles/guardians/{id}` -- 403 when I'm under 18.
+  Future<void> removeGuardian(String linkId) =>
+      _guard(() async => _dio.delete<void>('/profiles/guardians/$linkId'));
 
   /// `GET /app/version` -- public update check (see services/update_check.dart).
   Future<Map<String, dynamic>> getAppVersion() {

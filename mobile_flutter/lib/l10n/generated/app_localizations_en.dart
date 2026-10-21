@@ -1919,4 +1919,112 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nricScanRetake => 'Retake';
+
+  @override
+  String get familyTitle => 'My family';
+
+  @override
+  String get familySwitcherTooltip => 'Switch profile';
+
+  @override
+  String get familySwitch => 'Switch';
+
+  @override
+  String get familyYou => 'You';
+
+  @override
+  String familyActingFor(String name) {
+    return 'Acting for $name';
+  }
+
+  @override
+  String get familyBackToMine => 'Back to my profile';
+
+  @override
+  String get familyAdd => 'Add a family member';
+
+  @override
+  String get familyAddTitle => 'Add a child or parent';
+
+  @override
+  String get familyAddAction => 'Add';
+
+  @override
+  String get familyName => 'Full name';
+
+  @override
+  String get familyDob => 'Date of birth';
+
+  @override
+  String get familyRelation => 'Relationship';
+
+  @override
+  String get familyNameRequired => 'Enter a name.';
+
+  @override
+  String get familyDobRequired => 'Choose a date of birth.';
+
+  @override
+  String get familyRelationRequired => 'Choose a relationship.';
+
+  @override
+  String familyAge(int age) {
+    return '$age yrs';
+  }
+
+  @override
+  String get familyGuardiansTitle => 'Who can act for my account';
+
+  @override
+  String get familyNoGuardians => 'Nobody else can act for your account.';
+
+  @override
+  String get familyRemove => 'Remove';
+
+  @override
+  String get familyRemoveMinor => 'You must be 18 or older to remove access.';
+
+  @override
+  String get familyLinkRemoved =>
+      'You can no longer act for that profile. Switched back to your own.';
+
+  @override
+  String get relChild => 'Child';
+
+  @override
+  String get relMother => 'Mother';
+
+  @override
+  String get relFather => 'Father';
+
+  @override
+  String get relGrandmother => 'Grandmother';
+
+  @override
+  String get relGrandfather => 'Grandfather';
+
+  @override
+  String get relGuardian => 'Guardian (of a ward)';
+
+  @override
+  String get relOthers => 'Others';
+
+  @override
+  String get familyIcHint =>
+      'If this family member already has an IC record at the clinic, ask the clinic desk to link them.';
+
+  @override
+  String get familyPendingApproval => 'Waiting for their approval';
+
+  @override
+  String familyWantsToManage(String name) {
+    return '$name wants to manage your account';
+  }
+
+  @override
+  String get familyApprove => 'Approve';
+
+  @override
+  String get familyEmailActingHint =>
+      'Switch back to your own profile to change an email address.';
 }

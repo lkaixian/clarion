@@ -16,6 +16,8 @@ class MemoryStorage extends TokenStorage {
   Future<void> saveUser(Map<String, dynamic> u) async {}
   @override
   Future<String?> readToken() async => token;
+  @override
+  Future<void> saveActivePatient(String? id) async {}
 }
 
 const _session = {

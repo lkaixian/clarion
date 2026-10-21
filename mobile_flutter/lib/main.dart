@@ -29,6 +29,8 @@ void main() {
   // local secure storage and flips in-memory state, nothing that can
   // meaningfully fail or that any caller is waiting on.
   apiClient.onUnauthorized = () => authProvider.forceLogout();
+  apiClient.onActingLinkRemoved = () => authProvider.handleActingLinkRemoved();
+  apiClient.onSessionRefreshed = (u, asked) => authProvider.adoptRefreshedUser(u, asked);
   final patientProvider = PatientProvider(api: apiClient);
   final queueProvider = QueueProvider(api: apiClient);
   final localeProvider = LocaleProvider();

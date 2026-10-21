@@ -62,6 +62,14 @@ class QueueProvider extends ChangeNotifier {
     _pollTimer = Timer.periodic(interval, (_) => refresh(patientId));
   }
 
+  /// Forget the previous profile's ticket (profile switch).
+  void clear() {
+    stopPolling();
+    status = QueueStatus.inactive();
+    error = null;
+    notifyListeners();
+  }
+
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;

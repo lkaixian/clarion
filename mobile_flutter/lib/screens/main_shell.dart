@@ -5,6 +5,8 @@ import '../l10n/generated/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/queue_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import '../widgets/profile_switcher.dart';
 import 'care_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
@@ -30,8 +32,20 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) refreshPatientData(context);
+      if (!mounted) return;
+      refreshPatientData(context);
+      _showLinkRemovedNotice();
     });
+  }
+
+  /// A fresh shell is built whenever the active profile changes (see app.dart),
+  /// so this runs right after "no longer act for this profile" falls back.
+  void _showLinkRemovedNotice() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.actingLinkRemoved) return;
+    auth.actingLinkRemoved = false;
+    clearCachedPatientData(context);
+    context.snack(AppLocalizations.of(context).familyLinkRemoved);
   }
 
   void _go(int i) => setState(() {

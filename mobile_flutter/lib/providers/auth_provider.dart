@@ -198,6 +198,7 @@ class AuthProvider extends ChangeNotifier {
       await _tokenStorage.saveRefreshToken(refreshToken);
     }
     await _tokenStorage.saveUser(userJson);
+    await _tokenStorage.saveActivePatient(null); // a fresh login starts on its own profile
     user = MBUser.fromJson(userJson);
     status = AuthStatus.authenticated;
     syncOfflineTagData();
@@ -312,6 +313,64 @@ class AuthProvider extends ChangeNotifier {
     error = null;
     notifyListeners();
   }
+
+  /// Set when the link to the profile we were acting for was removed and we
+  /// fell back to the own profile; MainShell shows a notice once and clears it.
+  bool actingLinkRemoved = false;
+
+  /// `POST /profiles/switch`: replaces the stored access token + user with the
+  /// response and remembers the active profile (sent as `act_as` on refresh).
+  /// Returns an error message, or null on success. Callers clear cached
+  /// patient data afterwards (see switchToProfile in widgets/profile_switcher.dart).
+  Future<String?> switchProfile(String patientId) async {
+    try {
+      final data = await _api.switchProfile(patientId);
+      final userJson = data['user'] as Map<String, dynamic>;
+      final next = MBUser.fromJson(userJson);
+      await _tokenStorage.saveToken(data['access_token'] as String);
+      await _tokenStorage.saveUser(userJson);
+      await _tokenStorage.saveActivePatient(next.actingFor ? next.patientId : null);
+      user = next;
+      notifyListeners();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (e) {
+      return 'Unexpected error: $e';
+    }
+  }
+
+  /// Adopts the user from a token refresh. If we asked to act for a profile
+  /// but the server answered with the own profile (it refused `act_as`), drop
+  /// the stored active id and flag the notice; the keyed MainShell rebuilds,
+  /// clears cached data and shows it once.
+  void adoptRefreshedUser(Map<String, dynamic> json, bool askedActAs) {
+    final next = MBUser.fromJson(json);
+    final flipped = askedActAs && !next.actingFor;
+    if (flipped) {
+      actingLinkRemoved = true;
+      unawaited(_tokenStorage.saveActivePatient(null));
+    }
+    user = next;
+    notifyListeners();
+  }
+
+  /// 403 "You can no longer act for this profile": go back to the own profile.
+  /// If the explicit switch fails, keep the session and fall back to a plain
+  /// refresh (no act_as); only if that fails too, sign out.
+  Future<void> handleActingLinkRemoved() async {
+    final home = user?.homePatientId;
+    if (home == null || !(user?.actingFor ?? false)) return;
+    actingLinkRemoved = true; // read by the rebuilt MainShell
+    if (await switchProfile(home) == null) return;
+    await _tokenStorage.saveActivePatient(null);
+    if (await _api.refreshSession()) return;
+    actingLinkRemoved = false;
+    await forceLogout();
+  }
+
+  /// Approve / remove carers (see FamilyScreen).
+  Future<void> approveGuardian(String linkId) => _api.approveGuardian(linkId);
 
   Future<void> logout() async {
     // Best-effort server-side revocation (Security Audit M4) BEFORE

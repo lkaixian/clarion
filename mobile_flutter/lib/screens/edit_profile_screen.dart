@@ -79,10 +79,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final patientState = context.read<PatientProvider>();
     final patientId = auth.user?.patientId;
     if (patientId == null) return;
+    final acting = auth.user?.actingFor ?? false;
 
     final ok = await patientState.updateProfile(
       patientId: patientId,
-      email: _emailController.text.trim(),
+      email: acting ? null : _emailController.text.trim(),
       phone: _phoneController.text.trim(),
       emergencyContactName: _emergencyNameController.text.trim(),
       emergencyContactPhone: _emergencyPhoneController.text.trim(),
@@ -148,9 +149,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _emailController,
+                  enabled: !(context.watch<AuthProvider>().user?.actingFor ?? false),
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
-                  decoration: InputDecoration(labelText: l10n.profileEmailLabel, hintText: l10n.profileEmailLabel),
+                  decoration: InputDecoration(
+                    labelText: l10n.profileEmailLabel,
+                    hintText: l10n.profileEmailLabel,
+                    helperText: (context.watch<AuthProvider>().user?.actingFor ?? false)
+                        ? l10n.familyEmailActingHint
+                        : null,
+                    helperMaxLines: 2,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(

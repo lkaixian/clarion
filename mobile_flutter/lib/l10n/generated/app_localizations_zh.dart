@@ -1832,4 +1832,109 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get nricScanRetake => '重拍';
+
+  @override
+  String get familyTitle => '我的家人';
+
+  @override
+  String get familySwitcherTooltip => '切换档案';
+
+  @override
+  String get familySwitch => '切换';
+
+  @override
+  String get familyYou => '您';
+
+  @override
+  String familyActingFor(String name) {
+    return '正在代表 $name';
+  }
+
+  @override
+  String get familyBackToMine => '返回我的档案';
+
+  @override
+  String get familyAdd => '添加家庭成员';
+
+  @override
+  String get familyAddTitle => '添加孩子或父母';
+
+  @override
+  String get familyAddAction => '添加';
+
+  @override
+  String get familyName => '全名';
+
+  @override
+  String get familyDob => '出生日期';
+
+  @override
+  String get familyRelation => '关系';
+
+  @override
+  String get familyNameRequired => '请输入姓名。';
+
+  @override
+  String get familyDobRequired => '请选择出生日期。';
+
+  @override
+  String get familyRelationRequired => '请选择关系。';
+
+  @override
+  String familyAge(int age) {
+    return '$age 岁';
+  }
+
+  @override
+  String get familyGuardiansTitle => '谁可以代表我的账户';
+
+  @override
+  String get familyNoGuardians => '没有其他人可以代表您的账户。';
+
+  @override
+  String get familyRemove => '移除';
+
+  @override
+  String get familyRemoveMinor => '您必须年满 18 岁才能移除权限。';
+
+  @override
+  String get familyLinkRemoved => '您已无法再代表该档案，已切换回您自己的档案。';
+
+  @override
+  String get relChild => '孩子';
+
+  @override
+  String get relMother => '母亲';
+
+  @override
+  String get relFather => '父亲';
+
+  @override
+  String get relGrandmother => '祖母';
+
+  @override
+  String get relGrandfather => '祖父';
+
+  @override
+  String get relGuardian => '监护人';
+
+  @override
+  String get relOthers => '其他';
+
+  @override
+  String get familyIcHint => '如果该家人已在诊所有身份证记录，请联系诊所柜台关联。';
+
+  @override
+  String get familyPendingApproval => '等待对方批准';
+
+  @override
+  String familyWantsToManage(String name) {
+    return '$name 想管理您的账户';
+  }
+
+  @override
+  String get familyApprove => '批准';
+
+  @override
+  String get familyEmailActingHint => '请切换回您自己的档案后再更改电子邮件地址。';
 }

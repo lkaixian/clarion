@@ -3437,6 +3437,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retake'**
   String get nricScanRetake;
+
+  /// No description provided for @familyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My family'**
+  String get familyTitle;
+
+  /// No description provided for @familySwitcherTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch profile'**
+  String get familySwitcherTooltip;
+
+  /// No description provided for @familySwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch'**
+  String get familySwitch;
+
+  /// No description provided for @familyYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get familyYou;
+
+  /// No description provided for @familyActingFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Acting for {name}'**
+  String familyActingFor(String name);
+
+  /// No description provided for @familyBackToMine.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to my profile'**
+  String get familyBackToMine;
+
+  /// No description provided for @familyAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a family member'**
+  String get familyAdd;
+
+  /// No description provided for @familyAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a child or parent'**
+  String get familyAddTitle;
+
+  /// No description provided for @familyAddAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get familyAddAction;
+
+  /// No description provided for @familyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get familyName;
+
+  /// No description provided for @familyDob.
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get familyDob;
+
+  /// No description provided for @familyRelation.
+  ///
+  /// In en, this message translates to:
+  /// **'Relationship'**
+  String get familyRelation;
+
+  /// No description provided for @familyNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name.'**
+  String get familyNameRequired;
+
+  /// No description provided for @familyDobRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a date of birth.'**
+  String get familyDobRequired;
+
+  /// No description provided for @familyRelationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a relationship.'**
+  String get familyRelationRequired;
+
+  /// No description provided for @familyAge.
+  ///
+  /// In en, this message translates to:
+  /// **'{age} yrs'**
+  String familyAge(int age);
+
+  /// No description provided for @familyGuardiansTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can act for my account'**
+  String get familyGuardiansTitle;
+
+  /// No description provided for @familyNoGuardians.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody else can act for your account.'**
+  String get familyNoGuardians;
+
+  /// No description provided for @familyRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get familyRemove;
+
+  /// No description provided for @familyRemoveMinor.
+  ///
+  /// In en, this message translates to:
+  /// **'You must be 18 or older to remove access.'**
+  String get familyRemoveMinor;
+
+  /// No description provided for @familyLinkRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'You can no longer act for that profile. Switched back to your own.'**
+  String get familyLinkRemoved;
+
+  /// No description provided for @relChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Child'**
+  String get relChild;
+
+  /// No description provided for @relMother.
+  ///
+  /// In en, this message translates to:
+  /// **'Mother'**
+  String get relMother;
+
+  /// No description provided for @relFather.
+  ///
+  /// In en, this message translates to:
+  /// **'Father'**
+  String get relFather;
+
+  /// No description provided for @relGrandmother.
+  ///
+  /// In en, this message translates to:
+  /// **'Grandmother'**
+  String get relGrandmother;
+
+  /// No description provided for @relGrandfather.
+  ///
+  /// In en, this message translates to:
+  /// **'Grandfather'**
+  String get relGrandfather;
+
+  /// No description provided for @relGuardian.
+  ///
+  /// In en, this message translates to:
+  /// **'Guardian (of a ward)'**
+  String get relGuardian;
+
+  /// No description provided for @relOthers.
+  ///
+  /// In en, this message translates to:
+  /// **'Others'**
+  String get relOthers;
+
+  /// No description provided for @familyIcHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If this family member already has an IC record at the clinic, ask the clinic desk to link them.'**
+  String get familyIcHint;
+
+  /// No description provided for @familyPendingApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for their approval'**
+  String get familyPendingApproval;
+
+  /// No description provided for @familyWantsToManage.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to manage your account'**
+  String familyWantsToManage(String name);
+
+  /// No description provided for @familyApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get familyApprove;
+
+  /// No description provided for @familyEmailActingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch back to your own profile to change an email address.'**
+  String get familyEmailActingHint;
 }
 
 class _AppLocalizationsDelegate

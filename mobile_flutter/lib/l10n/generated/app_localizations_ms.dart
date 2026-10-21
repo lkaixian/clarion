@@ -1930,4 +1930,114 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get nricScanRetake => 'Ambil semula';
+
+  @override
+  String get familyTitle => 'Keluarga saya';
+
+  @override
+  String get familySwitcherTooltip => 'Tukar profil';
+
+  @override
+  String get familySwitch => 'Tukar';
+
+  @override
+  String get familyYou => 'Anda';
+
+  @override
+  String familyActingFor(String name) {
+    return 'Bertindak untuk $name';
+  }
+
+  @override
+  String get familyBackToMine => 'Kembali ke profil saya';
+
+  @override
+  String get familyAdd => 'Tambah ahli keluarga';
+
+  @override
+  String get familyAddTitle => 'Tambah anak atau ibu bapa';
+
+  @override
+  String get familyAddAction => 'Tambah';
+
+  @override
+  String get familyName => 'Nama penuh';
+
+  @override
+  String get familyDob => 'Tarikh lahir';
+
+  @override
+  String get familyRelation => 'Hubungan';
+
+  @override
+  String get familyNameRequired => 'Masukkan nama.';
+
+  @override
+  String get familyDobRequired => 'Pilih tarikh lahir.';
+
+  @override
+  String get familyRelationRequired => 'Pilih hubungan.';
+
+  @override
+  String familyAge(int age) {
+    return '$age thn';
+  }
+
+  @override
+  String get familyGuardiansTitle => 'Siapa boleh bertindak untuk akaun saya';
+
+  @override
+  String get familyNoGuardians =>
+      'Tiada orang lain boleh bertindak untuk akaun anda.';
+
+  @override
+  String get familyRemove => 'Buang';
+
+  @override
+  String get familyRemoveMinor =>
+      'Anda mesti berumur 18 tahun ke atas untuk membuang akses.';
+
+  @override
+  String get familyLinkRemoved =>
+      'Anda tidak lagi boleh bertindak untuk profil itu. Dikembalikan ke profil anda.';
+
+  @override
+  String get relChild => 'Anak';
+
+  @override
+  String get relMother => 'Ibu';
+
+  @override
+  String get relFather => 'Bapa';
+
+  @override
+  String get relGrandmother => 'Nenek';
+
+  @override
+  String get relGrandfather => 'Datuk';
+
+  @override
+  String get relGuardian => 'Penjaga (penjaga wad)';
+
+  @override
+  String get relOthers => 'Lain-lain';
+
+  @override
+  String get familyIcHint =>
+      'Jika ahli keluarga ini sudah mempunyai rekod IC di klinik, minta kaunter klinik memautkannya.';
+
+  @override
+  String get familyPendingApproval => 'Menunggu kelulusan mereka';
+
+  @override
+  String familyWantsToManage(String name) {
+    return '$name mahu menguruskan akaun anda';
+  }
+
+  @override
+  String get familyApprove => 'Lulus';
+
+  @override
+  String get familyEmailActingHint =>
+      'Tukar kembali ke profil anda untuk mengubah alamat e-mel.';
 }

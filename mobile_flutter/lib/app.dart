@@ -255,8 +255,8 @@ class _AuthGate extends StatelessWidget {
             // styling regardless of that preference.
             if (auth.mustChangePassword) return const ChangePasswordScreen();
             return auth.prefersSeniorMode
-                ? const SeniorHomeScreen()
-                : const MainShell();
+                ? SeniorHomeScreen(key: ValueKey(auth.user?.patientId))
+                : MainShell(key: ValueKey(auth.user?.patientId)); // fresh Home tab per profile
         }
       },
     );

@@ -5,7 +5,9 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/profile_switcher.dart';
 import '../emergency_scanner_screen.dart';
+import '../family_screen.dart';
 import 'senior_emergency_screen.dart';
 import 'senior_language_screen.dart';
 import 'senior_medications_screen.dart';
@@ -218,6 +220,7 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
+              const ActingBanner(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -297,6 +300,15 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
                 color: safe,
                 onTap: () => context.pushScreen(const SeniorMedicationsScreen()),
               ),
+              if (auth.user?.role == 'patient') ...[
+              const SizedBox(height: 20),
+              _BigTile(
+                label: l10n.familyTitle,
+                color: accent,
+                height: 80,
+                onTap: () => context.pushScreen(const FamilyScreen()),
+              ),
+              ],
               const Spacer(),
             ],
           ),
@@ -307,17 +319,18 @@ class _SeniorHomeScreenState extends State<SeniorHomeScreen> {
 }
 
 class _BigTile extends StatelessWidget {
-  const _BigTile({required this.label, required this.color, required this.onTap});
+  const _BigTile({required this.label, required this.color, required this.onTap, this.height = 140});
 
   final String label;
   final Color color;
   final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 140,
+      height: height,
       child: Material(
         color: color,
         borderRadius: BorderRadius.circular(24),

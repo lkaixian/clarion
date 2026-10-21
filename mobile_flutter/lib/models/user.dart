@@ -22,6 +22,10 @@ class MBUser {
   // added this field) still parses fine, same reasoning as
   // mustChangePassword above.
   final List<String> missingProfileFields;
+  // Family profiles: true when the session acts for a profile other than the
+  // login's own; [homePatientId] is the login's own patient record.
+  final bool actingFor;
+  final String? homePatientId;
 
   const MBUser({
     required this.id,
@@ -32,6 +36,8 @@ class MBUser {
     this.patientId,
     this.mustChangePassword = false,
     this.missingProfileFields = const [],
+    this.actingFor = false,
+    this.homePatientId,
   });
 
   factory MBUser.fromJson(Map<String, dynamic> json) => MBUser(
@@ -45,6 +51,8 @@ class MBUser {
         missingProfileFields: (json['missing_profile_fields'] as List<dynamic>? ?? [])
             .map((e) => e.toString())
             .toList(),
+        actingFor: json['acting_for'] as bool? ?? false,
+        homePatientId: json['home_patient_id'] as String?,
       );
 
   MBUser copyWith({bool? mustChangePassword, List<String>? missingProfileFields}) => MBUser(
@@ -56,6 +64,8 @@ class MBUser {
         patientId: patientId,
         mustChangePassword: mustChangePassword ?? this.mustChangePassword,
         missingProfileFields: missingProfileFields ?? this.missingProfileFields,
+        actingFor: actingFor,
+        homePatientId: homePatientId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -67,5 +77,7 @@ class MBUser {
         'patient_id': patientId,
         'must_change_password': mustChangePassword,
         'missing_profile_fields': missingProfileFields,
+        'acting_for': actingFor,
+        'home_patient_id': homePatientId,
       };
 }

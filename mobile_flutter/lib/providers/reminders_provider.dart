@@ -246,6 +246,12 @@ class RemindersProvider extends ChangeNotifier {
   /// per-item try/catch, plus an outer guard around the network call
   /// itself) — a failure here must never crash the app or block anything
   /// else in this provider.
+  /// Drops the cached clinic appointments (profile switch).
+  void clearServerAppointments() {
+    _serverAppointments = [];
+    notifyListeners();
+  }
+
   Future<void> syncServerAppointments(String patientId, ApiClient api) async {
     List<ServerAppointment> fetched;
     try {

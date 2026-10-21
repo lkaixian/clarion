@@ -13,6 +13,7 @@ import '../widgets/expandable_item_list.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/missing_profile_banner.dart';
 import '../widgets/record_widgets.dart';
+import '../widgets/profile_switcher.dart';
 import '../widgets/section_card.dart';
 import 'edit_profile_screen.dart';
 import 'emergency_screen.dart';
@@ -145,9 +146,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.homeTitle)),
+      appBar: AppBar(title: Text(l10n.homeTitle), actions: const [ProfileSwitcherAction()]),
       body: Column(
         children: [
+          const ActingBanner(),
           // Always first and never scrolls away: emergency-first product.
           Padding(
             padding: const EdgeInsets.all(16),

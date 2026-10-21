@@ -21,6 +21,16 @@ class TokenStorage {
   // browser's cookie jar, so no separate hardening needed for this value.
   static const _refreshTokenKey = 'mb_refresh_token';
 
+  // Family profiles: the patient_id this session is acting for (absent when
+  // acting as the login's own profile). Sent as `act_as` on refresh.
+  static const _activePatientKey = 'mb_active_patient';
+
+  Future<void> saveActivePatient(String? id) => id == null
+      ? _storage.delete(key: _activePatientKey)
+      : _storage.write(key: _activePatientKey, value: id);
+
+  Future<String?> readActivePatient() => _storage.read(key: _activePatientKey);
+
   Future<void> saveToken(String token) => _storage.write(key: _tokenKey, value: token);
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
@@ -43,5 +53,6 @@ class TokenStorage {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _refreshTokenKey);
     await _storage.delete(key: _userKey);
+    await _storage.delete(key: _activePatientKey);
   }
 }

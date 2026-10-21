@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'audit_log_screen.dart';
 import 'edit_profile_screen.dart';
+import 'family_screen.dart';
 import 'settings_screen.dart';
 import 'write_offline_tag_screen.dart';
 
@@ -86,6 +87,8 @@ class ProfileScreen extends StatelessWidget {
                   hasPatient ? () => context.pushScreen(const AuditLogScreen()) : null,
                   subtitle: noRecord,
                 ),
+                if (user?.role == 'patient')
+                  tile(Icons.family_restroom, l10n.familyTitle, () => context.pushScreen(const FamilyScreen())),
                 tile(Icons.settings_outlined, l10n.settingsTitle, () => context.pushScreen(const SettingsScreen())),
                 if (_kNfcRegistrationRoles.contains(user?.role))
                   tile(Icons.nfc, l10n.writeOfflineTagTitle, () => context.pushScreen(const WriteOfflineTagScreen())),

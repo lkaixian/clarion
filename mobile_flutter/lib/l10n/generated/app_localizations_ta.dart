@@ -1942,4 +1942,115 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get nricScanRetake => 'மீண்டும் எடு';
+
+  @override
+  String get familyTitle => 'என் குடும்பம்';
+
+  @override
+  String get familySwitcherTooltip => 'சுயவிவரத்தை மாற்று';
+
+  @override
+  String get familySwitch => 'மாற்று';
+
+  @override
+  String get familyYou => 'நீங்கள்';
+
+  @override
+  String familyActingFor(String name) {
+    return '$name சார்பாக செயல்படுகிறீர்கள்';
+  }
+
+  @override
+  String get familyBackToMine => 'என் சுயவிவரத்துக்குத் திரும்பு';
+
+  @override
+  String get familyAdd => 'குடும்ப உறுப்பினரைச் சேர்';
+
+  @override
+  String get familyAddTitle => 'குழந்தை அல்லது பெற்றோரைச் சேர்';
+
+  @override
+  String get familyAddAction => 'சேர்';
+
+  @override
+  String get familyName => 'முழுப் பெயர்';
+
+  @override
+  String get familyDob => 'பிறந்த தேதி';
+
+  @override
+  String get familyRelation => 'உறவு';
+
+  @override
+  String get familyNameRequired => 'பெயரை உள்ளிடவும்.';
+
+  @override
+  String get familyDobRequired => 'பிறந்த தேதியைத் தேர்வு செய்யவும்.';
+
+  @override
+  String get familyRelationRequired => 'உறவைத் தேர்வு செய்யவும்.';
+
+  @override
+  String familyAge(int age) {
+    return '$age வயது';
+  }
+
+  @override
+  String get familyGuardiansTitle => 'என் கணக்குக்காக யார் செயல்படலாம்';
+
+  @override
+  String get familyNoGuardians =>
+      'வேறு யாரும் உங்கள் கணக்குக்காகச் செயல்பட முடியாது.';
+
+  @override
+  String get familyRemove => 'நீக்கு';
+
+  @override
+  String get familyRemoveMinor =>
+      'அணுகலை நீக்க 18 வயது அல்லது அதற்கு மேல் இருக்க வேண்டும்.';
+
+  @override
+  String get familyLinkRemoved =>
+      'அந்த சுயவிவரத்துக்காக இனி செயல்பட முடியாது. உங்கள் சுயவிவரத்துக்குத் திரும்பியது.';
+
+  @override
+  String get relChild => 'குழந்தை';
+
+  @override
+  String get relMother => 'தாய்';
+
+  @override
+  String get relFather => 'தந்தை';
+
+  @override
+  String get relGrandmother => 'பாட்டி';
+
+  @override
+  String get relGrandfather => 'தாத்தா';
+
+  @override
+  String get relGuardian => 'பாதுகாவலர்';
+
+  @override
+  String get relOthers => 'மற்றவை';
+
+  @override
+  String get familyIcHint =>
+      'இந்த குடும்ப உறுப்பினருக்கு கிளினிக்கில் ஏற்கனவே அடையாள அட்டைப் பதிவு இருந்தால், கிளினிக் மேசையில் இணைக்கக் கேளுங்கள்.';
+
+  @override
+  String get familyPendingApproval =>
+      'அவர்களின் ஒப்புதலுக்காகக் காத்திருக்கிறது';
+
+  @override
+  String familyWantsToManage(String name) {
+    return '$name உங்கள் கணக்கை நிர்வகிக்க விரும்புகிறார்';
+  }
+
+  @override
+  String get familyApprove => 'ஒப்புக்கொள்';
+
+  @override
+  String get familyEmailActingHint =>
+      'மின்னஞ்சலை மாற்ற உங்கள் சுயவிவரத்துக்குத் திரும்பவும்.';
 }
