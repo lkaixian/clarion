@@ -49,7 +49,10 @@ def test_parallel_simulate_taps_credit_the_bill_once(w):
 def test_parallel_pay_taps_open_a_single_attempt(w):
     resp = blast(8, lambda _: w.intent())
     ids = {r.json()["id"] for r in resp if r.status_code in (200, 201)}
-    assert len(ids) == 1 and all(r.status_code in (200, 201) for r in resp)
+    # Whoever loses the race while the first attempt is still being created is told to try again
+    # (409 "just starting") -- timing decides how many, so only the invariant is asserted: one attempt.
+    assert len(ids) == 1 and {r.status_code for r in resp} <= {200, 201, 409}
+    assert all("just starting" in r.json()["detail"] for r in resp if r.status_code == 409)
 
 
 def test_two_devices_with_different_keys_cannot_open_two_attempts(w):
