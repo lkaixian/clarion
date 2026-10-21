@@ -77,7 +77,7 @@ class NfcService {
         if (ndef != null) {
           final message = ndef.cachedNdefMessage ?? await _safeGetNdefMessage(ndef);
           if (message != null) {
-            ndefText = _extractTextRecord(message);
+            ndefText = extractTextRecord(message);
           }
         }
 
@@ -95,7 +95,8 @@ class NfcService {
   /// tag CLARION already controls end-to-end -- the emergency-card
   /// offline fallback -- not a general-purpose NDEF writer). Returns a
   /// [NfcWriteResult] describing what happened; never throws.
-  static Future<NfcWriteResult> writeNdefText(String text, {String languageCode = 'en'}) async {
+  static Future<NfcWriteResult> writeNdefText(String text,
+      {String languageCode = 'en', String? publicUrl}) async {
     if (!isSupportedPlatform) return NfcWriteResult.unsupported;
     // Plaintext is never written to a tag (legacy plaintext tags stay readable).
     if (!TagCrypto.isWellFormedBlob(text)) return NfcWriteResult.notEncrypted;
@@ -120,10 +121,12 @@ class NfcService {
           return;
         }
 
-        final record = _buildTextRecord(text, languageCode);
-        // Marker FIRST: Android dispatches on the first record, so this is
-        // what launches CLARION from a locked phone (see MainActivity.kt).
-        final message = NdefMessage(records: [_buildLaunchMarker(), record]);
+        // Without a public URL: marker FIRST (Android dispatches on the first
+        // record, launching CLARION from a locked phone, see MainActivity.kt).
+        // With one (register's url_on_tag): the URI record goes first so a
+        // phone without the app opens the link.
+        final message =
+            NdefMessage(records: buildTagRecords(text, languageCode: languageCode, publicUrl: publicUrl));
         if (message.byteLength > ndef.maxSize) {
           await NfcManager.instance.stopSession();
           if (!completer.isCompleted) completer.complete(NfcWriteResult.tooLarge);
@@ -141,6 +144,47 @@ class NfcService {
       },
     );
     return completer.future;
+  }
+
+  /// The records written to a tag, in order: [URI (if [publicUrl]), launch
+  /// marker, sealed text]. Public so the layout and size can be tested.
+  static List<NdefRecord> buildTagRecords(String text, {String languageCode = 'en', String? publicUrl}) => [
+        if (publicUrl != null && publicUrl.trim().isNotEmpty) buildUriRecord(publicUrl.trim()),
+        _buildLaunchMarker(),
+        _buildTextRecord(text, languageCode),
+      ];
+
+  /// True only for `https://<host>/e/<token>` with no userinfo, query or
+  /// fragment and token = [A-Za-z0-9_-]{6,64}: what the server's register
+  /// call returns as `public_url`. Anything else must never be written.
+  static bool isValidPublicUrl(String url) {
+    final u = Uri.tryParse(url.trim());
+    if (u == null || u.scheme != 'https' || u.host.isEmpty) return false;
+    if (u.userInfo.isNotEmpty || u.hasQuery || u.hasFragment) return false;
+    final raw = url.trim();
+    if (raw.contains('?') || raw.contains('#') || raw.contains('@')) return false;
+    final m = RegExp(r'^/e/([A-Za-z0-9_-]{6,64})$').firstMatch(u.path);
+    return m != null;
+  }
+
+  /// NFC Forum URI record (well-known 'U'): prefix code 0x04 "https://",
+  /// 0x03 "http://", else 0x00 + the full URL.
+  static NdefRecord buildUriRecord(String url) {
+    var code = 0x00;
+    var rest = url;
+    if (url.startsWith('https://')) {
+      code = 0x04;
+      rest = url.substring(8);
+    } else if (url.startsWith('http://')) {
+      code = 0x03;
+      rest = url.substring(7);
+    }
+    return NdefRecord(
+      typeNameFormat: TypeNameFormat.wellKnown,
+      type: Uint8List.fromList([0x55]), // 'U'
+      identifier: Uint8List(0),
+      payload: Uint8List.fromList([code, ...utf8.encode(rest)]),
+    );
   }
 
   /// NTAG 424 DNA is an ISO 14443-4 card (IsoDep); NTAG213/215/216 are
@@ -207,7 +251,8 @@ class NfcService {
 
   /// Inverse of [_buildTextRecord] -- the first well-formed Text record
   /// found in [message], or `null` if there isn't one.
-  static String? _extractTextRecord(NdefMessage message) {
+  @visibleForTesting
+  static String? extractTextRecord(NdefMessage message) {
     for (final record in message.records) {
       if (record.typeNameFormat != TypeNameFormat.wellKnown) continue;
       if (record.type.length != 1 || record.type[0] != 0x54) continue;

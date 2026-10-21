@@ -28,8 +28,10 @@ class WriteOfflineTagScreen extends StatefulWidget {
 
 class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
   final _textController = TextEditingController();
+  final _urlController = TextEditingController();
   NfcAvailability? _availability;
   bool _writing = false;
+  bool _urlInvalid = false;
   NfcWriteResult? _lastResult;
 
   @override
@@ -41,6 +43,7 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
   @override
   void dispose() {
     _textController.dispose();
+    _urlController.dispose();
     NfcService.cancelSession();
     super.dispose();
   }
@@ -60,11 +63,17 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
       setState(() => _lastResult = NfcWriteResult.notEncrypted);
       return;
     }
+    final url = _urlController.text.trim();
+    if (url.isNotEmpty && !NfcService.isValidPublicUrl(url)) {
+      setState(() => _urlInvalid = true);
+      return;
+    }
     setState(() {
+      _urlInvalid = false;
       _writing = true;
       _lastResult = null;
     });
-    final result = await NfcService.writeNdefText(text);
+    final result = await NfcService.writeNdefText(text, publicUrl: url);
     if (!mounted) return;
     setState(() {
       _writing = false;
@@ -113,6 +122,26 @@ class _WriteOfflineTagScreenState extends State<WriteOfflineTagScreen> {
                   border: const OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _urlController,
+                keyboardType: TextInputType.url,
+                onChanged: (_) => setState(() => _urlInvalid = false),
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: l10n.writeOfflineTagUrlLabel,
+                  hintText: 'https://host/e/token',
+                  border: const OutlineInputBorder(),
+                  errorText: _urlInvalid ? l10n.writeOfflineTagUrlInvalid : null,
+                  errorMaxLines: 3,
+                ),
+              ),
+              if (_urlController.text.trim().isEmpty) ...[
+                const SizedBox(height: 6),
+                Text(l10n.writeOfflineTagNoUrlHint,
+                    key: const Key('no-url-hint'),
+                    style: TextStyle(fontSize: 12, color: Colors.amber.shade800, height: 1.4)),
+              ],
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,

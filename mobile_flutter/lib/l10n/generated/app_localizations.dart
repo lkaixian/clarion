@@ -3635,6 +3635,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Switch back to your own profile to change an email address.'**
   String get familyEmailActingHint;
+
+  /// No description provided for @writeOfflineTagUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Public link from registration (optional)'**
+  String get writeOfflineTagUrlLabel;
+
+  /// No description provided for @writeOfflineTagUrlInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The link must be https://<host>/e/<token> exactly, with no username, query or #fragment. Nothing was written.'**
+  String get writeOfflineTagUrlInvalid;
+
+  /// No description provided for @writeOfflineTagNoUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Without the link, a phone without the app cannot open this card.'**
+  String get writeOfflineTagNoUrlHint;
 }
 
 class _AppLocalizationsDelegate

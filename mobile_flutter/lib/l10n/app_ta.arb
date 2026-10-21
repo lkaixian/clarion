@@ -655,5 +655,8 @@
   "familyWantsToManage": "{name} உங்கள் கணக்கை நிர்வகிக்க விரும்புகிறார்",
   "@familyWantsToManage": {"placeholders": {"name": {"type": "String"}}},
   "familyApprove": "ஒப்புக்கொள்",
-  "familyEmailActingHint": "மின்னஞ்சலை மாற்ற உங்கள் சுயவிவரத்துக்குத் திரும்பவும்."
+  "familyEmailActingHint": "மின்னஞ்சலை மாற்ற உங்கள் சுயவிவரத்துக்குத் திரும்பவும்.",
+  "writeOfflineTagUrlLabel": "பதிவிலிருந்து பொது இணைப்பு (விருப்பம்)",
+  "writeOfflineTagUrlInvalid": "இணைப்பு சரியாக https://<host>/e/<token> ஆக இருக்க வேண்டும். எதுவும் எழுதப்படவில்லை.",
+  "writeOfflineTagNoUrlHint": "இணைப்பு இல்லாமல், செயலி இல்லாத தொலைபேசியால் இந்த அட்டையைத் திறக்க முடியாது."
 }

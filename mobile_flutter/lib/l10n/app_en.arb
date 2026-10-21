@@ -681,5 +681,8 @@
   "familyWantsToManage": "{name} wants to manage your account",
   "@familyWantsToManage": {"placeholders": {"name": {"type": "String"}}},
   "familyApprove": "Approve",
-  "familyEmailActingHint": "Switch back to your own profile to change an email address."
+  "familyEmailActingHint": "Switch back to your own profile to change an email address.",
+  "writeOfflineTagUrlLabel": "Public link from registration (optional)",
+  "writeOfflineTagUrlInvalid": "The link must be https://<host>/e/<token> exactly, with no username, query or #fragment. Nothing was written.",
+  "writeOfflineTagNoUrlHint": "Without the link, a phone without the app cannot open this card."
 }

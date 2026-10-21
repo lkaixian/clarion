@@ -2053,4 +2053,16 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get familyEmailActingHint =>
       'மின்னஞ்சலை மாற்ற உங்கள் சுயவிவரத்துக்குத் திரும்பவும்.';
+
+  @override
+  String get writeOfflineTagUrlLabel =>
+      'பதிவிலிருந்து பொது இணைப்பு (விருப்பம்)';
+
+  @override
+  String get writeOfflineTagUrlInvalid =>
+      'இணைப்பு சரியாக https://<host>/e/<token> ஆக இருக்க வேண்டும். எதுவும் எழுதப்படவில்லை.';
+
+  @override
+  String get writeOfflineTagNoUrlHint =>
+      'இணைப்பு இல்லாமல், செயலி இல்லாத தொலைபேசியால் இந்த அட்டையைத் திறக்க முடியாது.';
 }

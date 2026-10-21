@@ -2040,4 +2040,16 @@ class AppLocalizationsMs extends AppLocalizations {
   @override
   String get familyEmailActingHint =>
       'Tukar kembali ke profil anda untuk mengubah alamat e-mel.';
+
+  @override
+  String get writeOfflineTagUrlLabel =>
+      'Pautan awam dari pendaftaran (pilihan)';
+
+  @override
+  String get writeOfflineTagUrlInvalid =>
+      'Pautan mesti tepat https://<host>/e/<token>, tanpa nama pengguna, query atau #fragment. Tiada apa ditulis.';
+
+  @override
+  String get writeOfflineTagNoUrlHint =>
+      'Tanpa pautan, telefon tanpa aplikasi tidak dapat membuka kad ini.';
 }

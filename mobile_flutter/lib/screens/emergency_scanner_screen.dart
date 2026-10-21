@@ -51,7 +51,7 @@ class EmergencyScannerScreen extends StatefulWidget {
   /// skips the tap step and goes straight to the lookup.
   final NfcReadResult? initialTag;
 
-  /// A `CLARION-EMERGENCY:` QR already decoded elsewhere: straight to lookup.
+  /// An emergency QR (`/e/<ref>` link or legacy `CLARION-EMERGENCY:`) already decoded elsewhere: straight to lookup.
   final String? initialCardReference;
 
   /// [initialTag] came from a deliberate in-app tap, not a launch from a

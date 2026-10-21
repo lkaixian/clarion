@@ -2027,4 +2027,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get familyEmailActingHint =>
       'Switch back to your own profile to change an email address.';
+
+  @override
+  String get writeOfflineTagUrlLabel =>
+      'Public link from registration (optional)';
+
+  @override
+  String get writeOfflineTagUrlInvalid =>
+      'The link must be https://<host>/e/<token> exactly, with no username, query or #fragment. Nothing was written.';
+
+  @override
+  String get writeOfflineTagNoUrlHint =>
+      'Without the link, a phone without the app cannot open this card.';
 }

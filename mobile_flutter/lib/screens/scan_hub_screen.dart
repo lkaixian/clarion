@@ -18,11 +18,13 @@ enum QrKind { checkin, emergency }
 
 const _kPrefixes = {
   'CLARION-STATION:': QrKind.checkin,
-  'CLARION-EMERGENCY:': QrKind.emergency,
+  'CLARION-EMERGENCY:': QrKind.emergency, // legacy printed cards
 };
 
-/// Classifies a scanned QR string by its CLARION prefix; null for anything
-/// else (including a known prefix with an empty token).
+/// Classifies a scanned QR string; null for anything else. Accepts the
+/// CLARION prefixes and an http(s) link (any host) whose path is exactly
+/// `/e/<ref>` with ref = [A-Za-z0-9_-]+ (trailing slash, query and fragment
+/// ignored).
 ({QrKind kind, String token})? parseClarionQr(String raw) {
   final value = raw.trim();
   for (final e in _kPrefixes.entries) {
@@ -31,8 +33,17 @@ const _kPrefixes = {
       return token.isEmpty ? null : (kind: e.value, token: token);
     }
   }
+  final uri = Uri.tryParse(value);
+  if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) return null;
+  final seg = uri.pathSegments.toList();
+  if (seg.isNotEmpty && seg.last.isEmpty) seg.removeLast();
+  if (seg.length == 2 && seg[0] == 'e' && _linkRef.hasMatch(seg[1])) {
+    return (kind: QrKind.emergency, token: seg[1]);
+  }
   return null;
 }
+
+final _linkRef = RegExp(r'^[A-Za-z0-9_-]+$');
 
 enum _Mode { qr, nfc }
 

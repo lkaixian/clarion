@@ -646,5 +646,8 @@
   "familyWantsToManage": "{name} mahu menguruskan akaun anda",
   "@familyWantsToManage": {"placeholders": {"name": {"type": "String"}}},
   "familyApprove": "Lulus",
-  "familyEmailActingHint": "Tukar kembali ke profil anda untuk mengubah alamat e-mel."
+  "familyEmailActingHint": "Tukar kembali ke profil anda untuk mengubah alamat e-mel.",
+  "writeOfflineTagUrlLabel": "Pautan awam dari pendaftaran (pilihan)",
+  "writeOfflineTagUrlInvalid": "Pautan mesti tepat https://<host>/e/<token>, tanpa nama pengguna, query atau #fragment. Tiada apa ditulis.",
+  "writeOfflineTagNoUrlHint": "Tanpa pautan, telefon tanpa aplikasi tidak dapat membuka kad ini."
 }

@@ -175,6 +175,15 @@ On a **physical phone** (not an emulator): use your computer's LAN IP
 the machine running `uvicorn` are on the same network — same requirement
 as the RN app's `mobile/api/client.js`.
 
+### NFC tap host (go-live item)
+
+Cards carry a link `https://<host>/e/<token>`; the manifest's NDEF_DISCOVERED
+filter uses the Gradle property `clarionPublicHost` (default
+`clarion.larmkx.com`). A deployment on another host must build with
+`-PclarionPublicHost=<host>` (Gradle) or put `clarionPublicHost=<host>` in
+`android/gradle.properties` (works through `flutter build`), matching the host of the
+server's `CLARION_PUBLIC_URL`. Otherwise tapping a tag opens the browser, not the app.
+
 ### Demo login
 
 | Role | Email | Password |

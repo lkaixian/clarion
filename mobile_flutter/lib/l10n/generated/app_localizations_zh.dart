@@ -1937,4 +1937,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get familyEmailActingHint => '请切换回您自己的档案后再更改电子邮件地址。';
+
+  @override
+  String get writeOfflineTagUrlLabel => '注册时的公开链接（可选）';
+
+  @override
+  String get writeOfflineTagUrlInvalid =>
+      '链接必须严格为 https://<host>/e/<token>，不得含用户名、查询参数或 #片段。未写入任何内容。';
+
+  @override
+  String get writeOfflineTagNoUrlHint => '没有链接，未安装应用的手机无法打开此卡。';
 }

@@ -47,6 +47,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Host of the NDEF_DISCOVERED https filter (AndroidManifest.xml). MUST match
+        // the host of the server's CLARION_PUBLIC_URL, otherwise tapping a tag opens
+        // the browser instead of the app. Override with -PclarionPublicHost=<host>
+        // (or clarionPublicHost=<host> in android/gradle.properties).
+        manifestPlaceholders["clarionPublicHost"] =
+            (project.findProperty("clarionPublicHost") as String?) ?: "clarion.larmkx.com"
     }
 
     // Published builds are ARM64 only; plugin AARs (ML Kit) would otherwise ship every ABI.
