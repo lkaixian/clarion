@@ -1935,9 +1935,14 @@ export default function PatientDetail() {
                       <input
                         className="field-input"
                         type={type}
+                        disabled={key === "email" && !!getCurrentUser()?.acting_for}
+                        aria-describedby={key === "email" && getCurrentUser()?.acting_for ? "email-acting-hint" : undefined}
                         value={profileForm[key]}
                         onChange={(e) => setProfileForm((f) => ({ ...f, [key]: e.target.value }))}
                       />
+                      {key === "email" && getCurrentUser()?.acting_for && (
+                        <p id="email-acting-hint" className="text-xs text-slate-500 mt-1">{tr("Switch back to your own profile to change an email address.")}</p>
+                      )}
                     </div>
                   ))}
                   <div className="flex gap-2 pt-1">

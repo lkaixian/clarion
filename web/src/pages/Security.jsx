@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import {
   getMfaStatus, mfaSetupStart, mfaSetupConfirm, mfaDisable, mfaRegenerateRecoveryCodes,
   getSessions, revokeSession, revokeOtherSessions,
+  getCurrentUser,
 } from "../api/client";
 import { tr } from "../lib/i18n";
 
@@ -202,6 +203,15 @@ function SessionsCard() {
 }
 
 export default function Security() {
+  const user = getCurrentUser();
+  if (user?.acting_for) {
+    return (
+      <Layout>
+        <h1 className="text-xl font-semibold text-slate-900 mb-4">{tr("Account security")}</h1>
+        <p className="text-sm text-slate-600">{tr("Account settings are available on your own profile. Use “Back to my profile” first.")}</p>
+      </Layout>
+    );
+  }
   return (
     <Layout>
       <h1 className="text-xl font-semibold text-slate-900 mb-4">{tr("Account security")}</h1>

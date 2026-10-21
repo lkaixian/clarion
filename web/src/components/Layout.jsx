@@ -5,7 +5,8 @@ import { landingPathFor } from "../lib/access";
 import { roleLabel } from "../lib/role";
 import Watermark from "./Watermark";
 import LanguageSelect from "./LanguageSelect";
-import { useLang } from "../lib/i18n";
+import { tr, useLang } from "../lib/i18n";
+import ProfileSwitcher, { ActingBanner } from "./ProfileSwitcher";
 
 // Small nav pill only ever needs the time-of-day, not a full date — same
 // "no date library, plain built-in formatting" approach as
@@ -289,12 +290,14 @@ export default function Layout({ children }) {
         <img src="/Logo/Clarion.png" alt={tr("CLARION")} className="h-7 w-auto" />
       </Link>
       {!isPatient && <HospitalTab />}
+      <ProfileSwitcher />
 
       <nav aria-label={tr("Main")} ref={restoreNavScroll} onScroll={rememberNavScroll} className="flex-1 space-y-4 overflow-y-auto">
         {isPatient ? (
           <>
             <NavLink to={homeHref} end className={linkCls}>{t("My record")}</NavLink>
             <NavLink to="/my-bills" className={linkCls}>{t("My bills")}</NavLink>
+            <NavLink to="/family" className={linkCls}>{t("My family")}</NavLink>
           </>
         ) : (
           NAV_GROUPS.map(([label, items]) => {
@@ -330,7 +333,11 @@ export default function Layout({ children }) {
           )
         )}
         {!isPatient && <InboxLink className={linkCls} />}
-        <NavLink to="/security" className={linkCls}>{tr("Security")}</NavLink>
+        {isPatient && user.acting_for ? (
+          <p className="px-3 text-xs text-blue-300">{tr("Account settings are available on your own profile.")}</p>
+        ) : (
+          <NavLink to="/security" className={linkCls}>{tr("Security")}</NavLink>
+        )}
         <p className="px-3 text-center text-[11px] text-blue-300/80" title={tr("Web console version and build")}>
           v{import.meta.env.VITE_APP_VERSION} &middot; build {import.meta.env.VITE_APP_BUILD}
         </p>
@@ -391,7 +398,10 @@ export default function Layout({ children }) {
       )}
 
       <main id="main" className="min-w-0 flex-1 p-4 md:p-6 print:p-0">
-        <div className="mx-auto max-w-5xl">{children}</div>
+        <div className="mx-auto max-w-5xl">
+          <ActingBanner />
+          {children}
+        </div>
       </main>
     </div>
   );

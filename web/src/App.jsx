@@ -23,6 +23,7 @@ import Cashier from "./pages/Cashier";
 import Orders from "./pages/Orders";
 import Purchasing from "./pages/Purchasing";
 import FormsAdmin from "./pages/FormsAdmin";
+import Family from "./pages/Family";
 import { getCurrentUser } from "./api/client";
 import { landingPathFor } from "./lib/access";
 import { useLang } from "./lib/i18n";
@@ -96,6 +97,7 @@ export default function App() {
             "page", so it's guarded by <Protected> only, no RequirePage. */}
         <Route path="/catalogue" element={<Protected><RequireStaff><Catalogue /></RequireStaff></Protected>} />
         <Route path="/my-bills" element={<Protected><RequirePatient><MyBills /></RequirePatient></Protected>} />
+        <Route path="/family" element={<Protected><RequirePatient><Family /></RequirePatient></Protected>} />
         <Route path="/cashier" element={<Protected><RequirePage page="billing"><Cashier /></RequirePage></Protected>} />
         <Route path="/orders" element={<Protected><RequireStaff><Orders /></RequireStaff></Protected>} />
         <Route path="/purchasing" element={<Protected><RequirePage page="pharmacy"><Purchasing /></RequirePage></Protected>} />

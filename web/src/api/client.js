@@ -93,13 +93,26 @@ const UNAUTHENTICATED_AUTH_PATHS = [
 // just refreshing it.
 let refreshInFlight = null;
 
+function actAsBody() {
+  const u = getCurrentUser();
+  return u?.acting_for ? { act_as: u.patient_id } : {};
+}
+
 function refreshAccessToken() {
   if (!refreshInFlight) {
     refreshInFlight = axios
-      .post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+      // While acting for a family profile the refreshed token must keep acting for it.
+      .post(`${API_BASE}/auth/refresh`, actAsBody(), { withCredentials: true })
       .then(({ data }) => {
+        const wasActing = !!getCurrentUser()?.acting_for;
         localStorage.setItem("mb_token", data.access_token);
         localStorage.setItem("mb_user", JSON.stringify(data.user));
+        // The server may have refused act_as and handed back the home profile: the UI
+        // must not keep showing the other profile's data.
+        if (wasActing && !data.user?.acting_for) {
+          sessionStorage.setItem("mb_notice", NOT_ACTING);
+          window.location.href = landingFor(data.user);
+        }
         return data.access_token;
       })
       .finally(() => {
@@ -125,6 +138,10 @@ function bounceToLogin() {
   }
 }
 
+const NOT_ACTING = "You are no longer acting for that profile.";
+const LINK_GONE = "You can no longer act for this profile";
+const landingFor = (u) => (u?.patient_id ? `/patients/${u.patient_id}` : "/");
+
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -136,6 +153,19 @@ client.interceptors.response.use(
     if (error.response?.status === 403 && error.response?.data?.detail?.must_change_password
         && window.location.pathname !== "/change-password") {
       window.location.href = "/change-password";
+      return Promise.reject(error);
+    }
+
+    // The guardian link was removed while acting: fall back to the login's own profile.
+    if (error.response?.status === 403 && error.response?.data?.detail === LINK_GONE
+        && getCurrentUser()?.acting_for && !requestUrl.includes("/profiles/switch")) {
+      // Notice first, so it survives whichever way this goes; then keep the session on the
+      // home profile. Only if that switch fails too do we give up and sign in again.
+      sessionStorage.setItem("mb_notice", LINK_GONE);
+      try {
+        await switchProfile(getCurrentUser().home_patient_id);
+        window.location.href = landingFor(getCurrentUser());
+      } catch { bounceToLogin(); }
       return Promise.reject(error);
     }
 
@@ -263,6 +293,17 @@ export function logout() {
   // network call succeeding.
   axios.post(`${API_BASE}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
 }
+
+// ---- family profiles ---------------------------------------------------------
+export const getProfiles = () => client.get("/profiles").then((r) => r.data);
+export const createProfile = (body) => client.post("/profiles", body).then((r) => r.data);
+// Same shape as login: replaces the stored token + user so every screen that
+// reads user.patient_id now shows the selected profile.
+export const switchProfile = (patientId) =>
+  client.post("/profiles/switch", { patient_id: patientId }).then((r) => storeSession(r.data));
+export const getGuardians = () => client.get("/profiles/guardians").then((r) => r.data);
+export const approveGuardian = (linkId) => client.post(`/profiles/guardians/${linkId}/approve`);
+export const removeGuardian = (linkId) => client.delete(`/profiles/guardians/${linkId}`);
 
 export function getCurrentUser() {
   const raw = localStorage.getItem("mb_user");
