@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, auth, permissions, ldap_auth, mfa
+from ..guardianship import may_act_for
 from ..database import get_db
 from ..audit import log_access
 from ..email_service import send_new_signin_email, send_password_reset_otp_email
@@ -290,6 +291,24 @@ def _missing_profile_fields(user: models.User) -> list:
         field for field in models.PATIENT_PROFILE_FIELDS_TO_PROMPT
         if not getattr(user.patient, field, None)
     ]
+
+
+def _user_out_for(db: Session, user: models.User, patient_id: Optional[str] = None) -> schemas.UserOut:
+    """The user as clients see it. When `patient_id` is a profile this patient login is acting
+    for, `patient_id`/`full_name` describe that profile (so clients that read them need no
+    change) and `home_patient_id` is the login's own record."""
+    _with_missing_profile_fields(user)
+    _attach_allowed_pages(db, user)
+    _attach_has_signature(user)
+    _attach_has_photo(user)
+    out = schemas.UserOut.model_validate(user)
+    if patient_id and patient_id != user.patient_id:
+        profile = db.get(models.Patient, patient_id)
+        out = out.model_copy(update={
+            "patient_id": patient_id, "full_name": profile.full_name if profile else out.full_name,
+            "acting_for": True, "home_patient_id": user.patient_id, "missing_profile_fields": [],
+        })
+    return out
 
 
 def _with_missing_profile_fields(user: models.User) -> models.User:
@@ -657,7 +676,13 @@ def refresh_access_token(
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     user, new_plaintext = result
-    return _issue_login_response(db, response, user, refresh_plaintext=new_plaintext, fingerprint=fp)
+    issued = _issue_login_response(db, response, user, refresh_plaintext=new_plaintext, fingerprint=fp)
+    if body and body.act_as and may_act_for(db, user, body.act_as) and body.act_as != user.patient_id:
+        # Keep the client acting for the profile it had selected (the link is re-checked here).
+        issued.access_token = auth.create_access_token(
+            {"sub": user.id, "role": user.role, "act_as": body.act_as}, password_changed_at=user.password_changed_at)
+        issued.user = _user_out_for(db, user, body.act_as)
+    return issued
 
 
 @router.post("/logout")
@@ -687,10 +712,16 @@ def logout(
 def me(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user_allow_pending_change),
+    token: str = Depends(auth.oauth2_scheme),
 ):
     # Deliberately exempt from the must_change_password block below (see
     # auth.get_current_user_allow_pending_change) -- clients need this to
     # discover the flag is set in the first place.
+    act_as = auth.act_as_claim(token)
+    if act_as and act_as != current_user.patient_id:
+        if not may_act_for(db, current_user, act_as):
+            raise HTTPException(status_code=403, detail="You can no longer act for this profile")
+        return _user_out_for(db, current_user, act_as)
     _with_missing_profile_fields(current_user)
     _attach_allowed_pages(db, current_user)
     _attach_has_signature(current_user)

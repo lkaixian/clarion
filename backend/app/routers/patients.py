@@ -980,6 +980,9 @@ def update_own_profile(
         raise HTTPException(status_code=404, detail="Patient not found")
 
     submitted_fields = payload.model_dump(exclude_unset=True)
+    if getattr(current_user, "acting_for", False) and "email" in submitted_fields:
+        # That address receives the profile owner's password-reset and 2FA codes.
+        raise HTTPException(status_code=403, detail="Switch back to your own profile to change an email address")
 
     attempted_immutable = sorted(set(submitted_fields) & schemas.PATIENT_IMMUTABLE_FIELDS)
     if attempted_immutable:

@@ -57,17 +57,18 @@ def _staff_may_reach_patient(db: Session, current_user: models.User, patient_id:
 _AGE_OF_MAJORITY = 18
 # Dependant links to a partner or ex-partner are never a guardian relationship
 # (reference_codes kind `relationships`: Husband, Spouse, Ex-wife, Ex-husband).
-_NOT_GUARDIAN_CODES = {"2", "spouse", "13", "14"}
+from ..guardianship import NOT_GUARDIAN_CODES as _NOT_GUARDIAN_CODES
 
 
 def _is_guardian_of_minor(db: Session, current_user: models.User, patient_id: str) -> bool:
     """The signed-in patient is the recorded guardian of `patient_id`
     (a PatientDependant link) and that dependant is under 18."""
     from .emergency import _age_from_dob  # lazy: emergency imports this module's neighbours
-    if not current_user.patient_id:
+    home = auth.real_user(current_user).patient_id  # never the profile currently being acted for
+    if not home:
         return False
     linked = db.query(models.PatientDependant).filter_by(
-        patient_id=current_user.patient_id, dependant_id=patient_id).first()
+        patient_id=home, dependant_id=patient_id).first()
     if linked is not None and linked.relation_code in _NOT_GUARDIAN_CODES:
         return False
     child = db.query(models.Patient.date_of_birth).filter_by(id=patient_id).first()
@@ -178,7 +179,8 @@ def record_consent(
                             detail=f"purpose must be one of {list(models.CONSENT_PURPOSES)}")
     pid = _resolve_target_patient(db, current_user, payload.patient_id, allow_guardian=True)
     if current_user.role == "patient":
-        source = "portal" if pid == current_user.patient_id else "guardian"
+        source = ("guardian" if getattr(current_user, "acting_for", False) or pid != current_user.patient_id
+                  else "portal")
     else:
         source = "staff"
     row = models.ConsentRecord(
@@ -192,7 +194,8 @@ def record_consent(
     db.refresh(row)
     log_access(db, pid, current_user.id, current_user.role,
                "consent_granted" if payload.granted else "consent_withdrawn",
-               detail=f"purpose={payload.purpose}" + (" on_behalf_of_minor" if source == "guardian" else ""),
+               detail=f"purpose={payload.purpose}" + (("" if source != "guardian" else " on_behalf_of_dependant" if getattr(current_user, "acting_for", False)
+                                else " on_behalf_of_minor")),
                actor_facility=current_user.facility)
     if payload.purpose == "cross_facility_sharing":
         # Late grant: publish the visits signed here before it. Withdrawal: take our pointers off central.

@@ -3088,6 +3088,8 @@ class PatientDependant(Base):
     relation_code = Column(String(32), nullable=True)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(TZDateTime, default=lambda: datetime.now(timezone.utc))
+    # Set when the dependant themselves approved this carer (see guardianship.needs_approval).
+    approved_at = Column(TZDateTime, nullable=True)
 
 
 class BedMovement(Base):

@@ -134,6 +134,10 @@ class UserOut(BaseModel):
     role: str
     facility: Optional[str] = None
     patient_id: Optional[str] = None
+    # True while a patient login is acting for a dependant: `patient_id`/`full_name` then describe
+    # that profile and `home_patient_id` is the login's own record.
+    acting_for: bool = False
+    home_patient_id: Optional[str] = None
     must_change_password: bool = False
     # True once TOTP MFA is confirmed (models.User.mfa_enabled property).
     mfa_enabled: bool = False
@@ -260,6 +264,7 @@ class RefreshTokenRequest(BaseModel):
     The web client relies entirely on the HttpOnly cookie instead and
     sends no body at all."""
     refresh_token: Optional[str] = None
+    act_as: Optional[str] = None  # keep acting for this profile (re-checked on every request)
 
 
 # ---------- Patient account issuance / password reset ----------

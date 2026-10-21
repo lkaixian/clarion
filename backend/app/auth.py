@@ -511,7 +511,7 @@ def _resolve_current_user(token: str, db: Session) -> models.User:
 
 
 def get_current_user_allow_pending_change(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> models.User:
     """Same as get_current_user, but does NOT block a user whose
     must_change_password flag is still set. Reserved for the small,
@@ -519,7 +519,12 @@ def get_current_user_allow_pending_change(
     actually clear that flag: GET /auth/me and POST /auth/change-password.
     (There is no server-side logout endpoint -- JWTs are stateless here --
     so there's nothing else to exempt.) Every other authenticated route
-    should keep using get_current_user / require_roles below."""
+    should keep using get_current_user / require_roles below.
+
+    A token that is acting for a dependant's profile may only read /auth/me here (which describes
+    the profile); changing the login's password needs the account holder's own profile."""
+    if act_as_claim(token) and request.url.path != "/auth/me":
+        raise HTTPException(status_code=403, detail="Switch back to your own profile for account settings")
     return _resolve_current_user(token, db)
 
 
@@ -553,6 +558,44 @@ def _responder_may_use(path: str) -> bool:
     return path in RESPONDER_ALLOWED_PATHS or path.startswith(RESPONDER_ALLOWED_PREFIXES)
 
 
+class ActingUser:
+    """A patient login acting for a dependant's profile (see guardianship.py / routers/profiles.py).
+    Reads like the real User, except `patient_id` is the profile being acted for. Deliberately
+    READ-ONLY: the real row must never be saved with the borrowed patient_id, so any code that
+    tries to assign to it or hand it to the session fails loudly instead of corrupting the link."""
+
+    def __init__(self, user, patient_id):
+        object.__setattr__(self, "_user", user)
+        object.__setattr__(self, "patient_id", patient_id)
+        object.__setattr__(self, "home_patient_id", user.patient_id)
+        object.__setattr__(self, "acting_for", True)
+
+    def __getattr__(self, name):
+        return getattr(self._user, name)
+
+    def __setattr__(self, name, value):
+        raise AttributeError("read-only: switch back to your own profile to change account settings")
+
+
+def real_user(user):
+    """The underlying User row, whether or not it is currently acting for someone."""
+    return user._user if isinstance(user, ActingUser) else user
+
+
+def act_as_claim(token: str):
+    """The profile a token was minted to act for, or None. (Only meaningful once the signature
+    has been checked by _resolve_current_user.)"""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]).get("act_as")
+    except JWTError:
+        return None
+
+
+# While acting for a dependant only these /auth routes work; everything else about the login
+# itself (password, 2FA, sessions) needs the account holder's own profile.
+ACTING_AUTH_PATHS = ("/auth/me", "/auth/refresh", "/auth/logout")
+
+
 def get_current_user(
     request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db),
 ) -> models.User:
@@ -575,6 +618,15 @@ def get_current_user(
         )
     if user.role == "emergency_responder" and not _responder_may_use(request.url.path):
         raise HTTPException(status_code=403, detail="Community responder accounts are limited to emergency lookups")
+    act_as = act_as_claim(token)
+    if act_as and act_as != user.patient_id:
+        from .guardianship import may_act_for  # lazy: keeps auth importable before models is fully set up
+        if not may_act_for(db, user, act_as):
+            raise HTTPException(status_code=403, detail="You can no longer act for this profile")
+        path = request.url.path
+        if (path.startswith("/auth/") and path not in ACTING_AUTH_PATHS) or path.startswith("/me/"):
+            raise HTTPException(status_code=403, detail="Switch back to your own profile for account settings")
+        return ActingUser(user, act_as)
     return user
 
 
