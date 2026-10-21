@@ -93,9 +93,19 @@ const UNAUTHENTICATED_AUTH_PATHS = [
 // just refreshing it.
 let refreshInFlight = null;
 
+// The role the user picked in the role switcher; the server ignores it if no longer held.
+const ACT_ROLE_KEY = "mb_act_role";
+export const rememberActRole = (role) => { try { localStorage.setItem(ACT_ROLE_KEY, role); } catch { /* storage blocked */ } };
+function actRole() {
+  try { return localStorage.getItem(ACT_ROLE_KEY); } catch { return null; }
+}
+
 function actAsBody() {
   const u = getCurrentUser();
-  return u?.acting_for ? { act_as: u.patient_id } : {};
+  const body = u?.acting_for ? { act_as: u.patient_id } : {};
+  const role = actRole();
+  if (role) body.act_role = role;
+  return body;
 }
 
 export function refreshAccessToken() {
@@ -197,6 +207,7 @@ client.interceptors.response.use(
 );
 
 export async function login(email, password) {
+  try { localStorage.removeItem(ACT_ROLE_KEY); } catch { /* storage blocked */ }
   const form = new URLSearchParams();
   form.append("username", email);
   form.append("password", password);
@@ -287,6 +298,7 @@ export function errorMessage(err, fallback) {
 export function logout() {
   localStorage.removeItem("mb_token");
   localStorage.removeItem("mb_user");
+  try { localStorage.removeItem(ACT_ROLE_KEY); } catch { /* storage blocked */ }
   // Best-effort, fire-and-forget: revokes the refresh-token cookie
   // server-side (Security Audit M4 -- there was no real server-side
   // logout before P2.5). Never awaited/blocking -- the local state above
@@ -298,6 +310,8 @@ export function logout() {
 
 // ---- public emergency page (the ref is a QR card reference or an NFC tag public_ref) (no login; a stored token, if any, buys a higher tier) ----
 export const scanEmergencyCard = (ref) => client.post("/emergency/scan", { card_reference: ref }).then((r) => r.data);
+export const shareScanLocation = (token, location) => client.post("/emergency/location", { token, location }).then((r) => r.data);
+export const getScanLocations = (patientId) => client.get(`/emergency/locations/${patientId}`).then((r) => r.data);
 
 // ---- family profiles ---------------------------------------------------------
 export const getProfiles = () => client.get("/profiles").then((r) => r.data);
@@ -306,6 +320,11 @@ export const createProfile = (body) => client.post("/profiles", body).then((r) =
 // reads user.patient_id now shows the selected profile.
 export const switchProfile = (patientId) =>
   client.post("/profiles/switch", { patient_id: patientId }).then((r) => storeSession(r.data));
+// Same shape as login: replaces the stored token + user. Remembers the pick for silent refresh.
+// `creds` = { password, code }: only needed (HTTP 428) when moving from patient/responder up to staff;
+// sent for that one call and never stored.
+export const switchRole = (role, creds) =>
+  client.post("/auth/switch-role", { role, ...creds }).then((r) => { rememberActRole(role); return storeSession(r.data); });
 export const getGuardians = () => client.get("/profiles/guardians").then((r) => r.data);
 export const approveGuardian = (linkId) => client.post(`/profiles/guardians/${linkId}/approve`);
 export const removeGuardian = (linkId) => client.delete(`/profiles/guardians/${linkId}`);

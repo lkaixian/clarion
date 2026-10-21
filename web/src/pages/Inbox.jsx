@@ -5,6 +5,8 @@ import { formatDateTime } from "../lib/format";
 import Layout from "../components/Layout";
 import { tr } from "../lib/i18n";
 
+const isExternal = (link) => typeof link === "string" && link.startsWith("https://");
+
 // Own notifications, newest first. Opening one marks it read and goes to its
 // link. Layout's badge polls the unread count, so it catches up on its own.
 export default function Inbox() {
@@ -20,7 +22,7 @@ export default function Inbox() {
     try {
       if (!n.read_at) await markNotificationRead(n.id);
     } catch { /* still navigate */ }
-    if (n.link) navigate(n.link);
+    if (n.link && !isExternal(n.link)) navigate(n.link);
     else load();
   }
 
@@ -52,10 +54,10 @@ export default function Inbox() {
         ) : (
           <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
             {items.map((n) => (
-              <li key={n.id}>
+              <li key={n.id} className="flex items-start">
                 <button
                   onClick={() => open(n)}
-                  className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 ${n.read_at ? "" : "bg-blue-50/60"}`}
+                  className={`flex min-w-0 flex-1 items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 ${n.read_at ? "" : "bg-blue-50/60"}`}
                 >
                   <span
                     aria-hidden="true"
@@ -70,6 +72,17 @@ export default function Inbox() {
                     <span className="block text-xs text-slate-400">{formatDateTime(n.created_at)}</span>
                   </span>
                 </button>
+                {isExternal(n.link) && (
+                  <a
+                    href={n.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => { if (!n.read_at) markNotificationRead(n.id).catch(() => {}); }}
+                    className="shrink-0 px-4 py-3 text-sm text-blue-700 underline"
+                  >
+                    <span aria-hidden="true">{"\u{1F4CD}"} </span>{tr("Open in Maps")}
+                  </a>
+                )}
               </li>
             ))}
           </ul>

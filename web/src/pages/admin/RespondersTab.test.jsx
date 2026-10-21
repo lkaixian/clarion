@@ -22,11 +22,13 @@ describe("RespondersTab", () => {
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Guard Ali" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "g@x.my" } });
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "paramedic" } });
     fireEvent.click(screen.getByRole("button", { name: "Create responder" }));
 
     await screen.findByText("Temp-Pass-123");
     const body = api.createResponder.mock.calls[0][0];
     expect(body.full_name).toBe("Guard Ali");
+    expect(body.tier).toBe("paramedic");
     expect(body.expires_at).toMatch(/Z$/); // the server rejects a naive time
     fireEvent.click(screen.getByText("Done, hide it"));
     await waitFor(() => expect(screen.queryByText("Temp-Pass-123")).toBeNull());
@@ -36,12 +38,13 @@ describe("RespondersTab", () => {
     const past = new Date(Date.now() - 3600_000).toISOString();
     const future = new Date(Date.now() + 3600_000).toISOString();
     api.listResponders.mockResolvedValue([
-      { id: "a", full_name: "Live", email: "a@x.my", active: true, access_expires_at: future },
+      { id: "a", full_name: "Live", email: "a@x.my", active: true, tier: "paramedic", access_expires_at: future },
       { id: "b", full_name: "Old", email: "b@x.my", active: true, access_expires_at: past },
       { id: "c", full_name: "Gone", email: "c@x.my", active: false, access_expires_at: future },
     ]);
     render(<RespondersTab />);
     await screen.findByText(/Live/);
+    expect(screen.getByText(/Paramedic crew · Active/)).toBeTruthy();
     expect(screen.getByText(/· Expired/)).toBeTruthy();
     expect(screen.getByText(/· Revoked/)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Revoke" }).length).toBe(2); // live + expired-but-active

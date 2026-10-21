@@ -19,7 +19,7 @@ function state(r) {
 // account has a mandatory expiry; the temporary password is shown once.
 export default function RespondersTab() {
   const [rows, setRows] = useState(null);
-  const [form, setForm] = useState({ full_name: "", email: "", expires: defaultExpiry() });
+  const [form, setForm] = useState({ full_name: "", email: "", expires: defaultExpiry(), tier: "community" });
   const [issued, setIssued] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,8 +45,8 @@ export default function RespondersTab() {
     run(async () => {
       // A datetime-local value has no offset; the server insists on one.
       const expires_at = new Date(form.expires).toISOString();
-      setIssued(await createResponder({ full_name: form.full_name, email: form.email, expires_at }));
-      setForm({ full_name: "", email: "", expires: defaultExpiry() });
+      setIssued(await createResponder({ full_name: form.full_name, email: form.email, expires_at, tier: form.tier }));
+      setForm({ full_name: "", email: "", expires: defaultExpiry(), tier: "community" });
     });
   };
 
@@ -65,6 +65,13 @@ export default function RespondersTab() {
         <label className="text-xs text-slate-600">Email
           <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="block border border-slate-300 rounded-lg px-2 py-1 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">{tr("Type")}
+          <select value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value })}
+            className="block border border-slate-300 rounded-lg px-2 py-1 text-sm">
+            <option value="community">{tr("Community responder")}</option>
+            <option value="paramedic">{tr("Paramedic crew")}</option>
+          </select>
         </label>
         <label className="text-xs text-slate-600">Access ends
           <input required type="datetime-local" value={form.expires} onChange={(e) => setForm({ ...form, expires: e.target.value })}
@@ -87,7 +94,7 @@ export default function RespondersTab() {
         {(rows || []).map((r) => (
           <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2">
             <div className="text-sm text-slate-700 min-w-0">
-              <p className="font-medium">{r.full_name} <span className="text-xs text-slate-500">· {state(r)}</span></p>
+              <p className="font-medium">{r.full_name} <span className="text-xs text-slate-500">· {tr(r.tier === "paramedic" ? "Paramedic crew" : "Community responder")} · {state(r)}</span></p>
               <p className="text-xs text-slate-500">{r.email} · ends {new Date(r.access_expires_at).toLocaleString()}</p>
             </div>
             <div className="flex gap-2">

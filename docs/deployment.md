@@ -1463,6 +1463,19 @@ confirm these tags resolve (they were chosen from memory) and replace them with
 
 ---
 
+## Map tiles (scan locations)
+
+The "where the card was scanned" map (`web/src/components/ScanMap.jsx`) loads tiles in the
+**viewer's browser** from `https://tile.openstreetmap.org`. OpenStreetMap therefore sees that
+viewer's IP address and the area being viewed, and OSM's tile usage policy is for light use only.
+That origin is the only addition to `img-src` in `proxy/Caddyfile`. For production, run or rent a
+tile server and change the one constant `TILE_URL` in `ScanMap.jsx`, then replace
+`https://tile.openstreetmap.org` in the `img-src` of `proxy/Caddyfile` with the new origin (or just
+`'self'` if the tiles are served from the same site). `proxy/branch-edge/Caddyfile` has its own CSP
+and was not changed: add the same origin there if branch users should see the map.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

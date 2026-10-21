@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { refreshAccessToken, scanEmergencyCard } from "../api/client";
+import { refreshAccessToken, scanEmergencyCard, shareScanLocation } from "../api/client";
 import { tr } from "../lib/i18n";
 
 // Public page behind the card QR / NFC tag. No Layout, no login gate. The server
@@ -20,6 +20,66 @@ const List = ({ items, empty }) => (
   items.length ? <ul className="list-disc space-y-1 pl-6 text-xl">{items}</ul>
     : <p className="text-xl text-slate-700">{empty}</p>
 );
+
+const LOC_MSG = {
+  locating: "Getting your location…",
+  shared: "Location shared with the patient's family. Thank you.",
+  denied: "Location was not shared (permission denied). The medical information above is unaffected.",
+  unavailable: "Could not get your location.",
+  expired: "This location link has expired. Scan the card again to share your location.",
+};
+
+// Optional, user-initiated (or already-permitted) location share. It never blocks or hides the
+// medical information and never throws. The server sends the contact one SMS per call, so
+// the POST is guarded to run once per scan.
+function ShareLocation({ token }) {
+  const [st, setSt] = useState("idle");
+  const sent = useRef(false);
+  const alive = useRef(true);
+  const set = (v) => { if (alive.current) setSt(v); };
+
+  const share = useCallback(() => {
+    if (sent.current) return;
+    set("locating");
+    try {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          if (sent.current) return;
+          sent.current = true;
+          try {
+            const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+            await shareScanLocation(token, { lat, lng, ...(Number.isFinite(accuracy) ? { accuracy_m: accuracy } : {}) });
+            set("shared");
+          } catch (e) {
+            if (e?.response?.status === 400) set("expired");
+            else { sent.current = false; set("unavailable"); }
+          }
+        },
+        (err) => set(err?.code === 1 ? "denied" : "unavailable"),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      );
+    } catch { set("unavailable"); }
+  }, [token]);
+
+  useEffect(() => {
+    alive.current = true;
+    // Never send silently: sharing always needs a deliberate tap, even if permission is granted.
+    return () => { alive.current = false; };
+  }, []);
+
+  return (
+    <section aria-labelledby="em-loc" className="rounded-lg border border-slate-300 p-3">
+      <h2 id="em-loc" className="sr-only">{tr("Share location")}</h2>
+      <p id="em-loc-note" className="mb-2 text-sm text-slate-700">{tr("Your position is sent to the patient's emergency contact as a map link, and shown to the patient and their care team. It is kept for 90 days and is only sent if you tap the button.")}</p>
+      {(st === "idle" || st === "unavailable") && (
+        <button type="button" onClick={share} aria-describedby="em-loc-note"className="rounded-lg bg-slate-900 px-4 py-2 text-base font-semibold text-white">
+          {tr("Share my location with their family")}
+        </button>
+      )}
+      <p role="status" aria-live="polite" className="mt-1 text-base">{LOC_MSG[st] ? tr(LOC_MSG[st]) : ""}</p>
+    </section>
+  );
+}
 
 export default function EmergencyPublic() {
   const { ref } = useParams();
@@ -69,7 +129,7 @@ export default function EmergencyPublic() {
   }, [load]);
 
   const d = state.data || {};
-  const priv = d.tier === "responder" || d.tier === "clinical";
+  const priv = d.tier === "responder" || d.tier === "clinical" || d.tier === "paramedic";
   const allergies = (d.allergies || []).map((a, i) => (
     <li key={i}><strong>{a.substance}</strong>{a.severity ? ` (${a.severity})` : ""}{a.reaction ? ` - ${a.reaction}` : ""}</li>
   ));
@@ -121,7 +181,7 @@ export default function EmergencyPublic() {
             <h2 id="em-cond" className="mb-2 text-xl font-bold">{tr("Medical conditions")}</h2>
             <List items={conditions} empty={none} />
           </section>
-          {d.tier === "clinical" && (
+          {(d.tier === "clinical" || d.tier === "paramedic") && (
             <section aria-labelledby="em-med">
               <h2 id="em-med" className="mb-2 text-xl font-bold">{tr("Medications")}</h2>
               <List items={meds} empty={none} />
@@ -134,6 +194,7 @@ export default function EmergencyPublic() {
               {ec.phone && <a href={`tel:${ec.phone.replace(/[^\d+]/g, "")}`} className={`${CALL} mt-2 bg-slate-900 py-3 text-xl text-white`}>{tr("Call")} {ec.phone}</a>}
             </section>
           )}
+          {d.location_token && typeof navigator !== "undefined" && navigator.geolocation && <ShareLocation token={d.location_token} />}
           {!priv && (
             <p className="text-base text-slate-700">
               {tr("Viewing: basic information")}.{" "}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-vi.mock("../api/client", async (orig) => ({ ...(await orig()), scanEmergencyCard: vi.fn(), refreshAccessToken: vi.fn() }));
+vi.mock("../api/client", async (orig) => ({ ...(await orig()), scanEmergencyCard: vi.fn(), shareScanLocation: vi.fn(), refreshAccessToken: vi.fn() }));
 
 import * as api from "../api/client";
 import App from "../App";
@@ -56,6 +56,23 @@ describe("EmergencyPublic", () => {
     expect(screen.getByRole("link", { name: /\+60123/ }).getAttribute("href")).toBe("tel:+60123");
     expect(screen.queryByText(/Sign in to see more/)).toBeNull();
     expect(document.body.textContent).not.toContain("secret-note");
+  });
+
+  it("paramedic tier shows medications, name and contact; responder tier hides medications", async () => {
+    const meds = [{ drug_name: "Warfarin", dosage: "5mg", frequency: "daily" }];
+    api.scanEmergencyCard.mockResolvedValue({ ...resp, tier: "paramedic", medications: meds });
+    at("/e/REF1");
+    await tick();
+    expect(await screen.findByText("Ann Lee")).toBeTruthy();
+    expect(screen.getByText("Warfarin")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /\+60123/ })).toBeTruthy();
+    expect(screen.queryByText(/Sign in to see more/)).toBeNull();
+    cleanup();
+    api.scanEmergencyCard.mockResolvedValue({ ...resp, medications: meds });
+    at("/e/REF1");
+    await tick();
+    await screen.findByText("Ann Lee");
+    expect(screen.queryByText("Warfarin")).toBeNull();
   });
 
   it("404 shows the invalid-card message and keeps Call 999", async () => {
@@ -166,5 +183,94 @@ describe("EmergencyPublic", () => {
     await tick();
     expect(await screen.findByText("Penicillin")).toBeTruthy();
     expect(window.location.pathname).toBe("/e/REF9");
+  });
+
+  describe("location sharing", () => {
+    const withTok = { ...resp, location_token: "LT1" };
+    const okPos = { coords: { latitude: 3.1, longitude: 101.6, accuracy: 12 } };
+    const stubGeo = (impl) => {
+      const getCurrentPosition = vi.fn(impl);
+      Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition } });
+      return getCurrentPosition;
+    };
+    const stubPerm = (state) => Object.defineProperty(navigator, "permissions", {
+      configurable: true, value: { query: vi.fn().mockResolvedValue({ state }) },
+    });
+    const clickShare = () => act(async () => { fireEvent.click(screen.getByRole("button", { name: "Share my location with their family" })); });
+    afterEach(() => { delete navigator.geolocation; delete navigator.permissions; });
+
+    it("button flow: nothing is asked until the tap, then posts once and shows shared", async () => {
+      const gp = stubGeo((ok) => ok(okPos));
+      api.scanEmergencyCard.mockResolvedValue(withTok);
+      api.shareScanLocation.mockResolvedValue({ status: "ok" });
+      at("/e/REF1");
+      await tick();
+      expect(await screen.findByText("Ann Lee")).toBeTruthy();
+      expect(gp).not.toHaveBeenCalled();
+      expect(screen.getByText(/emergency contact as a map link.*90 days.*only sent if you tap/)).toBeTruthy();
+      await clickShare();
+      expect(gp.mock.calls[0][2]).toMatchObject({ enableHighAccuracy: true, timeout: 10000 });
+      expect(api.shareScanLocation).toHaveBeenCalledTimes(1);
+      expect(api.shareScanLocation).toHaveBeenCalledWith("LT1", { lat: 3.1, lng: 101.6, accuracy_m: 12 });
+      expect(screen.getByRole("status").textContent).toMatch(/Location shared/);
+      expect(screen.queryByRole("button", { name: /Share my location/ })).toBeNull();
+    });
+
+    it("no button without a location_token or without geolocation", async () => {
+      stubGeo(() => {});
+      api.scanEmergencyCard.mockResolvedValue(resp);
+      at("/e/REF1");
+      await tick();
+      await screen.findByText("Ann Lee");
+      expect(screen.queryByRole("button", { name: /Share my location/ })).toBeNull();
+      cleanup();
+      delete navigator.geolocation;
+      api.scanEmergencyCard.mockResolvedValue(withTok);
+      at("/e/REF1");
+      await tick();
+      await screen.findByText("Ann Lee");
+      expect(screen.queryByRole("button", { name: /Share my location/ })).toBeNull();
+    });
+
+    it("granted permission does NOT send until tapped; privacy copy is shown before the tap", async () => {
+      stubPerm("granted");
+      const gp = stubGeo((ok) => ok(okPos));
+      api.scanEmergencyCard.mockResolvedValue(withTok);
+      api.shareScanLocation.mockResolvedValue({ status: "ok" });
+      at("/e/REF1");
+      await tick();
+      await screen.findByText("Ann Lee");
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+      expect(screen.getByText(/map link.*care team.*90 days.*only sent if you tap/)).toBeTruthy();
+      expect(gp).not.toHaveBeenCalled();
+      expect(api.shareScanLocation).not.toHaveBeenCalled();
+      await clickShare();
+      expect(api.shareScanLocation).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("status").textContent).toMatch(/Location shared/);
+    });
+
+    it("denied keeps the medical information and does not post", async () => {
+      stubGeo((_ok, bad) => bad({ code: 1 }));
+      api.scanEmergencyCard.mockResolvedValue(withTok);
+      at("/e/REF1");
+      await tick();
+      await screen.findByText("Ann Lee");
+      await clickShare();
+      expect(screen.getByRole("status").textContent).toMatch(/permission denied/);
+      expect(api.shareScanLocation).not.toHaveBeenCalled();
+      expect(screen.getByText("Asthma")).toBeTruthy();
+    });
+
+    it("an expired token (400) suggests rescanning", async () => {
+      stubGeo((ok) => ok(okPos));
+      api.scanEmergencyCard.mockResolvedValue(withTok);
+      api.shareScanLocation.mockRejectedValue({ response: { status: 400 } });
+      at("/e/REF1");
+      await tick();
+      await screen.findByText("Ann Lee");
+      await clickShare();
+      expect(screen.getByRole("status").textContent).toMatch(/expired.*Scan the card again/);
+      expect(screen.getByText("Ann Lee")).toBeTruthy();
+    });
   });
 });

@@ -7,6 +7,7 @@ import Watermark from "./Watermark";
 import LanguageSelect from "./LanguageSelect";
 import { tr, useLang } from "../lib/i18n";
 import ProfileSwitcher, { ActingBanner } from "./ProfileSwitcher";
+import RoleSwitcher from "./RoleSwitcher";
 
 // Small nav pill only ever needs the time-of-day, not a full date — same
 // "no date library, plain built-in formatting" approach as
@@ -290,6 +291,7 @@ export default function Layout({ children }) {
         <img src="/Logo/Clarion.png" alt={tr("CLARION")} className="h-7 w-auto" />
       </Link>
       {!isPatient && <HospitalTab />}
+      <RoleSwitcher />
       <ProfileSwitcher />
 
       <nav aria-label={tr("Main")} ref={restoreNavScroll} onScroll={rememberNavScroll} className="flex-1 space-y-4 overflow-y-auto">

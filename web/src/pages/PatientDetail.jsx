@@ -9,6 +9,7 @@ import PatientOrders from "../components/PatientOrders";
 import PatientForms from "../components/PatientForms";
 import PatientDemographics from "../components/PatientDemographics";
 import SharingConsent from "../components/SharingConsent";
+import { ScanLocations } from "../components/ScanMap";
 import { roleLabel } from "../lib/role";
 import {
   getPatient, getSummary, getInteractionCheck, issueEmergencyCard,
@@ -2237,6 +2238,8 @@ export default function PatientDetail() {
               <p className="text-sm text-slate-500">{tr("Generates a scoped QR — scanning it (no login required) returns only critical fields.")}</p>
             )}
           </Section>
+
+          <Section title={tr("Where my card was scanned")}><ScanLocations patientId={id} /></Section>
 
           {canManageLogins && (
             <Section title={tr("Patient Login Account")} action={
