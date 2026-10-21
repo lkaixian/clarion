@@ -48,8 +48,12 @@ jobs:
         with:
           python-version: "3.12"   # same as backend/Dockerfile
           cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      # pytest is pinned in requirements-dev.txt, which also holds heavy lint/scan tools the test run
+      # does not need (semgrep, locust), so install just that one pin plus the runtime requirements.
+      - run: pip install -r requirements.txt "$(grep -E '^pytest==' requirements-dev.txt)"
       - name: Run tests
         run: |
           set +e
