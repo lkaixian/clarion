@@ -1,3 +1,5 @@
+[![API](https://github.com/lkaixian/clarion/actions/workflows/api.yml/badge.svg)](https://github.com/lkaixian/clarion/actions/workflows/api.yml) [![Web](https://github.com/lkaixian/clarion/actions/workflows/web.yml/badge.svg)](https://github.com/lkaixian/clarion/actions/workflows/web.yml) [![Flutter](https://github.com/lkaixian/clarion/actions/workflows/flutter.yml/badge.svg)](https://github.com/lkaixian/clarion/actions/workflows/flutter.yml)
+
 # CLARION
 ### *(Clinical Access, Records & Information Operations Network)*
 

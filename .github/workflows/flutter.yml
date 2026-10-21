@@ -1,0 +1,40 @@
+name: Flutter
+
+# The patient / responder mobile app: static analysis and tests.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile_flutter/**"
+      - ".github/workflows/flutter.yml"
+  pull_request:
+    paths:
+      - "mobile_flutter/**"
+      - ".github/workflows/flutter.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter (analyze, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.1"
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

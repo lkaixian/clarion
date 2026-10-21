@@ -1,0 +1,68 @@
+name: API
+
+# Backend tests plus a check that the Docker images still build. Only runs when something it
+# depends on changed (or by hand), so a red "API" badge means the API / Docker side broke.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/Dockerfile"
+      - "web/nginx.conf"
+      - "proxy/**"
+      - "docker-compose*.yml"
+      - ".env.docker.example"
+      - ".github/workflows/api.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "web/Dockerfile"
+      - "web/nginx.conf"
+      - "proxy/**"
+      - "docker-compose*.yml"
+      - ".env.docker.example"
+      - ".github/workflows/api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SECRET_KEY: ci-only-secret-key
+      OTP_HMAC_KEY: ci-only-otp-key
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # same as backend/Dockerfile
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests -q -p no:cacheprovider
+
+  docker:
+    name: Docker (compose config, image builds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: |
+          cp .env.docker.example .env.docker
+          docker compose config -q
+      - name: Build the backend image
+        run: docker build -t clarion/backend:ci backend
+      - name: Build the web image
+        run: docker build -t clarion/web:ci web
