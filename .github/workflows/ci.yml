@@ -1,0 +1,75 @@
+name: CI
+
+# Runs the backend, web and Flutter test suites on every push to main and on pull requests, so a
+# change is checked on GitHub's machines instead of waiting on a laptop. The offline gate in
+# ci/run.sh (ruff, bandit, semgrep, osv-scanner) is a separate, air-gapped-friendly check.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SECRET_KEY: ci-only-secret-key
+      OTP_HMAC_KEY: ci-only-otp-key
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # same as backend/Dockerfile
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests -q -p no:cacheprovider
+
+  web:
+    name: Web (vitest, lint, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20   # same as web/Dockerfile
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx vitest run
+      - run: npm run lint
+      - run: npm run build
+
+  flutter:
+    name: Flutter (analyze, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.1"
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
