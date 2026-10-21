@@ -71,10 +71,13 @@ jobs:
           exit $rc
       - name: The NFC launch filter got the configured host
         run: |
-          f=$(find build -path '*merged_manifests*' -name AndroidManifest.xml | head -1)
+          # The APP's merged manifest only: every plugin module has its own merged_manifests dir
+          # too, and none of those carries the launch filter.
+          f=$(find build/app/intermediates/merged_manifests/debug -name AndroidManifest.xml | head -1)
+          test -n "$f" || { echo "::error::no merged debug manifest found under build/app"; exit 1; }
           echo "merged manifest: $f"
-          grep -n 'android:host' "$f"
-          grep -q 'android:host="clarion.larmkx.com"' "$f"
+          grep -n 'android:host' "$f" || { echo "::error::no android:host in $f"; exit 1; }
+          grep -q 'android:host="clarion.larmkx.com"' "$f" || { echo "::error::launch filter host is not clarion.larmkx.com"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: clarion-debug-apk
