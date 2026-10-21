@@ -54,7 +54,9 @@ def test_scan_returns_age_not_dob(test_client, db_session, make_user, auth_heade
     assert issued.status_code == 200, issued.text
     card_ref = issued.json()["card_reference"]
 
-    body = test_client.post("/emergency/scan", json={"card_reference": card_ref}).json()
+    body = test_client.post(
+        "/emergency/scan", json={"card_reference": card_ref}, headers=auth_headers(clinician)
+    ).json()
     assert "date_of_birth" not in body
     assert "age" in body
     assert body["age"] == _age_from_dob("1975-06-01")

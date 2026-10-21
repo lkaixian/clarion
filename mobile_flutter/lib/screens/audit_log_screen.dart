@@ -54,11 +54,13 @@ String _formatActor(AuditLogEntry entry, AppLocalizations l10n) {
       : who;
 }
 
-const _responderPrefix = 'emergency_responder:';
+// 'emergency_responder:' is the pre-rename prefix; old rows still carry it. A verified
+// responder account also has role 'emergency_responder' but a real user id as actor.
+const _unverifiedPrefixes = ['public_unverified:', 'emergency_responder:'];
 
 bool _isUnverifiedResponder(AuditLogEntry entry) =>
-    entry.actor.startsWith(_responderPrefix) ||
-    entry.actorRole == 'emergency_responder';
+    _unverifiedPrefixes.any(entry.actor.startsWith) ||
+    entry.actorRole == 'public_unverified';
 
 /// How privacy-sensitive a given row *looks*, computed entirely client-side
 /// from fields already present on each entry -- there's no dedicated

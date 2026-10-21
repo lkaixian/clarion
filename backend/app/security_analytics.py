@@ -85,7 +85,7 @@ _LOOKBACK = timedelta(hours=24)
 # Pseudo-actors that are not a real staff account -- excluded from both
 # rules (see models.AuditLog's class docstring for the actor string shapes).
 _EXCLUDED_ACTORS = {"system"}
-_EXCLUDED_ACTOR_PREFIXES = ("emergency_",)
+_EXCLUDED_ACTOR_PREFIXES = ("emergency_", "public_unverified:")
 
 # Malaysia has no DST -- a fixed UTC+8 offset is exact, not an approximation.
 _MYT_OFFSET = timedelta(hours=8)

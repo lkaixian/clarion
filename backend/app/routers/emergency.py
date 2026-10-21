@@ -17,8 +17,46 @@ from ..database import get_db
 from ..audit import log_access
 from ..rate_limit import limiter
 from ..clinical_access import _patient_present_at
+from .notifications import notify
 
 router = APIRouter(prefix="/emergency", tags=["emergency"])
+
+# Who may see what. A scan returns grant.scope (what the patient agreed to expose
+# at all) intersected with the ceiling for the scanner's tier. The tier comes only
+# from the account behind the bearer token, never from anything the caller types.
+# "identity" = name + age.
+_TIER_CEILING = {
+    "public": frozenset({"allergies", "conditions"}),
+    "responder": frozenset({"allergies", "conditions", "blood_type", "identity"}),
+    "clinical": frozenset({"allergies", "conditions", "blood_type", "medications", "identity"}),
+}
+_TIER_BY_ROLE = {
+    "emergency_responder": "responder", "receptionist": "responder",
+    "clinician": "clinical", "admin": "clinical", "records_officer": "clinical", "pharmacist": "clinical",
+}
+# ponytail: no separate paramedic tier -- needs a User.responder_tier column once agencies enrol.
+
+
+def _effective_scope(grant, current_user) -> "tuple[str, set]":
+    tier = _TIER_BY_ROLE.get(current_user.role, "public") if current_user else "public"
+    return tier, (set(grant.scope or []) | {"identity"}) & _TIER_CEILING[tier]
+
+
+def _notify_patient_of_scan(db: Session, patient, tier: str, ident) -> None:
+    """Tell the patient's own account when anything above the public view was opened.
+    ponytail: patient's own account only; guardians of a minor need PatientDependant lookup."""
+    if tier == "public":
+        return
+    account = db.query(models.User).filter(
+        models.User.patient_id == patient.id, models.User.role == "patient").first()
+    recent = account and db.query(models.Notification).filter(
+        models.Notification.user_id == account.id, models.Notification.kind == "card_scanned",
+        models.Notification.read_at.is_(None),
+        models.Notification.created_at >= datetime.now(timezone.utc) - timedelta(minutes=15)).first()
+    if account and not recent:
+        where = f" at {ident.actor_facility}" if ident.actor_facility else ""
+        notify(db, account.id, "card_scanned", "Your emergency card was scanned",
+               body=f"Opened with {tier} access{where}.", urgent=True)
 
 
 def _require_patient_present_for_staff(db: Session, current_user: models.User, patient_id: str) -> None:
@@ -131,12 +169,14 @@ def _responder_audit(current_user: "models.User | None", payload) -> _ResponderA
     and unverifiable.
 
     - **No/invalid token (the common field case):** audited EXACTLY as
-      before -- `actor="emergency_responder:<name>"`,
-      `actor_role="emergency_responder"`. That role value already *means*
-      "self-asserted, unverified" and every existing audit-trail consumer
+      before -- `actor="public_unverified:<name>"`,
+      `actor_role="public_unverified"`. That role value *means*
+      "self-asserted, unverified" (a verified responder account keeps
+      `emergency_responder`) and every audit-trail consumer
       (web `PatientDetail.jsx`, `mobile_flutter/.../audit_log_screen.dart`)
-      keys on it; a reviewer filtering `actor_role == "emergency_responder"`
-      gets precisely the unverified accesses.
+      keys on it; a reviewer filtering `actor_role == "public_unverified"`
+      gets precisely the unverified accesses. Rows written before the rename
+      carry `emergency_responder:` and are still recognised by prefix.
     - **Valid staff bearer token:** bind the REAL identity -- `actor` is the
       user id, `actor_role` their real role, `actor_facility` recorded, and
       `detail` is prefixed `verified` with the typed-in name kept as
@@ -158,11 +198,17 @@ def _responder_audit(current_user: "models.User | None", payload) -> _ResponderA
             detail_suffix=f"verified org={org}" + (f" self_asserted={said}" if said else ""),
         )
     return _ResponderAudit(
-        actor=f"emergency_responder:{said or 'unidentified'}",
-        actor_role="emergency_responder",
+        actor=f"public_unverified:{said or 'unidentified'}",
+        actor_role="public_unverified",
         actor_facility=None,
         detail_suffix=f"org={org}",
     )
+
+
+def _scan_detail(ident: _ResponderAudit, tier: str) -> str:
+    """Unverified rows keep the bare `org=...` shape the audit UIs parse (their tier is
+    always public); verified rows record the tier the account got."""
+    return ident.detail_suffix if ident.actor_role == "public_unverified" else f"{ident.detail_suffix} tier={tier}"
 
 
 def _audit_sharing_bypass_if_any(
@@ -210,6 +256,7 @@ def _scoped_fields(
     scope: set,
     resolved_condition_ids: "set | frozenset" = frozenset(),
     discontinued_medication_ids: "set | frozenset" = frozenset(),
+    identity: bool = True,
 ) -> dict:
     """Shared by /emergency/scan and /emergency/nfc/scan so both a QR-code
     scan and an NFC tap return exactly the same shape for the same scope.
@@ -232,7 +279,10 @@ def _scoped_fields(
     IS more, it's just not flagged critical for this view", which is a real
     safety gap for an emergency-facing screen."""
     # M7b: age, not the full date_of_birth -- see _age_from_dob.
-    result = {"full_name": patient.full_name, "age": _age_from_dob(patient.date_of_birth)}
+    result = (
+        {"full_name": patient.full_name, "age": _age_from_dob(patient.date_of_birth)}
+        if identity else {"full_name": None, "age": None}
+    )
     omitted_non_critical = {}
 
     # A `resolved` condition annotation / `discontinued` medication
@@ -517,16 +567,21 @@ def scan_emergency_card(
         )
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    scope = set(grant.scope or [])
+    tier, scope = _effective_scope(grant, current_user)
     resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, patient.id)
-    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids)
+    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids,
+                            identity="identity" in scope)
+    result["tier"] = tier
+    if tier == "public":
+        result["omitted_non_critical"] = {}
 
+    _notify_patient_of_scan(db, patient, tier, ident)
     log_access(
         db, patient.id,
         actor=ident.actor, actor_role=ident.actor_role,
         action="emergency_access",
-        fields=list(scope),
-        detail=ident.detail_suffix,
+        fields=sorted(scope),
+        detail=_scan_detail(ident, tier),
         actor_facility=ident.actor_facility,
     )
     _audit_sharing_bypass_if_any(db, patient, ident)
@@ -790,16 +845,21 @@ def scan_nfc_card(
         )
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    scope = set(grant.scope or [])
+    tier, scope = _effective_scope(grant, current_user)
     resolved_cond_ids, discontinued_med_ids = _resolved_discontinued_ids(db, patient.id)
-    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids)
+    result = _scoped_fields(patient, scope, resolved_cond_ids, discontinued_med_ids,
+                            identity="identity" in scope)
+    result["tier"] = tier
+    if tier == "public":
+        result["omitted_non_critical"] = {}
 
+    _notify_patient_of_scan(db, patient, tier, ident)
     log_access(
         db, patient.id,
         actor=ident.actor, actor_role=ident.actor_role,
         action="emergency_access_nfc",
-        fields=list(scope),
-        detail=f"{hash_marker} {ident.detail_suffix}",
+        fields=sorted(scope),
+        detail=f"{hash_marker} {_scan_detail(ident, tier)}",
         actor_facility=ident.actor_facility,
     )
     _audit_sharing_bypass_if_any(db, patient, ident)
@@ -1085,7 +1145,7 @@ def nfc_card_history(
     )
     out = []
     for r in rows:
-        m = re.search(r"org=(.*?)(?: self_asserted=|$)", r.detail or "")
+        m = re.search(r"org=(.*?)(?: self_asserted=| tier=|$)", r.detail or "")
         org = m.group(1).strip() if m and m.group(1).strip() not in ("", "None") else None
         out.append({
             "at": (r.timestamp.replace(tzinfo=timezone.utc) if r.timestamp.tzinfo is None else r.timestamp).isoformat(),

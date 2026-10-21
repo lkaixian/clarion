@@ -5,9 +5,8 @@ distinguishable from a confirmed identity.
 Fix (app/routers/emergency.py::_responder_audit + auth.get_optional_current_user):
 the scan endpoints stay unauthenticated, but
   - no/invalid token -> audited EXACTLY as before: actor
-    `emergency_responder:<name>`, actor_role `emergency_responder` (that role
-    already means "self-asserted, unverified"; every audit-trail consumer
-    already keys on it)
+    `public_unverified:<name>`, actor_role `public_unverified` (renamed from
+    `emergency_responder`, which is now only a verified responder account)
   - valid staff token -> actor = the real user id, actor_role = their role,
     actor_facility recorded, detail carries `verified` + the typed-in name
     as `self_asserted=`
@@ -16,7 +15,7 @@ the scan endpoints stay unauthenticated, but
 The audit *action* string is deliberately unchanged (`emergency_access` /
 `_nfc` / `_failed`) -- audit_log_screen.dart switches on it. The
 verified/unverified distinction is: real user id + real role (verified) vs
-the unchanged `emergency_responder:` / `emergency_responder` shape.
+the `public_unverified:` / `public_unverified` shape.
 """
 from app import models
 
@@ -76,8 +75,8 @@ def test_unauthenticated_scan_logs_unverified_actor(test_client, db_session, mak
     row = rows[0]
     assert row.action == "emergency_access"  # action string unchanged
     # unverified path is byte-for-byte the pre-M6 shape
-    assert row.actor == "emergency_responder:Bomba Ali"
-    assert row.actor_role == "emergency_responder"
+    assert row.actor == "public_unverified:Bomba Ali"
+    assert row.actor_role == "public_unverified"
     assert row.actor_facility is None
     assert row.detail == "org=JBPM"
 
@@ -113,8 +112,8 @@ def test_failed_scan_unauthenticated_is_unverified(test_client, db_session):
         .filter(models.AuditLog.action == "emergency_access_failed").all()
         if "totally-bogus" in (r.detail or "")
     ]
-    assert rows and rows[-1].actor == "emergency_responder:X"
-    assert rows[-1].actor_role == "emergency_responder"
+    assert rows and rows[-1].actor == "public_unverified:X"
+    assert rows[-1].actor_role == "public_unverified"
 
 
 def test_nfc_scan_authenticated_binds_identity(test_client, db_session, make_user, auth_headers):
@@ -164,8 +163,8 @@ def test_broken_token_falls_back_to_unverified_no_401(test_client, db_session, m
     assert resp.status_code == 200, resp.text  # not 401
     rows = _audit_rows(db_session, patient.id, "emergency_access")
     assert rows[-1].action == "emergency_access"
-    assert rows[-1].actor == "emergency_responder:Fallback"
-    assert rows[-1].actor_role == "emergency_responder"
+    assert rows[-1].actor == "public_unverified:Fallback"
+    assert rows[-1].actor_role == "public_unverified"
 
 
 def test_sharing_bypass_row_uses_the_responder_identity(test_client, db_session, make_user, auth_headers):

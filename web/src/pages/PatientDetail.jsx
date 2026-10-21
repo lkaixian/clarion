@@ -1340,11 +1340,13 @@ function formatAuditActor(l) {
   // "org=None" when the responder left the org field blank (an f-string
   // over Optional[str] on the backend) -- treat that the same as "no org
   // given", not as a literal value to display.
-  if (l.actor && l.actor.startsWith("emergency_responder:")) {
-    const respName = l.actor.slice("emergency_responder:".length) || "unidentified";
+  // "emergency_responder:" is the pre-rename prefix; old rows still carry it.
+  const unverifiedPrefix = ["public_unverified:", "emergency_responder:"].find((p) => l.actor && l.actor.startsWith(p));
+  if (unverifiedPrefix) {
+    const respName = l.actor.slice(unverifiedPrefix.length) || "unidentified";
     const orgMatch = typeof l.detail === "string" ? l.detail.match(/^org=(.*)$/) : null;
     const org = orgMatch && orgMatch[1] && orgMatch[1] !== "None" ? orgMatch[1] : null;
-    const who = `${respName} (emergency responder — self-reported, unverified)`;
+    const who = `${respName} (not signed in — self-reported, unverified)`;
     return org ? `${who} · ${org}` : who;
   }
 

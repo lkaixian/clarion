@@ -1067,7 +1067,7 @@ def get_audit_log(
     # against the User table.
     real_user_actor_ids = {
         l.actor for l in logs
-        if l.actor != "system" and not l.actor.startswith("emergency_responder:")
+        if l.actor != "system" and not l.actor.startswith(("emergency_responder:", "public_unverified:"))
     }
     actor_names = {}
     if real_user_actor_ids:

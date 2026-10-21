@@ -103,7 +103,7 @@ def test_scan_accepts_raw_uid_and_never_logs_it(test_client, db_session, make_us
     uid = _uid()
     assert _register(test_client, auth_headers, staff, patient.id, uid).status_code == 200
 
-    scan = test_client.post("/emergency/nfc/scan", json={"nfc_uid": uid})
+    scan = test_client.post("/emergency/nfc/scan", json={"nfc_uid": uid}, headers=auth_headers(staff))
     assert scan.status_code == 200, scan.text
     assert scan.json()["full_name"] == "M7 Scan"
 
@@ -152,7 +152,7 @@ def test_uid_lookup_is_separator_and_case_insensitive(test_client, db_session, m
     assert _register(test_client, auth_headers, staff, patient.id, "04:AB:CD:EF:12:34").status_code == 200
 
     for variant in ("04abcdef1234", "04-ab-cd-ef-12-34", "04 AB CD EF 12 34"):
-        r = test_client.post("/emergency/nfc/scan", json={"nfc_uid": variant})
+        r = test_client.post("/emergency/nfc/scan", json={"nfc_uid": variant}, headers=auth_headers(staff))
         assert r.status_code == 200, f"{variant} -> {r.status_code}"
         assert r.json()["full_name"] == "M7 Canon"
 
