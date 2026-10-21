@@ -1,7 +1,9 @@
 import base64
 import hashlib
 import io
+import os
 import secrets
+from urllib.parse import urlsplit
 import re
 from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
@@ -98,14 +100,34 @@ def _age_from_dob(dob: "str | None", *, today: "date | None" = None) -> "int | N
     return age if 0 <= age <= 150 else None  # reject a future / garbage DOB
 
 
+def _public_base() -> str:
+    """Where the public emergency page lives (the SPA's /e/... route): CLARION_PUBLIC_URL, default
+    https://clarion.larmkx.com. A value that is set but not a plain https origin (http is allowed only for
+    localhost) is refused loudly -- printing cards that point somewhere else would be worse than failing."""
+    raw = os.environ.get("CLARION_PUBLIC_URL")
+    if raw is None or not raw.strip():
+        return "https://clarion.larmkx.com"
+    parts = urlsplit(raw.strip())
+    local = parts.hostname in ("localhost", "127.0.0.1")
+    if (parts.scheme != "https" and not (parts.scheme == "http" and local)) or not parts.hostname \
+            or parts.username or parts.password or parts.query or parts.fragment or parts.path not in ("", "/"):
+        raise RuntimeError("CLARION_PUBLIC_URL must be a plain https origin such as https://clarion.example.org")
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+_public_base()  # a bad CLARION_PUBLIC_URL stops the app at startup, not when the first card is printed
+
+
 def _render_qr_base64(card_reference: str) -> str:
     """Render the emergency QR PNG for a given card_reference and return it
     as a `data:image/png;base64,...` string.
 
-    The QR content is fully deterministic (`CLARION-EMERGENCY:{card_reference}`),
-    so this can be called as many times as needed — nothing about the image
-    itself is ever persisted, only the card_reference it's derived from."""
-    qr_payload = f"CLARION-EMERGENCY:{card_reference}"
+    The QR content is a link, `{public base}/e/{card_reference}`: any phone camera opens the
+    public emergency page (public tier only), and the CLARION app recognises the same link.
+    Cards printed before this change carry the older `CLARION-EMERGENCY:{card_reference}` text,
+    which the app still understands. Deterministic, so it can be rendered as often as needed —
+    nothing about the image is persisted, only the card_reference it's derived from."""
+    qr_payload = f"{_public_base()}/e/{card_reference}"
     img = qrcode.make(qr_payload)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -543,7 +565,8 @@ def scan_emergency_card(
     ident = _responder_audit(current_user, payload)
     grant = (
         db.query(models.EmergencyToken)
-        .filter(models.EmergencyToken.card_reference == payload.card_reference)
+        .filter(or_(models.EmergencyToken.card_reference == payload.card_reference,
+                    models.EmergencyToken.public_ref == payload.card_reference))
         .first()
     )
     if not grant or grant.revoked or grant.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
@@ -693,6 +716,10 @@ def _tag_security(tag_type: str) -> dict:
 # The sealed record leads with "X:<yyyymmdd>|"; below this many plaintext
 # bytes left over, there is no room for even a blood type plus one allergy.
 _SEALED_EXPIRY_LEN = len("X:YYYYMMDD")
+# A tag this big (NTAG215/216) also carries a URL record so a phone without the app opens the
+# public page; the URL record's bytes come out of the sealed record's budget.
+_URL_ON_TAG_MIN_CAPACITY = 400
+_URL_RECORD_OVERHEAD = 6
 _MIN_SEALED_BUDGET = 24
 
 
@@ -731,7 +758,11 @@ def register_nfc_card(
 
     # Refuse before anything is persisted: a tag too small for the sealed
     # record must never fall back to writing readable plaintext.
-    budget = _sealed_budget(payload.tag_max_bytes or _TAG_TEXT_MAX_BYTES_DEFAULT)
+    capacity = payload.tag_max_bytes or _TAG_TEXT_MAX_BYTES_DEFAULT
+    public_ref = secrets.token_urlsafe(8)  # new at every registration; the link never contains the UID
+    public_url = f"{_public_base()}/e/{public_ref}"
+    url_on_tag = capacity >= _URL_ON_TAG_MIN_CAPACITY
+    budget = _sealed_budget(capacity - (len(public_url) + _URL_RECORD_OVERHEAD if url_on_tag else 0))
     if budget < _MIN_SEALED_BUDGET:
         raise HTTPException(
             status_code=422,
@@ -747,6 +778,7 @@ def register_nfc_card(
         existing.nfc_uid_last4 = auth.nfc_uid_last4(payload.nfc_uid)
         existing.nfc_revocation_id = tag_crypto.revocation_id(auth.canonical_nfc_uid(payload.nfc_uid))
         existing.nfc_tag_type = payload.tag_type
+        existing.public_ref = public_ref
         grant = existing
         action = "update_nfc_card"
     else:
@@ -757,6 +789,7 @@ def register_nfc_card(
             nfc_uid_last4=auth.nfc_uid_last4(payload.nfc_uid),
             nfc_revocation_id=tag_crypto.revocation_id(auth.canonical_nfc_uid(payload.nfc_uid)),
             nfc_tag_type=payload.tag_type,
+            public_ref=public_ref,
             scope=payload.scope,
             expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=payload.valid_minutes),
             registered_by=current_user.id,
@@ -805,6 +838,9 @@ def register_nfc_card(
         "tag_security": _tag_security(payload.tag_type),
         "grant_valid_until": grant.expires_at.isoformat(),
         "revoked": grant.revoked,
+        # Written as the FIRST NDEF record when url_on_tag, so a phone without the app opens the page.
+        "public_url": public_url,
+        "url_on_tag": url_on_tag,
     }
 
 

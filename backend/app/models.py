@@ -1178,6 +1178,9 @@ class EmergencyToken(Base):
     card_reference = Column(String(64), unique=True, nullable=True)  # printed on physical card / encoded in QR
     nfc_uid = Column(String(64), unique=True, nullable=True)  # M7: HMAC of the UID, never the raw UID
     nfc_uid_last4 = Column(String(8), nullable=True)  # cleartext tail of the raw UID, display only
+    # Random token in the https link written onto an NFC tag (/e/<public_ref>), so the link never contains
+    # the UID. New at every (re-)registration, which also kills the link on the tag being replaced.
+    public_ref = Column(String(64), unique=True, nullable=True)
     # tag_crypto.revocation_id(uid): what offline devices match against the
     # revoked list. Set at register time (the only moment the raw UID is in
     # hand); cards registered before this column existed have none until they

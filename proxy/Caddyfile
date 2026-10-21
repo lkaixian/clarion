@@ -106,8 +106,17 @@
 		-Server
 	}
 
-	# --- Access log (edge). PHI never appears in CLARION URLs (UUID path
-	# params, no identifiers in query strings), so path logging is safe. ----
+	# --- Public emergency pages (/e/<ref>): the reference in the path is a bearer-style token, so these
+	# requests are not logged, are never cached and send no Referer. -----------------------------------
+	@emergency path /e/*
+	header @emergency {
+		Cache-Control "no-store"
+		Referrer-Policy "no-referrer"
+	}
+	log_skip @emergency
+
+	# --- Access log (edge). Other CLARION URLs carry no identifiers in the path (UUID path
+	# params, no query strings), so path logging is safe there. ----
 	log {
 		output stdout
 		format json
