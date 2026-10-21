@@ -16,6 +16,9 @@ def _clean_jobs(db_session):
     def wipe():
         db_session.rollback()
         db_session.query(models.Job).filter_by(kind=contact_notify.JOB_KIND).delete()
+        for row in db_session.query(models.Patient).filter(models.Patient.phone.isnot(None)).all():
+            if contact_notify.normalize_phone(row.phone) == "60123456789":  # numbers other tests here gave to patients
+                row.phone = None
         db_session.commit()
     wipe()
     yield
@@ -77,8 +80,9 @@ def test_unregistered_contact_gets_an_sms_with_no_clinical_data(test_client, db_
     assert "Siti" in text and "A+" not in text and "Warfarin" not in text and "1958" not in text
 
 
-def test_registered_contact_is_alerted_in_the_app_and_gets_no_sms(test_client, db_session, make_user, auth_headers, monkeypatch):
-    monkeypatch.setattr(sms_service, "send_sms", lambda *a: (_ for _ in ()).throw(AssertionError("no SMS expected")))
+def test_registered_contact_gets_the_app_alert_and_the_sms(test_client, db_session, make_user, auth_headers, monkeypatch):
+    sent = []
+    monkeypatch.setattr(sms_service, "send_sms", lambda to, text: sent.append(to) or True)
     hafiz = models.Patient(full_name="Hafiz Bin Ali", date_of_birth="1985-01-01", phone="+60 12-3456789")
     db_session.add(hafiz)
     db_session.commit()
@@ -89,6 +93,42 @@ def test_registered_contact_is_alerted_in_the_app_and_gets_no_sms(test_client, d
     _drain(db_session)
     rows = db_session.query(models.Notification).filter_by(user_id=hafiz_account.id, kind="contact_card_scanned").all()
     assert len(rows) == 1 and rows[0].urgent and "Siti" in rows[0].title
+    assert sent == ["60123456789"]  # never replaced by the in-app alert
+
+
+def test_a_squatter_claiming_the_contacts_number_cannot_stop_the_sms(test_client, db_session, make_user, auth_headers, monkeypatch):
+    sent = []
+    monkeypatch.setattr(sms_service, "send_sms", lambda to, text: sent.append(to) or True)
+    squatter = models.Patient(full_name="Mallory", date_of_birth="1990-01-01", phone="012 345 6789")  # the real contact's number
+    db_session.add(squatter)
+    db_session.commit()
+    db_session.refresh(squatter)
+    make_user(role="patient", patient_id=squatter.id)
+    card = _card(test_client, db_session, make_user, auth_headers, _patient(db_session))
+    _scan(test_client, card)
+    _drain(db_session)
+    assert sent == ["60123456789"]
+
+
+def test_a_retried_sms_never_duplicates_the_in_app_alert(test_client, db_session, make_user, auth_headers, monkeypatch):
+    state = {"up": False}
+    monkeypatch.setattr(sms_service, "send_sms", lambda to, text: state["up"])
+    hafiz = models.Patient(full_name="Hafiz Bin Ali", date_of_birth="1985-01-01", phone="+60 12-3456789")
+    db_session.add(hafiz)
+    db_session.commit()
+    db_session.refresh(hafiz)
+    account = make_user(role="patient", patient_id=hafiz.id)
+    card = _card(test_client, db_session, make_user, auth_headers, _patient(db_session))
+    _scan(test_client, card)
+    job = db_session.query(models.Job).filter_by(kind=contact_notify.JOB_KIND).first()
+    jobs.run_pending(db_session)  # SMS down: no in-app alert yet either
+    assert db_session.query(models.Notification).filter_by(user_id=account.id, kind="contact_card_scanned").count() == 0
+    state["up"] = True
+    db_session.refresh(job)
+    job.updated_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+    db_session.commit()
+    jobs.run_pending(db_session)
+    assert db_session.query(models.Notification).filter_by(user_id=account.id, kind="contact_card_scanned").count() == 1
 
 
 def test_a_phone_shared_by_two_patients_falls_back_to_sms(test_client, db_session, make_user, auth_headers, monkeypatch):

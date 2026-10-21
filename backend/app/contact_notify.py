@@ -1,7 +1,7 @@
 """Tell a patient's emergency contact that the patient's card was scanned.
 
-Delivery order: the CLARION app first (an in-app alert on the contact's own account, if the
-contact's phone number belongs to exactly one registered patient account), otherwise SMS.
+Delivery: always an SMS to the number on the record, plus -- when that number belongs to exactly
+one registered patient account -- an in-app alert on that account as an extra channel.
 
 The scan itself only queues a job (`safe_queue()`), so a slow or dead SMS gateway never delays
 -- or fails -- a life-safety scan. The job is retried with a long, spaced policy (see the
@@ -13,9 +13,10 @@ per patient per THROTTLE_MINUTES, and at most MAX_PER_DESTINATION_PER_HOUR per p
 across all patients (so a number entered on many records can't be used to spam one person).
 The audit log still records every scan.
 
-Known gap: `Patient.phone` is self-entered and not verified, so the "registered contact" match
-can be claimed by someone who types another person's number into their own profile. Verify
-phone numbers (OTP) before relying on the in-app channel alone.
+Why SMS is never skipped: `Patient.phone` is self-entered and not verified, so anyone can type
+another person's number into their own profile and claim the "registered contact" match. If the
+in-app alert replaced the SMS, the real contact would never be told. The in-app alert is
+therefore only an addition (the squatter would at worst see a first name and a time).
 """
 import hashlib
 import logging
@@ -109,12 +110,6 @@ def _deliver(payload: dict) -> None:
         when = datetime.fromisoformat(payload["scanned_at"]).astimezone(_MYT).strftime("%d %b %H:%M")
         what = ("a scan of {}'s emergency card made without network was reported at {}"
                 if payload.get("late") else "{}'s emergency card was scanned at {}").format(first, when)
-        account = _registered_account(db, phone, patient.id)
-        if account:
-            notify(db, account.id, "contact_card_scanned", f"{first}'s emergency card was scanned",
-                   body=f"{what[0].upper()}{what[1:]} (MYT). You are listed as their emergency contact.", urgent=True)
-            db.commit()
-            return
         try:
             sent = sms_service.send_sms(
                 phone, f"CLARION: {what} (MYT). You are listed as their emergency contact.")
@@ -123,6 +118,15 @@ def _deliver(payload: dict) -> None:
             raise jobs.PermanentFailure(str(exc))
         if not sent:
             raise RuntimeError("SMS not delivered")  # transient: the job queue retries it
+        # The SMS is out; the in-app copy comes after it so a retried SMS can never duplicate it.
+        try:
+            account = _registered_account(db, phone, patient.id)
+            if account:
+                notify(db, account.id, "contact_card_scanned", f"{first}'s emergency card was scanned",
+                       body=f"{what[0].upper()}{what[1:]} (MYT). You are listed as their emergency contact.", urgent=True)
+                db.commit()
+        except Exception:  # noqa: BLE001 - the SMS already went; an in-app extra must not retry it
+            logger.exception("in-app emergency-contact alert failed for patient %s", patient.id)
     finally:
         db.close()
 
