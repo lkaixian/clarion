@@ -29,7 +29,8 @@ String _formatActor(AuditLogEntry entry, AppLocalizations l10n) {
   // it's deliberately labeled "unverified" rather than shown like a real
   // staff name.
   if (_isUnverifiedResponder(entry)) {
-    final typedName = entry.actor.substring(_responderPrefix.length).trim();
+    final prefix = _unverifiedPrefixes.firstWhere((p) => entry.actor.startsWith(p), orElse: () => '');
+    final typedName = entry.actor.substring(prefix.length).trim();
     final name = typedName.isEmpty ? 'unidentified' : typedName;
     final detail = entry.detail;
     String? org;
