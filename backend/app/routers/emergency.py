@@ -12,7 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, auth, tag_crypto
+from .. import models, schemas, auth, tag_crypto, contact_notify
 from ..database import get_db
 from ..audit import log_access
 from ..rate_limit import limiter
@@ -24,11 +24,11 @@ router = APIRouter(prefix="/emergency", tags=["emergency"])
 # Who may see what. A scan returns grant.scope (what the patient agreed to expose
 # at all) intersected with the ceiling for the scanner's tier. The tier comes only
 # from the account behind the bearer token, never from anything the caller types.
-# "identity" = name + age.
+# "identity" = name + age; "emergency_contact" = the family contact's name, relationship and phone.
 _TIER_CEILING = {
     "public": frozenset({"allergies", "conditions"}),
-    "responder": frozenset({"allergies", "conditions", "blood_type", "identity"}),
-    "clinical": frozenset({"allergies", "conditions", "blood_type", "medications", "identity"}),
+    "responder": frozenset({"allergies", "conditions", "blood_type", "identity", "emergency_contact"}),
+    "clinical": frozenset({"allergies", "conditions", "blood_type", "medications", "identity", "emergency_contact"}),
 }
 _TIER_BY_ROLE = {
     "emergency_responder": "responder", "receptionist": "responder",
@@ -39,7 +39,7 @@ _TIER_BY_ROLE = {
 
 def _effective_scope(grant, current_user) -> "tuple[str, set]":
     tier = _TIER_BY_ROLE.get(current_user.role, "public") if current_user else "public"
-    return tier, (set(grant.scope or []) | {"identity"}) & _TIER_CEILING[tier]
+    return tier, (set(grant.scope or []) | {"identity", "emergency_contact"}) & _TIER_CEILING[tier]
 
 
 def _notify_patient_of_scan(db: Session, patient, tier: str, ident) -> None:
@@ -283,6 +283,12 @@ def _scoped_fields(
         {"full_name": patient.full_name, "age": _age_from_dob(patient.date_of_birth)}
         if identity else {"full_name": None, "age": None}
     )
+    if "emergency_contact" in scope:
+        result["emergency_contact"] = (
+            {"name": patient.emergency_contact_name, "relationship": patient.emergency_contact_relationship,
+             "phone": patient.emergency_contact_phone}
+            if patient.emergency_contact_phone else None
+        )
     omitted_non_critical = {}
 
     # A `resolved` condition annotation / `discontinued` medication
@@ -576,6 +582,10 @@ def scan_emergency_card(
         result["omitted_non_critical"] = {}
 
     _notify_patient_of_scan(db, patient, tier, ident)
+    # Every successful scan alerts the emergency contact (queued, never blocks or fails the scan).
+    family = contact_notify.safe_queue(db, patient)
+    if tier != "public":  # the public tier must not learn whether a contact exists or was alerted recently
+        result["family_notification"] = family
     log_access(
         db, patient.id,
         actor=ident.actor, actor_role=ident.actor_role,
@@ -854,6 +864,10 @@ def scan_nfc_card(
         result["omitted_non_critical"] = {}
 
     _notify_patient_of_scan(db, patient, tier, ident)
+    # Every successful scan alerts the emergency contact (queued, never blocks or fails the scan).
+    family = contact_notify.safe_queue(db, patient)
+    if tier != "public":  # the public tier must not learn whether a contact exists or was alerted recently
+        result["family_notification"] = family
     log_access(
         db, patient.id,
         actor=ident.actor, actor_role=ident.actor_role,
@@ -1020,6 +1034,8 @@ def upload_offline_reads(
         prev_cache[e.seq] = e.entry_hash
         stored += 1
         broken += 0 if chain_ok else 1
+        if patient_id and e.outcome == "decrypted":  # a tap made with no network: alert the contact now
+            contact_notify.safe_queue(db, db.get(models.Patient, patient_id), when=read_at, late=True)
 
     return {"stored": stored, "duplicates": duplicates, "conflicts": conflicts, "chain_broken": broken}
 

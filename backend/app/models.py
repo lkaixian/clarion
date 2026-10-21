@@ -369,6 +369,8 @@ class Patient(Base):
     emergency_contact_name = Column(String(255), nullable=True)
     emergency_contact_phone = Column(String(64), nullable=True)
     emergency_contact_relationship = Column(String(64), nullable=True)
+    # When the contact was last alerted about a card scan; throttles contact_notify.queue().
+    emergency_contact_notified_at = Column(TZDateTime, nullable=True)
 
     # Coded demographics (his_open_1 `patients`). Values are `reference_codes.code`s of the
     # kind named in schemas.PATIENT_DEMOGRAPHIC_KINDS, checked on write; nullable, so every

@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from . import permissions
+from .phone import normalize_phone, sms_allowed
 from . import models as _models
 
 
@@ -432,6 +433,13 @@ class PatientProfileUpdate(BaseModel):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
+
+    @field_validator("emergency_contact_phone")
+    @classmethod
+    def _contact_phone_is_textable(cls, v):
+        if v and not sms_allowed(normalize_phone(v)):
+            raise ValueError("Enter a Malaysian mobile number, for example 012-345 6789.")
+        return v
 
     class Config:
         extra = "allow"  # so the router can detect & reject full_name/date_of_birth/national_id explicitly

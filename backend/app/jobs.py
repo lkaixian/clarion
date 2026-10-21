@@ -45,13 +45,25 @@ _POLL_INTERVAL_SECONDS = 2.0
 _STALE_RUNNING_SECONDS = 300
 
 _HANDLERS: dict[str, Callable[[dict], None]] = {}
+# Per-kind retry policy. Default = the original behaviour (3 tries, retried on the next
+# poll). A kind that talks to the outside world registers a longer, spaced policy so a
+# network or gateway outage delays the work instead of failing it for good.
+_MAX_ATTEMPTS: dict[str, int] = {}
+_RETRY_DELAY: dict[str, int] = {}
 
 
-def register(kind: str, handler: Callable[[dict], None]) -> None:
+class PermanentFailure(Exception):
+    """Raised by a handler when retrying cannot help: the job is failed immediately."""
+
+
+def register(kind: str, handler: Callable[[dict], None], *, max_attempts: int = MAX_ATTEMPTS,
+             retry_delay_seconds: int = 0) -> None:
     """Register the function that runs a job of this ``kind``. Call at
     module import time (see ``derived.py``) -- a kind with no handler fails
     every job enqueued under it rather than silently no-op'ing."""
     _HANDLERS[kind] = handler
+    _MAX_ATTEMPTS[kind] = max_attempts
+    _RETRY_DELAY[kind] = retry_delay_seconds
 
 
 def enqueue(db, kind: str, payload: dict) -> models.Job:
@@ -65,8 +77,14 @@ def enqueue(db, kind: str, payload: dict) -> models.Job:
 
 
 def _claimable_filter():
-    stale_cutoff = datetime.now(timezone.utc) - timedelta(seconds=_STALE_RUNNING_SECONDS)
-    return (models.Job.status == "pending") | (
+    now = datetime.now(timezone.utc)
+    stale_cutoff = now - timedelta(seconds=_STALE_RUNNING_SECONDS)
+    pending = models.Job.status == "pending"
+    for kind, delay in _RETRY_DELAY.items():
+        if delay:  # a retry (attempts > 0) waits `delay` seconds after its last failure
+            pending = pending & ~((models.Job.kind == kind) & (models.Job.attempts > 0)
+                                  & (models.Job.updated_at >= now - timedelta(seconds=delay)))
+    return pending | (
         (models.Job.status == "running") & (models.Job.updated_at < stale_cutoff)
     )
 
@@ -106,10 +124,17 @@ def _run_one(db, job: models.Job) -> None:
         return
     try:
         handler(json.loads(job.payload))
+    except PermanentFailure as exc:
+        job.attempts += 1
+        job.error = str(exc)[:2000]
+        job.status = "failed"
+        db.commit()
+        logger.error("job %s (%s) failed permanently: %s", job.id, job.kind, exc)
+        return
     except Exception as exc:  # noqa: BLE001 - a bad job must never crash the worker loop
         job.attempts += 1
         job.error = str(exc)[:2000]
-        job.status = "pending" if job.attempts < MAX_ATTEMPTS else "failed"
+        job.status = "pending" if job.attempts < _MAX_ATTEMPTS.get(job.kind, MAX_ATTEMPTS) else "failed"
         db.commit()
         logger.warning("job %s (%s) failed attempt %d: %s", job.id, job.kind, job.attempts, exc)
         return
