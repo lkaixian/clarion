@@ -50,7 +50,18 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m pytest tests -q -p no:cacheprovider
+      - name: Run tests
+        run: |
+          set +e
+          python -m pytest tests -q -p no:cacheprovider 2>&1 | tee /tmp/pytest.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            # Put the failing test names and error lines in the run's annotations (readable without
+            # opening the full log).
+            msg=$(grep -E '^(FAILED|ERROR) |^E  ' /tmp/pytest.log | head -60 | cut -c1-240 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=pytest failures::${msg}"
+          fi
+          exit $rc
 
   docker:
     name: Docker (compose config, image builds)
@@ -61,7 +72,7 @@ jobs:
       - name: Compose file is valid
         run: |
           cp .env.docker.example .env.docker
-          docker compose config -q
+          docker compose --env-file .env.docker config -q
       - name: Build the backend image
         run: docker build -t clarion/backend:ci backend
       - name: Build the web image

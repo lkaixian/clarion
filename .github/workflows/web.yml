@@ -36,6 +36,15 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx vitest run
+      - name: Unit tests
+        run: |
+          set +e
+          npx vitest run 2>&1 | tee /tmp/vitest.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            msg=$(grep -E 'FAIL|Error|expected|×' /tmp/vitest.log | head -60 | cut -c1-240 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=vitest failures::${msg}"
+          fi
+          exit $rc
       - run: npm run lint
       - run: npm run build
