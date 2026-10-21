@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20   # same as web/Dockerfile
+          node-version: 24   # vitest's jsdom/undici need a recent Node (20 lacks markAsUncloneable); the image build uses its own
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci

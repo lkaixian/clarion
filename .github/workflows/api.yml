@@ -60,6 +60,8 @@ jobs:
             # opening the full log).
             msg=$(grep -E '^(FAILED|ERROR) |^E  ' /tmp/pytest.log | head -60 | cut -c1-240 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error title=pytest failures::${msg}"
+            tailmsg=$(tail -n 40 /tmp/pytest.log | cut -c1-220 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=pytest output tail::${tailmsg}"
           fi
           exit $rc
 
