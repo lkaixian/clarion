@@ -5,7 +5,7 @@ import { landingPathFor } from "../lib/access";
 import { roleLabel } from "../lib/role";
 import Watermark from "./Watermark";
 import LanguageSelect from "./LanguageSelect";
-import { useLang } from "../lib/i18n";
+import { tr, useLang } from "../lib/i18n";
 
 // Small nav pill only ever needs the time-of-day, not a full date — same
 // "no date library, plain built-in formatting" approach as

@@ -49,6 +49,11 @@ def _derive(label: str) -> bytes:
 
 # ---- policy ----------------------------------------------------------------
 
+def exempt_emails() -> set:
+    """Demo-only: accounts that skip the second factor (shared public logins). Empty by default."""
+    return {e.strip().lower() for e in os.environ.get("CLARION_MFA_EXEMPT_EMAILS", "").split(",") if e.strip()}
+
+
 def required_roles() -> set:
     return {r.strip() for r in os.environ.get("CLARION_MFA_REQUIRED_ROLES", "").split(",") if r.strip()}
 
@@ -93,6 +98,8 @@ def role_requires_mfa(role: str) -> bool:
 def challenge_kind(user) -> Optional[str]:
     """None = no second factor; "verify" = enrolled, ask for a code;
     "enrol" = role requires MFA but the user has not set it up yet."""
+    if (getattr(user, "email", "") or "").lower() in exempt_emails():
+        return None
     if is_enrolled(user):
         return "verify"
     if role_requires_mfa(user.role):

@@ -145,3 +145,6 @@ docker-compose.override.yml
 # Built APK is published by copying it here (see docs/deployment.md "Mobile app download"); never commit binaries
 web/public/downloads/*.apk
 web/public/downloads/*.sha256
+
+# graphify output (regenerate with /graphify .)
+graphify-out/
