@@ -3116,6 +3116,10 @@ class CriticalDirective(Base):
     recorded_by_role = Column(String(64), nullable=True)
     recorded_by_facility = Column(String(255), nullable=True)
     recorded_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    # The row this one replaces ("" = the first entry for this kind). Unique per (patient, kind), so two
+    # writers who both started from the same version cannot both win: the second gets a 409.
+    supersedes_id = Column(String(36), nullable=False, default="", server_default="")
+    __table_args__ = (Index("uq_critical_directives_supersedes", "patient_id", "kind", "supersedes_id", unique=True),)
 
 
 SCAN_LOCATION_KEEP_DAYS = 90

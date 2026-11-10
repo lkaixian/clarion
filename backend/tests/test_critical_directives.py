@@ -1,3 +1,4 @@
+import pytest
 """Critical directives: append-only, patient-declared vs staff-recorded, emergency view, audit."""
 import uuid
 
@@ -26,7 +27,34 @@ def _known(db, patient, facility):
     db.commit()
 
 
-def _setup(db, make_user, auth_headers, role="receptionist"):
+@pytest.fixture(autouse=True)
+def _auto_based_on(test_client, monkeypatch):
+    """Most tests just want to write; fill in `based_on` (the entry being replaced) like the UI does.
+    Tests about conflicts pass `based_on` explicitly and are left alone."""
+    put, post = test_client.put, test_client.post
+
+    def current_id(headers, list_url, kind):
+        r = test_client.get(list_url, headers=headers)
+        cur = [d for d in r.json().get("current", []) if d["kind"] == kind] if r.status_code == 200 else []
+        return cur[0]["id"] if cur else ""
+
+    def w_put(url, **kw):
+        body = kw.get("json") or {}
+        if isinstance(body, dict) and "based_on" not in body and url.startswith("/profile/directives/"):
+            kw["json"] = {**body, "based_on": current_id(kw["headers"], "/profile/directives", url.rsplit("/", 1)[1])}
+        return put(url, **kw)
+
+    def w_post(url, **kw):
+        body = kw.get("json") or {}
+        if isinstance(body, dict) and "based_on" not in body and url.endswith("/directives") and "kind" in body:
+            kw["json"] = {**body, "based_on": current_id(kw["headers"], url, body["kind"])}
+        return post(url, **kw)
+
+    monkeypatch.setattr(test_client, "put", w_put)
+    monkeypatch.setattr(test_client, "post", w_post)
+
+
+def _setup(db, make_user, auth_headers, role="clinician"):
     fac = _fac()
     patient = _patient(db)
     _known(db, patient, fac)
@@ -92,7 +120,7 @@ def test_staff_needs_evidence_ref_and_roles(test_client, db_session, make_user, 
     r = test_client.post(url, headers=sh, json=_staff_body(note="heart"))
     assert r.status_code == 201, r.text
     assert r.json()["source"] == "staff" and r.json()["label"] == "recorded by staff (form FORM-001)"
-    assert r.json()["recorded_by_role"] == "receptionist" and r.json()["recorded_by_facility"] == fac
+    assert r.json()["recorded_by_role"] == "clinician" and r.json()["recorded_by_facility"] == fac
     # source cannot be chosen by the caller
     assert test_client.post(url, headers=sh, json=_staff_body(source="patient")).status_code == 422
     for role in ("admin", "records_officer", "clinician"):
@@ -195,3 +223,30 @@ def test_audit_rows_written_without_free_text(test_client, db_session, make_user
     rows = db_session.query(models.AuditLog).filter_by(patient_id=patient.id, action="write_critical_directive").all()
     assert sorted(r.detail for r in rows) == ["kind=implanted_device source=patient", "kind=organ_donation source=staff"]
     assert "SECRET" not in " ".join(r.detail for r in rows)
+
+
+def test_stale_save_is_a_conflict_and_changes_nothing(test_client, db_session, make_user, auth_headers):
+    fac, patient, staff, login, sh, ph = _setup(db_session, make_user, auth_headers)
+    first = test_client.put("/profile/directives/organ_donation", headers=ph, json={"value": "yes"}).json()
+    # staff open the form on `first`, meanwhile the patient changes their mind
+    test_client.put("/profile/directives/organ_donation", headers=ph, json={"value": "no"})
+    r = test_client.post(f"/patients/{patient.id}/directives", headers=sh,
+                         json=_staff_body(value="yes", based_on=first["id"]))
+    assert r.status_code == 409 and "changed by someone else" in r.json()["detail"]
+    assert [d.value for d in _rows(db_session, patient.id)].count("yes") == 1  # only the patient's first row
+
+
+def test_same_version_cannot_win_twice(test_client, db_session, make_user, auth_headers):
+    fac, patient, staff, login, sh, ph = _setup(db_session, make_user, auth_headers)
+    base = test_client.put("/profile/directives/organ_donation", headers=ph, json={"value": "yes"}).json()["id"]
+    a = test_client.put("/profile/directives/organ_donation", headers=ph, json={"value": "no", "based_on": base})
+    b = test_client.put("/profile/directives/organ_donation", headers=ph, json={"value": "undecided", "based_on": base})
+    assert (a.status_code, b.status_code) == (201, 409)
+
+
+def test_receptionist_can_read_but_not_record_staff_entries(test_client, db_session, make_user, auth_headers):
+    fac, patient, staff, login, sh, ph = _setup(db_session, make_user, auth_headers)
+    rec = auth_headers(make_user(role="receptionist", facility=fac))
+    assert test_client.get(f"/patients/{patient.id}/directives", headers=rec).status_code == 200
+    assert test_client.post(f"/patients/{patient.id}/directives", headers=rec,
+                            json=_staff_body(based_on="")).status_code == 403

@@ -25,7 +25,7 @@ describe("CriticalDirectives", () => {
     await screen.findByText("patient-declared", { exact: false });
     fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "no" } });
     fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(api.putMyDirective).toHaveBeenCalledWith("organ_donation", { value: "no", note: null }));
+    await waitFor(() => expect(api.putMyDirective).toHaveBeenCalledWith("organ_donation", { value: "no", note: null, based_on: row.id }));
     expect(screen.queryByText("Signed form number")).toBeNull();
   });
 
@@ -39,7 +39,18 @@ describe("CriticalDirectives", () => {
     expect(api.addPatientDirective).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Signed form number"), { target: { value: "F-9" } });
     fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(api.addPatientDirective).toHaveBeenCalledWith("p1", { value: "undecided", note: null, kind: "organ_donation", evidence_ref: "F-9" }));
+    await waitFor(() => expect(api.addPatientDirective).toHaveBeenCalledWith("p1", { value: "undecided", note: null, based_on: "", kind: "organ_donation", evidence_ref: "F-9" }));
+  });
+
+  it("a 409 shows the message and reloads the newer value", async () => {
+    api.getMyDirectives.mockResolvedValue({ current: [row], history: [row] });
+    api.putMyDirective.mockRejectedValue({ response: { status: 409, data: { detail: "changed by someone else" } } });
+    render(<CriticalDirectives mode="self" />);
+    await screen.findByText("patient-declared", { exact: false });
+    const loads = api.getMyDirectives.mock.calls.length;
+    fireEvent.click(screen.getByText("Save"));
+    await screen.findByText("changed by someone else", { exact: false });
+    await waitFor(() => expect(api.getMyDirectives.mock.calls.length).toBeGreaterThan(loads));
   });
 
   it("emergency block shows the source label and the not-legal-proof line", () => {

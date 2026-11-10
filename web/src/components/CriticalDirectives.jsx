@@ -81,13 +81,15 @@ export default function CriticalDirectives({ mode, patientId, readOnly = false }
     if (staff && !evidence.trim()) return setError(tr("Enter the signed form number."));
     setBusy(true);
     try {
-      const body = { value, note: note || null };
+      // based_on = the entry we are looking at; the server refuses (409) if someone saved a newer one.
+      const body = { value, note: note || null, based_on: (data.current.find((d) => d.kind === kind) || {}).id || "" };
       if (staff) await addPatientDirective(patientId, { ...body, kind, evidence_ref: evidence });
       else await putMyDirective(kind, body);
       setNote(""); setEvidence(""); setValue(initial(kind));
       load();
     } catch (ex) {
       setError(errorMessage(ex, tr("Could not save.")));
+      if (ex?.response?.status === 409) load(); // show the newer value so it can be reviewed and saved again
     } finally {
       setBusy(false);
     }

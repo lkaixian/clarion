@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import auth, models
@@ -27,8 +28,9 @@ router = APIRouter(tags=["directives"])
 Kind = Literal["organ_donation", "blood_transfusion", "implanted_device", "advance_directive"]
 CHOICE_KINDS = ("organ_donation", "blood_transfusion")
 CHOICES = ("yes", "no", "undecided")
-STAFF_WRITE_ROLES = ("admin", "records_officer", "receptionist", "clinician")
-STAFF_READ_ROLES = STAFF_WRITE_ROLES + ("pharmacist",)
+# Staff entries override what a patient declared, so only roles that handle signed clinical forms may write.
+STAFF_WRITE_ROLES = ("admin", "records_officer", "clinician")
+STAFF_READ_ROLES = STAFF_WRITE_ROLES + ("receptionist", "pharmacist")
 
 # control chars plus zero-width / bidi-override characters that could spoof the text responders read
 _CTRL = re.compile("[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
@@ -44,6 +46,8 @@ class DirectiveIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: str
     note: Optional[str] = None
+    # id of the entry you were looking at ("" if there was none). Saving over a newer one is a 409.
+    based_on: str = Field(max_length=36)
 
     @field_validator("value", "note", mode="before")
     @classmethod
@@ -125,9 +129,19 @@ def current_for_emergency(db: Session, patient_id: str, public: bool = False) ->
     ]
 
 
-def _append(db: Session, patient_id: str, *, kind: str, value: str, note, source: str, evidence_ref, user):
+def _conflict() -> HTTPException:
+    return HTTPException(status_code=409, detail="This item was changed by someone else since you opened it. "
+                                                  "The latest value is now shown; check it and save again.")
+
+
+def _append(db: Session, patient_id: str, *, kind: str, value: str, note, source: str, evidence_ref, user,
+            based_on: str):
     real = auth.real_user(user)
     _check_value(kind, value)
+    latest = (db.query(models.CriticalDirective.id).filter_by(patient_id=patient_id, kind=kind)
+              .order_by(models.CriticalDirective.recorded_at.desc(), models.CriticalDirective.id).first())
+    if based_on != (latest[0] if latest else ""):
+        raise _conflict()
     now = datetime.now(timezone.utc)
     prev = (db.query(models.CriticalDirective.recorded_at)
             .filter_by(patient_id=patient_id, kind=kind).order_by(models.CriticalDirective.recorded_at.desc()).first())
@@ -138,10 +152,14 @@ def _append(db: Session, patient_id: str, *, kind: str, value: str, note, source
     row = models.CriticalDirective(
         patient_id=patient_id, kind=kind, value=value, note=note, source=source, evidence_ref=evidence_ref,
         recorded_by=real.id, recorded_by_name=real.full_name, recorded_by_role=user.role,
-        recorded_by_facility=getattr(user, "facility", None), recorded_at=now,
+        recorded_by_facility=getattr(user, "facility", None), recorded_at=now, supersedes_id=based_on,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # someone saved over the same version at the same instant
+        db.rollback()
+        raise _conflict()
     db.refresh(row)
     log_access(db, patient_id, real.id, user.role, "write_critical_directive",
                detail=f"kind={kind} source={source}", actor_facility=getattr(user, "facility", None))
@@ -167,7 +185,7 @@ def declare_my_directive(kind: Kind, payload: DirectiveIn, db: Session = Depends
     pid = _my_patient_id(user)
     source = "guardian" if isinstance(user, auth.ActingUser) else "patient"  # a guardian is not the patient
     return _out(_append(db, pid, kind=kind, value=payload.value, note=payload.note, source=source,
-                        evidence_ref=None, user=user))
+                        evidence_ref=None, user=user, based_on=payload.based_on))
 
 
 def _known_patient_or_404(db: Session, patient_id: str, user) -> None:
@@ -181,7 +199,8 @@ def record_staff_directive(patient_id: str, payload: StaffDirectiveIn, db: Sessi
                            user: models.User = Depends(auth.require_roles(*STAFF_WRITE_ROLES))):
     _known_patient_or_404(db, patient_id, user)
     return _out(_append(db, patient_id, kind=payload.kind, value=payload.value, note=payload.note,
-                        source="staff", evidence_ref=payload.evidence_ref, user=user))
+                        source="staff", evidence_ref=payload.evidence_ref, user=user,
+                        based_on=payload.based_on))
 
 
 @router.get("/patients/{patient_id}/directives")
