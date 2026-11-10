@@ -417,10 +417,23 @@ def rotate_refresh_token(
         db, user, fingerprint=presented_fingerprint,
         ip=ip or row.ip, user_agent=user_agent or row.user_agent, mfa_ok=row.mfa_ok,
     )
-    row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    row.replaced_by_id = new_row.id
-    db.add(row)
+    # Single-use claim: one conditional UPDATE decides which concurrent request
+    # owns this token. A read-then-write here let N parallel refreshes with the
+    # same token each mint a live pair (qa/stress R8). The loser discards the
+    # pair it just issued (nobody else holds its plaintext) and fails like a
+    # graced tab race -- it does NOT revoke the chain.
+    claimed = (
+        db.query(models.RefreshToken)
+        .filter(models.RefreshToken.id == row.id, models.RefreshToken.revoked_at.is_(None))
+        .update({"revoked_at": datetime.now(timezone.utc).replace(tzinfo=None),
+                 "replaced_by_id": new_row.id}, synchronize_session=False)
+    )
+    if claimed != 1:
+        db.query(models.RefreshToken).filter(models.RefreshToken.id == new_row.id).delete(synchronize_session=False)
+        db.commit()
+        return None
     db.commit()
+    db.refresh(row)
     return user, new_plaintext
 
 

@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -608,6 +608,8 @@ def login(
             # full new run of LOGIN_MAX_ATTEMPTS wrong guesses to re-lock.
             user.login_failed_count = 0
             user.login_locked_until = None
+            db.add(user)
+            db.commit()   # persist now: the atomic increment below is a SQL UPDATE and must see 0
 
         if user.auth_source == "ldap" and ldap_auth.ldap_enabled():
             password_ok = _verify_ldap_existing_user(db, user, form_data.password)
@@ -625,11 +627,17 @@ def login(
         # Same per-account lockout bookkeeping for an LDAP-backed account's
         # failed bind as for a local account's wrong password -- LDAP-backed
         # accounts are not exempt from brute-force protection.
-        user.login_failed_count = (user.login_failed_count or 0) + 1
+        # Atomic increment in SQL: `count + 1` computed in Python lost updates
+        # under parallel guesses, so the lock never tripped (qa/stress R9).
+        db.query(models.User).filter(models.User.id == user.id).update(
+            {models.User.login_failed_count: func.coalesce(models.User.login_failed_count, 0) + 1},
+            synchronize_session=False)
+        db.commit()
+        db.refresh(user)
         if user.login_failed_count >= auth.LOGIN_MAX_ATTEMPTS:
             user.login_locked_until = now + timedelta(minutes=auth.LOGIN_LOCKOUT_MINUTES)
-        db.add(user)
-        db.commit()
+            db.add(user)
+            db.commit()
         log_access(db, user.patient_id, user.id, user.role,
                    "login_locked" if user.login_locked_until else "login_failed",
                    detail=f"count={user.login_failed_count}", actor_facility=user.facility)
