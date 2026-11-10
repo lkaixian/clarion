@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession, errorMessage } from "../api/client";
 import { landingPathFor } from "../lib/access";
 import { afterLoginPath } from "../lib/emergencyQr";
-import { useLang } from "../lib/i18n";
+import { tr, useLang } from "../lib/i18n";
 import LanguageSelect from "../components/LanguageSelect";
 
 const INPUT =
@@ -34,6 +34,14 @@ function Field({ id, label, children, hint }) {
   );
 }
 
+const DEMO_ACCOUNTS = [
+  ["patient@clarion.demo", "patient123"],
+  ["receptionist@clarion.demo", "receptionist123"],
+  ["pharmacist@clarion.demo", "pharmacist123"],
+  ["clinician@clarion.demo", "clinician123"],
+  ["admin@clarion.demo", "admin123"],
+];
+
 export default function Login() {
   const { t } = useLang();
   // Pre-filled demo account only in dev / when the demo hint is on; a public build starts empty.
@@ -43,8 +51,8 @@ export default function Login() {
 
   const [tab, setTab] = useState("patient"); // patient | staff -- UX only, the backend resolves the identifier
   const [step, setStep] = useState("credentials"); // credentials | mfa | enrol | recovery
-  const [identifier, setIdentifier] = useState(demo ? "clinician@clarion.demo" : "");
-  const [password, setPassword] = useState(demo ? "clinician123" : "");
+  const [identifier, setIdentifier] = useState(demo ? "patient@clarion.demo" : "");
+  const [password, setPassword] = useState(demo ? "patient123" : "");
   const [showPw, setShowPw] = useState(false);
   const [caps, setCaps] = useState(false);
   const [error, setError] = useState("");
@@ -145,6 +153,16 @@ export default function Login() {
         <a href="/" aria-label={tr("CLARION home")}>
           <img src="/brand/logo-full.png" alt={tr("CLARION")} className="h-14 w-auto mx-auto mb-4" />
         </a>
+
+        {demo && step === "credentials" && (
+          <div role="note" className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3 rounded-lg mb-4">
+            <p className="font-semibold">{tr("Demo system, synthetic data only")}</p>
+            <p className="mb-1">{tr("DEMO PURPOSE: two-step verification (2FA) is disabled for these demo accounts. Other accounts still get the 2FA page.")}</p>
+            <ul className="font-mono space-y-0.5">
+              {DEMO_ACCOUNTS.map(([e, pw]) => <li key={e}>{e} / {pw}</li>)}
+            </ul>
+          </div>
+        )}
 
         {location.state?.resetSuccess && step === "credentials" && (
           <div role="status" className="bg-green-50 text-green-800 text-sm p-3 rounded-lg mb-4">

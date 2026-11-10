@@ -20,6 +20,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+ARG VITE_SHOW_DEMO_HINT=0
+ENV VITE_SHOW_DEMO_HINT=$VITE_SHOW_DEMO_HINT
 RUN npm run build
 
 # ---------------------------------------------------------------------------
