@@ -10,6 +10,7 @@ import PatientOrders from "../components/PatientOrders";
 import PatientForms from "../components/PatientForms";
 import PatientDemographics from "../components/PatientDemographics";
 import SharingConsent from "../components/SharingConsent";
+import DispenseDialog from "../components/DispenseDialog";
 import { ScanLocations } from "../components/ScanMap";
 import { roleLabel } from "../lib/role";
 import {
@@ -1638,6 +1639,8 @@ export default function PatientDetail() {
   const canManageLogins = ["admin", "records_officer"].includes(getCurrentUser()?.role);
   const canPrintRx = ["admin", "pharmacist", "clinician"].includes(getCurrentUser()?.role);
   const [rxError, setRxError] = useState("");
+  const canDispense = ["admin", "pharmacist"].includes(getCurrentUser()?.role);
+  const [dispenseFor, setDispenseFor] = useState(null);
   const printPrescription = async () => {
     setRxError("");
     try {
@@ -2021,6 +2024,7 @@ export default function PatientDetail() {
               </span>
             )}>
               {rxError && <div role="alert" className="alert-error mb-2">{rxError}</div>}
+              {dispenseFor && <DispenseDialog patientId={id} medication={dispenseFor} onClose={() => setDispenseFor(null)} />}
               {patient.medications.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               {patient.medications.map((m) => (
                 <div key={m.id} className="record-row">
@@ -2038,6 +2042,9 @@ export default function PatientDetail() {
                   </div>
                   {isStaff && (
                     <div className="flex flex-col items-end gap-1 shrink-0">
+                      {canDispense && m.active !== false && (
+                        <button onClick={() => setDispenseFor(m)} aria-label={`Dispense ${m.drug_name}`} className="btn-chip">{tr("Dispense")}</button>
+                      )}
                       <RecordEditControl record={m} label={m.drug_name} onEdit={() => openEditRecord("medication", m)} />
                       <button
                         onClick={() => setSignOff({ targetType: "medication", target: m, targetLabel: m.drug_name })}

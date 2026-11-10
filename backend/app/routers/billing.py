@@ -156,6 +156,12 @@ def _check_claim_amount_cap(bill: models.Bill, claim_amount_cents: int) -> None:
         )
 
 
+def unit_cost_to_cents(unit_cost: float) -> int:
+    """Float price -> integer cents. Shared by add_bill_item and pharmacy dispense.
+    Decimal(str(...)) first: raw float * 100 plus round() can misconvert a cent."""
+    return int((Decimal(str(unit_cost)) * 100).to_integral_value(rounding=ROUND_HALF_UP))
+
+
 def _resolve_bill_item_source(
     db: Session, payload: schemas.BillItemCreate, current_user: models.User, bill: models.Bill
 ) -> Tuple[str, int]:
@@ -236,8 +242,7 @@ def _resolve_bill_item_source(
     # Once written, BillItem.unit_price_cents is an immutable snapshot (no
     # PATCH) -- the only recovery from a bad conversion would be void-and-
     # recreate, so this is worth getting exactly right at write time.
-    price_cents = int((Decimal(str(item.unit_cost)) * 100).to_integral_value(rounding=ROUND_HALF_UP))
-    return item.drug_name, price_cents
+    return item.drug_name, unit_cost_to_cents(item.unit_cost)
 
 
 # ---------------------------------------------------------------------------

@@ -1162,6 +1162,22 @@ class StockAdjustRequest(BaseModel):
         return v
 
 
+class DispenseRequest(BaseModel):
+    """Body for POST /pharmacy/dispense: stock down + priced + on the patient's open bill, one transaction."""
+
+    patient_id: str
+    medicine_inventory_item_id: str
+    quantity: int = Field(ge=1, le=10_000)
+    medication_statement_id: Optional[str] = None
+
+
+class DispenseOut(BaseModel):
+    quantity_on_hand: int
+    bill_id: str
+    bill_item_id: str
+    amount_cents: int
+
+
 class InventoryDeleteRequestCreate(BaseModel):
     reason: Optional[str] = None
 

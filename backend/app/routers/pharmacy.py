@@ -23,7 +23,7 @@ auto-approved path runs here, so the two can never drift.
 """
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -40,6 +40,9 @@ from ..storage import BUCKET_MEDICINE, ObjectNotFound, ObjectStoreError, get_obj
 from ..derived import get_or_make_thumbnail
 from ..directory import resolve_user_names
 from .admin import _require_facility
+from .billing import unit_cost_to_cents
+from .payments import _lock
+from ..clinical_access import _patient_known_to_facility
 from ..inventory import (
     _get_inventory_item_or_404,
     _serialize_inventory_item,
@@ -238,6 +241,106 @@ def adjust_stock(
         detail=action_detail, actor_facility=facility,
     )
     return _serialize_inventory_item(db, item)
+
+
+@router.post("/dispense", response_model=schemas.DispenseOut)
+def dispense_and_bill(
+    payload: schemas.DispenseRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*_PHARMACY_ROLES)),
+):
+    """Dispense = decrement stock + price it + put it on the patient's OPEN bill at this
+    facility (created if none), all in one commit. Billed at the item's unit_cost (there is
+    no sale-price column yet), same as billing.py's add-item."""
+    facility = _require_facility(current_user)
+    if not _patient_known_to_facility(db, payload.patient_id, facility):
+        raise HTTPException(status_code=404, detail="Patient not found")
+    _get_inventory_item_or_404(db, payload.medicine_inventory_item_id, facility)
+    if payload.medication_statement_id:
+        stmt = db.query(models.MedicationStatement).filter(
+            models.MedicationStatement.id == payload.medication_statement_id,
+            models.MedicationStatement.patient_id == payload.patient_id,
+        ).first()
+        if stmt is None or not stmt.active:
+            raise HTTPException(status_code=400, detail="medication_statement_id is not an active medication of this patient")
+
+    user_id, role, qty = current_user.id, current_user.role, payload.quantity
+    # Serialise on the patient row (covers the duplicate check and bill creation); stock
+    # itself is a compare-and-set below. payments._lock commits, so nothing is held before it.
+    _lock(db, models.Patient, payload.patient_id, "full_name")
+    item = _get_inventory_item_or_404(db, payload.medicine_inventory_item_id, facility)
+    if item.unit_cost is None:
+        raise HTTPException(status_code=400, detail="This inventory item has no price set")
+    unit_price_cents = unit_cost_to_cents(item.unit_cost)
+    if qty * unit_price_cents > 2_000_000_000:
+        raise HTTPException(status_code=400, detail="Amount too large")
+
+    since = datetime.now(timezone.utc) - timedelta(seconds=10)
+    dup = (
+        db.query(models.BillItem.id).join(models.Bill, models.Bill.id == models.BillItem.bill_id)
+        .filter(
+            models.Bill.patient_id == payload.patient_id, models.Bill.facility_name == facility,
+            models.BillItem.source_type == "pharmacy_item",
+            models.BillItem.medicine_inventory_item_id == item.id,
+            models.BillItem.quantity == qty, models.BillItem.created_by == user_id,
+            models.BillItem.created_at >= since,
+        ).first()
+    )
+    if dup is not None:
+        raise HTTPException(status_code=409, detail="An identical dispense was just recorded; not repeating it.")
+
+    MII = models.MedicineInventoryItem
+    if item.quantity_on_hand < qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot dispense {qty}: only {item.quantity_on_hand} {item.unit} on hand.",
+        )
+    drug_name, unit, unit_cost = item.drug_name, item.unit, item.unit_cost
+    # SQL arithmetic + guard in the WHERE: a racing dispense/restock can't lose an update.
+    if not db.query(MII).filter(MII.id == item.id, MII.quantity_on_hand >= qty).update(
+        {MII.quantity_on_hand: MII.quantity_on_hand - qty, MII.updated_by: user_id},
+        synchronize_session=False,
+    ):
+        raise HTTPException(status_code=400, detail=f"Cannot dispense {qty}: not enough {unit} on hand.")
+
+    now = datetime.now(timezone.utc)
+    bill = (
+        db.query(models.Bill)
+        .filter(models.Bill.patient_id == payload.patient_id, models.Bill.facility_name == facility,
+                models.Bill.status == "open")
+        .order_by(models.Bill.created_at.desc()).first()
+    )
+    if bill is None:
+        bill = models.Bill(
+            patient_id=payload.patient_id, facility_name=facility, status="open",
+            created_by=user_id, created_by_name=current_user.full_name, created_by_role=role,
+        )
+        db.add(bill)
+        db.flush()
+    amount_cents = qty * unit_price_cents
+    bill_item = models.BillItem(
+        bill_id=bill.id, source_type="pharmacy_item", medicine_inventory_item_id=item.id,
+        description=drug_name, quantity=qty, unit_price_cents=unit_price_cents, amount_cents=amount_cents,
+        created_by=user_id, created_by_name=current_user.full_name, created_by_role=role,
+    )
+    db.add(bill_item)
+    db.add(models.MedicineStockEvent(
+        facility_name=facility, item_id=item.id, delta=-qty, unit_cost_at_time=unit_cost,
+        cost=0.0, kind="consume", by=user_id, at=now.replace(tzinfo=None),
+    ))
+    db.flush()
+    bill_id, bill_item_id = bill.id, bill_item.id
+    db.commit()
+
+    new_qty = db.query(MII.quantity_on_hand).filter(MII.id == item.id).scalar()
+    log_access(
+        db, payload.patient_id, user_id, role, "pharmacy_dispense_billed",
+        detail=f"item_id={item.id} qty={qty} bill_id={bill_id} bill_item_id={bill_item_id} amount_cents={amount_cents}",
+        actor_facility=facility,
+    )
+    return schemas.DispenseOut(
+        quantity_on_hand=new_qty, bill_id=bill_id, bill_item_id=bill_item_id, amount_cents=amount_cents,
+    )
 
 
 @router.post("/inventory/{item_id}/image", response_model=schemas.MedicineInventoryOut)

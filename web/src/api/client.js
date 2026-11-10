@@ -544,7 +544,11 @@ export const getPharmacySummary = () =>
 // proposal is a 409 (rejected promise).
 export const adjustStock = (itemId, payload) =>
   client.post(`/pharmacy/inventory/${itemId}/adjust`, payload);
-export const requestInventoryDeletion = (itemId, payload) =>
+// Dispense = stock down + priced + on the patient's open bill, one transaction.
+// -> { quantity_on_hand, bill_id, bill_item_id, amount_cents }. 409 = identical dispense < 10s ago.
+export const dispenseMedicine = (payload) =>
+  client.post("/pharmacy/dispense", payload).then((r) => r.data);
+export const requestInventoryDeletion =(itemId, payload) =>
   client.post(`/pharmacy/inventory/${itemId}/delete-request`, payload || {}).then((r) => r.data);
 
 // Purchase proposals — the pharmacist's own view (this facility's proposals,
