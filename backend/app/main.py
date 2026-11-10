@@ -82,7 +82,7 @@ from . import auth, jobs
 from .database import engine, DB_BACKEND
 from .rate_limit import limiter, enforce_rate_limits
 from .storage import BUCKET_DOCUMENTS, get_object_store
-from .routers import profiles, auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, registration_claims, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation, auth_security, notifications, reference, catalogue, payments, registry, orders, purchasing, forms, booking
+from .routers import profiles, auth_router, patients, emergency, ai_router, appointments, admin, staff, self_registration, registration_claims, reception, pharmacy, consultation, display, profile, pdpa, ancillary, pacs, dental, billing, reporting, dashboard, fhir, campus_registry_mock, federation, auth_security, notifications, reference, catalogue, payments, registry, orders, purchasing, forms, booking, directives
 
 # Schema management (P1.5): Alembic is the single source of schema truth. The
 # old startup path -- create_all() plus a ~400-line hand-rolled
@@ -501,6 +501,9 @@ app.include_router(catalogue.router)
 # HIS-dataset features. Registry (demographics, sponsors, dependants) and forms/orders carry their
 # own role gates and facility scoping (see each module's docstring); purchasing is pharmacy-side.
 app.include_router(registry.router)
+# Critical directives (organ donation etc.): deliberately NOT page-gated -- a receptionist (no `patients`
+# page by default) must be able to record a signed form; each route carries its own require_roles.
+app.include_router(directives.router)
 app.include_router(profiles.router)
 app.include_router(orders.router)
 app.include_router(forms.router)

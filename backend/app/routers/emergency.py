@@ -21,6 +21,7 @@ from ..audit import log_access
 from ..rate_limit import limiter
 from ..clinical_access import _patient_present_at
 from .notifications import notify
+from .directives import current_for_emergency
 
 router = APIRouter(prefix="/emergency", tags=["emergency"])
 
@@ -702,6 +703,8 @@ def scan_emergency_card(
     result["tier"] = tier
     if tier == "public":
         result["omitted_non_critical"] = {}
+    # Directives are the same class of info as conditions: only if the card scope exposes conditions.
+    result["directives"] = current_for_emergency(db, patient.id, public=tier == "public") if "conditions" in scope else []
 
     loc = _record_location(db, patient, tier, ident, payload.location) if payload.location else None
     _notify_patient_of_scan(db, patient, tier, ident, loc)
@@ -1074,6 +1077,8 @@ def scan_nfc_card(
     result["tier"] = tier
     if tier == "public":
         result["omitted_non_critical"] = {}
+    # Directives are the same class of info as conditions: only if the card scope exposes conditions.
+    result["directives"] = current_for_emergency(db, patient.id, public=tier == "public") if "conditions" in scope else []
 
     loc = _record_location(db, patient, tier, ident, payload.location) if payload.location else None
     _notify_patient_of_scan(db, patient, tier, ident, loc)

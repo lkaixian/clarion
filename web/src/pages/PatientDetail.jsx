@@ -10,6 +10,7 @@ import PatientOrders from "../components/PatientOrders";
 import PatientForms from "../components/PatientForms";
 import PatientDemographics from "../components/PatientDemographics";
 import SharingConsent from "../components/SharingConsent";
+import CriticalDirectives from "../components/CriticalDirectives";
 import DispenseDialog from "../components/DispenseDialog";
 import { ScanLocations } from "../components/ScanMap";
 import { roleLabel } from "../lib/role";
@@ -1934,6 +1935,14 @@ export default function PatientDetail() {
 
       {activeTab === "overview" && (
         <>
+          {isOwnRecord && (
+            <Section title={tr("My critical information")}><CriticalDirectives mode="self" /></Section>
+          )}
+          {isStaff && ["admin", "records_officer", "receptionist", "clinician", "pharmacist"].includes(currentUser?.role) && (
+            <Section title={tr("Critical information")}>
+              <CriticalDirectives mode="staff" patientId={id} readOnly={currentUser?.role === "pharmacist"} />
+            </Section>
+          )}
           {isOwnRecord && (
             <Section title={tr("My Contact Info")} action={
               !editingProfile && <button onClick={startEditingProfile} className="btn-primary">{tr("Edit")}</button>

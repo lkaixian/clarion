@@ -3097,6 +3097,27 @@ class ScanLocation(Base):
     created_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
 
+class CriticalDirective(Base):
+    """A critical personal directive (organ donation, blood transfusion, implanted device, advance
+    directive). APPEND-ONLY: never UPDATE or DELETE a row; a change is a new row and the newest row per
+    (patient_id, kind) is the current one. `source` says who stated it: 'patient' (their own declaration)
+    or 'staff' (recorded from a document, `evidence_ref` = e.g. the signed form number). Not legal proof."""
+    __tablename__ = "critical_directives"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    patient_id = Column(String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(32), nullable=False)
+    value = Column(String(300), nullable=False)
+    note = Column(String(500), nullable=True)
+    source = Column(String(16), nullable=False)
+    evidence_ref = Column(String(120), nullable=True)
+    recorded_by = Column(String(36), nullable=True)
+    recorded_by_name = Column(String(255), nullable=True)
+    recorded_by_role = Column(String(64), nullable=True)
+    recorded_by_facility = Column(String(255), nullable=True)
+    recorded_at = Column(TZDateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
 SCAN_LOCATION_KEEP_DAYS = 90
 
 

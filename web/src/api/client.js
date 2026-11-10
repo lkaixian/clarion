@@ -311,6 +311,11 @@ export function logout() {
 // ---- public emergency page (the ref is a QR card reference or an NFC tag public_ref) (no login; a stored token, if any, buys a higher tier) ----
 export const scanEmergencyCard = (ref) => client.post("/emergency/scan", { card_reference: ref }).then((r) => r.data);
 export const shareScanLocation = (token, location) => client.post("/emergency/location", { token, location }).then((r) => r.data);
+// ---- critical directives (organ donation etc.; append-only on the server) ----
+export const getMyDirectives = () => client.get("/profile/directives").then((r) => r.data);
+export const putMyDirective = (kind, body) => client.put(`/profile/directives/${kind}`, body).then((r) => r.data);
+export const getPatientDirectives = (patientId) => client.get(`/patients/${patientId}/directives`).then((r) => r.data);
+export const addPatientDirective = (patientId, body) => client.post(`/patients/${patientId}/directives`, body).then((r) => r.data);
 export const getScanLocations = (patientId) => client.get(`/emergency/locations/${patientId}`).then((r) => r.data);
 
 // ---- family profiles ---------------------------------------------------------

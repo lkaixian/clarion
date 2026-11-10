@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { refreshAccessToken, scanEmergencyCard, shareScanLocation } from "../api/client";
 import { tr } from "../lib/i18n";
+import { DirectivesBlock } from "../components/CriticalDirectives";
 
 // Public page behind the card QR / NFC tag. No Layout, no login gate. The server
 // decides how much to show; a stored staff token (if any) is sent by the api client.
@@ -194,6 +195,7 @@ export default function EmergencyPublic() {
               {ec.phone && <a href={`tel:${ec.phone.replace(/[^\d+]/g, "")}`} className={`${CALL} mt-2 bg-slate-900 py-3 text-xl text-white`}>{tr("Call")} {ec.phone}</a>}
             </section>
           )}
+          <DirectivesBlock items={d.directives} />
           {d.location_token && typeof navigator !== "undefined" && navigator.geolocation && <ShareLocation token={d.location_token} />}
           {!priv && (
             <p className="text-base text-slate-700">
