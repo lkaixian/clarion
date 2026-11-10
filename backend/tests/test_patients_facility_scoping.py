@@ -75,18 +75,21 @@ def test_list_patients_break_glass_reason_unlocks_full_list_and_is_logged(
     test_client, make_user, auth_headers, db_session
 ):
     records_officer = make_user(role="records_officer", facility="Facility A")
-    other_facility_patient = _make_patient(db_session, full_name="Elsewhere Patient")
+    # The list is paged by name (50) and the shared test DB keeps every earlier test's patients, so the
+    # name must sort first or it falls off page 1 once the suite grows (CI run, 1000+ tests).
+    NAME = "0 Elsewhere Patient"
+    other_facility_patient = _make_patient(db_session, full_name=NAME)
     _give_encounter_at(db_session, other_facility_patient, "Facility B")
 
     scoped = test_client.get("/patients", headers=auth_headers(records_officer))
-    assert "Elsewhere Patient" not in {p["full_name"] for p in scoped.json()}
+    assert NAME not in {p["full_name"] for p in scoped.json()}
 
     override = test_client.get(
         "/patients?break_glass_reason=Tracking+down+a+transferred+patient%27s+chart",
         headers=auth_headers(records_officer),
     )
     assert override.status_code == 200
-    assert "Elsewhere Patient" in {p["full_name"] for p in override.json()}
+    assert NAME in {p["full_name"] for p in override.json()}
 
     entry = (
         db_session.query(models.AuditLog)
