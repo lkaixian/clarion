@@ -137,12 +137,18 @@ function paintBars() {
     maintDays.add(isoDay(new Date(m.end || Date.now())));
   }
 
+  // The sampler runs inside the backend, so a day it never ran is a day the
+  // server was down. Past days after the first-ever sample with no row = outage.
+  const sampled = Object.values(h.components || {}).flatMap(rows => Object.keys(rows));
+  const firstDay = sampled.length ? sampled.reduce((a, b) => (a < b ? a : b)) : null;
+  const today = isoDay(new Date());
+
   document.querySelectorAll("[data-bars]").forEach(el => {
     const comp = el.dataset.bars;
     const rows = (h.components && h.components[comp]) || {};
     let total = 0, bad = 0;
     el.replaceChildren(...days.map(d => {
-      const r = rows[d];
+      const r = rows[d] || (firstDay && d > firstDay && d < today ? { total: 1, bad: 1 } : null);
       const i = document.createElement("i");
       i.tabIndex = 0;
       let label;

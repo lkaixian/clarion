@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login, mfaVerify, mfaEnrolStart, mfaEnrolConfirm, commitSession, errorMessage } from "../api/client";
 import { landingPathFor } from "../lib/access";
 import { afterLoginPath } from "../lib/emergencyQr";
-import { useLang } from "../lib/i18n";
+import { tr, useLang } from "../lib/i18n";
 import LanguageSelect from "../components/LanguageSelect";
 
 const INPUT =
@@ -34,17 +34,19 @@ function Field({ id, label, children, hint }) {
   );
 }
 
+// Optional demo plugin (web/src/demo): empty object when the folder is deleted.
+const demoMod = Object.values(import.meta.glob("../demo/index.jsx", { eager: true }))[0];
+const DemoBanner = demoMod?.Banner;
+
 export default function Login() {
   const { t } = useLang();
-  // Pre-filled demo account only in dev / when the demo hint is on; a public build starts empty.
-  const demo = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_HINT === "1";
   const navigate = useNavigate();
   const location = useLocation();
 
   const [tab, setTab] = useState("patient"); // patient | staff -- UX only, the backend resolves the identifier
   const [step, setStep] = useState("credentials"); // credentials | mfa | enrol | recovery
-  const [identifier, setIdentifier] = useState(demo ? "clinician@clarion.demo" : "");
-  const [password, setPassword] = useState(demo ? "clinician123" : "");
+  const [identifier, setIdentifier] = useState(demoMod?.prefill.identifier ?? "");
+  const [password, setPassword] = useState(demoMod?.prefill.password ?? "");
   const [showPw, setShowPw] = useState(false);
   const [caps, setCaps] = useState(false);
   const [error, setError] = useState("");
@@ -145,6 +147,8 @@ export default function Login() {
         <a href="/" aria-label={tr("CLARION home")}>
           <img src="/brand/logo-full.png" alt={tr("CLARION")} className="h-14 w-auto mx-auto mb-4" />
         </a>
+
+        {DemoBanner && step === "credentials" && <DemoBanner />}
 
         {location.state?.resetSuccess && step === "credentials" && (
           <div role="status" className="bg-green-50 text-green-800 text-sm p-3 rounded-lg mb-4">

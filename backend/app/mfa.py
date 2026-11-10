@@ -47,6 +47,13 @@ def _derive(label: str) -> bytes:
     return HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=label.encode()).derive(_secret_key())
 
 
+try:  # optional demo plugin; absent in production
+    from .demo_plugin import skips_mfa
+except ImportError:
+    def skips_mfa(user) -> bool:
+        return False
+
+
 # ---- policy ----------------------------------------------------------------
 
 def required_roles() -> set:
@@ -105,6 +112,8 @@ def required_for(user) -> bool:
 def challenge_kind(user) -> Optional[str]:
     """None = no second factor; "verify" = enrolled, ask for a code;
     "enrol" = role requires MFA but the user has not set it up yet."""
+    if skips_mfa(user):
+        return None
     if is_enrolled(user):
         return "verify"
     if required_for(user):
