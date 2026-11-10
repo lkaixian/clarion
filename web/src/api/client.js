@@ -1166,6 +1166,9 @@ export const cancelPaymentIntent = (intentId) =>
 export const getReceipt = (paymentId) => client.get(`/payments/receipts/${paymentId}`).then((r) => r.data);
 export const getReceiptPdf = (paymentId) =>
   client.get(`/payments/receipts/${paymentId}/pdf`, { responseType: "blob" }).then((r) => r.data);
+// Pharmacist/clinician/admin: PDF of the patient's active medications.
+export const getPrescriptionPdf = (patientId) =>
+  client.get(`/pharmacy/patients/${patientId}/prescription/pdf`, { responseType: "blob" }).then((r) => r.data);
 export const emailReceipt = (paymentId) => client.post(`/payments/receipts/${paymentId}/email`).then((r) => r.data);
 export const getReconciliation = ({ day, days, tzOffsetMinutes } = {}) =>
   client.get("/billing/reconciliation", { params: { day: day || undefined, days: days || undefined, tz_offset_minutes: tzOffsetMinutes } })

@@ -16,14 +16,16 @@ screening stays the existing GET /ai/prescription-screen/{patient} call, made be
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from .. import auth, models
 from ..audit import log_access
-from ..clinical_access import _patient_known_to_facility
+from ..clinical_access import _hidden_author_facilities, _patient_known_to_facility, _row_author_facility
+from ..receipt_pdf import render_prescription
+from ..storage import sanitize_filename
 from ..database import get_db
 
 router = APIRouter(tags=["orders"])
@@ -226,3 +228,45 @@ def cancel_order(
     db.refresh(o)
     log_access(db, o.patient_id, user.id, user.role, "cancel_order", detail=o.id, actor_facility=user.facility)
     return _out(o)
+
+
+_PRESCRIPTION_ROLES = ("admin", "pharmacist", "clinician")
+
+
+@router.get("/pharmacy/patients/{patient_id}/prescription/pdf")
+def patient_prescription_pdf(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_roles(*_PRESCRIPTION_ROLES)),
+):
+    """Printable list of the patient's ACTIVE medications. Read-only. Scoped to
+    patients the caller's facility already deals with (same rule as orders.py:
+    unknown-to-facility -> 404, never confirms existence); medications from a
+    facility that does not share its records are left out, as in the record view."""
+    from .patients import _group_annotations_by_target  # lazy: avoids a router import cycle
+
+    facility = _facility(current_user)
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if patient is None or not _patient_known_to_facility(db, patient_id, facility):
+        raise HTTPException(status_code=404, detail="Patient not found")
+    hidden = _hidden_author_facilities(db, facility)
+    anns = _group_annotations_by_target(db, patient_id)
+    meds = [
+        m for m in patient.medications
+        if m.active and _row_author_facility(m) not in hidden
+        and not any(a.kind == "discontinued" for a in anns.get(m.id, ()))
+    ]
+    pdf = render_prescription({
+        "facility_name": facility, "patient_name": patient.full_name, "national_id": patient.national_id,
+        "printed_at": datetime.now(timezone.utc), "printed_by": current_user.full_name or current_user.email,
+        "meds": [
+            {"drug_name": m.drug_name, "dosage": m.dosage, "frequency": m.frequency,
+             "start_date": m.start_date, "prescribed_by_facility": m.prescribed_by_facility}
+            for m in meds
+        ],
+    })
+    log_access(db, patient_id, current_user.id, current_user.role, "prescription_pdf_printed",
+               detail=f"{len(meds)} medication(s)", actor_facility=facility)
+    name = sanitize_filename(f"prescription-{patient.full_name}", fallback="prescription")
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{name}.pdf"', "Cache-Control": "no-store"})

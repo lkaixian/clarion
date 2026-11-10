@@ -27,6 +27,45 @@ def _when(value) -> str:
     return str(value or "-")
 
 
+def render_prescription(d: dict) -> bytes:
+    """Active medication list for the pharmacist. d: facility_name, patient_name,
+    national_id, printed_at, printed_by, meds[{drug_name,dosage,frequency,start_date,prescribed_by_facility}]."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    c.setTitle("Prescription")
+    y = _H - _M
+
+    def line(text, size=10, bold=False, step=6 * mm):
+        nonlocal y
+        if y < _M + 25 * mm:
+            c.showPage()
+            y = _H - _M
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+        c.drawString(_M, y, textwrap.shorten(str(text), width=95, placeholder="..."))
+        y -= step
+
+    line("PRESCRIPTION", 16, True, step=9 * mm)
+    line(d.get("facility_name") or "", 11, True)
+    line(f"Date: {_when(d.get('printed_at'))}")
+    line(f"Patient: {d.get('patient_name') or '-'}")
+    line(f"NRIC / ID: {d.get('national_id') or '-'}")
+    if d.get("printed_by"):
+        line(f"Printed by: {d['printed_by']}")
+    y -= 3 * mm
+    line("Active medications", 10, True)
+    if not d["meds"]:
+        line("No active medications on record.")
+    for i, m in enumerate(d["meds"], 1):
+        line(f"{i}. {m['drug_name']}", 10, True, step=5 * mm)
+        line("   " + (" | ".join(filter(None, [m.get("dosage"), m.get("frequency")])) or "-"), step=5 * mm)
+        line(f"   Started: {m.get('start_date') or '-'}   Prescribed by: {m.get('prescribed_by_facility') or '-'}", 9)
+    y -= 6 * mm
+    line("Computer generated. Verify with the prescriber before dispensing.", 8)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 def render_receipt(r: dict) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)

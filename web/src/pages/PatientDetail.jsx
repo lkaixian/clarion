@@ -24,7 +24,7 @@ import {
   rescheduleAppointment, acceptRescheduleRequest, rejectRescheduleRequest,
   addPatientAnnotation,
   getMySignatureBlob,
-  listDrugs,
+  listDrugs, getPrescriptionPdf,
 } from "../api/client";
 import { tr } from "../lib/i18n";
 
@@ -1636,6 +1636,18 @@ export default function PatientDetail() {
   // actions above which clinicians *are* allowed to use. isStaff alone
   // would show this button to roles that always 403 on click.
   const canManageLogins = ["admin", "records_officer"].includes(getCurrentUser()?.role);
+  const canPrintRx = ["admin", "pharmacist", "clinician"].includes(getCurrentUser()?.role);
+  const [rxError, setRxError] = useState("");
+  const printPrescription = async () => {
+    setRxError("");
+    try {
+      const url = URL.createObjectURL(await getPrescriptionPdf(id));
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      setRxError(tr("Could not load the prescription."));
+    }
+  };
   // Patient viewing their own record — the only case profile self-editing
   // (and the missing-data nudge) applies. A patient can't reach anyone
   // else's /patients/:id at all (backend scopes GET /patients/{id} to
@@ -2002,7 +2014,13 @@ export default function PatientDetail() {
                 </div>
               ))}
             </Section>
-            <Section title={tr("Medications")} count={patient.medications.length} action={isStaff && <button onClick={() => openAddRecord("medication")} className="btn-add">{tr("+ Add")}</button>}>
+            <Section title={tr("Medications")} count={patient.medications.length} action={isStaff && (
+              <span className="flex gap-2">
+                {canPrintRx && <button onClick={printPrescription} className="btn-add">{tr("Print prescription")}</button>}
+                <button onClick={() => openAddRecord("medication")} className="btn-add">{tr("+ Add")}</button>
+              </span>
+            )}>
+              {rxError && <div role="alert" className="alert-error mb-2">{rxError}</div>}
               {patient.medications.length === 0 && <p className="empty-state">{tr("None on file.")}</p>}
               {patient.medications.map((m) => (
                 <div key={m.id} className="record-row">
