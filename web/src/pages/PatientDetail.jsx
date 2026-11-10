@@ -1,3 +1,4 @@
+import { sigQuantity } from "../lib/sig";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import Layout from "../components/Layout";
@@ -55,8 +56,8 @@ const RECORD_FIELD_CONFIG = {
     addFn: addMedication, updateFn: updateMedication,
     fields: [
       { key: "drug_name", label: "Drug name", type: "text", required: true },
-      { key: "dosage", label: "Dosage", type: "text", placeholder: "e.g. 500mg" },
-      { key: "frequency", label: "Frequency", type: "text", placeholder: "e.g. twice daily" },
+      { key: "dosage", label: "Dosage", type: "text", placeholder: "e.g. 1 tab, 2 tab, 5ml" },
+      { key: "frequency", label: "Frequency", type: "text", placeholder: "e.g. TDS x 5/7, BD x 1/52, nocte" },
       // The prescriber — often an external clinic. Informational and editable;
       // it is NOT what governs who can edit this record (the recording facility
       // is, tracked server-side).
@@ -362,6 +363,10 @@ export function RecordModal({ kind, mode, initial, onClose, onSaved }) {
                       onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                     />
                   )}
+                  {kind === "medication" && f.key === "frequency" && (() => {
+                    const q = sigQuantity(values.dosage, values.frequency);
+                    return q && <p className="text-xs text-slate-500 mt-1">{tr("Quantity to dispense")}: <b>{q.qty}{q.unit ? ` ${q.unit}` : ""}</b></p>;
+                  })()}
                   {kind === "medication" && f.key === "drug_name" && (
                     <datalist id="drug-hints">
                       {drugHints.map((d) => (
