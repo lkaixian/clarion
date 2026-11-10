@@ -28,6 +28,12 @@ clarion/
 └── docker-compose.yml  The single-VM on-prem topology.
 ```
 
+![What is built and how far each feature got](docs/features.svg)
+
+![Automated tests, one square per check](docs/tests.svg)
+
+Regenerate both with `python docs/gen_svgs.py`.
+
 ---
 
 ## 1. Local dev — SQLite, no containers
