@@ -1,0 +1,3 @@
+pytest>=8
+httpx>=0.27
+h2>=4.1   # optional: HTTP/2 single-connection bursts (race.py falls back to HTTP/1.1)

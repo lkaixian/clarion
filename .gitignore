@@ -147,3 +147,8 @@ web/public/downloads/*.sha256
 
 # graphify output (regenerate with /graphify .)
 graphify-out/
+
+# stress-test output and credentials
+qa/stress/results/
+qa/stress/*.env
+qa/stress/**/results/
