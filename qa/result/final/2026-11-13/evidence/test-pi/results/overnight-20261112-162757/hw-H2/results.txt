@@ -1,0 +1,1 @@
+INFO H2 closed-case vs open-case comparison is manual: repeat with the case open

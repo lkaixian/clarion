@@ -1,0 +1,6 @@
+INFO origin_ping_1.1.1.1_avg_ms 28.374 (min=23.527 max=33.734 0% packet loss)
+INFO origin_ping_8.8.8.8_avg_ms 21.912 (min=17.388 max=27.830 0% packet loss)
+INFO origin_down_mbps 311.8 (4 streams, 3 runs)
+INFO origin_up_mbps 52.0 (4 streams, 3 runs)
+INFO origin_tunnel probe n=103 fail=43 5xx=0 ok%=58.252 med=45.996ms p95=54.964ms p99=91.772ms max=94.746ms
+INFO origin_tunnel_avg_ms 47.3 (client RTT via https://clarion.larmkx.com/api/healthz, successful requests only)

@@ -1,0 +1,13 @@
+INFO BOOT uptime_at_start=8s
+PASS BOOT mariadb up (waited 7s, uptime 15s)
+PASS BOOT backend up (waited 16s, uptime 24s)
+PASS BOOT proxy up (waited 0s, uptime 8s)
+PASS BOOT redis up (waited 0s, uptime 8s)
+PASS BOOT minio up (waited 0s, uptime 8s)
+PASS BOOT mpi up (waited 6s, uptime 14s)
+PASS BOOT cloudflared up (waited 0s, uptime 8s)
+PASS BOOT web up (waited 0s, uptime 8s)
+PASS BOOT serving_uptime_s=73 (le 180)
+PASS BOOT backend_healthz=200 (ge 200)
+PASS BOOT mariadb-check clean
+PASS BOOT row counts >= counts.pre

@@ -1,0 +1,6 @@
+INFO N1 warm-up 60s discarded, then 600s; p95 SERVER time needs Caddy/uvicorn logs or /metrics (not measured here)
+INFO N1-warmup probe n=39 fail=0 5xx=0 ok%=100.000 med=314.307ms p95=865.935ms p99=1997.06ms max=1997.06ms
+INFO N1 probe n=402 fail=0 5xx=0 ok%=100.000 med=301.95ms p95=607.935ms p99=746.077ms max=1220.55ms
+PASS N1 median_ms=301.95 (le 1000)
+PASS N1 ok_pct=100.000 (ge 99.9)
+INFO N1 p95_rtt=607.935ms (client RTT, not server time)

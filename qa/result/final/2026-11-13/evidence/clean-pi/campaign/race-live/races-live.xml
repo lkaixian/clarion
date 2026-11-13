@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="6" failures="0" skipped="0" tests="7" time="9.434" timestamp="2026-11-12T18:48:15.320444+00:00" hostname="uthm-pr-emos-000m"><testcase classname="test_races_live" name="test_r1_parallel_simulate_one_payment" time="1.178"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r2_parallel_pay_never_exceeds_bill" time="0.001"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r11_same_nric_one_patient" time="0.002"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r4_double_booking_one_slot" time="0.002"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r8_refresh_rotation_single_winner" time="0.002"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r9_lockout_not_bypassed_by_parallelism" time="0.002"><error message="failed on setup with &quot;KeyError: 'access_token'&quot;">client = &lt;httpx.Client object at 0x7f9039db50&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+        tok = login(client, email, pw)
+&gt;       return {"headers": {"Authorization": f"Bearer {tok['access_token']}"}, "refresh": tok.get("refresh_token"),
+                "email": email, "password": pw, "user": tok.get("user", {})}
+E       KeyError: 'access_token'
+
+conftest.py:53: KeyError</error></testcase><testcase classname="test_races_live" name="test_r10_rate_limit_holds" time="7.943" /></testsuite></testsuites>

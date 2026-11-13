@@ -1,0 +1,9 @@
+Deliberately not run in this campaign, and why:
+ D5  power cut           needs POWER_CYCLE_CMD (a smart plug); never guessed
+ D8  restore drill       needs a restic repository and the backup sandbox
+ D9  kernel panic        --panic needs the watchdog configured (hardening not applied: baseline) and someone present to power-cycle
+ N12 offline NFC (phone) manual: airplane mode, scan a tag
+ RN4/RN5/RN8             UI race / 15 min token expiry / true half-open sockets: need a browser, hardware or time not available here
+ A2 IDOR, A5 upload, A8 SSRF   need ids / endpoints supplied by hand (SEC_FOREIGN_PATIENT_ID, SEC_UPLOAD, SEC_SSRF)
+ T7  origin IP           needs the Pi's public address (ORIGIN_IP)
+ fail2ban / watchdog / log rotation: not installed or applied (this is the baseline configuration)

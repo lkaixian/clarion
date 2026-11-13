@@ -1,0 +1,35 @@
+== 2026-11-12T18:05:24Z uthm-pr-emos-000m
+Linux uthm-pr-emos-000m 6.1.21-v8+ #1642 SMP PREEMPT Mon Apr  3 17:24:16 BST 2023 aarch64 GNU/Linux
+PRETTY_NAME="Debian GNU/Linux 11 (bullseye)"
+Raspberry Pi Compute Module 4 Rev 1.1
+Docker version 29.8.0, build 88096ef
+Docker Compose version v5.5.1
+               total        used        free      shared  buff/cache   available
+Mem:            1849         976         257          31         614         734
+Swap:           1109         293         816
+Filename				Type		Size		Used		Priority
+/dev/zram0                              partition	1136152		300544		100
+memory	0	130	1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root        15G  7.5G  6.0G  56% /
+== images
+clarion/backend:local 4603026e40cb 50 minutes ago
+clarion/web:local 25916df101b9 54 minutes ago
+ghcr.io/shopify/toxiproxy:latest 5d3dae09bc18 4 weeks ago
+clarion/minio:local 80bef889a5b0 4 weeks ago
+cloudflare/cloudflared:2026.10.0 9b49eed8f628 5 weeks ago
+mariadb:11.4 1292844148b3 5 weeks ago
+redis:7.4-alpine 858f009f9709 7 weeks ago
+caddy:2.8-alpine af32e97399fe 2 years ago
+== containers
+clarion-pi-proxy-1 caddy:2.8-alpine Up 24 minutes (healthy)
+clarion-pi-backend-1 clarion/backend:local Up 24 minutes (healthy)
+clarion-pi-mariadb-1 mariadb:11.4 Up 24 minutes (healthy)
+clarion-pi-minio-1 clarion/minio:local Up 24 minutes (healthy)
+clarion-pi-cloudflared-1 cloudflare/cloudflared:2026.10.0 Up 22 minutes
+clarion-pi-redis-1 redis:7.4-alpine Up 45 minutes (healthy)
+clarion-pi-web-1 clarion/web:local Up 38 minutes (healthy)
+clarion-pi-mpi-1 clarion/backend:local Up 45 minutes (healthy)
+== API paths in the running backend
+343
+== throttle throttled=0x0  temp temp=31.1'C

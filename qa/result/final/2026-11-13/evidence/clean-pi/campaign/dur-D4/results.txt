@@ -1,0 +1,1 @@
+INFO D4 rebooting; after boot run: sudo /home/pi/CLARION_CENTRAL/qa/stress/pi/verify_after_boot.sh (measures serving <= 180s, DB check, counts)

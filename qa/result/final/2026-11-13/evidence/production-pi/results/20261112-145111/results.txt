@@ -1,0 +1,5 @@
+INFO N1 warm-up 60s discarded, then 600s; p95 SERVER time needs Caddy/uvicorn logs or /metrics (not measured here)
+INFO N1 p95_rtt=0ms (client RTT, not server time)
+INFO N3 'no worker pinned': inspect docker stats / gunicorn log in /home/pi/clarion_qa/stress/pi/results/20261112-145111
+INFO N4 zero duplicated writes is asserted by the R group, not here
+INFO N5 no half-written record: assert with the R/RN group

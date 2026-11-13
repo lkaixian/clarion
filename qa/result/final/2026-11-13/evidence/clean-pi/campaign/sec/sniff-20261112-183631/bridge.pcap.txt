@@ -1,0 +1,1297 @@
+18:36:32.059948 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 41
+E..E..@.@........).k.....12.A..6..o......Ssy....._w8"....y<|.o.qrX.u=
+18:36:32.116395 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 26
+E..6..@.6....).k........."	-F...~.i.......}..#...K%...
+18:36:32.155190 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 21
+E..1..@.6.
+Q.).!..........j.X..v...^2.^xi.[...P..
+18:36:32.181281 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 46
+E..J..@.@..8.....).!.....6:.B.E..]i..`Gk.6....=1..~FB....>g...E......l..o.
+18:36:32.193060 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 41
+E..E..@.@..).....).5.....1:.D.....w..../......T.'.;u.......@.L3..N...
+18:36:32.249176 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 26
+E..6..@.6.
+8.).5........."p"B.).,.>.o../.lQ.n......`..
+18:36:32.321821 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 3314216376:3314216514, ack 509636265, win 501, options [nop,nop,TS val 2155777522 ecr 4092446902], length 138: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/127.0.0.1//healthz/60/1/minute" "60" "1"
+E.....@.@....................`n.....Y......
+.~......*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$45
+LIMITS:LIMITER/127.0.0.1//healthz/60/1/minute
+$2
+60
+$1
+1
+
+18:36:32.322610 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 1:5, ack 138, win 501, options [nop,nop,TS val 4092450528 ecr 2155777522], length 4: RESP "2"
+E..8..@.@................`n....B....Yk.....
+.....~..:2
+
+18:36:32.322662 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 5, win 501, options [nop,nop,TS val 2155777523 ecr 4092450528], length 0
+E..4..@.@..z...............B.`n.....Yg.....
+.~......
+18:36:32.396635 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 21
+E..1..@.6....).........k..z_S*;..2..H...$d.G-....
+18:36:32.422489 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 46
+E..J..@.@..v.....)...k...63uQ..../.<.=.8..s..O	......}?l.y>l........j.kp6.
+18:36:33.091333 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 21
+E..1..@.6....).k............H. .G...M.L'...m+O4..
+18:36:33.099530 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 2912507745:2912507750, ack 3254397409, win 1061, options [nop,nop,TS val 2757776287 ecr 2522019955], length 5
+E..9$.@.@.................Wa..)....%Yn.....
+.`S..R.s.....
+18:36:33.099782 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 1:12, ack 5, win 9845, options [nop,nop,TS val 2522021958 ecr 2757776287], length 11
+E..?..@.@.:k..............)...Wf..&uYt.....
+.S.F.`S............
+18:36:33.099829 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 12, win 1061, options [nop,nop,TS val 2757776287 ecr 2522021958], length 0
+E..4$.@.@.................Wf..)....%Yi.....
+.`S..S.F
+18:36:33.101329 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5:303, ack 12, win 1061, options [nop,nop,TS val 2757776288 ecr 2522021958], length 298
+E..^$.@.@.................Wf..)....%Z......
+.`S..S.F&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:33.097552') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:33.097552' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:33.102269 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12:85, ack 303, win 9845, options [nop,nop,TS val 2522021960 ecr 2757776288], length 73
+E..}..@.@.:,..............)...X...&uY......
+.S.H.`S...........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:33.103490 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 303:316, ack 85, win 1061, options [nop,nop,TS val 2757776291 ecr 2522021960], length 13
+E..A$.@.@.................X...*5...%Yv.....
+.`S..S.H	....ROLLBACK
+18:36:33.103735 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 85:96, ack 316, win 9845, options [nop,nop,TS val 2522021962 ecr 2757776291], length 11
+E..?..@.@.:i..............*5..X...&uYt.....
+.S.J.`S............
+18:36:33.104087 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 316:329, ack 96, win 1061, options [nop,nop,TS val 2757776291 ecr 2522021962], length 13
+E..A$.@.@.................X...*@...%Yv.....
+.`S..S.J	....ROLLBACK
+18:36:33.104231 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 96:107, ack 329, win 9845, options [nop,nop,TS val 2522021962 ecr 2757776291], length 11
+E..?..@.@.:h..............*@..X...&uYt.....
+.S.J.`S............
+18:36:33.117604 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 46
+E..J..@.@........).k.....62.Q..6..o......Ssy......@.7.I$.N..2\T......_J..R
+18:36:33.147463 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 107, win 1061, options [nop,nop,TS val 2757776335 ecr 2522021962], length 0
+E..4$.@.@.................X...*K...%Yi.....
+.`S..S.J
+18:36:33.156401 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 41
+E..E..@.@..=.....).!.....1:.I.E..]i..`Gk.6....=1.{..r......3S|7kTG.oy
+18:36:33.214190 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 26
+E..6..@.6.
+L.).!........."..[...W..c.u.f.>a.h...^<$...
+18:36:33.223730 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 21
+E..1..@.6.
+=.).5...........5Na..wx..%d.zk.:.....C
+18:36:33.249858 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 46
+E..J..@.@..$.....).5.....6:.K.....w..../......T.'..Kq.|8.r[.j.........$.:d
+18:36:33.253836 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 4280332866:4280332871, ack 2610510991, win 9879, options [nop,nop,TS val 2757776441 ecr 2522020108], length 5
+E..9+.@.@................ .B..<...&.Yn.....
+.`T9.R.......
+18:36:33.254040 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 1:12, ack 5, win 9856, options [nop,nop,TS val 2522022112 ecr 2757776441], length 11
+E..?.1@.@..<..............<.. .G..&.Yt.....
+.S...`T9...........
+18:36:33.254145 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 12, win 9879, options [nop,nop,TS val 2757776441 ecr 2522022112], length 0
+E..4+.@.@................ .G..<...&.Yi.....
+.`T9.S..
+18:36:33.255811 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 5:303, ack 12, win 9879, options [nop,nop,TS val 2757776443 ecr 2522022112], length 298
+E..^+.@.@................ .G..<...&.Z......
+.`T;.S..&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:33.251897') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:33.251897' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:33.256737 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 12:85, ack 303, win 9856, options [nop,nop,TS val 2522022115 ecr 2757776443], length 73
+E..}.2@.@.................<.. .q..&.Y......
+.S...`T;..........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:33.257878 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 303:316, ack 85, win 9879, options [nop,nop,TS val 2757776445 ecr 2522022115], length 13
+E..A+.@.@................ .q..<...&.Yv.....
+.`T=.S..	....ROLLBACK
+18:36:33.258135 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 85:96, ack 316, win 9856, options [nop,nop,TS val 2522022116 ecr 2757776445], length 11
+E..?.3@.@..:..............<.. .~..&.Yt.....
+.S...`T=...........
+18:36:33.258486 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 316:329, ack 96, win 9879, options [nop,nop,TS val 2757776446 ecr 2522022116], length 13
+E..A+.@.@................ .~..<...&.Yv.....
+.`T>.S..	....ROLLBACK
+18:36:33.258635 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 96:107, ack 329, win 9856, options [nop,nop,TS val 2522022117 ecr 2757776446], length 11
+E..?.4@.@..9..............<.. ....&.Yt.....
+.S...`T>...........
+18:36:33.303494 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 107, win 9879, options [nop,nop,TS val 2757776491 ecr 2522022117], length 0
+E..4+.@.@................ ....<...&.Yi.....
+.`Tk.S..
+18:36:33.400072 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 41
+E..E..@.@..{.....)...k...13pC..../.<.=.8..s..O	.........M..rA...VI...
+18:36:33.463879 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 26
+E..6..@.6....).........k."..K..$Y...A..)....X.U/7.....
+18:36:33.646311 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 966
+E.....@.6....).........k....He).x./....`.;..#b9g.L.e.....%./z..7......,.:...w^.._pO...xv..kz4.#C......<G...+9..gx.8^.."._N.n.M.".,.p......]9...t.O..............[y.I.........p..|n..~LP.mC?v......p...Jc~.:...*h.@.....T.X..Z....Ep.^.L...(...6......V\i....:.u...Y)....?.....S/....t.E.M.....=...n...{`..EVf.=}.-@R...G....J.>..%.....f..(\.5.....$G....qsSws.h=(~....D..
+....?o.2..,..@..$c.H.|..+..
+.....u.....!..V......q..x...............L..[.3.. ...Mb.. S^..Sh.....Z....+CW.. !g.#.X.......3..\.Z..Kgn...Lv.*......r..].uhx.....aTW....V.j...............g..;..2.R@.&.?....rX.60.Ur....e5!............Y.....b..7.!../.&....dr..*.....l64^.i..=.TOOn.....?..d.....m?.$.Z........djV..$.6.W.\7.A...V....a.E..K"p.K...g...Ke....C...l....9w..".1...k....n..m.b...[...}.c..........z}Rv.:....Z....-.....}.{.....Q.w.%.3....dzs7.J..-[...Im..	..8...3...r;.b../......m....`....r.zN.k|gr7..tF.
+.....z...3pQ_....-R.q{..fT.......l.?.@(..y.W.k.7@x....1\.,Cf.Y.....Q.0..{..... a..+..V..$x..OlH.........;...b..1T..bY.-K4...2..3
+18:36:33.646385 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 77
+E..i..@.6..W.).........k.U..^.........3:...&.....x.WP.......p$.V.........n......Scyg..|...k...~	..a.Ru...
+18:36:33.646918 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 45
+E..I..@.@..w.....)...k...53tH..../.<.=.8..s..O	......D@.1..K.../e.....l..
+18:36:33.647543 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 2177150713:2177151216, ack 3343478608, win 1204, options [nop,nop,TS val 2921126884 ecr 663547543], length 503
+E..+..@.@....................IoP....Z].....
+....'..........S./.|E.0.t0.a..X..D..<..:........w..W.x...L.S.c..:.<./$...p.a.=M.. ...
+1')*'..~~......cT....[&.......c ".F...S.~...L}.k8...:.j..Uu
+....7..z..{C......B".la......S.........,k.x]....jv..U.....=&
+H}!0.Mj.8+y..1.:....>_Z...H.*.c....Z9......%#q:*@:.:byZx.}.WbYi.|Y...J\...-.w;.y3...r!.."Y.0.HB..r-T~.$XY.....#Fo.......[....T{..	,FgY.w.fa..x>5...~c....x#.BaC..A
+W.Z..VU...J9,....Z....n.....E..sR.q.O<.d....H..,.:.T...-...|`wVD...I....<.b..L|w}Yde..e(P'3.G*.......Hmfyi.5~?@...]..*.v#{#..!...8...[.{.S...
+18:36:33.647661 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 503:578, ack 1, win 1204, options [nop,nop,TS val 2921126884 ecr 663547543], length 75
+E.....@.@.!..................IoP....X......
+....'.......F.X3c...,9JcQv-.......BD.@... >..}.C...X;C.>........~.J1.v(....n.....Q\
+18:36:33.649661 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [S], seq 2708786793, win 64240, options [mss 1460,sackOK,TS val 1690715729 ecr 0,nop,wscale 7], length 0
+E..<..@.@..5...........@.t.i........X..........
+d.FQ........
+18:36:33.649730 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [S.], seq 4259416163, ack 2708786794, win 65160, options [mss 1460,sackOK,TS val 2717636300 ecr 1690715729,nop,wscale 7], length 0
+E..<..@.@............@.....c.t.j....X..........
+....d.FQ....
+18:36:33.649785 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 1, win 502, options [nop,nop,TS val 1690715729 ecr 2717636300], length 0
+E..4..@.@..<...........@.t.j...d....X......
+d.FQ....
+18:36:33.650257 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 1:512, ack 1, win 502, options [nop,nop,TS val 1690715729 ecr 2717636300], length 511
+E..3..@.@..<...........@.t.j...d....Z......
+d.FQ....POST /auth/login HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Content-Length: 53
+Accept: */*
+Accept-Encoding: gzip, br
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.98.114
+Cf-Ipcountry: MY
+Cf-Ray: a597a495eeacfdf9-SIN
+Cf-Visitor: {"scheme":"https"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+Content-Type: application/x-www-form-urlencoded
+X-Forwarded-For: 49.125.98.114, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: https
+
+
+18:36:33.650306 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [.], ack 512, win 506, options [nop,nop,TS val 2717636300 ecr 1690715729], length 0
+E..4..@.@.Sv.........@.....d.t.i....X......
+....d.FQ
+18:36:33.650475 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [.], ack 578, win 501, options [nop,nop,TS val 663551881 ecr 2921126884], length 0
+E..4 y@.@................IoP...;....Xf.....
+'.......
+18:36:33.650593 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 512:565, ack 1, win 502, options [nop,nop,TS val 1690715730 ecr 2717636300], length 53
+E..i..@.@..............@.t.i...d....Y......
+d.FR....username=clinician@clarion.demo&password=clinician123
+18:36:33.650623 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [.], ack 565, win 506, options [nop,nop,TS val 2717636301 ecr 1690715730], length 0
+E..4..@.@.Su.........@.....d.t......X......
+....d.FR
+18:36:33.657319 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 138:283, ack 5, win 501, options [nop,nop,TS val 2155778857 ecr 4092450528], length 145: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/49.125.98.114//auth/login/20/1/minute" "60" "1"
+E....	@.@..................B.`n.....Y......
+.~.)....*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$52
+LIMITS:LIMITER/49.125.98.114//auth/login/20/1/minute
+$2
+60
+$1
+1
+
+18:36:33.658117 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 5:9, ack 283, win 501, options [nop,nop,TS val 4092451863 ecr 2155778857], length 4: RESP "2"
+E..8..@.@................`n.........Yk.....
+.....~.):2
+
+18:36:33.658168 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 9, win 501, options [nop,nop,TS val 2155778858 ecr 4092451863], length 0
+E..4.
+@.@..x.................`n.....Yg.....
+.~.*....
+18:36:33.662350 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 329:334, ack 107, win 1061, options [nop,nop,TS val 2757776849 ecr 2522021962], length 5
+E..9$.@.@.................X...*K...%Yn.....
+.`U..S.J.....
+18:36:33.662591 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 107:118, ack 334, win 9845, options [nop,nop,TS val 2522022521 ecr 2757776849], length 11
+E..?..@.@.:g..............*K..X...&uYt.....
+.S.y.`U............
+18:36:33.662632 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 118, win 1061, options [nop,nop,TS val 2757776850 ecr 2522022521], length 0
+E..4$.@.@.................X...*V...%Yi.....
+.`U..S.y
+18:36:33.663718 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 334:2246, ack 118, win 1061, options [nop,nop,TS val 2757776851 ecr 2522022521], length 1912
+E...$.@.@..|..............X...*V...%`......
+.`U..S.yt....SELECT users.id AS users_id, users.email AS users_email, users.hashed_password AS users_hashed_password, users.full_name AS users_full_name, users.role AS users_role, users.facility AS users_facility, users.patient_id AS users_patient_id, users.section AS users_section, users.must_change_password AS users_must_change_password, users.access_expires_at AS users_access_expires_at, users.reset_attempt_count AS users_reset_attempt_count, users.reset_locked_until AS users_reset_locked_until, users.login_failed_count AS users_login_failed_count, users.login_locked_until AS users_login_locked_until, users.mfa_secret_enc AS users_mfa_secret_enc, users.mfa_enabled_at AS users_mfa_enabled_at, users.mfa_last_step AS users_mfa_last_step, users.otp_code_hash AS users_otp_code_hash, users.otp_expires_at AS users_otp_expires_at, users.otp_attempt_count AS users_otp_attempt_count, users.otp_request_count AS users_otp_request_count, users.otp_request_window_start AS users_otp_request_window_start, users.password_changed_at AS users_password_changed_at, users.owner_locked_at AS users_owner_locked_at, users.self_registered_at AS users_self_registered_at, users.signature_object_key AS users_signature_object_key, users.signature_sha256 AS users_signature_sha256, users.signature_bytes AS users_signature_bytes, users.signature_mime AS users_signature_mime, users.bio AS users_bio, users.contact_email AS users_contact_email, users.photo_object_key AS users_photo_object_key, users.photo_sha256 AS users_photo_sha256, users.photo_bytes AS users_photo_bytes, users.photo_mime AS users_photo_mime, users.auth_source AS users_auth_source, users.ldap_dn AS users_ldap_dn, users.ldap_username AS users_ldap_username, users.last_role AS users_last_role, users.responder_tier AS users_responder_tier 
+FROM users 
+WHERE users.email = 'clinician@clarion.demo' OR users.ldap_username = 'clinician@clarion.demo' 
+ LIMIT 1
+18:36:33.663810 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [.], ack 2246, win 9838, options [nop,nop,TS val 2522022522 ecr 2757776851], length 0
+E..4..@.@.:q..............*V..`'..&nYi.....
+.S.z.`U.
+18:36:33.664850 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 118:3503, ack 2246, win 9845, options [nop,nop,TS val 2522022523 ecr 2757776851], length 3385
+E..m.	@.@.-7..............*V..`'..&uf......
+.S.{.`U.....(1....def.clarion.users.users.users_id.id.........P...7....def.clarion.users.users.users_email.email.........P...K....def.clarion.users.users.users_hashed_password.hashed_password.............?....def.clarion.users.users.users_full_name	full_name.............5....def.clarion.users.users
+users_role.role.............=....def.clarion.users.users.users_facility.facility.............A....def.clarion.users.users.users_patient_id
+patient_id.........@...;..	.def.clarion.users.users.users_section.section.............U..
+.def.clarion.users.users.users_must_change_password.must_change_password.?...........O....def.clarion.users.users.users_access_expires_at.access_expires_at.?...........S....def.clarion.users.users.users_reset_attempt_count.reset_attempt_count.?...........Q....def.clarion.users.users.users_reset_locked_until.reset_locked_until.?...........Q....def.clarion.users.users.users_login_failed_count.login_failed_count.?...........Q....def.clarion.users.users.users_login_locked_until.login_locked_until.?...........I....def.clarion.users.users.users_mfa_secret_enc.mfa_secret_enc.............I....def.clarion.users.users.users_mfa_enabled_at.mfa_enabled_at.?...........G....def.clarion.users.users.users_mfa_last_step.mfa_last_step.?...........G....def.clarion.users.users.users_otp_code_hash.otp_code_hash.............I....def.clarion.users.users.users_otp_expires_at.otp_expires_at.?...........O....def.clarion.users.users.users_otp_attempt_count.otp_attempt_count.?...........O....def.clarion.users.users.users_otp_request_count.otp_request_count.?...........]....def.clarion.users.users.users_otp_request_window_start.otp_request_window_start.?...........S....def.clarion.users.users.users_password_changed_at.password_changed_at.?...........K....def.clarion.users.users.users_owner_locked_at.owner_locked_at.?...........Q....def.clarion.users.users.users_self_registered_at.self_registered_at.?...........U....def.clarion.users.users.users_signature_object_key.signature_object_key.............M....def.clarion.users.users.users_signature_sha256.signature_sha256.............K....def.clarion.users.users.users_signature_bytes.signature_bytes.?...........I....def.clarion.users.users.users_signature_mime.signature_mime.............3....def.clarion.users.users	users_bio.bio.............G.. .def.clarion.users.users.users_contact_email.contact_email.............M..!.def.clarion.users.users.users_photo_object_key.photo_object_key.............E..".def.clarion.users.users.users_photo_sha256.photo_sha256.............C..#.def.clarion.users.users.users_photo_bytes.photo_bytes.?...........A..$.def.clarion.users.users.users_photo_mime
+photo_mime.............C..%.def.clarion.users.users.users_auth_source.auth_source.............;..&.def.clarion.users.users.users_ldap_dn.ldap_dn.............G..'.def.clarion.users.users.users_ldap_username.ldap_username.........@...?..(.def.clarion.users.users.users_last_role	last_role.............I..).def.clarion.users.users.users_responder_tier.responder_tier...@............*.....N..+$fe60fa82-76d3-4546-85dc-650de75e02a1.clinician@clarion.demo<$2b$12$OeEneVCeNMTUM/g1i5dRwu3ssH5qwvH0soHFCBdHyDr4aBwkwNlnO.Dr. Aisyah Rahman	clinician.Hospital Sejahtera...0..0..0.......0.0.....users/fe60fa82-76d3-4546-85dc-650de75e02a1.png@09bad3424602c4c4a8b9afeb531dee16d67a1b4c26aae414c8549484220d2c25.563	image/png.......local.......,.....
+18:36:33.664904 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 3503, win 1114, options [nop,nop,TS val 2757776852 ecr 2522022523], length 0
+E..4$.@.@.................`'..7....ZYi.....
+.`U..S.{
+18:36:33.669281 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 2246:2421, ack 3503, win 1114, options [nop,nop,TS val 2757776856 ecr 2522022523], length 175
+E...$.@.@..B..............`'..7....ZZ......
+.`U..S.{.....SELECT user_roles.user_id AS user_roles_user_id, user_roles.role AS user_roles_role 
+FROM user_roles 
+WHERE user_roles.user_id IN ('fe60fa82-76d3-4546-85dc-650de75e02a1')
+18:36:33.669941 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 3503:3676, ack 2421, win 9845, options [nop,nop,TS val 2522022528 ecr 2757776856], length 173
+E.....@.@.9...............7...`...&uZ......
+.S...`U......J....def.clarion
+user_roles
+user_roles.user_roles_user_id.user_id.........P...D....def.clarion
+user_roles
+user_roles.user_roles_role.role.........P.....................
+18:36:33.711423 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 3676, win 1136, options [nop,nop,TS val 2757776899 ecr 2522022528], length 0
+E..4$.@.@.................`...8<...pYi.....
+.`V..S..
+18:36:34.092951 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 41
+E..E..@.@........).k.....12.M..6..o......Ssy.....1...<....?........M.
+18:36:34.158949 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 26
+E..6..@.6....).k........."..QP....^.Z.}..v!.K..-s.....
+18:36:34.174721 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 2421:2734, ack 3676, win 1136, options [nop,nop,TS val 2757777362 ecr 2522022528], length 313
+E..m$.@.@.................`...8<...pZ......
+.`W..S..5....SELECT audit_chain_state.id AS audit_chain_state_id, audit_chain_state.last_seq AS audit_chain_state_last_seq, audit_chain_state.last_hash AS audit_chain_state_last_hash, audit_chain_state.updated_at AS audit_chain_state_updated_at 
+FROM audit_chain_state 
+WHERE audit_chain_state.id = 1 
+ LIMIT 1 FOR UPDATE
+18:36:34.175426 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 3676:4198, ack 2734, win 9845, options [nop,nop,TS val 2522023033 ecr 2757777362], length 522
+E..>..@.@.8b..............8<..b...&u[s.....
+.S.y.`W......U....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_id.id.?.......B...a....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_last_seq.last_seq.?...........c....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_last_hash	last_hash.............e....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_updated_at
+updated_at.?....................a....1.26@d8fba3d1c71ff65d4cc76b605c9fdf216059c8d4aa233a3b4a61eb612d73ffb9.2026-11-12 18:36:29.265676.........
+18:36:34.175477 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 4198, win 1159, options [nop,nop,TS val 2757777363 ecr 2522023033], length 0
+E..4$.@.@.................b...:F....Yi.....
+.`W..S.y
+18:36:34.178044 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 2734:2929, ack 4198, win 1159, options [nop,nop,TS val 2757777365 ecr 2522023033], length 195
+E...$.@.@..*..............b...:F....Z,.....
+.`W..S.y.....UPDATE audit_chain_state SET last_seq=27, last_hash='7134362197fcae25b21ac3679e0d97273ae6386ae7bfd2024fd5f4f6fe008309', updated_at='2026-11-12 18:36:34.173207' WHERE audit_chain_state.id = 1
+18:36:34.178834 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4198:4250, ack 2929, win 9845, options [nop,nop,TS val 2522023037 ecr 2757777365], length 52
+E..h..@.@.:7..............:F..b...&uY......
+.S.}.`W.0..........(Rows matched: 1  Changed: 1  Warnings: 0
+18:36:34.180033 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 2929:3422, ack 4250, win 1159, options [nop,nop,TS val 2757777367 ecr 2522023037], length 493
+E..!$.@.@.................b...:z....[V.....
+.`W..S.}.....INSERT INTO audit_logs (id, patient_id, actor, actor_role, actor_facility, action, fields_accessed, timestamp, detail, seq, prev_hash, row_hash) VALUES ('1e227c16-9191-4a98-99da-5d2759de5c15', NULL, 'fe60fa82-76d3-4546-85dc-650de75e02a1', 'clinician', 'Hospital Sejahtera', 'login_mfa_challenge', 'null', '2026-11-12 18:36:34.173207', 'kind=enrol', 27, 'd8fba3d1c71ff65d4cc76b605c9fdf216059c8d4aa233a3b4a61eb612d73ffb9', '7134362197fcae25b21ac3679e0d97273ae6386ae7bfd2024fd5f4f6fe008309')
+18:36:34.180748 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4250:4261, ack 3422, win 9845, options [nop,nop,TS val 2522023039 ecr 2757777367], length 11
+E..?..@.@.:_..............:z..d...&uYt.....
+.S...`W............
+18:36:34.181669 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 3422:3433, ack 4261, win 1159, options [nop,nop,TS val 2757777369 ecr 2522023039], length 11
+E..?$.@.@.................d...:.....Yt.....
+.`W..S.......COMMIT
+18:36:34.183186 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4261:4272, ack 3433, win 9845, options [nop,nop,TS val 2522023041 ecr 2757777369], length 11
+E..?..@.@.:^..............:...d...&uYt.....
+.S...`W............
+18:36:34.183829 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 3433:3446, ack 4272, win 1159, options [nop,nop,TS val 2757777371 ecr 2522023041], length 13
+E..A$.@.@.................d...:.....Yv.....
+.`W..S..	....ROLLBACK
+18:36:34.183973 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4272:4283, ack 3446, win 9845, options [nop,nop,TS val 2522023042 ecr 2757777371], length 11
+E..?..@.@.:]..............:...d...&uYt.....
+.S...`W............
+18:36:34.185121 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 3446:3451, ack 4283, win 1159, options [nop,nop,TS val 2757777372 ecr 2522023042], length 5
+E..9$.@.@.................d...:.....Yn.....
+.`W..S.......
+18:36:34.185333 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4283:4294, ack 3451, win 9845, options [nop,nop,TS val 2522023043 ecr 2757777372], length 11
+E..?..@.@.:\..............:...d...&uYt.....
+.S...`W............
+18:36:34.186357 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 3451:5314, ack 4294, win 1159, options [nop,nop,TS val 2757777373 ecr 2522023043], length 1863
+E..{$.@.@.................d...:.....`......
+.`W..S..C....SELECT users.id AS users_id, users.email AS users_email, users.hashed_password AS users_hashed_password, users.full_name AS users_full_name, users.role AS users_role, users.facility AS users_facility, users.patient_id AS users_patient_id, users.section AS users_section, users.must_change_password AS users_must_change_password, users.access_expires_at AS users_access_expires_at, users.reset_attempt_count AS users_reset_attempt_count, users.reset_locked_until AS users_reset_locked_until, users.login_failed_count AS users_login_failed_count, users.login_locked_until AS users_login_locked_until, users.mfa_secret_enc AS users_mfa_secret_enc, users.mfa_enabled_at AS users_mfa_enabled_at, users.mfa_last_step AS users_mfa_last_step, users.otp_code_hash AS users_otp_code_hash, users.otp_expires_at AS users_otp_expires_at, users.otp_attempt_count AS users_otp_attempt_count, users.otp_request_count AS users_otp_request_count, users.otp_request_window_start AS users_otp_request_window_start, users.password_changed_at AS users_password_changed_at, users.owner_locked_at AS users_owner_locked_at, users.self_registered_at AS users_self_registered_at, users.signature_object_key AS users_signature_object_key, users.signature_sha256 AS users_signature_sha256, users.signature_bytes AS users_signature_bytes, users.signature_mime AS users_signature_mime, users.bio AS users_bio, users.contact_email AS users_contact_email, users.photo_object_key AS users_photo_object_key, users.photo_sha256 AS users_photo_sha256, users.photo_bytes AS users_photo_bytes, users.photo_mime AS users_photo_mime, users.auth_source AS users_auth_source, users.ldap_dn AS users_ldap_dn, users.ldap_username AS users_ldap_username, users.last_role AS users_last_role, users.responder_tier AS users_responder_tier 
+FROM users 
+WHERE users.id = 'fe60fa82-76d3-4546-85dc-650de75e02a1'
+18:36:34.186483 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [.], ack 5314, win 9838, options [nop,nop,TS val 2522023045 ecr 2757777373], length 0
+E..4..@.@.:f..............:...l#..&nYi.....
+.S...`W.
+18:36:34.187260 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 4294:7679, ack 5314, win 9845, options [nop,nop,TS val 2522023045 ecr 2757777373], length 3385
+E..m..@.@.-,..............:...l#..&uf......
+.S...`W.....(1....def.clarion.users.users.users_id.id.........P...7....def.clarion.users.users.users_email.email.........P...K....def.clarion.users.users.users_hashed_password.hashed_password.............?....def.clarion.users.users.users_full_name	full_name.............5....def.clarion.users.users
+users_role.role.............=....def.clarion.users.users.users_facility.facility.............A....def.clarion.users.users.users_patient_id
+patient_id.........@...;..	.def.clarion.users.users.users_section.section.............U..
+.def.clarion.users.users.users_must_change_password.must_change_password.?...........O....def.clarion.users.users.users_access_expires_at.access_expires_at.?...........S....def.clarion.users.users.users_reset_attempt_count.reset_attempt_count.?...........Q....def.clarion.users.users.users_reset_locked_until.reset_locked_until.?...........Q....def.clarion.users.users.users_login_failed_count.login_failed_count.?...........Q....def.clarion.users.users.users_login_locked_until.login_locked_until.?...........I....def.clarion.users.users.users_mfa_secret_enc.mfa_secret_enc.............I....def.clarion.users.users.users_mfa_enabled_at.mfa_enabled_at.?...........G....def.clarion.users.users.users_mfa_last_step.mfa_last_step.?...........G....def.clarion.users.users.users_otp_code_hash.otp_code_hash.............I....def.clarion.users.users.users_otp_expires_at.otp_expires_at.?...........O....def.clarion.users.users.users_otp_attempt_count.otp_attempt_count.?...........O....def.clarion.users.users.users_otp_request_count.otp_request_count.?...........]....def.clarion.users.users.users_otp_request_window_start.otp_request_window_start.?...........S....def.clarion.users.users.users_password_changed_at.password_changed_at.?...........K....def.clarion.users.users.users_owner_locked_at.owner_locked_at.?...........Q....def.clarion.users.users.users_self_registered_at.self_registered_at.?...........U....def.clarion.users.users.users_signature_object_key.signature_object_key.............M....def.clarion.users.users.users_signature_sha256.signature_sha256.............K....def.clarion.users.users.users_signature_bytes.signature_bytes.?...........I....def.clarion.users.users.users_signature_mime.signature_mime.............3....def.clarion.users.users	users_bio.bio.............G.. .def.clarion.users.users.users_contact_email.contact_email.............M..!.def.clarion.users.users.users_photo_object_key.photo_object_key.............E..".def.clarion.users.users.users_photo_sha256.photo_sha256.............C..#.def.clarion.users.users.users_photo_bytes.photo_bytes.?...........A..$.def.clarion.users.users.users_photo_mime
+photo_mime.............C..%.def.clarion.users.users.users_auth_source.auth_source.............;..&.def.clarion.users.users.users_ldap_dn.ldap_dn.............G..'.def.clarion.users.users.users_ldap_username.ldap_username.........@...?..(.def.clarion.users.users.users_last_role	last_role.............I..).def.clarion.users.users.users_responder_tier.responder_tier...@............*.....N..+$fe60fa82-76d3-4546-85dc-650de75e02a1.clinician@clarion.demo<$2b$12$OeEneVCeNMTUM/g1i5dRwu3ssH5qwvH0soHFCBdHyDr4aBwkwNlnO.Dr. Aisyah Rahman	clinician.Hospital Sejahtera...0..0..0.......0.0.....users/fe60fa82-76d3-4546-85dc-650de75e02a1.png@09bad3424602c4c4a8b9afeb531dee16d67a1b4c26aae414c8549484220d2c25.563	image/png.......local.......,.....
+18:36:34.187441 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 7679, win 1212, options [nop,nop,TS val 2757777375 ecr 2522023045], length 0
+E..4$.@.@.................l#..G.....Yi.....
+.`W..S..
+18:36:34.189143 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 21
+E..1..@.6.
+Q.).!..........u.[.B.K/.J.6~.M....F.v.
+18:36:34.191090 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5314:5486, ack 7679, win 1212, options [nop,nop,TS val 2757777378 ecr 2522023045], length 172
+E...$.@.@..9..............l#..G.....Z......
+.`W..S.......SELECT user_roles.user_id AS user_roles_user_id, user_roles.role AS user_roles_role 
+FROM user_roles 
+WHERE 'fe60fa82-76d3-4546-85dc-650de75e02a1' = user_roles.user_id
+18:36:34.191805 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7679:7852, ack 5486, win 9845, options [nop,nop,TS val 2522023050 ecr 2757777378], length 173
+E.....@.@.9...............G...l...&uZ......
+.S...`W......J....def.clarion
+user_roles
+user_roles.user_roles_user_id.user_id.........P...D....def.clarion
+user_roles
+user_roles.user_roles_role.role.........P.....................
+18:36:34.195830 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 1:325, ack 565, win 506, options [nop,nop,TS val 2717636846 ecr 1690715730], length 324
+E..x..@.@.R0.........@.....d.t......Z,.....
+....d.FRHTTP/1.1 200 OK
+date: Thu, 12 Nov 2026 18:36:33 GMT
+server: uvicorn
+content-length: 241
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains
+x-request-id: be2df131fec3
+
+
+18:36:34.195902 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 325, win 501, options [nop,nop,TS val 1690716275 ecr 2717636846], length 0
+E..4..@.@..9...........@.t..........X......
+d.Hs....
+18:36:34.196706 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 325:566, ack 565, win 506, options [nop,nop,TS val 2717636847 ecr 1690716275], length 241
+E..%..@.@.R..........@.......t......Y......
+....d.Hs{"mfa_required":true,"mfa_enrol":true,"mfa_token":"mfa1.enrol.fe60fa82-76d3-4546-85dc-650de75e02a1.dc937b59.1794508894.0f73114d68d576b1d799376cd6b34aa162d936ab6e65d46e8d036394d3c2e981","email_available":true,"email_hint":"c***@clarion.demo"}
+18:36:34.196760 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 566, win 501, options [nop,nop,TS val 1690716276 ecr 2717636847], length 0
+E..4..@.@..8...........@.t..........X......
+d.Ht....
+18:36:34.197287 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 1:1223, ack 578, win 501, options [nop,nop,TS val 663552427 ecr 2921126884], length 1222
+E... z@.@..D.............IoP...;....],.....
+'..............|....B.vn. ..j..7.ft..g<.L. 6...!..@..i...qn..F.)....+.m..g..7>.B.....:^...p.>q:::..q....F...X$..|...C..>....v<<6.
+..u....CR..........C......K.W4.EdX....4... Qk.a1B<)/..I..`.C....z.'0.y.....}..+.Bf........^.v...b.X/.\........6... 8..}...G...l..G.)....k.:P3.Q...T8..p.K....#..8.w..&..4..v.Bx.g?k.C)..t... ..z:f7...s....h...M..X....;.c].[.....r,........".U.T.......;n.j...l.5m,.....{"....[.$.m..]tW'.& 	fx.......&.I....1n.~..t...v ..~_.|....^.U..?..h....l..*[qv.B...F.4..O|y.?PMD..Oy..A..)F........>...H'X;.-.P...MB>0....|............9.[J%......5m....(.M..e&`....Q....&;A
+	..........8.....s.!..8.b@E~.W(.[J.e.......z
+`nn.V......*.v.......z.kti..O.%.A..-'.]kb]r...Ep.@%..%..F..A6>/......J.<..{..."k../..........e.....]...........``.cm..d.u..eYq..1..4....R.6.2......u.......h..>.4%@.@HU...8....... .......9...6...:......`.uBm.Qg....*._..
+.d..r.j{`"...&...........7.......-...+..n..k..$..X......M.].Rcl........}9.=h_.......>.T).2...q...B...sgD.F.x..._7....v.K.-.....1.... ^.v.....|.v)..:F..Y..........Uy.P..^....X.6/...
+..Z....,n.G..(>2.).6.9..Y..d..j=-.....^....s\.G9..x..>).....?.ft.[...|.c..*....y.......4e.2!O.......F......CS9...........{..~.nX.w/...y@ ...3$[.F%..>..:.`.../.}...O/
+.I..z..H.._e.....qX^.{....%...h.S.
+18:36:34.197364 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 1223, win 1203, options [nop,nop,TS val 2921127433 ecr 663552427], length 0
+E..4..@.@.!................;.It.....Xf.....
+...	'...
+18:36:34.198374 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1486
+E.....@.@........)...k....9.G..../.<.=.8..s..O	...0..Zx.W.[.h...)X....Q.jy..E......k.y...+nf
+2QX..\F...Q..eUf.t..L._..Q..{.Ma\............ed..,Bh;.....Y.G....W...d..kl..F.O......Nq.......G.4Y..h..aC..R....j,m.]7	.)D..0...)..a.......u.}..M..5.Wx..K..7...q_...[..Y..F.\.)^g.9M.]..zU.+...I/.m.:...8.;.z....d...4j.8\.[<...
+.. .*l..........#.V;..*........]...[..9......[.....v..v. .....{.{.L..p}......a:b.....=.?F.U.U.=p..._..r.s...NU...6$..*'... ._. .+...K].$.x..gv.X.....k....c......-.x;.j%..N.&.I~.t...l.
+.`..........D..#v=........6.,.*.H`@.....X..........Qp.].[%@..o^kr.[...>g...9P...J..4%a.L..&....k1........M2..r$.......f.SR..}..B...w..:.6.#|..,c.....E.} .*7.$>s...R$..fZ.|[6...'.=............<.^...).......(....N.w...[...t7.2..B.9f.:j..b...$..@.8.N....o...Q.{.....c..E...#.7....].....8....Z...).../...E......F..i...i.8....oT.j.@*.Y...JT......V....e.0Z..X..u4.*...v5j..-Y...6 ...=[..7.w.q7HZmd..9=..J.y..$W....@.%...;.%.mK+!5X./n@A....j.<I...q)W.~r.S"..t..W.<.I...@......W..^...].....O5.R....D....X..i....B...T...=.B[Uy.EY5e....y+Av...1......!3m7...y..S.....S..'\i......l........+0....O	i..U.Z.:.....^a..........u.........6.*.7.pi ...;H"
+..d.PL.`h...JgS...;.]....i.....w.-.b....;..,A..j?.7nCM.X'.U.............?-.2....+?...{..6v.2.1...a.....gW.	..-....>..^.t....s....1.....@.>.....Ms....!...f'....p.l.Hu[./Uz.4....}<..b...>X._9...|.v..j.........8..al.N13.D..g...&Arp...#6Y..../.<.=.8..s..O	...xY.4@..-.b...qi`........r..&..V.....Egn85.....H......M.......23...r]...#..n..Ut*..]r.&K#^Z....c......4.tG.l/.i...+4.wJ..
+18:36:34.198374 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5486:5499, ack 7852, win 1234, options [nop,nop,TS val 2757777385 ecr 2522023050], length 13
+E..A$.@.@.................l...H.....Yv.....
+.`W..S..	....ROLLBACK
+18:36:34.198526 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 285
+E..9..@.@........)...k...%4d[..../.<.=.8..s..O	...*..A.V5P?.i.i.......c....\..s...)(f....?..Y.Z.........i.SN.I..T.\H..#..W..p.....D.-\t...r....h..'S.*..............v.............pC1...."....jEc.N.L..#......)..S.....X.?7\.S.t.>..`.*}]..cji.U......d........~Z#.....j..k.f...KC......d...A......>8./.oR..l.....b|.H..S
+18:36:34.198582 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 44
+E..H..@.@..x.....)...k...43sK..../.<.=.8..s..O	.....G....Tw....U.>...} 0
+18:36:34.198812 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7852:7863, ack 5499, win 9845, options [nop,nop,TS val 2522023057 ecr 2757777385], length 11
+E..?..@.@.:V..............H...l...&uYt.....
+.S...`W............
+18:36:34.199105 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5499:5512, ack 7863, win 1234, options [nop,nop,TS val 2757777386 ecr 2522023057], length 13
+E..A$.@.@.................l...H.....Yv.....
+.`W..S..	....ROLLBACK
+18:36:34.199210 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7863:7874, ack 5512, win 9845, options [nop,nop,TS val 2522023057 ecr 2757777386], length 11
+E..?..@.@.:U..............H...l...&uYt.....
+.S...`W............
+18:36:34.215050 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 46
+E..J..@.@..8.....).!.....6:.R.E..]i..`Gk.6....=1...r<-ZdW".....25."_..,...
+18:36:34.224351 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 41
+E..E..@.@..).....).5.....1:.R.....w..../......T.'....n...].....V2mI..
+18:36:34.236287 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!.._OO.0?{7f...Xl.L-o..~....
+18:36:34.239451 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 7874, win 1234, options [nop,nop,TS val 2757777427 ecr 2522023057], length 0
+E..4$.@.@.................l...H.....Yi.....
+.`X..S..
+18:36:34.284994 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 26
+E..6..@.6.
+8.).5........."V.S.V2f\.e$^....a..w?..Q&./.
+18:36:34.470858 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 886
+E.....@.6....).........k.~*.YSvb..%0S....|.2]1[.	.E..{.O..?z..EY..C.2[I....u...y...OsE....)dy........L.D#N2F.]R.gb...A.q..Tu`.b~9...U	\...r....-..F+..........lg..9..w.Ge.Umn.L....X...4.:...].....	.......$){...(.\.YT..A.A.\..n.....n....l.Ca....7..I8..........2..g`M.....................:.>6.t....zN...7q......h....}.>%...*. ...&....jFV...R.....kmFsk{.jY'	.lT{.5... .........I{.=.N].......-n...y..L..PL...@Z.iU..?..Q..Gl^..fL.q&,....A@;).....4b...i....3S.......A.;wS...(...p.....<..
+.....YW..@-..M...aE..<.'.T....>...7........f.}..@.J.D.....].}.4. z.B ...M......T.0{..\e.....!....8`/C...Hy.l..Fcp.....o.......3'%.Mb..IOFb......m..Ge..(. \(.4..4FO
+.C.W}....)....D.X........{.U".Z..3.........\.rL.S......F"(..*?m..p.....{5...b..Z.
+..R..2...3...M....l..G..X9V.........M.O...x.....g<M`Oy.2...K.\.n...~Q.i.y..k....Zzv.......5.X....#.....9F...\8W	.._.@....._.J...j...}G....D.....G"Z.J.[r..@K...e..~...^.{.-..;0...,.v.=.MO\
+18:36:34.472043 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 578:1033, ack 1223, win 1204, options [nop,nop,TS val 2921127708 ecr 663552427], length 455
+E.....@.@. ................;.It.....Z-.....
+....'........{..J.Mi..vCd.8j....5.....(.N.
+..U........8.....8Z:z..Oa....|.8.g"....r..7I.o.u.mp8JkoI.{.)V.....>..x....2...G=X.Fa..LG...........@.hO.t......8;KM......../.p.F<.6.u..H.[.u$...(.
+'.$.....5.jY...w.......F....>N.._ROs-FP...p..q.6....S.^}.0............b{nZ.r6........'.;.......O`.P..LP~.C\+......Y...,..s..D..3.
+....@(.L..3.$...O+...j..f+.!@.W..o2X.2...A.....N#?..s.p.5.$..Y.Q....TM.9[h.*.s..L.V8...........=..0...93&...."X.
+.g....t...=g].l.O.....QA...>..
+18:36:34.472853 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 565:1028, ack 566, win 501, options [nop,nop,TS val 1690716552 ecr 2717636847], length 463
+E.....@.@..h...........@.t..........Z......
+d.I.....POST /auth/refresh HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Content-Length: 0
+Accept: */*
+Accept-Encoding: gzip, br
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.98.114
+Cf-Ipcountry: MY
+Cf-Ray: a597a49b48bdce3a-SIN
+Cf-Visitor: {"scheme":"https"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+X-Forwarded-For: 49.125.98.114, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: https
+
+
+18:36:34.472911 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [.], ack 1028, win 503, options [nop,nop,TS val 2717637123 ecr 1690716552], length 0
+E..4..@.@.Sr.........@.......t.m....X......
+....d.I.
+18:36:34.477886 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 283:430, ack 9, win 501, options [nop,nop,TS val 2155779678 ecr 4092451863], length 147: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/49.125.98.114//auth/refresh/30/1/minute" "60" "1"
+E.....@.@....................`n.....Y......
+.~.^....*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$54
+LIMITS:LIMITER/49.125.98.114//auth/refresh/30/1/minute
+$2
+60
+$1
+1
+
+18:36:34.478703 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 9:13, ack 430, win 501, options [nop,nop,TS val 4092452684 ecr 2155779678], length 4: RESP "1"
+E..8..@.@................`n....f....Yk.....
+...L.~.^:1
+
+18:36:34.478752 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 13, win 501, options [nop,nop,TS val 2155779679 ecr 4092452684], length 0
+E..4..@.@..v...............f.`n.....Yg.....
+.~._...L
+18:36:34.482503 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 566:899, ack 1028, win 503, options [nop,nop,TS val 2717637133 ecr 1690716552], length 333
+E.....@.@.R$.........@.......t.m....Z5.....
+....d.I.HTTP/1.1 401 Unauthorized
+date: Thu, 12 Nov 2026 18:36:34 GMT
+server: uvicorn
+content-length: 38
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains
+x-request-id: fb2a3fcc1e6d
+
+
+18:36:34.482567 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 899, win 501, options [nop,nop,TS val 1690716562 ecr 2717637133], length 0
+E..4..@.@..6...........@.t.m........X......
+d.I....
+18:36:34.483306 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 899:937, ack 1028, win 503, options [nop,nop,TS val 2717637133 ecr 1690716562], length 38
+E..Z..@.@.SJ.........@.......t.m....Y......
+....d.I.{"detail":"No refresh token provided"}
+18:36:34.483391 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 937, win 501, options [nop,nop,TS val 1690716563 ecr 2717637133], length 0
+E..4..@.@..5...........@.t.m........X......
+d.I....
+18:36:34.483932 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 1223:2251, ack 1033, win 501, options [nop,nop,TS val 663552714 ecr 2921127708], length 1028
+E..8 {@.@................It.........\j.....
+'................J...:]..........-.C.|........M...... .h..1..{n.?F.._...K...R.\.q.;..9...z9v.......C,`.5........^.N.......1m=%.^7K38uf.C...1/<.......v....u....@6....`..Ek..O.iZz4..C...h#1... ...P6..\....ch.......b.....V............j...!O.Z....C....S.....KFV..6ZUM......xm.d....0U..m.....e..|....y.h..hTr~h*#.....D.XY....J.....*...7^.Y~..\;../.	..WM..........zYw.......er..<4...J.-}.....Y.:..\=<pQ7..).s.....z.@0.|.3H....D]Une.. ..@.O.i..=....>`f[.. <Vy.z...}..du..n\D..	...6.9._5o.d.q.......@.....N...W.........p.....<.i..Y...n.....U,.J..H...i...7..*...m.R....k.c.cs.....r.....Kg......6w.NE5.~amS...3...7n..M....!...|...@4...}...G..........{U.{..d........w. ...!.....k.x.w	...k7R......B......U';...~.u..*...Y(2....hJ]1..F...+.4?.-!.7.....A.s..Q.&B....0.@.~...=..@9
+......6...T...U;+..^	#..9.Zv......1.#]*~6.o%....0X@...f.d.f"......~... ..."...2tW.>....2.3.;..a.9^.N....5e.K-..A.+.*.d+J. ...P.ca.....f.r...
+.n=/y.#?..kt......X..hX.
+./...`~..8c.&_...7.A.,....Ig.. i...\'N[.)..X..........A;g..G......o..N.2@......t..1....F.Y..G{...........
+18:36:34.484008 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 2251, win 1204, options [nop,nop,TS val 2921127720 ecr 663552714], length 0
+E..4..@.@.!..................Ix.....Xf.....
+...('...
+18:36:34.484998 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1531
+E.....@.@........)...k....9BE..../.<.=.8..s..O	..)..l'Oz.h.8........>....W3
+.kB..ZM.w....nD.(........%(..4...-....?!....J[.v........E...`...aXQk..XQ(U..L..(.U...I^3....z,.....:..u..i.$.*.@A.:..\Z7..ZT......Mv..n...P.....;..X|. .&.I.h1P.3.Fo.............V......X.d;T.#...&.]......?.Y..!.....(..|^..sh....P6....,0....y..h.Y..7|O.Q..3.Fh.	oM]	B9.*/.Q........M]5......x|,.......3..".u}O.L......oX.....g{Zc....g...EZ.Z~..b'..f..A,.NEO.7uZ.....Gf..&..uN..y..mO.-..k.Sn8k.....".h...\....D.`.....$.?.\.s.~..I...3..N..5..a...h.........l......I.{.2......s..i..UVJ2".. ....../k.n......,ug3...hT..x.6M:?..,>..t.u..	.L.>jf..=..O...2..8...8@.._6.bb..+.i......S.g.A.i>O..q.*..0.s...F\..z..q.@YdF.......{.o...N".o..X.g.@S
+.!..."|ZLQC...Z.......M...T....V]......}....0.4.....$..C...M.....s3-*....%..\...JY|u,.!....._.Y&/....p."...	...?..\.t...P.N..r...{..L...m2_U.".#%C....}.\.e.....H.C6..K....r...................=.F. ..k..DW.FJ....X..^..l...W%.z.T.....7.u...9..o..$).....ES...../..? So.A!*....@n..Q...)..........N{...*.....	}....w.3......[.A.....S..*.......umj.T.+.	>R.......g+)...=...[.'...nF.......=&.....F..... .3.5..9;..}U6...!.....JL.6c.#V.U..f...k!85h]),..O@.....>~.{.c..y4.q.......)?~gbh..x.....#U......Z...!..[...vl_af4...g......W.F....C.
+V`.T..3.P.mr......D!...T..	|.0.b.T...6%|.)....KR_..$.".......dR....<j..rM..[G..&_.W.V..8A{.;...."..w.....0...v	........ZU...B........r......D..../.<.=.8..s..O	... .M..'........ ...j~d@:.vG..^........._]}.P5dW~.aDV.......@..6.e.1.*G.x4......(....."J..*e3p.Ie`.zsj0E6..x.Gs.......t..I.`94.....,u..G..lP.e..	^...Hl!.>.f0.XR...nV9.
+18:36:34.523778 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!?.@F.........5h....9...=.`|
+18:36:34.833740 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 878
+E.....@.6..6.).........k.v.gQ............mi.c............S%....
+..... ZJ}.ik...N...}d.{../...W2HY..>.Za8.../....a..+.
+X....^.$....J....w$b.4_....'.qz.......i..!]2.w....V7_......i
+.qr.K.e.,k......=.[g.q.{./e.oQ.T.	.6.&....U...('N.Jm....E.........8...!.:E......5.{8u8m.x|.C.ma.m.K.N..P.....u....ed..~..Ee._..$.j..{S....TYa...>~...O.fl.S.|.k6g.?..p..NG.t@1p.?8.y6
+.|fFP&....<f../..p-.-.6.4De.R..@S5AK..rN.8..w......~.@MHsg............q.1....m.Y...<...v.\.ft..m...'.#.x.3w!....M.X.2..IY..`...z.D.M0.k.R-.!.*!/..L.o..u.#.+.g...0Y.....J.Sx|..9
+~m...jvL.1.n6Wg&.L....&.........A%]..e.]..]..d...@{.k....5hV...L.N.u..d.6.C.8..c.d....9........o..3..../:.\t`.I.j.WtT.....GpI.T#..a.......f..~.i] ........F....W.7.;..v..f.
+.\.Y....bG......J.ge.'..(..jm..I+`.h.4k.\...N.z.......<.......m_v
+.$9.'..@...z..oQC+... ......Jp*....../W.....-K"....$...)...Y".?..@.S>...t.)...t'S.$k	.T-....I......4.^.....y.....B#3..%.HnA..Rz.i.
+18:36:34.834845 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 1033:1488, ack 2251, win 1204, options [nop,nop,TS val 2921128071 ecr 663552714], length 455
+E.....@.@. ..................Ix.....Z-.....
+....'........V...[u.....[...\.....".U),.......W."....B....M	....Z].L.{@.qxw.$..V..1.a..n2.U'...?....._C...Tq.....u..*.....xc..@...M....x L......8.r@=..9..=..j....	...}N..BL.-(rg..Q3.'...x.8F..5..>w.L3.9..Z@...s..,.z....o.....d....J.:.J.YB..(..uD@.s.*.H]F.....nx.tzMl*.5)a..;.................n.{.p5..~.u.}....(Qq.R.\......s..,..A.OOh...~..L2I.l.C.Q:&8..."b0....AS.H..I..L4..2.z.........:.X...}..jq .=...*..o.Z....G.9eMA.Gt..A"^.pI.[....}.z...E....e.WXf......"..L.g
+18:36:34.835703 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 1028:1491, ack 937, win 501, options [nop,nop,TS val 1690716915 ecr 2717637133], length 463
+E.....@.@..e...........@.t.m........Z......
+d.J.....GET /auth/me HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Accept: */*
+Accept-Encoding: gzip, br
+Authorization: Bearer
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.106.198
+Cf-Ipcountry: MY
+Cf-Ray: a597a49d9ac25f66-SIN
+Cf-Visitor: {"scheme":"https"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+X-Forwarded-For: 49.125.106.198, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: https
+
+
+18:36:34.840456 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 430:573, ack 13, win 501, options [nop,nop,TS val 2155780041 ecr 4092452684], length 143: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/49.125.106.198//auth/me/60/1/minute" "60" "1"
+E.....@.@..................f.`n.....Y......
+.~.....L*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$50
+LIMITS:LIMITER/49.125.106.198//auth/me/60/1/minute
+$2
+60
+$1
+1
+
+18:36:34.841202 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 13:17, ack 573, win 501, options [nop,nop,TS val 4092453046 ecr 2155780041], length 4: RESP "1"
+E..8..@.@................`n.........Yk.....
+.....~..:1
+
+18:36:34.841247 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 17, win 501, options [nop,nop,TS val 2155780041 ecr 4092453046], length 0
+E..4..@.@..t.................`n.....Yg.....
+.~......
+18:36:34.845355 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 937:1296, ack 1491, win 501, options [nop,nop,TS val 2717637495 ecr 1690716915], length 359
+E.....@.@.R..........@.......t.<....ZO.....
+...wd.J.HTTP/1.1 401 Unauthorized
+date: Thu, 12 Nov 2026 18:36:34 GMT
+server: uvicorn
+www-authenticate: Bearer
+content-length: 43
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains
+x-request-id: b582415c70ef
+
+
+18:36:34.845440 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 1296, win 501, options [nop,nop,TS val 1690716925 ecr 2717637495], length 0
+E..4..@.@..3...........@.t.<...s....X......
+d.J....w
+18:36:34.846201 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 1296:1339, ack 1491, win 501, options [nop,nop,TS val 2717637496 ecr 1690716925], length 43
+E.._..@.@.SC.........@.....s.t.<....Y......
+...xd.J.{"detail":"Could not validate credentials"}
+18:36:34.846253 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 1339, win 501, options [nop,nop,TS val 1690716925 ecr 2717637496], length 0
+E..4..@.@..2...........@.t.<........X......
+d.J....x
+18:36:34.846732 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 2251:3310, ack 1488, win 501, options [nop,nop,TS val 663553077 ecr 2921128071], length 1059
+E..W |@.@................Ix.........\......
+'..5...............H....[>..n.._U.yd.B....1.M.')..ol...........3s.v.k).E?...V.T....!`.....u..	RM.z.5......uO....yk.@..y.K....#.....{..}...os........b._j.q.$.)...@.h..!L~]...o......c.=.,e.Y..c.....=:_H.l.&8..9...H...(d.....LI....n44X.....O....~s5~..!...2.....S.....X..Pc..2..>....@B.z.....r......^.....+o....D%.`49v0..K.ZI<.?..P.r.....%....7.w...XpO.^..I.n.]`	S/...'.S....g+$...<9N.H .:...\.^>0........{p.0g.c	.^E.+\I..C... ...u.
+6$.'..f...	.=.......C.u../R..F.*oT.r...Y.....f	....Vz.V...[.f..|q.-.	....b.9.j5C....O........2.A..Y#...N.....[}..-.iH;l..a..w*........{..V..1.B...z.<=)..-...2........^1n.&O.A.;..W..-...P.:$QV...".I}~....W}.7."..lt.U4..f..A.5.(.*9......!&
+..J..........TOY.....}.?.2...`}.3.)c.D.....Y.G....e....v..mK.>7xh.,.|d..K.0Q.B.......KC.....;n...6\,.z....I$O8.....|........MD.mK.#......$.7d.H.S..U.n...k..QD.J...gX.*.{i/.#.....w4}..*IU..4........u.....N.=V|...5.z..E..n.....L....>..y...:.D|.....~...%T..$T..D.B..q~.,@...q.v##.x...} .}..T..j7....E..r...."S.Ej=]}....g..,.g...aPO...q	$...._...k(n^......Z.1....8~..."%V.....R..|..7v........q..r.(.T.f2.
+18:36:34.846820 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 3310, win 1204, options [nop,nop,TS val 2921128083 ecr 663553077], length 0
+E..4..@.@.!..................I|=....Xf.....
+....'..5
+18:36:34.847940 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 65
+E..]..@.@..c.....)...k...I3.G..../.<.=.8..s..O	..U...B..5^3.......OP.+t<He.......k..1...Q.!v*
+18:36:34.848076 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1527
+E.....@.@........)...k....9>^..../.<.=.8..s..O	....gbJ.P...^...G.4....$./.....7K.5q._.
+.#0..:.\.lE.y..Z..n.@.r.*R....o.F.z@.E..u....M....mA..T...Se.G{"(.._....~D^k.....m....B||....[...D..VL.Uh.@..7......
+..y..;=.X.....w..A....S...........}.c.).>..s....D..q.....o.V...5...`..V5\.q.x.@..b9e.M.....Bw...y..........B_#.../..[....^;.......D.c..T...!|.EFT......3....i....G...6.....'..Z.....j.6.../dv4...E.x.....5......k.<.>q......u:<..D=.L..mgJ..v.{.......W'I,....h.....................,...r.c.....
+..,..d.-%9....(g.........2.c\..."...^......V.\.S.J...tq..?~...Jg..$.^7e......:...~,.........aw..f)....8z....4....f...d......_...S....3...o. 0..a.4l.......p.......!..N...G.%I...(..j.b]W.....P....%.T>.fI......6.6.......XZU.........g..$.[...l;.:....?B.H..gu...y.Q.?q...I...d.eq.3.)2......	wM..J.^.........&.....d]-PhW2.g.O.oU.>&N....|.....%....%)............-..D.....E./....Z...v...D..V$Q.A.....m..9....K.w+....3.s.)4../..\3..?.u.o"v./.b}QZ....6...v=.K......x........2.t.;..<..o&..!.N!......2.1..(..Y%E.........._AG.s.*.;4.......f.\F...,.	?...k.LSd.Da......x...f..'....Y17.....wB.jV.+..f.w.0FA{.d6L.}Qm7|...."JC.....2@u6...V....2gm..............A.F.....,.......f.v....)]` .....l}.u.qa...M..-\.....p.ZS
+~..........c4>*..D.h.=...9H.OV.afly...eK.h...+...........	...Z?..0.;I.ae2lv:d.....4N.5O......P....Jm..?x@...|1..k11J.T..........z...`..{S.....W. ._...3#...z.*......t] 1...D5......	X..../.<.=.8..s..O	...$.V......C....}U.....v/....#...o.c.8!.]8V..../..ho
+.J2....0=..B.8|.......%....me..$........6:. ..s.A/.-...... .
+-8[....r*3.b.Lv.K....	..^>...t...&n.q(.C$.H....r3
+18:36:34.848142 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 87
+E..s..@.@..M.....)...k..._3.I..../.<.=.8..s..O	..n8XW..U6....Xy....|...,J..72....D.y..........I^..'lq..{.6.W.*7.u7.
+18:36:34.888740 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!.OD..............m..Sf.p@..
+18:36:35.027666 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 806
+E..B..@.6..~.).........k....^....TCk..... .....8HoXRb...........@.y)......|...i.. c........K%x...7......S...A[..i.....%~.luDDBYG.i].Z{D.h.p@...t...r?.[..s..~....w.'..P.m....owk.......4x..]OFDI$..g..5...N...)....z.@k.U2.F}3.A.1.....w..@..,...zD........|../....>. S
+.FQk[;.jG...p...]Q....@#0id.A.#NP..t.Zi.b..'.^rS.=......8.P.yi..C....x.?..Z..@v...:{.....eC{......)..;i..0.Q0..........E.X....<.K.ij...s.....V.l.A..\H..YTVm..q....j...w	.B&...^)!K.0.......vB..2/E...k.k.L&"l..-<VD0.........0.|.X.$	..E......c.I.....6.hZ........^6.....]......L.n..K%..7..s......me...P.u...M3D...d.Ac.-..}..9..wf....7t ..!8J....y..../.%....O.I.R&7....U..'.....O.A....i...O.....F...XR...... ......C.	....X.......kI..^[..E....p...[c0I.P....;m.!.qV.[q.r...'..t.,./.^.s.v.\....&7..VD.._..h.y....kP..s...l@...@.w$..W...%t.t.....x..=&Fb_..N..v..B~.........1Zqc..W
+18:36:35.028771 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 1488:1903, ack 3310, win 1204, options [nop,nop,TS val 2921128265 ecr 663553077], length 415
+E.....@.@. ,.................I|=....Z......
+...I'..5........\l.^.OY^...K...*%.A..].I....X..a..6.N.....F.A...2d\V..0..........*4.*M.C.../...5.c....f.*.-}.........:.Z.Y.8...........wzA...V.f.]z..V..MP.0...|,......]~.E.0\.N.	=.K....y+.K.........z........c..fp..W......"D.B.....+P_f.'.](..+......J......n.U..=$8...@..\.rn.Y.!...8O.EBAf...ay..+....]......tY.u.3....Q.$..jZ.......	TZ.....:+...8..z.....-....e.V.}..B.......a.B;......J.....f(.......
+Py8.G|3P....5.....;..nG.w
+18:36:35.028771 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 45
+E..I..@.@..w.....)...k...53tK..../.<.=.8..s..O	....J.....A/_.y"R...e....H
+18:36:35.029549 IP 172.29.0.2.48070 > 172.29.0.134.8080: Flags [P.], seq 1653928169:1653928596, ack 2089596947, win 501, options [nop,nop,TS val 1668034951 ecr 1624996820], length 427: HTTP: GET / HTTP/1.1
+E.....@.@.].............b...|.......Z......
+cl1.`.{.GET / HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Accept: */*
+Accept-Encoding: gzip
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.106.198
+Cf-Ipcountry: MY
+Cf-Ray: a597a49ec908ce51-SIN
+Cf-Visitor: {"scheme":"http"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+X-Forwarded-For: 49.125.106.198, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: http
+
+
+18:36:35.031067 IP 172.29.0.134.8080 > 172.29.0.2.48070: Flags [P.], seq 1:5371, ack 427, win 501, options [nop,nop,TS val 1625008399 ecr 1668034951], length 5370: HTTP: HTTP/1.1 200 OK
+E....F@.@.0.............|...b.......m......
+`...cl1.HTTP/1.1 200 OK
+Server: nginx/1.27.5
+Date: Thu, 12 Nov 2026 18:36:35 GMT
+Content-Type: text/html
+Last-Modified: Thu, 12 Nov 2026 17:10:22 GMT
+Transfer-Encoding: chunked
+Connection: keep-alive
+ETag: W/"6af5f2fe-4522"
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+Content-Encoding: gzip
+
+1370
+...........\.....}w...&;...X...E".(UI....*.4n.#.	2..m..*.........).%s....L....n..m1w........fu...%..,V.....+
+Ym....>.dF...."....]&].......J.j..ju...MDZW..p....|..[......].V.bfSY..s~K..B...;.p....g..Tf..t7.hc[..x*.vg[U....0*..L.....u.. .R[!+...=.u5k.*.U6|CW.......w:.h..E...j.}..g.....R.....F..D..D...]...7.6.V.I.e...../....Y&...U6.'f/_..}.....4...u..3.........'m.+......g.n.ij.oo..L.s...&@F.;..5)..o....b........u..p....2.[Z@P.[....L...wF6.,.C....O?.DH....k.9,t^.*Y-t..#s....0.B..K.a.Y.....h1.<.|.#u..?,.
+cp.}..P...)=......b.L..2u.....G.(q'.-Y}.~<r{.jH......Y..,....r.y.Q.oe......o.oU;.(&..P.H....y..h;{J.%Y].......<Z.........&.Zo+..z..f.../'g..'.J.+:iU.z..'W....P.z.L.G..}...	J.G.SkS.%.s6O..gi..=..TZ.,..edR.7..q........._/5.s.3...J..-'.	.Q....
+u.... .xBG........{.........<g.h..&..........Izw...!...).U.....3._'P..fY.,.Z.L.~*.....2{*z.4j.a...X...?........N4y.	.F.....W|JWi.e*;.oy..Q.	.....0..@.4"a......TJ`..N*..F.;....1.....%.h.$"s..2X..i.8m%...........<u.E+.Y..e...,Qg.^c.n.C...~%....f.G..98...k;......(.B.....6h..cd<.T&o.O..4>...j....{M.<..x8...<0..}h....+..uc@(...=.Z.......#=......b&S.@.`....N....C|%y...gXs..9..o...Fp2...y}.+H......`."...B; ..f......+..%Y.[..*Z]*\S.c.....X...fuU....!.c.....F...M.%#,S.D(.YvP.d...a<th.p.....b.aX2H...8.....[.aY.?.N...$<bec.joiV.=...nE......Q.	r[.J,.....Z..^....}i"2...^.Ld....]]...........Jo......y...u7..DJ..l5z..q%..W":.P.t...[..H............hJ......./..oE.KT..c .2bE1..#..D<.^2..A"a.x...M..V.s...C...........o......7x4.#..b...C..6........._.........:..........5...N.tM._.r.^.0.'.....%c....5:.....K.j.5...y.#.x)`..N?Tm......[....`.D,.^aX`9....G\.nnVgQ.%~.....{....#.5..|8.N..3.=u..0.'"......).......`.......h.}.!.G..Gc...=....g.9.....}P.f.......$ 7X...`>~y.f|....bs...U+...(.....D.zbTW....7 S_..E......x...."Cb.wr...}.{.D,	.=.hH.. .03.....#vY..F.^@..	%a....@]....c...(..$z*Z.{. ..%..&.5..d#9p...4.@..>.[#c...}..>b.1.k..$......V......p*...E..i...8}E...>......m..&..
+.0...x.8-.x....b..-l...xK.B..p..E.r....E....W...,E..q...|.........>n.F..C..].>..0.H!...p7...0..#.....1..KN..L..V.3.Ht..TA./P.J.0..p.W.o.....h........<
+.......v..0.w........T[.a2#0).......)..	=.l0........UM.4..F.1.m.=	f.C.kCL).w.....+......@.0NC-.H..S.I.....b.........8.58.i.......x*.E-3,.2)......8D...<]...=I.....^........R..J;d..r.+.^9..Bn.*..@....v.JF.k.0..''.,..:!1...^	dJ6...y)["m.q.!+..p.6...#s.K.*./d.-.t..n.>..,.w...Dgz.A........H. ..9..T>.S..%.....D..z..m>3......./8..uMA.3......".Y.'Iit...:XrO... :..r.h_X/..`....	d.C.N|..v..zHy....x.U......I..CC.....K..p.4.e..'!..^".'(..@.......4........*.9.......S`&..."l..\.././...29...hl(g..#...Wr..h..w.(..M..*.P.<...d<@b.QJ.p....C)..R.t.j~.d.\...Qn.,.%.9sM..%..2.............\$..qM.0f.g.=.tUHw...+.....v..... ...g.....u/....R.2........L8	.....TV..'....v.A(a.\]...b....f.)S..pj..j.S....i..k.I.rr.b.....'.....&$....`..C.r.SH......<..:..,...).d..4....SPL.&C..RJ.4...)d...a?...a......v.....]"?.M............*:....NC1......	..
+...x.....x.=.....z.:[............R....sw*t.
+.K.UXZ........~.....vD....0...0.c.H.zHj.....w.Y..yi...Pq&4'..p......	..Qj....Q_.=.!.9...L.....(.m....we..9.......q.PDU...:...uI......RU..S[.{".n..Pz..2.....gr,..S.*C....H..k#..... .b...F...I....-.eP~.	2. .O8.Qy....z?.c..rg..B..}..].q..N....:.#..
+.@..!...sD.u.l44..d..).w.r.....0.^......O...} .0......W....mdi4...1...(...v<.h.=F<.c...;....]....4....].... .2.2w<x..{.F.:.PT........H.>.H.ro...9...-...H....s...B....s.>.NNc.;...M.6B.}.....6.fp^...~"5D...qF?.^.....+WI= S..%..Rqx..C(..........,...?H@..c;FQH..........Gq...`D..=...].....g..P.K9...f.F.%CHQ....%%_Q.E".Y...M@..Yv<..Tz...8...LC.:.s....C.i..AW.D....Y............j. <.W.$....}..(...3....Q..o.r.W.L.v_&..F......s4.Sm.j..A.."~@y`4L.
+t.YsI%.1.v......v.k......hXi..u.>+5....O....^.T...r..u?Q.....@.n.7..$'...K..x#Rx!..Z.F.?*...5>....o.iu._$....a......?..8......:.O.z.#)~..'P...x]...0.N..ys&.
+6.Z
+....C.lo..4....^<...K.....:W.{...g.{-U}G<}..co......Z.M...}<4.h.Ax..28...`D........|...O5S(...v%.	i.+....|...YH...B3r
+'..zrw..........WH....gb...8........~bs......8.3-x.X>N...72..=.T....`R...t.2.S...\!...E...k....H;.w&..'...(...	...\\.$Wj.-U....9.87..r.d./....!
+m.L.f5.JE....?y.....k+r.;n.....z.~=d......./...b..6a..B..nw.........l
+%....b.*.Y...O._?g.i.t....I.Vzv.(...c....4.OU.Y].]B..	v.....pkn.p.Qcs..F.....(;....P....S.dhN1...D`.h.......+...J).q.l...F....dg.....Cg..i.-..9.v...#...ZS2.....:.8>..P...2.{_.X..prK.=.]]\..$m..G.j(N.x/...v	.n.G"....mw.d
+m.c;H.D.u".....RXC..$...$.C^.KC...f`.c...0.....gw<..w..;,p...]c.Z.?..QP........:...?...m.....365...-.....r.......#....=...b....ez.5{$.}.H.`.15..}...w{.z..+..a..{(...0..`Y...w.^~@.......s...mt..(.......e.x.6M<....+W....G..0
+.E.T.;%.....,...$..x.S.!..... <.Q..j..	XZ..Hd..^...L.........~>"..Z..j8>...&..?&l.....-.........<3.fK.+Q^......+..........C...4...Fm..|d...]C....~d.i5,.G	Q#0.FBo6wz.Art..j...)[......i.L
+.......C%........22.k.S..~.....F6..'.....Ck(y.0.+.&.........?.< %.zt%.f(...}.e......:..\F.....?........$S
+.v...O.k".O.......Cm.'.......F......._.	..$.....-...Ay.7.C.....6C.O.......5m...?....{a.`.._.._Wk...._...>J..&.3 ..a...h...T.8.?...<..`"E..
+0
+
+
+18:36:35.031199 IP 172.29.0.2.48070 > 172.29.0.134.8080: Flags [.], ack 5371, win 487, options [nop,nop,TS val 1668034952 ecr 1625008399], length 0
+E..4..@.@._L............b...|.......X......
+cl1.`...
+18:36:35.031908 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 3310:7428, ack 1903, win 501, options [nop,nop,TS val 663553262 ecr 2921128265], length 4118
+E..J }@.@................I|=...h....h|.....
+'......I.....z.Q..Yr?....&......
+!~4![.M.:..?.......t0[w........#.Y		4.{...}v....W|.5R.J....[e.....?......O.0.B4].._.4.........u\.?.......3....H2..\M...Y...^...!V.X/...L)JJ"...K...vD...!..`........B.-[.3.....o.x%"T`CC*..?._.....F........8C...............x...b/..M6;..*..=.jr].-\.......7J...%r..;.>X...`....?.........<;.T.......9.j.1.Y..
+PZ.18.........&..V...; ...(...."..l\.d.......c...J./.w..;Y...../Y...5..2..Y..X..5j.....O....6..8.hH..Y.a...q......V.@q.C.S>...r.o...<.....a.........ah$^$.;.......7n.w}...t8....b{..B......Y..!..F.H....~>......C....XQ{S.......].ALF...=...g...Y. 9...%%.....X?...<......3;J........	......i.=..[...P.8QC{..y}....q......c)r..tI.\F......w3.......X.M*.....f......,........Oc...3I..$..~.?.HZ.{*.<.
+<(3..._{_......	~G	..[...:..Q..(-.....o..}{._.....j.R....0j05,.......o...@.=.._...<.......I.Tf.Y..3...o......G..5..Y.R
+d<..S.....k......m.........ps_..Q....8.%w.m9...}r.~........i...>..P...nl...B.k....E.*...LH...T.
+.....:...d..:E...5....0.....]xP.6}{.U...es._g.~..5gY1H+..	..8........z.P..7.:.....5.T....e.v...6.......5]^..~V.m....B.........K:...n1.B....]q.C....w....h.!]..W.L.V....o..Ojq...L......u.so@....t$.n.n,YL....S.|2.....z.j.6...K....`}...".."...I.e.....K..?.S.).	.......a..6.B.Zl.BY...)z...U.8O.C..V..x.. S...z. A$....N..Q.........__&...:....9.~B._4	....uL"..b..^.A..G.5...U.........|....0k....-P...n...Qd.....m,...+8.g......-k....{..kq$..D$...`..............C.ah....ZmR.....2X....O...<."x.......T...*
+.NHu...1P..Vt..I.R...n)T*a.?..e..(I>.Vg..1.....B._..(..P...UC....c...O.`.3'J......CD.......
+.t..G..6..oBf.#i..H..."\]LU...\.....8......x....o}.....:.O .".s.ly.]^..U&$..AGTh....Zr.u$d......P....q.....ai.zv....2u....G.n........o....'....T.-.4.+D-..../M..Ll>n. .......*l..~R..h..D.a..A..........x.......|k.r.l )...N.....iUE..9.qJ.....r....$.r.....g2..d..p6.J|{...(...BA`V2,	.."...R2.......7s {....U.*.j .......k.].=..!Mc.{P]=k.W.....TT;....H...W...........[.]?.1.].R2.....K..Q.g]	._5..C..J./..".g.?F.[....(....[%7B.....}.q.!.9
+S!....\..
+V.D>.J.A.G[/ou...W%......H4..Y...\	M...X.AM...M.E... ..q..._...!d...y.3}h.[...ud.O[.nkC..g..........E.*.
+.V.....vpT`.....[.............u.`q.4.?02.I...&,.m,.BD..rT.+"..lP...h}n=..F.w...@b.
+...$"s.....?...z......h(.Nw...4.]..k..;{.S.+.....[8.%U...a.A%.....R.;.j.r....G.....xS..C..\.... ..Z.^._$.b.. .4j..f..t.rH...".KH~.........1..Z....!p..7.@..9n.s..F.FP..#....A.... .C.w.....?.$z.............m...\.e.vf......a5.....H....H<..+...	NZS....j7.w."t.oa....v!......1g.........e.
+..WQ.....1.........Z.UH...S;..>5..2....2.._b".s...<.....f.k.2U.. iQ9b......s....N`........t...U4. ...RN.\.Tu...p...V..S...........YN......J..5.".....4F^...a.~.h......~...L.!`Ej..:.~.Og..... B..Y....<...`@9...#.k..vG.x.)..].L.F%	.H.....W...:...j4h..-.=F.W.",.+IX*...4..#;.fXX.<..HE..o.0.K......G.nm.j+....L.,o.?..*KXC`^BEb_d.;,/}".~D.2._B..c[b......._....j..7..gX..4....HQ.'...._R..[G....nw.4..Io#M.e.o2.7}...4.......:.....-.3.+.../HnE+.%.m;.=...7=.k...,..t._.e......(.T.K.<.r.M...jPa..em..'..e...g..~.83Z.0O..+T....aT.l|..........5Ls.TKus.S.oUq...k...1....l....3\...).>...o..U?......Zn....*..s...M...+S..d...kfD..
+_|...z....mS.......cSzz.
+~,..B[....qv. O	D.
+...e,..{..K.......7u.....cmC.]..v)lk?n....if......(...L2..x....{]d.o.=.b."p............'.N...DxP.......X1dZxt..D....;N2u.=L.x^.....R.5...;A'..Kq.P.9...........Q.h8)68.:.[..E...s1. Q.....[=....t..2.CF.]....FC.....%.......P....p..1......r....."-U.	...m..w..Q.x'Q.....m.lb...........+IF..`&..'D./i..U.t.>.R....2...b...z..)..u....z..:.m.....3zD..q.LG......1.o.>....>]...*....?,...}.]W...V....@..V}]{...E:.p+.!z....hJ.|.....t........l.R~.q..V@1......!..4..4.1t.......D......d..........#...KEt.t..-..c..<...IJ.......[9....K.a.8..l.S.:.+.[.G...<...C..5...F.fEI&.u.[]~....{.y_...T.<.9o81\Z.F/.$6.R...x.L;.........l.......\........%.:.c.].......^.8y.;....+...".....Tr>...jQpk......P .!S.J.....u.Y0V.H.....|.H.....J.T.{.	.#...."....`)...b.],{7C..+...K...A.\...5.~.,y...psMC3.S.A...
+.....JI'A.D..R&..5..Mzc.....S...	[	K.P...y(...P..;......86y.@...c.l2....o...W(..-...N......U....[W.~C..6B\..T..V....+...E......`l..bK=.G...@..\;._...U...D..'..K..k.[.j..w..C+..q.].+.. ......6..`+..^.......Xx.5.....S}..m...WIQ2......U.l	...]..R.q.....P..
+18:36:35.031977 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 7428, win 1192, options [nop,nop,TS val 2921128268 ecr 663553262], length 0
+E..4..@.@.!................h.I.S....Xf.....
+...L'...
+18:36:35.032082 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 7428:9389, ack 1903, win 501, options [nop,nop,TS val 663553262 ecr 2921128268], length 1961
+E... .@.@..[.............I.S...h....`......
+'......L.....l9..#..E.L..$'p).c...k.J].B....e..}..G...........%......3.K.../...3..@EC{.L.....c.La..P...^B.PA..<..:0.......']...].e.kxs..E.@.Q..9%!m4.y..s2.@=......
+..T.G..4SI..ZG....M.L....s..y|.8.V.;..a.."Q......n-8.8......V.....J..C..Qj..4..X+...W...%RC)...zE.kK.5..%".b..<.....~.CIh.fbQkU...._}....-S.8&...p.5.....B..v......+....TK.%tL	+..3....n/2......k..... c/k-+.r_$.%.L...XN.cC7..-.8.c.2...V.6.3....vT.H.FR-../V.y.v...Gt1..A.s....;.{.B....J....i....608....Ji.B.u..h.l.....j..W(..F.K._
+.=Q..(.....?.5..*'.okO.%..J/......
+....F...z...o.%.b
+j...n.b....*G"T.^.<..2.J3X..f...>..f9"^.......k.`..q...V.....z.R?J..y.V.F......p............r
+....$}V,.....A.&..j.......c..F.^....+W<.n......o.CY..G).J..Z..!......e......?.e......~...&.g.#".... .4B..0	.#..L.#Sv..3...{D.e..p.....
+.....5J...l.E..Cw..."......x...#...`.w...i.P.S...(...ue.3.L.v....=ms.Kb?....O.=*E...R...e..]......@(...S.;.b.9R....$./r..&.0..\...}...3h.tT...W....[.B.....|....J.65....I..F....]..fb.5..k.G;.v....u.|.m.m.UV..G...$..~.i..4.I.U.Tm..p.D<f.R..(.o`lV.<Q..?nGI.m..>..N..
+...W..MZ......b..@.....t..t....L.
+N.xz.?.]...y...x&.m....Ok9...y....A.........T......=T.I...LQw#.....v..|..m...mp.rI.1.v..>.W2....#.:.9.y.}..'..t..w.c<}.?.....E.%$.k.+o[....w-...)l.;t.p..c..L.A...4e'..ng...?8.e.Ui..O.!+^.F..f.s.'....>..
+.....(n^.<=x...@.GL.y.I.....8L'....._f[._U..._.!.....V.!.]...1...u.....	tA.....;.[.@.U.........=.......?4.`.....c	...V...=7..../.$.0.k.............&	...{1.F...[..t..Gpz4.j...a....H)0.?..$j..<......s......z...8	..YW..hpie.X.s.D..)j...`Q.k..i...f...g{J.T..+.q.k...5F|..~.7...L.....|.+...ca.hS....,.~..O..[...~.......uH..tNH....4...R..:<......d\.._..^.....>./.."..O-..>T$..d....y........_.X.LB.>.HK.Tx....HW.5?......)O....\..L....d....rx...q`j.....q...=..SL....g..m...G@4.g
+.....sH.?p.r.5..G.]@u.....U....Pn.....1.~(....q..8 l......_.Jz.......t...).I/o4t....O..^2v.d....k....h..M{?icd...QOOg..0.;).....Zr.6.....Y....#N/s...>-dn...EM.]..,-].Sw;.....E....e....`.is;.._.a<.S....x........O........]G7.
+18:36:35.032114 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 9389, win 1200, options [nop,nop,TS val 2921128268 ecr 663553262], length 0
+E..4..@.@.!................h.I......Xf.....
+...L'...
+18:36:35.032394 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 9389:9416, ack 1903, win 501, options [nop,nop,TS val 663553263 ecr 2921128268], length 27
+E..O .@.@................I.....h....X......
+'......L.............du.g.z.S.C.f:.
+18:36:35.032447 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 9416, win 1200, options [nop,nop,TS val 2921128269 ecr 663553263], length 0
+E..4..@.@.!................h.I......Xf.....
+...M'...
+18:36:35.033084 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 58
+E..V..@.@..j.....)...k...B3.U..../.<.=.8..s..O	...........F..up..g...U..........H..W..
+18:36:35.033207 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1607
+E..c..@.@..].....)...k...O9.A..../.<.=.8..s..O	...AD.....p7t...fU.J..\..2....-..D../..... Q..z(T4.X.mec...Y....V..3...........T....9....V...'....5z.h@}c<..?....x_$.8..e....b).;i.A.....:.t..8...WQ..8h`lF......x.....tOT...#.. ..C.W.-..g..rt.y.^.yz....%Og.,.Hw..S..S...?k..,...G'.w...V...-.p$ab....n.@.W.=...'.....u.....q.s..|...\.;..'c...J.I.C|.sxU....}.RyN{..KQ....$o...,s....:N.4....3WE9sYE.Q.	.........w.v..Q.b..<....z.j5._.o49..2l..GA...W?..O@.@.9\o...y..[.-h..7....<_z.....T....t1.o!............
+lp.H...Z$...@.D..3K..f........l.......e.<'.HOz.5..?.<..\}...R.v.V..p....'#.tF.,.....?.T...o.0..=...[......_.......}.|!......C....W+o.....`..B&?.....u.(}g~.a.;....b.Kjan.l....@...)....9.-...85..W.+..K.....P...<....S.#:.....}_..~.ST)J...-.[%{aBv_
+	.}..FT..b./-.3...[E...>N.A.j...}@.t..._.s...".`.......[I.1LR.;.U.e.....Z.[.W....6E./q;.<...|..
+.qZ...|....&b...Ez?Zr..^Gy.......$.u...I..3....\[.A.{W#W^.?..(...O..$....V..d..5='.vf..<......-&M*..\..wE..4.....O.;.G......r.)..`...W..<=#..Z....Z:.R2}...If,.f..m...D/ho.A.<".@+....&..oO..t.8h.....{....Jt.6..E.3 .OQ........W.............#._......{?.......r.8..Y.......{......>I..c..n{M..d..Q....U.Wg..I..t....._uvT.......tm.....m:.*.^0.L....}... ;...s%'..*.q.@.o..........R...f.oU.A...
+.e...p.1.....-R:;...]&.k.).(....`..)..U.9.IW.W.kzgw.!.y..O&#Es......Yiz.......CT..Q.~.........K......r...S\.$...:.;..B...\H/.M..P....g....h......G..../.<.=.8..s..O	..X.a>..5e.......{..|h%...]..'..;....y..u..B...9.C../{..D1h_=...v4#.."Z.&QZM.P.;j...<...H0.C%..l<.v..J.|Or..._@.[MH..C.....B..l{.B...Zm..c.7.iR....?."...'.y7.....'e.r	..K.....*,.aKz.P........McF..p!d.......k>&.5.).u......6......v.~w....5D......
+18:36:35.033408 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 5152
+E..<..@.@........)...k...(GgU..../.<.=.8..s..O	...9..1.7PP..qq.F....t[...4AC.d..Y2.L...WL.>.Nn...I..:......4. -hp.=..5.....s....".R.z.).I..+MU......nC.....B!	}.`7Jt.....1.:.......\	...*].R.>x.....b	:....X...&....e...).....?.........[.}u+...s.&Jue..H..8....N.....t4%.n...=I.B.c..t....I..f..X.;A...aa..%.a.$.R.#Tl.5.Q....H.l?.D.._...._..)16..d.j*[....2.C..0..d..EpC...Tru...\..Z...-N`...../................J.....P.q..+n<..F.}	....".W..k..
+...'......s	.).	.M...Q..u..........el..Ap..Pf0..3.jdd........?.Jy......!pH&^..9u...e.].^.&..x,..U.@..W@..E....i....P....z...m.]}.\.j.p.@......Ut.5g.<...D.v.s.... ..L /.&LpT..e.......%.B.q....Gw..M.....x,.I.z..(..{>..).2.Q7%./....h>..R.NQ.y..Ie..^z...=...+.".^\u.i........>....<'W....-?,:.k.h..=..6.......v.....X...:...(..Y.;e.......H.. .UC4.DOh..G.sI4.P..2..yr....2.r..0yR.c.".<.7......rqmi".Y.K<.Y.......T.1...d.Q0'T!...Y,Gj.s...i......Os)...m.S.f....
+...'.<......2........Q.F.)._."..(.8=..-..o.lH.2m ..j...8cx.....U..2.%..si.p.I......_..R......b....."j.P.................(.J.L]..~.$..A...~.. ..(d.0..	.j... ..y....'ft.. .>......-]..W.N6.X`......I......s.p...m^.!............=.KS.+..A.....g.w.J..g<j..(n..H.P>..2?...i..3.|...B?...(E:.K..=.....P."V.......7...R..+I...B..p.`.....LLS.7E..?A..$.O1..D.(..'....=<..,.k..Y..g.B{.up..I........&........Sh,..@.(6V.s.M.......^....B.Eb.>...A.E3.@X...2.......G.B...6..T4.D...l......&...4A./.t/...K..../.<.=.8..s..O	..I.4.{.P..#8..{g....m.H....d.y.....u.. ...1..B....;k...J........u.H?....
+W.@..,.o.7{.C.......\\.......v.&.%2.......F.+..S.C7G'._k\....+..3....... ..U.b..R66..9T?..Zx...Z{E...3;V.8.5..)L0.:.....Y..Jw....M"v...%..>.............M....E.0....>..f.wg..w.M_..A.^.\......[...vUp..V..u.0...f.w...F..P...4V.o......k....m...L;.$..Yw....L.....I'..}..._h.N.H....4V-....a.{G`p.:.....),,..6..d3t.Z......rr....[#...<....1..q.T.gk..?.C/.E|......O......A.\r......9......K.s..(k+.......	....T.......E......\.K.....}B...4.kV.#.1k/....Uz#...Qb>...6..&E@......_]....&.IK.	......T.u~)........^..UM.....K...!R~..J	.......?..\.......F.<.kh7.z..w. <.i...AP.p..d]v..~.+...=^...z..s..h...!.....^NF....q.....s...c,......}IF%..t-.....=t.[.o9qT....pr+..Q..._..Ls&`."..@#.._.yb..M..!nn..3...c....5.ip.....#
+...8.U..s..1.U...39..[0...Z....1J.^i5..+.......W>..)7.;L....B......6...E....~.....2..r.....G...!........+.8...b..U.....jB..&..x..S...92%..=....C,...V.N......gj@\5,Y94......A...nkfqP...+.u..	,.K...zm.l.r...VGY&..
+B..IX...d>[[Q.4P..*.....# 9xD.*.8.{e#.%....J.).^...P...!.W..-.&.e...9w%...`].2.....!P.nh1....+...@...r.w
+q.Dw.^...m..E]i.,?[<.,i..
+........bg..W.{..Z^...........,..5."....>J.l9`.!..$..HC........zg.&mw.$.'C...'...L.jX.......PI=_..I...I|...9...Z8.
+.........B..........*./=2.=.P..B;r.;...."\YI.~."....\.].'P...7.cW........B_..}*..2..u....8.J..../.<.=.8..s..O	....+Aw	.J.(ng..K.p.
+..)..j.}.[.Q......
+.tn..{..;.Q-..;..8..j..K..J.	..j@&8t.B.}B........kr).e...t'.....y..*7),.....j..............wL(......`..K(DWG9.2..c2.../`~|.c..)...I......T..,....d.5..#.8\.?el;Ie.O..,......a....y_../...w5..3Xr.....ESp......!..VS....C(.	..U7...\...g..kr{..#v....Vj.`..h@X...dA..M...uL.....QA....,.Y.~
+.......N`..;...a]^......7h...V.t.Rg...g.2....W....=D..5....Zg.b..	...~...T...........+_...j.	.@VyF.@4...Dr..o..K>Pe.p.*u.	:.6...n...;c1....g...v.u...F...W...u.u...Tg..1.3...b...K..%......j....0.b...F..<.v0..X2.|.5..L.....f0.?&!. uH...f...I.r....@.....}#/`.P..t-...fp....".y.>UX.Hy.....).....w...umN.!<.....'...D.<....s[.~.....x......;.....4...c..n.n0.!.I..../B]g..z..,......fziy.x.	jl.r.8
+i.....@."..^...D.(...`.(.X)..7.....T..>.}.z..dM...y.\..z%S..G".p...x...............^9ino.v..?...@Z.W......L .....!..~c.>.. ....+...\.....J.0....!...`.h{.I....I.-C.........1+........M.6"..p.B.^V.C.....UCl".,..O.SZGo.=...6....7..eW..x..@..ir.....]..3H.... .^|X_....L.i9...0..Z..d|'........J..#a.m...}O..Bu...e.E.>..e{h....;.kWAJ..3...eYFH.j....TG... ...,y.......D...x).^$l...&.-.f[K.k.B8E.....,....cB..^..	.u..[.RY... .......:t.i.:..u469.TMI.G.~7../......u.?........_.Sw...@.......v.QY...>....4.]..g.f..|.f..*.%.2.^..	.+f.g9..A;....icV..."..b..o:.hR..vh..*......UQ......	G8.N...9..eO.Y..0-.W=-.VAIC&.yN.'.....I.1..1V..../.<.=.8..s..O	....*%.......[......cL..V...+.....%..P..Y..;.cZnG.)..O.
+..'.!....DS.!d...p...{.B..t...V...7....U.v.O....@..:}b}......*......P.V.Op	Y.(.....g......F.}..A..{G~..0.i]...u.^.<...;.:.|........{;.u..Yd3..V.X4..L...2.O#@<....u:..6F
+..%........|..e.3....zp....0.....(..j...._...Q......-....u.WPq].Q.X...8;C.r.2sZ.!..O ...fL...C.....1.c.j.P..W........9...1......[Qme|....v...Q.`t.....{.g#.4L.E....B..-;].H.	..... x...-.......F....o....TJ.x.2.}.\?]..?..3..~d..S..p..(...1a.......@J...0.EC..v".t....v...(.;>...6..R..*|.F.|....w...........5.NQ..V...:.}.c.+l'V.mL.........G...ty.d..(..<1._.......ae...W.......@..Fv.-..e...~..C..N6.....
+......26*.;6..l83......iF.\Z4..'...._{X.....*.C..`.]...;7.....2.:.n8L5P9....ykRFm...Q.....(....$..........AT.....8.".8...P)..9{..	n....h.&.(..H3...0.....H...':.u3...Oa.vO.L..y..,......&?.]{..Nd..j..5E....I....X..&G."wo.:..1\q;a*.a..z.F...5......[...)......%.=._..2...g.'....o.....}....DR*......_.G..2.OOK...4....&...........L*H.b.........y"p...$>..++Tw.G..x..........?6....%.RP....W..'.*^...".`....ZE.O...............f.l...b........u3f..D. 5ft...]..i3..\....'..}.7._!,.......=l.
+18:36:35.033523 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 44
+E..H..@.@..x.....)...k...43sC..../.<.=.8..s..O	..D...~R. y+...[.?I.Z.$.C
+18:36:35.074055 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!.;K....2.....W........rq.^.
+18:36:35.074183 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!..L.5~.i....\..~k.........4
+18:36:35.107029 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5512:5517, ack 7874, win 1234, options [nop,nop,TS val 2757778294 ecr 2522023057], length 5
+E..9$.@.@.................l...H.....Yn.....
+.`[v.S.......
+18:36:35.107313 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7874:7885, ack 5517, win 9845, options [nop,nop,TS val 2522023965 ecr 2757778294], length 11
+E..?..@.@.:T..............H...l...&uYt.....
+.S...`[v...........
+18:36:35.107387 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 7885, win 1234, options [nop,nop,TS val 2757778295 ecr 2522023965], length 0
+E..4$.@.@.................l...H.....Yi.....
+.`[w.S..
+18:36:35.108942 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5517:5815, ack 7885, win 1234, options [nop,nop,TS val 2757778296 ecr 2522023965], length 298
+E..^$.@.@.................l...H.....Z......
+.`[x.S..&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:35.104935') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:35.104935' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:35.109899 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7885:7958, ack 5815, win 9845, options [nop,nop,TS val 2522023968 ecr 2757778296], length 73
+E..}..@.@.:...............H...n...&uY......
+.S. .`[x..........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:35.110957 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5815:5828, ack 7958, win 1234, options [nop,nop,TS val 2757778298 ecr 2522023968], length 13
+E..A$.@.@.................n...H.....Yv.....
+.`[z.S. 	....ROLLBACK
+18:36:35.111218 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7958:7969, ack 5828, win 9845, options [nop,nop,TS val 2522023969 ecr 2757778298], length 11
+E..?..@.@.:R..............H...n%..&uYt.....
+.S.!.`[z...........
+18:36:35.111584 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5828:5841, ack 7969, win 1234, options [nop,nop,TS val 2757778299 ecr 2522023969], length 13
+E..A$.@.@.................n%..I.....Yv.....
+.`[{.S.!	....ROLLBACK
+18:36:35.111756 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7969:7980, ack 5841, win 9845, options [nop,nop,TS val 2522023970 ecr 2757778299], length 11
+E..?..@.@.:Q..............I...n2..&uYt.....
+.S.".`[{...........
+18:36:35.133810 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 21
+E..1..@.6....).k............U./(@RV=V.6...w,i..Oz
+18:36:35.155393 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 7980, win 1234, options [nop,nop,TS val 2757778343 ecr 2522023970], length 0
+E..4$.@.@.................n2..I.....Yi.....
+.`[..S."
+18:36:35.159568 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 46
+E..J..@.@........).k.....62.C..6..o......Ssy.......H.o..%;1:....G.:..
+....
+18:36:35.190063 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 41
+E..E..@.@..=.....).!.....1:.].E..]i..`Gk.6....=1...nM.-..j,........=.
+18:36:35.246554 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 26
+E..6..@.6.
+L.).!.........".hG....-;.M.)......n.X..C..S
+18:36:35.256519 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 1011
+E.....@.6....).........k...^P...Y..e6[A..\...S....\.8.z.m...>>j....T.@.Q?..A2.~z...I..M.SjrTE!5.E1
+.}...../..X.9..>....`Hpa.............@%.Q4..=..Z5W..L]....E...Fh.0.|.x..t(:...NK....25h....4
+t.>....\......CN......1m.Q..].x(...p.......B{.d.6.0..............F...h..L.	..	_u..r[[..&.v..0_..L...N...D.oPJ....C.+m}k.K..=.v..X.c..r-X.4I...U...PGcPM
+.....M/3..8..ga....0....!.Amxf.V.....D.r...;.d.
+C...+HMl:..S...G......rO....J...c!3E..Et(v4.&|.9..({x.1..@...8%...n6............`P.W....1Q...|..CU........x.........O.(.f9......-...V.V....PF........$.F..p...s.......Q2....c...J>...{.q...WwX....i....n.B...N.U.M..h.G..Q./..I.Cj.b.......	..Mr...P...W.)...G.Sc....."..V,.....Wb....	..m...D.U...1..Kt.?...."........f.d...&&.49.BN..&...G.G......?9.`.C.J......C...WM.P.....Ufv||.I0.)%.Z...\......Fw..(.....9..q.a$=.Z...`..Xv..5...e...#%*....?.......g. .c_.4*..u..1.)..]U.....o.GX....o5..A.)..Ka.......
+.......@....E.JE...f@Hw..W>h.k..N0M.o.......%t.7..$.u...G..k.NR..n7...IA.0...N......5y($.......m....4I.2....%eW.	..0^.S\.....>Z.>O...m...D.z.....m..'.B
+18:36:35.256569 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 21
+E..1..@.6.
+=.).5...........Y_C.8......?>>..7>	A
+.
+18:36:35.257428 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 1903:2400, ack 9416, win 1204, options [nop,nop,TS val 2921128494 ecr 663553263], length 497
+E..%..@.@..................h.I......ZW.....
+....'..........{......v1_.......v.......&V....I......Bi..B.l,......-.'....\m
+.6&..z.......`8T.......C. N~.l.WV...h.F96.P..	.._x..Rjgi.!w..I.x....Q.......7.........#e:9...'...A....~Z.....1.......p|..R..I...r1...
+..}"..z.d/.5....(...z?....I..f?....b.!..aI.buyy....'w..Wx..r*E.....E...d.cA6.....Qm.]c....6...p....E6......6k..O>...XF ...f..l..l.;...QV.ow..9t..^.......
+..
+."I_ew.J...^..;L.?.k.}'...u?f...".....<\U.B..\.....{^..Q....!...X....=....L....O..K.V..v...I... x.%........w...r'?...j....Z.d..x.=.T	....
+18:36:35.257593 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 2400:2475, ack 9416, win 1204, options [nop,nop,TS val 2921128494 ecr 663553263], length 75
+E.....@.@.!{...............Y.I......X......
+....'.......F!......e...?......S.8a..jo.u.7M.[....+..U.^..J.t(.b.G)....i.
+c:.......
+18:36:35.258271 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 1491:1997, ack 1339, win 501, options [nop,nop,TS val 1690717337 ecr 2717637496], length 506
+E.....@.@..7...........@.t.<........Z......
+d.L....xPOST /auth/login HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Content-Length: 53
+Accept: */*
+Accept-Encoding: gzip
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.98.114
+Cf-Ipcountry: MY
+Cf-Ray: a597a49ffabace6f-SIN
+Cf-Visitor: {"scheme":"http"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+Content-Type: application/x-www-form-urlencoded
+X-Forwarded-For: 49.125.98.114, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: https
+
+
+18:36:35.258392 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [.], ack 2475, win 501, options [nop,nop,TS val 663553489 ecr 2921128494], length 0
+E..4 .@.@................I..........Xf.....
+'.......
+18:36:35.258499 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 1997:2050, ack 1339, win 501, options [nop,nop,TS val 1690717338 ecr 2717637496], length 53
+E..i..@.@..............@.t.6........Y......
+d.L....xusername=clinician@clarion.demo&password=clinician123
+18:36:35.258533 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [.], ack 2050, win 501, options [nop,nop,TS val 2717637909 ecr 1690717337], length 0
+E..4..@.@.Sm.........@.......t.k....X......
+....d.L.
+18:36:35.261338 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 329:334, ack 107, win 9879, options [nop,nop,TS val 2757778448 ecr 2522022117], length 5
+E..9+.@.@................ ....<...&.Yn.....
+.`\..S.......
+18:36:35.261621 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 107:118, ack 334, win 9856, options [nop,nop,TS val 2522024120 ecr 2757778448], length 11
+E..?.5@.@..8..............<.. ....&.Yt.....
+.S...`\............
+18:36:35.261782 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 118, win 9879, options [nop,nop,TS val 2757778449 ecr 2522024120], length 0
+E..4+.@.@................ ....=...&.Yi.....
+.`\..S..
+18:36:35.263847 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 334:632, ack 118, win 9879, options [nop,nop,TS val 2757778451 ecr 2522024120], length 298
+E..^+.@.@................ ....=...&.Z......
+.`\..S..&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:35.259296') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:35.259296' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:35.264949 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 118:191, ack 632, win 9856, options [nop,nop,TS val 2522024123 ecr 2757778451], length 73
+E..}.6@.@.................=.. ....&.Y......
+.S...`\...........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:35.266217 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 632:645, ack 191, win 9879, options [nop,nop,TS val 2757778453 ecr 2522024123], length 13
+E..A+.@.@................ ....=M..&.Yv.....
+.`\..S..	....ROLLBACK
+18:36:35.266519 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 191:202, ack 645, win 9856, options [nop,nop,TS val 2522024125 ecr 2757778453], length 11
+E..?.7@.@..6..............=M. ....&.Yt.....
+.S...`\............
+18:36:35.266949 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 645:658, ack 202, win 9879, options [nop,nop,TS val 2757778454 ecr 2522024125], length 13
+E..A+.@.@................ ....=X..&.Yv.....
+.`\..S..	....ROLLBACK
+18:36:35.267172 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 202:213, ack 658, win 9856, options [nop,nop,TS val 2522024125 ecr 2757778454], length 11
+E..?.8@.@..5..............=X. ....&.Yt.....
+.S...`\............
+18:36:35.270339 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 573:718, ack 17, win 501, options [nop,nop,TS val 2155780470 ecr 4092453046], length 145: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/49.125.98.114//auth/login/20/1/minute" "60" "1"
+E.....@.@....................`n.....Y......
+.~.v....*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$52
+LIMITS:LIMITER/49.125.98.114//auth/login/20/1/minute
+$2
+60
+$1
+1
+
+18:36:35.270704 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 17:21, ack 718, win 501, options [nop,nop,TS val 4092453476 ecr 2155780470], length 4: RESP "3"
+E..8..@.@................`n.........Yk.....
+...d.~.v:3
+
+18:36:35.270748 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 21, win 501, options [nop,nop,TS val 2155780471 ecr 4092453476], length 0
+E..4..@.@..r.................`n.....Yg.....
+.~.w...d
+18:36:35.274589 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5841:5846, ack 7980, win 1234, options [nop,nop,TS val 2757778462 ecr 2522023970], length 5
+E..9$.@.@.................n2..I.....Yn.....
+.`\..S.".....
+18:36:35.274767 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7980:7991, ack 5846, win 9845, options [nop,nop,TS val 2522024133 ecr 2757778462], length 11
+E..?..@.@.:P..............I...n7..&uYt.....
+.S...`\............
+18:36:35.274809 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 7991, win 1234, options [nop,nop,TS val 2757778462 ecr 2522024133], length 0
+E..4$.@.@.................n7..I.....Yi.....
+.`\..S..
+18:36:35.275848 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 5846:7758, ack 7991, win 1234, options [nop,nop,TS val 2757778463 ecr 2522024133], length 1912
+E...$.@.@..a..............n7..I.....`......
+.`\..S..t....SELECT users.id AS users_id, users.email AS users_email, users.hashed_password AS users_hashed_password, users.full_name AS users_full_name, users.role AS users_role, users.facility AS users_facility, users.patient_id AS users_patient_id, users.section AS users_section, users.must_change_password AS users_must_change_password, users.access_expires_at AS users_access_expires_at, users.reset_attempt_count AS users_reset_attempt_count, users.reset_locked_until AS users_reset_locked_until, users.login_failed_count AS users_login_failed_count, users.login_locked_until AS users_login_locked_until, users.mfa_secret_enc AS users_mfa_secret_enc, users.mfa_enabled_at AS users_mfa_enabled_at, users.mfa_last_step AS users_mfa_last_step, users.otp_code_hash AS users_otp_code_hash, users.otp_expires_at AS users_otp_expires_at, users.otp_attempt_count AS users_otp_attempt_count, users.otp_request_count AS users_otp_request_count, users.otp_request_window_start AS users_otp_request_window_start, users.password_changed_at AS users_password_changed_at, users.owner_locked_at AS users_owner_locked_at, users.self_registered_at AS users_self_registered_at, users.signature_object_key AS users_signature_object_key, users.signature_sha256 AS users_signature_sha256, users.signature_bytes AS users_signature_bytes, users.signature_mime AS users_signature_mime, users.bio AS users_bio, users.contact_email AS users_contact_email, users.photo_object_key AS users_photo_object_key, users.photo_sha256 AS users_photo_sha256, users.photo_bytes AS users_photo_bytes, users.photo_mime AS users_photo_mime, users.auth_source AS users_auth_source, users.ldap_dn AS users_ldap_dn, users.ldap_username AS users_ldap_username, users.last_role AS users_last_role, users.responder_tier AS users_responder_tier 
+FROM users 
+WHERE users.email = 'clinician@clarion.demo' OR users.ldap_username = 'clinician@clarion.demo' 
+ LIMIT 1
+18:36:35.275947 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [.], ack 7758, win 9838, options [nop,nop,TS val 2522024134 ecr 2757778463], length 0
+E..4..@.@.:Z..............I...u...&nYi.....
+.S...`\.
+18:36:35.276991 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 7991:11376, ack 7758, win 9845, options [nop,nop,TS val 2522024135 ecr 2757778463], length 3385
+E..m. @.@.- ..............I...u...&uf......
+.S...`\.....(1....def.clarion.users.users.users_id.id.........P...7....def.clarion.users.users.users_email.email.........P...K....def.clarion.users.users.users_hashed_password.hashed_password.............?....def.clarion.users.users.users_full_name	full_name.............5....def.clarion.users.users
+users_role.role.............=....def.clarion.users.users.users_facility.facility.............A....def.clarion.users.users.users_patient_id
+patient_id.........@...;..	.def.clarion.users.users.users_section.section.............U..
+.def.clarion.users.users.users_must_change_password.must_change_password.?...........O....def.clarion.users.users.users_access_expires_at.access_expires_at.?...........S....def.clarion.users.users.users_reset_attempt_count.reset_attempt_count.?...........Q....def.clarion.users.users.users_reset_locked_until.reset_locked_until.?...........Q....def.clarion.users.users.users_login_failed_count.login_failed_count.?...........Q....def.clarion.users.users.users_login_locked_until.login_locked_until.?...........I....def.clarion.users.users.users_mfa_secret_enc.mfa_secret_enc.............I....def.clarion.users.users.users_mfa_enabled_at.mfa_enabled_at.?...........G....def.clarion.users.users.users_mfa_last_step.mfa_last_step.?...........G....def.clarion.users.users.users_otp_code_hash.otp_code_hash.............I....def.clarion.users.users.users_otp_expires_at.otp_expires_at.?...........O....def.clarion.users.users.users_otp_attempt_count.otp_attempt_count.?...........O....def.clarion.users.users.users_otp_request_count.otp_request_count.?...........]....def.clarion.users.users.users_otp_request_window_start.otp_request_window_start.?...........S....def.clarion.users.users.users_password_changed_at.password_changed_at.?...........K....def.clarion.users.users.users_owner_locked_at.owner_locked_at.?...........Q....def.clarion.users.users.users_self_registered_at.self_registered_at.?...........U....def.clarion.users.users.users_signature_object_key.signature_object_key.............M....def.clarion.users.users.users_signature_sha256.signature_sha256.............K....def.clarion.users.users.users_signature_bytes.signature_bytes.?...........I....def.clarion.users.users.users_signature_mime.signature_mime.............3....def.clarion.users.users	users_bio.bio.............G.. .def.clarion.users.users.users_contact_email.contact_email.............M..!.def.clarion.users.users.users_photo_object_key.photo_object_key.............E..".def.clarion.users.users.users_photo_sha256.photo_sha256.............C..#.def.clarion.users.users.users_photo_bytes.photo_bytes.?...........A..$.def.clarion.users.users.users_photo_mime
+photo_mime.............C..%.def.clarion.users.users.users_auth_source.auth_source.............;..&.def.clarion.users.users.users_ldap_dn.ldap_dn.............G..'.def.clarion.users.users.users_ldap_username.ldap_username.........@...?..(.def.clarion.users.users.users_last_role	last_role.............I..).def.clarion.users.users.users_responder_tier.responder_tier...@............*.....N..+$fe60fa82-76d3-4546-85dc-650de75e02a1.clinician@clarion.demo<$2b$12$OeEneVCeNMTUM/g1i5dRwu3ssH5qwvH0soHFCBdHyDr4aBwkwNlnO.Dr. Aisyah Rahman	clinician.Hospital Sejahtera...0..0..0.......0.0.....users/fe60fa82-76d3-4546-85dc-650de75e02a1.png@09bad3424602c4c4a8b9afeb531dee16d67a1b4c26aae414c8549484220d2c25.563	image/png.......local.......,.....
+18:36:35.277048 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 11376, win 1287, options [nop,nop,TS val 2757778464 ecr 2522024135], length 0
+E..4$.@.@.................u...VP....Yi.....
+.`\ .S..
+18:36:35.281531 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 7758:7933, ack 11376, win 1287, options [nop,nop,TS val 2757778469 ecr 2522024135], length 175
+E...$.@.@..'..............u...VP....Z......
+.`\%.S.......SELECT user_roles.user_id AS user_roles_user_id, user_roles.role AS user_roles_role 
+FROM user_roles 
+WHERE user_roles.user_id IN ('fe60fa82-76d3-4546-85dc-650de75e02a1')
+18:36:35.282174 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 11376:11549, ack 7933, win 9845, options [nop,nop,TS val 2522024140 ecr 2757778469], length 173
+E....#@.@.9...............VP..v^..&uZ......
+.S...`\%.....J....def.clarion
+user_roles
+user_roles.user_roles_user_id.user_id.........P...D....def.clarion
+user_roles
+user_roles.user_roles_role.role.........P.....................
+18:36:35.282527 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 46
+E..J..@.@..v.....)...k...63uA..../.<.=.8..s..O	..u...jC-^.QAld...&.&.!T...
+18:36:35.282527 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 46
+E..J..@.@..$.....).5.....6:.K.....w..../......T.'..Z;.;D....^......5w.U...
+18:36:35.307414 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 213, win 9879, options [nop,nop,TS val 2757778495 ecr 2522024125], length 0
+E..4+.@.@................ ....=c..&.Yi.....
+.`\?.S..
+18:36:35.323355 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 11549, win 1310, options [nop,nop,TS val 2757778511 ecr 2522024140], length 0
+E..4$.@.@.................v^..V.....Yi.....
+.`\O.S..
+18:36:35.791974 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 7933:8246, ack 11549, win 1310, options [nop,nop,TS val 2757778979 ecr 2522024140], length 313
+E..m$.@.@.................v^..V.....Z......
+.`^#.S..5....SELECT audit_chain_state.id AS audit_chain_state_id, audit_chain_state.last_seq AS audit_chain_state_last_seq, audit_chain_state.last_hash AS audit_chain_state_last_hash, audit_chain_state.updated_at AS audit_chain_state_updated_at 
+FROM audit_chain_state 
+WHERE audit_chain_state.id = 1 
+ LIMIT 1 FOR UPDATE
+18:36:35.792697 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 11549:12071, ack 8246, win 9845, options [nop,nop,TS val 2522024651 ecr 2757778979], length 522
+E..>.$@.@.8K..............V...w...&u[s.....
+.S
+..`^#.....U....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_id.id.?.......B...a....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_last_seq.last_seq.?...........c....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_last_hash	last_hash.............e....def.clarion.audit_chain_state.audit_chain_state.audit_chain_state_updated_at
+updated_at.?....................a....1.27@7134362197fcae25b21ac3679e0d97273ae6386ae7bfd2024fd5f4f6fe008309.2026-11-12 18:36:34.173207.........
+18:36:35.792855 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 12071, win 1333, options [nop,nop,TS val 2757778980 ecr 2522024651], length 0
+E..4$.@.@.................w...Y....5Yi.....
+.`^$.S
+.
+18:36:35.795888 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8246:8441, ack 12071, win 1333, options [nop,nop,TS val 2757778983 ecr 2522024651], length 195
+E...$.@.@.................w...Y....5Z,.....
+.`^'.S
+......UPDATE audit_chain_state SET last_seq=28, last_hash='2207aa5fbbb626bb84b5a39fc2c4df623a34c2828563a848a7e5ca28920c3e32', updated_at='2026-11-12 18:36:35.790184' WHERE audit_chain_state.id = 1
+18:36:35.796780 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12071:12123, ack 8441, win 9845, options [nop,nop,TS val 2522024655 ecr 2757778983], length 52
+E..h.%@.@.: ..............Y...xZ..&uY......
+.S
+..`^'0..........(Rows matched: 1  Changed: 1  Warnings: 0
+18:36:35.798172 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8441:8934, ack 12123, win 1333, options [nop,nop,TS val 2757778985 ecr 2522024655], length 493
+E..!$.@.@.................xZ..Y;...5[V.....
+.`^).S
+......INSERT INTO audit_logs (id, patient_id, actor, actor_role, actor_facility, action, fields_accessed, timestamp, detail, seq, prev_hash, row_hash) VALUES ('b89bfa04-5bd9-4809-9a87-f8421301c90d', NULL, 'fe60fa82-76d3-4546-85dc-650de75e02a1', 'clinician', 'Hospital Sejahtera', 'login_mfa_challenge', 'null', '2026-11-12 18:36:35.790184', 'kind=enrol', 28, '7134362197fcae25b21ac3679e0d97273ae6386ae7bfd2024fd5f4f6fe008309', '2207aa5fbbb626bb84b5a39fc2c4df623a34c2828563a848a7e5ca28920c3e32')
+18:36:35.799148 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12123:12134, ack 8934, win 9845, options [nop,nop,TS val 2522024657 ecr 2757778985], length 11
+E..?.&@.@.:H..............Y;..zG..&uYt.....
+.S
+..`^)...........
+18:36:35.800413 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8934:8945, ack 12134, win 1333, options [nop,nop,TS val 2757778988 ecr 2522024657], length 11
+E..?$.@.@.................zG..YF...5Yt.....
+.`^,.S
+......COMMIT
+18:36:35.802218 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12134:12145, ack 8945, win 9845, options [nop,nop,TS val 2522024660 ecr 2757778988], length 11
+E..?.'@.@.:G..............YF..zR..&uYt.....
+.S
+..`^,...........
+18:36:35.803135 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8945:8958, ack 12145, win 1333, options [nop,nop,TS val 2757778990 ecr 2522024660], length 13
+E..A$.@.@.................zR..YQ...5Yv.....
+.`^..S
+.	....ROLLBACK
+18:36:35.803448 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12145:12156, ack 8958, win 9845, options [nop,nop,TS val 2522024662 ecr 2757778990], length 11
+E..?.(@.@.:F..............YQ..z_..&uYt.....
+.S
+..`^............
+18:36:35.804968 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8958:8963, ack 12156, win 1333, options [nop,nop,TS val 2757778992 ecr 2522024662], length 5
+E..9$.@.@.................z_..Y\...5Yn.....
+.`^0.S
+......
+18:36:35.805163 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12156:12167, ack 8963, win 9845, options [nop,nop,TS val 2522024663 ecr 2757778992], length 11
+E..?.)@.@.:E..............Y\..zd..&uYt.....
+.S
+..`^0...........
+18:36:35.806376 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 8963:10826, ack 12167, win 1333, options [nop,nop,TS val 2757778993 ecr 2522024663], length 1863
+E..{$.@.@.................zd..Yg...5`......
+.`^1.S
+.C....SELECT users.id AS users_id, users.email AS users_email, users.hashed_password AS users_hashed_password, users.full_name AS users_full_name, users.role AS users_role, users.facility AS users_facility, users.patient_id AS users_patient_id, users.section AS users_section, users.must_change_password AS users_must_change_password, users.access_expires_at AS users_access_expires_at, users.reset_attempt_count AS users_reset_attempt_count, users.reset_locked_until AS users_reset_locked_until, users.login_failed_count AS users_login_failed_count, users.login_locked_until AS users_login_locked_until, users.mfa_secret_enc AS users_mfa_secret_enc, users.mfa_enabled_at AS users_mfa_enabled_at, users.mfa_last_step AS users_mfa_last_step, users.otp_code_hash AS users_otp_code_hash, users.otp_expires_at AS users_otp_expires_at, users.otp_attempt_count AS users_otp_attempt_count, users.otp_request_count AS users_otp_request_count, users.otp_request_window_start AS users_otp_request_window_start, users.password_changed_at AS users_password_changed_at, users.owner_locked_at AS users_owner_locked_at, users.self_registered_at AS users_self_registered_at, users.signature_object_key AS users_signature_object_key, users.signature_sha256 AS users_signature_sha256, users.signature_bytes AS users_signature_bytes, users.signature_mime AS users_signature_mime, users.bio AS users_bio, users.contact_email AS users_contact_email, users.photo_object_key AS users_photo_object_key, users.photo_sha256 AS users_photo_sha256, users.photo_bytes AS users_photo_bytes, users.photo_mime AS users_photo_mime, users.auth_source AS users_auth_source, users.ldap_dn AS users_ldap_dn, users.ldap_username AS users_ldap_username, users.last_role AS users_last_role, users.responder_tier AS users_responder_tier 
+FROM users 
+WHERE users.id = 'fe60fa82-76d3-4546-85dc-650de75e02a1'
+18:36:35.806522 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [.], ack 10826, win 9838, options [nop,nop,TS val 2522024665 ecr 2757778993], length 0
+E..4.*@.@.:O..............Yg......&nYi.....
+.S
+..`^1
+18:36:35.807426 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 12167:15552, ack 10826, win 9845, options [nop,nop,TS val 2522024665 ecr 2757778993], length 3385
+E..m.+@.@.-...............Yg......&uf......
+.S
+..`^1....(1....def.clarion.users.users.users_id.id.........P...7....def.clarion.users.users.users_email.email.........P...K....def.clarion.users.users.users_hashed_password.hashed_password.............?....def.clarion.users.users.users_full_name	full_name.............5....def.clarion.users.users
+users_role.role.............=....def.clarion.users.users.users_facility.facility.............A....def.clarion.users.users.users_patient_id
+patient_id.........@...;..	.def.clarion.users.users.users_section.section.............U..
+.def.clarion.users.users.users_must_change_password.must_change_password.?...........O....def.clarion.users.users.users_access_expires_at.access_expires_at.?...........S....def.clarion.users.users.users_reset_attempt_count.reset_attempt_count.?...........Q....def.clarion.users.users.users_reset_locked_until.reset_locked_until.?...........Q....def.clarion.users.users.users_login_failed_count.login_failed_count.?...........Q....def.clarion.users.users.users_login_locked_until.login_locked_until.?...........I....def.clarion.users.users.users_mfa_secret_enc.mfa_secret_enc.............I....def.clarion.users.users.users_mfa_enabled_at.mfa_enabled_at.?...........G....def.clarion.users.users.users_mfa_last_step.mfa_last_step.?...........G....def.clarion.users.users.users_otp_code_hash.otp_code_hash.............I....def.clarion.users.users.users_otp_expires_at.otp_expires_at.?...........O....def.clarion.users.users.users_otp_attempt_count.otp_attempt_count.?...........O....def.clarion.users.users.users_otp_request_count.otp_request_count.?...........]....def.clarion.users.users.users_otp_request_window_start.otp_request_window_start.?...........S....def.clarion.users.users.users_password_changed_at.password_changed_at.?...........K....def.clarion.users.users.users_owner_locked_at.owner_locked_at.?...........Q....def.clarion.users.users.users_self_registered_at.self_registered_at.?...........U....def.clarion.users.users.users_signature_object_key.signature_object_key.............M....def.clarion.users.users.users_signature_sha256.signature_sha256.............K....def.clarion.users.users.users_signature_bytes.signature_bytes.?...........I....def.clarion.users.users.users_signature_mime.signature_mime.............3....def.clarion.users.users	users_bio.bio.............G.. .def.clarion.users.users.users_contact_email.contact_email.............M..!.def.clarion.users.users.users_photo_object_key.photo_object_key.............E..".def.clarion.users.users.users_photo_sha256.photo_sha256.............C..#.def.clarion.users.users.users_photo_bytes.photo_bytes.?...........A..$.def.clarion.users.users.users_photo_mime
+photo_mime.............C..%.def.clarion.users.users.users_auth_source.auth_source.............;..&.def.clarion.users.users.users_ldap_dn.ldap_dn.............G..'.def.clarion.users.users.users_ldap_username.ldap_username.........@...?..(.def.clarion.users.users.users_last_role	last_role.............I..).def.clarion.users.users.users_responder_tier.responder_tier...@............*.....N..+$fe60fa82-76d3-4546-85dc-650de75e02a1.clinician@clarion.demo<$2b$12$OeEneVCeNMTUM/g1i5dRwu3ssH5qwvH0soHFCBdHyDr4aBwkwNlnO.Dr. Aisyah Rahman	clinician.Hospital Sejahtera...0..0..0.......0.0.....users/fe60fa82-76d3-4546-85dc-650de75e02a1.png@09bad3424602c4c4a8b9afeb531dee16d67a1b4c26aae414c8549484220d2c25.563	image/png.......local.......,.....
+18:36:35.807480 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 15552, win 1386, options [nop,nop,TS val 2757778995 ecr 2522024665], length 0
+E..4$.@.@.....................f....jYi.....
+.`^3.S
+.
+18:36:35.811385 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 10826:10998, ack 15552, win 1386, options [nop,nop,TS val 2757778998 ecr 2522024665], length 172
+E...$.@.@.....................f....jZ......
+.`^6.S
+......SELECT user_roles.user_id AS user_roles_user_id, user_roles.role AS user_roles_role 
+FROM user_roles 
+WHERE 'fe60fa82-76d3-4546-85dc-650de75e02a1' = user_roles.user_id
+18:36:35.812199 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15552:15725, ack 10998, win 9845, options [nop,nop,TS val 2522024670 ecr 2757778998], length 173
+E.....@.@.9...............f....W..&uZ......
+.S
+..`^6.....J....def.clarion
+user_roles
+user_roles.user_roles_user_id.user_id.........P...D....def.clarion
+user_roles
+user_roles.user_roles_role.role.........P.....................
+18:36:35.816868 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 1339:1663, ack 2050, win 501, options [nop,nop,TS val 2717638467 ecr 1690717337], length 324
+E..x..@.@.R(.........@.......t.k....Z,.....
+...Cd.L.HTTP/1.1 200 OK
+date: Thu, 12 Nov 2026 18:36:34 GMT
+server: uvicorn
+content-length: 241
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains
+x-request-id: 0a79ce3f4301
+
+
+18:36:35.816950 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 1663, win 501, options [nop,nop,TS val 1690717896 ecr 2717638467], length 0
+E..4..@.@../...........@.t.k........X......
+d.N....C
+18:36:35.817994 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 1663:1904, ack 2050, win 501, options [nop,nop,TS val 2717638468 ecr 1690717896], length 241
+E..%..@.@.Rz.........@.......t.k....Y......
+...Dd.N.{"mfa_required":true,"mfa_enrol":true,"mfa_token":"mfa1.enrol.fe60fa82-76d3-4546-85dc-650de75e02a1.dc937b59.1794508895.09554256c3aafaec8fb1154c213789a9ec50f733b7c7b35d84186e162831996d","email_available":true,"email_hint":"c***@clarion.demo"}
+18:36:35.818066 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 1904, win 501, options [nop,nop,TS val 1690717897 ecr 2717638468], length 0
+E..4..@.@..............@.t.k........X......
+d.N....D
+18:36:35.818615 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 9416:10638, ack 2475, win 501, options [nop,nop,TS val 663554049 ecr 2921128494], length 1222
+E... .@.@..:.............I..........],.....
+'.............J5..h(.!Gh..7p.hg.].
+.pp......Ka.*.....]..%I..k..^............S.2.^....'.^....r_d..!......V...]m$)+.Jn?..kKO.......5.i.Y....B.cqf....G...6.Mx*.y.......%7v\.8F...+......R^kd".B...... j.p...\.h.6.Z[.....10.b...#F.y..?....(...'........3...E..p._..^S..@..........h.2....i(...m...?.|......8...Y.sa).K..N.D-..	..m....BP.."Z....J...=.)...[. ..........y..m.'..9...y..........lIc.....7GO..z/...f....B.s5.0a..:..L#&..v.J.a.C.5...#.G..U....L)..#.....>{!.U.X.S.f...|...N...V....N)S......@....V.n.!	O./..*\....:..D..".{].Bi......P..W..y.]E.........vx3H.pD.......q2]q......
+....&.`....sE..v...,....w.x...d.p.D...O.=.E.@..7q;.\@......%S....c.|..?4..q..1.3...v................|.wo...x.".~./....#H..[..S..6'A..].5..d<.'.. .......,/b.....n..2..Hk Y.4..6v.8.c..\.7..Fn.Gc...P.n!.....R..N9.8....R*e........F.?.,..|...'1...SDn"S..9n..=6.}...;.O...O....3.V7..........\.O.........<...He..........xH7	K..P.n'.r..\.T..r...<<B.^..:.b...h..v..r.8.....7%....h...d....Q9.5...w#...y...&....I.>M..|.)|C4L.!&...Z..c........(......=y.......Uf	.Z......E..f...%r..|.~.X..l...u.....R...l1
+................mO.N......Q..7...].....6B~...g&l...d6...~..Ml..(....*.r....ny.P	............E0...6	...[..._....B.m.....Sin...r.#.6"..k...[.........7..Dd...V_..L.7.
+18:36:35.818691 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 10638, win 1203, options [nop,nop,TS val 2921129055 ecr 663554049], length 0
+E..4..@.@.!..................I......Xf.....
+..._'...
+18:36:35.819145 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 10998:11011, ack 15725, win 1408, options [nop,nop,TS val 2757779006 ecr 2522024670], length 13
+E..A$.@.@..................W..gM....Yv.....
+.`^>.S
+.	....ROLLBACK
+18:36:35.819749 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15725:15736, ack 11011, win 9845, options [nop,nop,TS val 2522024678 ecr 2757779006], length 11
+E..?./@.@.:?..............gM...d..&uYt.....
+.S
+..`^>...........
+18:36:35.820168 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1486
+E.....@.@........)...k....9.D..../.<.=.8..s..O	..nj....h..9_..U..-+a(.WCG.Q`..cO...X-_g.Trq.<...j."..#.N6....%b.N.......jd...U.8..D..ZKP<L{U.....C.7<Nm .i`.NA>..U.....)....~i..GT~....uT.wq
+%.......3....D=}.f.i...p...N..4....`..w.......s.......>..[T.._.....[.7n.......$.7.}..3.c..+... .U./..B<.....*...4..x{Jn....[vn.cH{......^.SG.M....Vu.`....1......*.6..GQ...Sp@...s.....X...}.j)".&.j..[.)B*.jt=t......P.a..B?{_...y......-.+.ORd.dD..T.%M*....iN...../.........`.M^.g.`D.]o....Cq...Ex...bDx........f.0O.....NS..V+.?_...d.&.....Z..
+M!.)......\.A.:.]...L.wR{.J. ...x.=...?Q&r..Q.....p..pF.Z.....Po7.....g.....-.`D6.f.]Z.UsV.....1.`..}..T..M...._...V.....QH....jPG.t....n....E..8....Ok.N"~..Px...\e...1a.T. h+6.O.g-.</A..I..i.e[d..L$..C...G(+u.1bIh....+u.+L.H.r.@..@.2.t..Jo..{.l..4v7~a..M.W.,.{....?...f.f........f....!`...........u.....7..h....N....0kf|....M..s.Q....V....I`.`..KQm.G..g.... x..z!H."gd....gF..Csb.T....Q.9J.o.Y./.3....OU ..f.d...@q.,$l.2......;^.?.%u.@...|.H..Bc....f:......'FtX...........
+.._.;.&b....ot..x<_Ft:.[S...S..d....au1.o....6.....!.9....j..
+./....... ..#6	..!Z..O.k\.i..+.G....!S2.R._.@.xW...Y..a.8H..IU..t....{Gw..AH...(0....k.c+.9.......#.nyh...C.S).s.......	.D2~..!V..U.y...<.{.Qb.....QA...._pk.0..3....i.._Z.V..@. ......(2...A..}... S.	...d....y.;..V."!......j..##R..4..>...p...........c ..3H\/	..~i...u.Z/..7.3..........>........'AT.....>:.E.N..../.<.=.8..s..O	..5y.....N...f......4E.X.......9.c...7.Rg...v..y..DR...*..U:..k.l..K/J.. .D..8....?. .z.;H6.Iu..O.2.n..(...)..r..F...C....M
+18:36:35.820338 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 285
+E..9..@.@........)...k...%4dI..../.<.=.8..s..O	.......L.z......A<.......r06......3.}*..>c~.M.za7...Y... \..Yu....".@.d..}.|.......... ..$2.3...)..m7.........W..;44y....U.BDA..(1...'...tOhO.h\..](|3.....~.
+,...u.......G...@z-(.|..."84..m_.. .)..+\..kkmy..5\eA..^..Vp1......4.lu...h.....q...'g.......WI'.*..gJ.L....
+18:36:35.820411 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 44
+E..H..@.@..x.....)...k...43sA..../.<.=.8..s..O	..Q......Yqf.B7h..Vo^!Vc1
+18:36:35.820875 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 11011:11024, ack 15736, win 1408, options [nop,nop,TS val 2757779008 ecr 2522024678], length 13
+E..A$.@.@..................d..gX....Yv.....
+.`^@.S
+.	....ROLLBACK
+18:36:35.821098 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15736:15747, ack 11024, win 9845, options [nop,nop,TS val 2522024679 ecr 2757779008], length 11
+E..?.0@.@.:>..............gX...q..&uYt.....
+.S
+..`^@...........
+18:36:35.863421 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 15747, win 1408, options [nop,nop,TS val 2757779051 ecr 2522024679], length 0
+E..4$.@.@..................q..gc....Yi.....
+.`^k.S
+.
+18:36:35.878897 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!..G...id+..s%xnXJ.T.-.e...z
+18:36:36.096294 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 886
+E.....@.6....).........k.~DmE.3.....zH.0.....h..U.Aj....$.J...U%..I.b.....|.....>e].}..'[fW.NkG8Z.....F.:Q8..k.ZY}.:.......?.2.i..Y.....L.......<'..h......%.<..S..(..Y'.......&....I.u... .t..y...Z<.So6j..\.k:/...b4{...[.A.cfGf:...{..i...O....^.....M.O..%.S.&..p.\@.....I,..E..G.q..`R	]...i..8Q...2].+(X..Y.9......s.w..q4k....^.Y..BH?.....DR..C.x`oY;......n}..7Z.).Q.!..y.N[v..:.f...#...a!.....\.4..ar..'J}..?.....n.x`....R......=..=..".z1.I...9R..HD.....>n(/....f..?......_...n..H..C...SBA(.....zA_.T.xE....p......8.e.2x#...uo3.....)z........c.f5.V..n.,n..B.@+t5.l^0.........?....E..`...{.4.w....7S.....a.Y....g4.3.B!.......J..._.:..4".....@I...Q.....-.Lgd....V...a{.c..'4=.!..s.A...\r>..VN-..fm...k
+..x.v..Y..P...z.L."x.&.......[>....=.....l~!..v.........$y.......&65p.,x.&.[-.........C..\.{]..U.kH.D..l.~...Da..Z.&..(.4..A...u...{.#3.....S.A.O..t..kf..`....\.....c.+y.2.=1.<(.'..&...!l.....7..Q....}...-9..c..SH.
+18:36:36.097462 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [P.], seq 2475:2929, ack 10638, win 1204, options [nop,nop,TS val 2921129334 ecr 663554049], length 454
+E.....@.@....................I......Z,.....
+...v'.........1.......".G..#s`.....o....:n.k.u...v.tY.%e...XG.xu...X.'.............N..iX..F...8.Ww.y../;....
+6)..]w,..%h.*..l}....v.. ..^$........~.j|u...9rx<@y.+C.6..%fw..\.<(J..Y. c.A.....w.~..'j7.EB..3/.h3_Z.$'..2aT..r.=....F./...0..)......$9<a..).*.....
+\..0:<.=....'...".2C..[^.........1...V}.Y...`..4.....$.t..AOG.....m..w..S....,..j.Y..t....T.?...q.t..+S.c..$....}..V.......Z=.d.yvs....a1.s..UiT,%....<.......kIR..R..8.~E.%.i.....F...wxnk...
+...%.4..'	..t
+18:36:36.098374 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [P.], seq 2050:2512, ack 1904, win 501, options [nop,nop,TS val 1690718177 ecr 2717638468], length 462
+E.....@.@.._...........@.t.k........Z......
+d.O....DPOST /auth/logout HTTP/1.1
+Host: clarion-testnet.larmkx.com
+User-Agent: curl/7.74.0
+Content-Length: 0
+Accept: */*
+Accept-Encoding: gzip, br
+Cdn-Loop: cloudflare; loops=1
+Cf-Connecting-Ip: 49.125.98.114
+Cf-Ipcountry: MY
+Cf-Ray: a597a4a58812fd39-SIN
+Cf-Visitor: {"scheme":"https"}
+Cf-Warp-Tag-Id: a1d6b86b-8559-4d89-9486-f0e6436fd1b9
+X-Forwarded-For: 49.125.98.114, 172.29.0.3
+X-Forwarded-Host: clarion-testnet.larmkx.com
+X-Forwarded-Proto: https
+
+
+18:36:36.105608 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [P.], seq 718:864, ack 21, win 501, options [nop,nop,TS val 2155781306 ecr 4092453476], length 146: RESP "EVALSHA" "628bd136a573a06b346879695681af12ccef300f" "1" "LIMITS:LIMITER/49.125.98.114//auth/logout/60/1/minute" "60" "1"
+E.....@.@....................`n.....Y......
+.~.....d*6
+$7
+EVALSHA
+$40
+628bd136a573a06b346879695681af12ccef300f
+$1
+1
+$53
+LIMITS:LIMITER/49.125.98.114//auth/logout/60/1/minute
+$2
+60
+$1
+1
+
+18:36:36.106516 IP 172.29.0.129.6379 > 172.29.0.133.33270: Flags [P.], seq 21:25, ack 864, win 501, options [nop,nop,TS val 4092454312 ecr 2155781306], length 4: RESP "1"
+E..8..@.@................`n.........Yk.....
+.....~..:1
+
+18:36:36.106579 IP 172.29.0.133.33270 > 172.29.0.129.6379: Flags [.], ack 25, win 501, options [nop,nop,TS val 2155781307 ecr 4092454312], length 0
+E..4..@.@..p.................`n.....Yg.....
+.~......
+18:36:36.110960 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 1904:2337, ack 2512, win 501, options [nop,nop,TS val 2717638761 ecr 1690718177], length 433
+E.....@.@.Q..........@.......t.9....Z......
+...id.O.HTTP/1.1 200 OK
+date: Thu, 12 Nov 2026 18:36:35 GMT
+server: uvicorn
+content-length: 23
+content-type: application/json
+set-cookie: clarion_refresh_token=""; expires=Thu, 12 Nov 2026 18:36:36 GMT; Max-Age=0; Path=/; SameSite=lax
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=63072000; includeSubDomains
+x-request-id: 675a9e6d71e6
+
+
+18:36:36.111041 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 2337, win 501, options [nop,nop,TS val 1690718190 ecr 2717638761], length 0
+E..4..@.@..,...........@.t.9........X......
+d.O....i
+18:36:36.112169 IP 172.29.0.133.8000 > 172.29.0.2.46280: Flags [P.], seq 2337:2360, ack 2512, win 501, options [nop,nop,TS val 2717638762 ecr 1690718190], length 23
+E..K..@.@.SR.........@.......t.9....X......
+...jd.O.{"status":"logged_out"}
+18:36:36.112239 IP 172.29.0.2.46280 > 172.29.0.133.8000: Flags [.], ack 2360, win 501, options [nop,nop,TS val 1690718191 ecr 2717638762], length 0
+E..4..@.@..+...........@.t.9........X......
+d.O....j
+18:36:36.113757 IP 172.29.0.2.443 > 172.29.0.3.60174: Flags [P.], seq 10638:11751, ack 2929, win 501, options [nop,nop,TS val 663554344 ecr 2921129334], length 1113
+E... .@.@................I.....j....\......
+'.	(...v....Tm}........f.e.M9.x..X.ed%.i..a..q...+z"M.z.D....1It.=.9....+.D...I:G..%mR.z......$s.....)..[7..p+..P...Y...h...	'.V..}..d:4...D.....LN.....D......{.&...0.'>f ..>....[(^..?Q.$x.....b....\.cP..H...S.2..?...e...6e.<....OM.c...4...^.:.....&.6.l:.t...n&!.2uw.^..?...L...@.!..~.....^.:4..+..A..sb|
+........Wa.n#.. .C..../Ll(...c3xU....fc...r.8.G...._.`.....N.....{W....c..7..[A.E.q..#.././......L5.....`.S..	;.>..F..g.Y.G...'....w.E>0..R.~..b....q..s.p.J....8...,......{V.U.l.......?.6..c..y.(.A..c............z........=s...-..............|.`...$.L{..r.@../.].[..."..`J..gu"B...-......%..s....)...'.h.).=.
+	.J~..O..e....D..k.i............V.db..\A..~.......F..6.
+,.....P/...%..!G.......)...E.C..*y+E....C.#..D<....$...)........i3=..=..*..z5"n.:.XP.....2.&.|.m.J...j.....R....Y.J.K.."m...~..o.,.DLZ,.Iv.t,..Iz-.V6.u..b5....[.......2j....t....+x....l...X...Z.....b=5%Oa.u)8.....Q....s..9.....K..u.....S.....J.0.....%6...I........k9.-..]..S.-.v.u;!<.R.g....=..).........l....T....z<h.G.V.......L5.K.?...8.....x!=...C...~x..u..VqHR......@....
+..a..N.......w7u.D.....Z"..b...d.(...6Y	....@O..C=S...xS..c.Q.-).,....{.v...
+18:36:36.113852 IP 172.29.0.3.60174 > 172.29.0.2.443: Flags [.], ack 11751, win 1203, options [nop,nop,TS val 2921129350 ecr 663554344], length 0
+E..4..@.@.!................j.I.6....Xf.....
+....'.	(
+18:36:36.114914 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 65
+E..]..@.@..c.....)...k...I3.L..../.<.=.8..s..O	..T...\+.`..!.% .%k..}...,.....*.@.b....Bi...a
+18:36:36.115132 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 1615
+E..k..@.@..U.....)...k...W9.L..../.<.=.8..s..O	......CK.......,0	.`...Q..Y..J.H...".........b..,..ts>`5......v...G=..Q..d.b...c..z.&qH.!.....L..C|n.>....X.....t.&.yf7..!.t.~P..(xr..5. .h..lO...m./....P....s....h........x....\.k.~..A........Z
+.U..Q......^CA..1...P~.o!:..U..La...G
+..)).c.#GD'j.a=E..)....;.kP..'6..{MO.j.4..[..ncx..kw.I..-K...I.Q..#.B&......pk......BH../Z.W8..S5u.%.F."..$.t...-J.PLs.9L..F...,.oQ@L....r.?u....jY"...5..7<...a9bR...<...;...E....}.v.,.3. ..k........i0Y.....E;.7`...p.	.(.m.V.6......2......~SRv..v..\~.Z..'.).\...b...QU4Z!t..*\.BV..K\.=o.;...I.u.\...d.........7<.....i..n qi
++.3K......w....e0v....:.[<.YQ^.z..O.T..gi.............",9wK.D...Y..P.EJ.r..FxL?.#..H.)8.........&.4X..... ..xF.^."a.G...[.....	.7lT3...3.o.u.......5z..Og4.6.z..I...k...DH.z*x...a..{.p/&15.?...4N.X..BJ...p.E_yl..^. pd.5..rG.vUw.......8.".och.N..l.D.QO..'8.b'......6.r.g..A{.8..~..].........{....Y|..8*y.....a..>.	.s.j...G..e...qk...A.tn.T...~-4......z..#s.$..	n&...f.^..YXZ.=NH..{N.D...| .Q..}.=..........	v./....q[..xL..2Y...q!....,.q.9.4pfs....k.Z\.m%....6.<Bo..d.O^.w.;.<.ppls.S...........iE....s.....~......ta..!f.c:{>u4..B..'.Y6U.oGt.....!.S.i.T...X..t..y.;E...U...8._.&K}..u.]..r..>.L....]BsK........G..6A~.faT.4b{Cdt..0........<..........I...'..<.A...*. ..S@.1.y.@<..`A.8.M'....~C	....E....!EHd27...:a..qT..<Y..cWf.S.x
+...JQ;.O...#...gf...{d..1.......$....q...{.^..../.<.=.8..s..O	..d..... m.J...gD.<+......vjO...#.....3&@JH...L...q..$.4..9....$+.<.s..r	g _))....45$.8.B.lX(J4[d.e.V..M.&.m...	...vfr....?..ps59.u....G...|.w...0.,..!...].J..B.
+...Y.P.j..mI.mTGC.k
+..L...$!.KL3......{...!...}~..8nA...M5..}...z&..N]..Y..?*e"..b..\p.R.
+18:36:36.115367 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 67
+E.._..@.@..a.....)...k...K3.R..../.<.=.8..s..O	........mIN.:h....L..|...!z......6..^`!{l\z.0...
+18:36:36.134950 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 41
+E..E..@.@........).k.....12.J..6..o......Ssy........B...T.|.|....4Sm.
+18:36:36.153680 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 25
+E..5..@.6....).........k.!y.X.........P.r...\...9..9.
+18:36:36.191192 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 26
+E..6..@.6....).k.........".8I....c.7j>..#;.......Ds..?
+18:36:36.221253 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 21
+E..1..@.6.
+Q.).!..........U.S....>.....<H=..V...c
+18:36:36.246771 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 46
+E..J..@.@..8.....).!.....6:._.E..]i..`Gk.6....=1..!r..Qr...`.........%...R
+18:36:36.257084 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 41
+E..E..@.@..).....).5.....1:.Z.....w..../......T.'...	.\.V.,$.u.....U.
+18:36:36.313658 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 26
+E..6..@.6.
+8.).5........."L.I;P:...w.C.....z.w.I..=.. 
+18:36:37.115140 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 11024:11029, ack 15747, win 1408, options [nop,nop,TS val 2757780302 ecr 2522024679], length 5
+E..9$.@.@..................q..gc....Yn.....
+.`cN.S
+......
+18:36:37.115356 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15747:15758, ack 11029, win 9845, options [nop,nop,TS val 2522025973 ecr 2757780302], length 11
+E..?.1@.@.:=..............gc...v..&uYt.....
+.S...`cN...........
+18:36:37.115513 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 15758, win 1408, options [nop,nop,TS val 2757780303 ecr 2522025973], length 0
+E..4$.@.@..................v..gn....Yi.....
+.`cO.S..
+18:36:37.116886 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 11029:11327, ack 15758, win 1408, options [nop,nop,TS val 2757780304 ecr 2522025973], length 298
+E..^$.@.@..................v..gn....Z......
+.`cP.S..&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:37.113189') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:37.113189' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:37.117724 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15758:15831, ack 11327, win 9845, options [nop,nop,TS val 2522025976 ecr 2757780304], length 73
+E..}.2@.@.9...............gn......&uY......
+.S...`cP..........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:37.118684 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 11327:11340, ack 15831, win 1408, options [nop,nop,TS val 2757780306 ecr 2522025976], length 13
+E..A$.@.@.....................g.....Yv.....
+.`cR.S..	....ROLLBACK
+18:36:37.118878 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15831:15842, ack 11340, win 9845, options [nop,nop,TS val 2522025977 ecr 2757780306], length 11
+E..?.3@.@.:;..............g.......&uYt.....
+.S...`cR...........
+18:36:37.119143 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [P.], seq 11340:11353, ack 15842, win 1408, options [nop,nop,TS val 2757780306 ecr 2522025977], length 13
+E..A$.@.@.....................g.....Yv.....
+.`cR.S..	....ROLLBACK
+18:36:37.119248 IP 172.29.0.131.3306 > 172.29.0.133.49300: Flags [P.], seq 15842:15853, ack 11353, win 9845, options [nop,nop,TS val 2522025977 ecr 2757780306], length 11
+E..?.4@.@.::..............g.......&uYt.....
+.S...`cR...........
+18:36:37.155218 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 41
+E..E..@.@..{.....)...k...13p]..../.<.=.8..s..O	....."H.d.$./.......E?
+18:36:37.155368 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 21
+E..1..@.6....).........k..N#Kc.k(.
+D#.U...s...VB.
+18:36:37.159383 IP 172.29.0.133.49300 > 172.29.0.131.3306: Flags [.], ack 15853, win 1408, options [nop,nop,TS val 2757780347 ecr 2522025977], length 0
+E..4$.@.@.....................g.....Yi.....
+.`c{.S..
+18:36:37.166888 IP 198.41.192.107.7844 > 172.29.0.3.36571: UDP, length 21
+E..1..@.6....).k...........VB.U..[.../...m..O;M..
+18:36:37.181424 IP 172.29.0.3.49259 > 198.41.192.227.7844: UDP, length 46
+E..J..@.@..v.....)...k...63u_..../.<.=.8..s..O	...q..@@.<'Wz!.$8..&....^B.
+18:36:37.192833 IP 172.29.0.3.36571 > 198.41.192.107.7844: UDP, length 46
+E..J..@.@........).k.....62.]..6..o......Ssy............P...:-....%.>..x.F
+18:36:37.212719 IP 198.41.192.227.7844 > 172.29.0.3.49259: UDP, length 26
+E..6..@.6....).........k.".SWe..U.......I....Q...}....
+18:36:37.222340 IP 172.29.0.3.58819 > 198.41.200.33.7844: UDP, length 41
+E..E..@.@..=.....).!.....1:.J.E..]i..`Gk.6....=1...."}.j(...$iu.<.%.*
+18:36:37.269709 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 658:663, ack 213, win 9879, options [nop,nop,TS val 2757780457 ecr 2522024125], length 5
+E..9+.@.@................ ....=c..&.Yn.....
+.`c..S.......
+18:36:37.269951 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 213:224, ack 663, win 9856, options [nop,nop,TS val 2522026128 ecr 2757780457], length 11
+E..?.9@.@..4..............=c. ....&.Yt.....
+.S...`c............
+18:36:37.269995 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 224, win 9879, options [nop,nop,TS val 2757780457 ecr 2522026128], length 0
+E..4+.@.@................ ....=n..&.Yi.....
+.`c..S..
+18:36:37.271316 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 663:961, ack 224, win 9879, options [nop,nop,TS val 2757780458 ecr 2522026128], length 298
+E..^+.@.@................ ....=n..&.Z......
+.`c..S..&....SELECT jobs.id AS jobs_id 
+FROM jobs 
+WHERE jobs.status = 'pending' AND NOT (jobs.kind = 'notify_contact' AND jobs.attempts > 0 AND jobs.updated_at >= '2026-11-12 18:31:37.267967') OR jobs.status = 'running' AND jobs.updated_at < '2026-11-12 18:31:37.267967' ORDER BY jobs.created_at 
+ LIMIT 1
+18:36:37.272209 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 224:297, ack 961, win 9856, options [nop,nop,TS val 2522026130 ecr 2757780458], length 73
+E..}.:@.@.................=n. ....&.Y......
+.S...`c...........def.clarion.jobs.jobs.jobs_id.id.........P.....................
+18:36:37.273170 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 961:974, ack 297, win 9879, options [nop,nop,TS val 2757780460 ecr 2522026130], length 13
+E..A+.@.@................ ....=...&.Yv.....
+.`c..S..	....ROLLBACK
+18:36:37.273365 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 297:308, ack 974, win 9856, options [nop,nop,TS val 2522026132 ecr 2757780460], length 11
+E..?.;@.@..2..............=.. ....&.Yt.....
+.S...`c............
+18:36:37.273619 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [P.], seq 974:987, ack 308, win 9879, options [nop,nop,TS val 2757780461 ecr 2522026132], length 13
+E..A+.@.@................ ....=...&.Yv.....
+.`c..S..	....ROLLBACK
+18:36:37.273720 IP 172.29.0.131.3306 > 172.29.0.133.59612: Flags [P.], seq 308:319, ack 987, win 9856, options [nop,nop,TS val 2522026132 ecr 2757780461], length 11
+E..?.<@.@..1..............=.. ....&.Yt.....
+.S...`c............
+18:36:37.279166 IP 198.41.200.33.7844 > 172.29.0.3.58819: UDP, length 26
+E..6..@.6.
+L.).!........."`.B.I.6..~z.J$....30M.7B.x..
+18:36:37.290998 IP 198.41.200.53.7844 > 172.29.0.3.56482: UDP, length 21
+E..1..@.6.
+=.).5...........gC..Y.P.. ..`hQ...2Ys|
+18:36:37.315403 IP 172.29.0.133.59612 > 172.29.0.131.3306: Flags [.], ack 319, win 9879, options [nop,nop,TS val 2757780503 ecr 2522026132], length 0
+E..4+.@.@................ ....=...&.Yi.....
+.`d..S..
+18:36:37.316901 IP 172.29.0.3.56482 > 198.41.200.53.7844: UDP, length 46
+E..J..@.@..$.....).5.....6:.F.....w..../......T.'h&..e.........t..B....	l.

@@ -215,13 +215,13 @@ d11() {
   local csv=$RESULTS_DIR/D11.probe.csv end now code ms rs0 up0 last_ok=0 gap_start=0 n=0 bad=0 avail t0
   mark "begin D11"
   [ -n "$BASE_URL" ] || { skip D11 "BASE_URL not set"; return 0; }
-  if [ "$DRY_RUN" = 1 ]; then echo "DRY: probe $BASE_URL/healthz every ${D11_EVERY_S}s for ${HOURS}h -> $csv"; return 0; fi
+  if [ "$DRY_RUN" = 1 ]; then echo "DRY: probe $BASE_URL${D11_PATH:-/api/healthz} every ${D11_EVERY_S}s for ${HOURS}h -> $csv"; return 0; fi
   echo "epoch,code,dns_s,connect_s,tls_s,ttfb_s,total_s" >"$csv"
   rs0=$(restart_total); up0=$(awk '{print int($1)}' /proc/uptime); t0=$(date +%s); end=$(( t0 + HOURS * 3600 ))
   trap 'end=0' INT TERM    # Ctrl-C ends the soak early but still evaluates
   info D11 "soak ${HOURS}h against $BASE_URL (Ctrl-C to stop early)"
   while now=$(date +%s); [ "$now" -lt "$end" ]; do
-    out=$("${CURL[@]}" -m 10 -o /dev/null -w '%{http_code},%{time_namelookup},%{time_connect},%{time_appconnect},%{time_starttransfer},%{time_total}' "$BASE_URL/healthz" 2>/dev/null || echo "000,0,0,0,0,0")
+    out=$("${CURL[@]}" -m 10 -o /dev/null -w '%{http_code},%{time_namelookup},%{time_connect},%{time_appconnect},%{time_starttransfer},%{time_total}' "$BASE_URL${D11_PATH:-/api/healthz}" 2>/dev/null || echo "000,0,0,0,0,0")
     code=${out%%,*}; echo "$now,$out" >>"$csv"; n=$(( n + 1 ))
     if [[ $code == 2* ]]; then
       if [ "$gap_start" != 0 ] && [ $(( now - gap_start )) -ge "$D11_GAP_S" ]; then

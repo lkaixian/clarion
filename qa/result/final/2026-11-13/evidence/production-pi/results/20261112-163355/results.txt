@@ -1,0 +1,12 @@
+INFO N8 probe n=42 fail=0 5xx=0 ok%=100.000 med=284.86ms p95=328.491ms p99=518.017ms max=518.017ms
+PASS N8 ok_pct=100.000 (ge 99)
+PASS N8 restarts_delta=0 (le 0)
+INFO N8 Caddy dropping slow headers at its timeout: confirm in proxy logs
+FAIL N9 first_request_ms=15066 (le 5000)
+PASS N9 restarts_delta=0 (le 0)
+PASS N10 reconnect_s=2 (le 30)
+PASS N10 other_restarts=0 (le 0)
+INFO N11 probe n=42 fail=0 5xx=0 ok%=100.000 med=276.577ms p95=336.462ms p99=593.825ms max=593.825ms
+PASS N11 ok_pct=100.000 (ge 99.9)
+PASS N11 login_ms=839 (le 10000)
+INFO N11 NIH RxClass should degrade, not fail: check backend logs in /home/pi/clarion_qa/stress/pi/results/20261112-163355

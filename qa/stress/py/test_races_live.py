@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
+from conftest import login_tokens
 from race import histogram, run
 
 
@@ -38,17 +39,22 @@ def _patient_account(client, ah, name):
     return pat, acct
 
 
+def _patient_headers(client, acct):
+    """Temporary password -> forced change -> real login. The password policy needs a special character (! @ # $ * . ?)."""
+    tok = client.post("/auth/login", data={"username": acct["email"], "password": acct["temporary_password"]}).json()
+    newpw = "Race-" + secrets.token_urlsafe(12) + "9!"
+    r = client.post("/auth/change-password", headers={"Authorization": f"Bearer {tok['access_token']}"}, json={"new_password": newpw})
+    assert r.status_code == 200, f"password change refused: {r.status_code} {r.text[:120]}"
+    tok = client.post("/auth/login", data={"username": acct["email"], "password": newpw}).json()
+    return {"Authorization": f"Bearer {tok['access_token']}"}
+
+
 @pytest.fixture(scope="module")
 def bill_world(client, admin):
     """A patient account with one finalized RM 50.00 bill: (patient_headers, bill_id, admin_headers)."""
     ah = admin["headers"]
     pat, acct = _patient_account(client, ah, "Race Live")
-    tok = client.post("/auth/login", data={"username": acct["email"], "password": acct["temporary_password"]}).json()
-    newpw = "Race-" + secrets.token_urlsafe(12)
-    client.post("/auth/change-password", headers={"Authorization": f"Bearer {tok['access_token']}"},
-                json={"new_password": newpw})
-    tok = client.post("/auth/login", data={"username": acct["email"], "password": newpw}).json()
-    ph = {"Authorization": f"Bearer {tok['access_token']}"}
+    ph = _patient_headers(client, acct)
     item = _post(client, "/billing/charge-master", ah,
                  json={"category": "consultation", "name": "Race consult", "unit_price_cents": 5000})
     bill = _post(client, "/billing/bills", ah, json={"patient_id": pat["id"]})
@@ -96,8 +102,7 @@ def test_r4_double_booking_one_slot(client, base, admin):
     if not fac:
         pytest.skip("admin has no facility")
     pat, acct = _patient_account(client, ah, "Slot Race")
-    t = client.post("/auth/login", data={"username": acct["email"], "password": acct["temporary_password"]}).json()
-    ph = {"Authorization": f"Bearer {t['access_token']}"}
+    ph = _patient_headers(client, acct)
     day = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
     slots = client.get("/patients/appointment-slots", headers=ph, params={"facility_name": fac, "date": day}).json()
     if not slots:
@@ -109,7 +114,7 @@ def test_r4_double_booking_one_slot(client, base, admin):
 
 
 def test_r8_refresh_rotation_single_winner(client, base, admin):
-    tok = client.post("/auth/login", data={"username": admin["email"], "password": admin["password"]}).json()
+    tok = login_tokens(client, admin["email"], admin["password"])
     rt = tok.get("refresh_token")
     if not rt:
         pytest.skip("login returned no refresh_token")

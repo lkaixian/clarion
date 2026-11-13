@@ -6,7 +6,11 @@ transport security, and crash / power-loss recovery on the Raspberry Pi 4 (Ubunt
 Specification: [`docs/stress-and-security-test-protocol.md`](../../docs/stress-and-security-test-protocol.md).
 Coverage of that specification: [`coverage.svg`](coverage.svg). Inventory of what exists: [`tests.svg`](tests.svg).
 
-![coverage](coverage.svg)
+![Clean Prod Pi](coverage-clean.svg)
+
+![Dirty Prod Pi](coverage-dirty.svg)
+
+One SVG pair per Pi, drawn from the evidence in `../result/final/2026-11-13/evidence/` by `python qa/result/final/2026-11-13/tools/build_matrix.py`: `coverage-clean.svg` / `coverage-clean-detail.svg` (Clean Prod Pi, the system under test) and `coverage-dirty.svg` / `coverage-dirty-detail.svg` (Dirty Prod Pi, labelled reference on the old build). The detail files list every test and end with the reference speed, ping and latency measurements. `report.py` writes only `coverage-spec.svg`.
 
 ![tests](tests.svg)
 

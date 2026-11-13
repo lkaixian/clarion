@@ -1,0 +1,3 @@
+INFO H11 life: eMMC Life Time Estimation A [EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A]: 0x01;eMMC Life Time Estimation B [EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B]: 0x01;
+FAIL H11 gb_written_per_day=47.71 (le 5)
+INFO H11 life estimate >5 y needs the before/after Life Time Est. codes above (10% steps); compare the two runs

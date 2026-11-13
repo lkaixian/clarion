@@ -1,0 +1,409 @@
+
+[1mTesting all IPv4 addresses (port 443): [m104.21.68.68 172.67.191.121
+-----------------------------------------------------
+[7m Start 2026-11-12 18:14:13        -->> 104.21.68.68:443 (clarion-testnet.larmkx.com) <<--[m
+
+ Further IP addresses:   172.67.191.121 2606:4700:3030::ac43:bf79
+                         2606:4700:3032::6815:4444 
+ rDNS (104.21.68.68):    --
+ Service detected:       HTTP
+
+
+[1m[4m Testing protocols [m[4mvia sockets except NPN+ALPN [m
+
+[1m SSLv2      [m[1;32mnot offered (OK)[m
+[1m SSLv3      [m[1;32mnot offered (OK)[m
+[1m TLS 1      [m[1;33moffered[m (deprecated)
+[1m TLS 1.1    [m[1;33moffered[m (deprecated)
+[1m TLS 1.2    [m[1;32moffered (OK)[m
+[1m TLS 1.3    [m[1;32moffered (OK)[m: final
+[1m NPN/SPDY   [mnot offered
+[1m ALPN/HTTP2 [m[0;32mh2[m, http/1.1 (offered)
+
+[1m[4m Testing cipher categories [m
+
+[1m NULL ciphers (no encryption)                  [m[1;32mnot offered (OK)[m
+[1m Anonymous NULL Ciphers (no authentication)    [m[1;32mnot offered (OK)[m
+[1m Export ciphers (w/o ADH+NULL)                 [m[1;32mnot offered (OK)[m
+[1m LOW: 64 Bit + DES, RC[2,4] (w/o export)       [m[0;32mnot offered (OK)[m
+[1m Triple DES Ciphers / IDEA                     [mnot offered
+[1m Obsolete CBC ciphers (AES, ARIA etc.)         [m[1;33moffered[m
+[1m Strong encryption (AEAD ciphers)              [m[1;32moffered (OK)[m
+
+
+[1m[4m Testing robust (perfect) forward secrecy[m[4m, (P)FS -- omitting Null Authentication/Encryption, 3DES, RC4 [m
+
+[0;32m PFS is offered (OK)[m          TLS_AES_256_GCM_SHA384
+                              TLS_CHACHA20_POLY1305_SHA256
+                              ECDHE-ECDSA-AES256-GCM-SHA384
+                              ECDHE-ECDSA-AES256-SHA384 ECDHE-ECDSA-AES256-SHA
+                              ECDHE-ECDSA-CHACHA20-POLY1305
+                              TLS_AES_128_GCM_SHA256
+                              ECDHE-ECDSA-AES128-GCM-SHA256
+                              ECDHE-ECDSA-AES128-SHA256 ECDHE-ECDSA-AES128-SHA 
+[1m Elliptic curves offered:     [m[0;32mprime256v1[m [0;32msecp384r1[m [0;32msecp521r1[m [0;32mX25519[m 
+
+
+[1m[4m Testing server preferences [m
+
+[1m Has server cipher order?     [m[0;32myes (OK)[m -- only for < TLS 1.3
+[1m Negotiated protocol          [m[1;32mTLSv1.3[m
+[1m Negotiated cipher            [m[1;32mTLS_AES_256_GCM_SHA384[m, [0;32m253 bit ECDH (X25519)[m
+[1m Cipher order[m
+    TLSv1:     ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA 
+    TLSv1.1:   ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA 
+    TLSv1.2:   ECDHE-ECDSA-CHACHA20-POLY1305 ECDHE-ECDSA-AES128-GCM-SHA256
+               ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-GCM-SHA384
+               ECDHE-ECDSA-AES256-SHA ECDHE-ECDSA-AES128-SHA256
+               ECDHE-ECDSA-AES256-SHA384 
+
+
+[1m[4m Testing server defaults (Server Hello) [m
+
+[1m TLS extensions (standard)    [m"server name/#0" "renegotiation info/#65281"
+                              "EC point formats/#11" "session ticket/#35"
+                              "next protocol/#13172"
+                              "signed certificate timestamps/#18"
+                              "key share/#51" "supported versions/#43"
+                              "extended master secret/#23"
+                              "application layer protocol negotiation/#16"
+[1m Session Ticket RFC 5077 hint [m64800 seconds, session tickets keys seems to be rotated < daily
+[1m SSL Session ID support       [myes
+[1m Session Resumption           [mTickets: yes, ID: no
+[1m TLS clock skew[m               -1 sec from localtime
+[1m Signature Algorithm          [m[0;32mECDSA with SHA384[m
+[1m Server key size              [mEC [0;32m256[m bits
+[1m Server key usage             [mDigital Signature
+[1m Server extended key usage    [mTLS Web Server Authentication
+[1m Serial / Fingerprints        [m05E6CED83A4F2D97096F54959E40B9B85ADD / SHA1 2E9EE91CD80B0298B0368C96038494DA3EC19E1B
+                              SHA256 14C3AFBB5CD09B61C4D1CC1A5DD9AF36C1440AE86120FF2C5C10F94C4F988FCE
+[1m Common Name (CN)             [m[3mlarmkx.com [m (request w/o SNI didn't succeed, usual for EC certificates)
+[1m subjectAltName (SAN)         [m[3m*.larmkx.com larmkx.com [m
+[1m Issuer                       [m[3mYE2[m ([3mLet's Encrypt[m from [3mUS[m)
+[1m Trust (hostname)             [m[0;32mOk via SAN wildcard[m (SNI mandatory)
+[1m Chain of trust[m               [0;32mOk   [m[0;35m[m
+[1m EV cert[m (experimental)       no 
+[1m ETS/"eTLS"[m, visibility info  not present
+[1m Certificate Validity (UTC)   [m[0;32m63 >= 60 days[m (2026-10-17 08:19 --> 2027-01-15 07:19)
+[1m # of certificates provided[m   4
+[1m Certificate Revocation List  [mhttp://ye2.c.lencr.org/94.crl
+[1m OCSP URI                     [m--
+[1m OCSP stapling                [mnot offered
+[1m OCSP must staple extension   [m--
+[1m DNS CAA RR[m (experimental)    [1;33mnot offered[m
+[1m Certificate Transparency     [m[0;32myes[m (certificate extension)
+
+
+[1m[4m Testing HTTP header response @ "/" [m
+
+[1m HTTP Status Code           [m  200 OK
+[1m HTTP clock skew              [m0 sec from localtime
+[1m Strict Transport Security    [m[0;33m300 s = 0 days is too short ( >=15465600 seconds recommended)[m[0;36m, just this domain[m
+[1m Public Key Pinning           [m--
+[1m Server banner                [mcloudflare
+[1m Application banner           [m--
+[1m Cookie(s)                    [m(none issued at "/")
+[1m Security headers             [m[0;32mX-Frame-Options[m: DENY
+                              [0;32mX-Content-Type-Options[m: nosniff
+                              [0;32mContent-Security-Policy[m: default-src 'self';
+                                base-uri 'self'; object-src 'none';
+                                frame-ancestors 'none'; form-action 'self';
+                                img-src 'self' data: blob:
+                                https://tile.openstreetmap.org; font-src
+                                'self'; style-src 'self' 'unsafe-inline';
+                                style-src-elem 'self'; style-src-attr
+                                'unsafe-inline'; script-src 'self'; connect-src
+                                'self' ; worker-src 'self' blob:; manifest-src
+                                'self'
+                              Referrer-Policy: strict-origin-when-cross-origin
+                              Cache-Control: no-store
+[1m Reverse Proxy banner         [m--
+
+
+[1m[4m Testing vulnerabilities [m
+
+[1m Heartbleed[m (CVE-2014-0160)                [1;32mnot vulnerable (OK)[m, no heartbeat extension
+[1m CCS[m (CVE-2014-0224)                       [1;32mnot vulnerable (OK)[m
+[1m Ticketbleed[m (CVE-2016-9244), experiment.  [1;32mnot vulnerable (OK)[m, no session tickets
+[1m ROBOT                                     [m[1;32mServer does not support any cipher suites that use RSA key transport[m
+[1m Secure Renegotiation (RFC 5746)           [m[0;35mOpenSSL handshake didn't succeed[m
+[1m Secure Client-Initiated Renegotiation     [m[0;32mnot vulnerable (OK)[m
+[1m CRIME, TLS [m(CVE-2012-4929)                [0;32mnot vulnerable (OK)[m
+[1m BREACH[m (CVE-2013-3587)                    [0;33mpotentially NOT ok, "br" HTTP compression detected.[m - only supplied "/" tested
+                                           Can be ignored for static pages or if no secrets in the page
+[1m POODLE, SSL[m (CVE-2014-3566)               [1;32mnot vulnerable (OK)[m, no SSLv3 support
+[1m TLS_FALLBACK_SCSV[m (RFC 7507)              [0;32mDowngrade attack prevention supported (OK)[m
+[1m SWEET32[m (CVE-2016-2183, CVE-2016-6329)    [1;32mnot vulnerable (OK)[m
+[1m FREAK[m (CVE-2015-0204)                     [1;32mnot vulnerable (OK)[m
+[1m DROWN[m (CVE-2016-0800, CVE-2016-0703)      [1;32mnot vulnerable on this host and port (OK)[m
+                                           no RSA certificate, thus certificate can't be used with SSLv2 elsewhere
+[1m LOGJAM[m (CVE-2015-4000), experimental      [0;32mnot vulnerable (OK):[m no DH EXPORT ciphers, no DH key detected with <= TLS 1.2
+[1m BEAST[m (CVE-2011-3389)                     TLS1: [1;33mECDHE-ECDSA-AES128-SHA
+                                                 ECDHE-ECDSA-AES256-SHA [m
+                                           [1;33mVULNERABLE[m -- but also supports higher protocols  TLSv1.1 TLSv1.2 (likely mitigated)
+[1m LUCKY13[m (CVE-2013-0169), experimental     potentially [1;33mVULNERABLE[m, uses cipher block chaining (CBC) ciphers with TLS. Check patches
+[1m RC4[m (CVE-2013-2566, CVE-2015-2808)        [0;32mno RC4 ciphers detected (OK)[m
+
+
+[1m[4m Testing 370 ciphers via OpenSSL plus sockets against the server, ordered by encryption strength [m
+
+Hexcode  Cipher Suite Name (OpenSSL)       KeyExch.   Encryption  Bits     Cipher Suite Name (IANA/RFC)
+-----------------------------------------------------------------------------------------------------------------------------
+ x1302   TLS_AES_256_GCM_SHA384            ECDH[0;32m 253[m   AESGCM      256      TLS_AES_256_GCM_SHA384                             
+ x1303   TLS_CHACHA20_POLY1305_SHA256      ECDH[0;32m 253[m   ChaCha20    256      TLS_CHACHA20_POLY1305_SHA256                       
+ xc02c   ECDHE-ECDSA-AES256-GCM-SHA384     ECDH[0;32m 253[m   AESGCM      256      TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384            
+ xc024   ECDHE-ECDSA-AES256-SHA384         ECDH[0;32m 253[m   AES         256      TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384            
+ xc00a   ECDHE-ECDSA-AES256-SHA            ECDH[0;32m 253[m   AES         256      TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA               
+ xcca9   ECDHE-ECDSA-CHACHA20-POLY1305     ECDH[0;32m 253[m   ChaCha20    256      TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256      
+ x1301   TLS_AES_128_GCM_SHA256            ECDH[0;32m 253[m   AESGCM      128      TLS_AES_128_GCM_SHA256                             
+ xc02b   ECDHE-ECDSA-AES128-GCM-SHA256     ECDH[0;32m 253[m   AESGCM      128      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256            
+ xc023   ECDHE-ECDSA-AES128-SHA256         ECDH[0;32m 253[m   AES         128      TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256            
+ xc009   ECDHE-ECDSA-AES128-SHA            ECDH[0;32m 253[m   AES         128      TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA               
+
+
+[1m[4m Running client simulations [m[1m[4m(HTTP) [m[1m[4mvia sockets [m
+
+ Android 4.4.2                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 5.0.0                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 6.0                  TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 7.0 (native)         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 8.1 (native)         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Android 9.0 (native)         TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Android 10.0 (native)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Chrome 74 (Win 10)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Chrome 79 (Win 10)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Firefox 66 (Win 8.1/10)      TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Firefox 71 (Win 10)          TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ IE 6 XP                      No connection
+ IE 8 Win 7                   TLSv1.0 ECDHE-ECDSA-AES128-SHA, [0;32m256 bit ECDH (P-256)[m
+ IE 8 XP                      No connection
+ IE 11 Win 7                  TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win 8.1                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win Phone 8.1          TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win 10                 TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Edge 15 Win 10               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Edge 17 (Win 10)             TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Opera 66 (Win 10)            TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Safari 9 iOS 9               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 9 OS X 10.11          TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 10 OS X 10.12         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 12.1 (iOS 12.2)       TLSv1.3 TLS_CHACHA20_POLY1305_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Safari 13.0 (macOS 10.14.6)  TLSv1.3 TLS_CHACHA20_POLY1305_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Apple ATS 9 iOS 9            TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 6u45                    No connection
+ Java 7u25                    TLSv1.0 ECDHE-ECDSA-AES128-SHA, [0;32m256 bit ECDH (P-256)[m
+ Java 8u161                   TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 11.0.2 (OpenJDK)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 12.0.1 (OpenJDK)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m256 bit ECDH (P-256)[m
+ OpenSSL 1.0.2e               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ OpenSSL 1.1.0l (Debian)      TLSv1.2 ECDHE-ECDSA-CHACHA20-POLY1305, [0;32m253 bit ECDH (X25519)[m
+ OpenSSL 1.1.1d (Debian)      TLSv1.3 TLS_AES_256_GCM_SHA384, [0;32m253 bit ECDH (X25519)[m
+ Thunderbird (68.3)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+
+[7m Done 2026-11-12 18:16:58 [ 173s] -->> 104.21.68.68:443 (clarion-testnet.larmkx.com) <<--[m
+
+-----------------------------------------------------
+[7m Start 2026-11-12 18:16:59        -->> 172.67.191.121:443 (clarion-testnet.larmkx.com) <<--[m
+
+ Further IP addresses:   104.21.68.68 2606:4700:3030::ac43:bf79
+                         2606:4700:3032::6815:4444 
+ rDNS (172.67.191.121):  --
+ Service detected:       HTTP
+
+
+[1m[4m Testing protocols [m[4mvia sockets except NPN+ALPN [m
+
+[1m SSLv2      [m[1;32mnot offered (OK)[m
+[1m SSLv3      [m[1;32mnot offered (OK)[m
+[1m TLS 1      [m[1;33moffered[m (deprecated)
+[1m TLS 1.1    [m[1;33moffered[m (deprecated)
+[1m TLS 1.2    [m[1;32moffered (OK)[m
+[1m TLS 1.3    [m[1;32moffered (OK)[m: final
+[1m NPN/SPDY   [mnot offered
+[1m ALPN/HTTP2 [m[0;32mh2[m, http/1.1 (offered)
+
+[1m[4m Testing cipher categories [m
+
+[1m NULL ciphers (no encryption)                  [m[1;32mnot offered (OK)[m
+[1m Anonymous NULL Ciphers (no authentication)    [m[1;32mnot offered (OK)[m
+[1m Export ciphers (w/o ADH+NULL)                 [m[1;32mnot offered (OK)[m
+[1m LOW: 64 Bit + DES, RC[2,4] (w/o export)       [m[0;32mnot offered (OK)[m
+[1m Triple DES Ciphers / IDEA                     [mnot offered
+[1m Obsolete CBC ciphers (AES, ARIA etc.)         [m[1;33moffered[m
+[1m Strong encryption (AEAD ciphers)              [m[1;32moffered (OK)[m
+
+
+[1m[4m Testing robust (perfect) forward secrecy[m[4m, (P)FS -- omitting Null Authentication/Encryption, 3DES, RC4 [m
+
+[0;32m PFS is offered (OK)[m          TLS_AES_256_GCM_SHA384
+                              TLS_CHACHA20_POLY1305_SHA256
+                              ECDHE-ECDSA-AES256-GCM-SHA384
+                              ECDHE-ECDSA-AES256-SHA384 ECDHE-ECDSA-AES256-SHA
+                              ECDHE-ECDSA-CHACHA20-POLY1305
+                              TLS_AES_128_GCM_SHA256
+                              ECDHE-ECDSA-AES128-GCM-SHA256
+                              ECDHE-ECDSA-AES128-SHA256 ECDHE-ECDSA-AES128-SHA 
+[1m Elliptic curves offered:     [m[0;32mprime256v1[m [0;32msecp384r1[m [0;32msecp521r1[m [0;32mX25519[m 
+
+
+[1m[4m Testing server preferences [m
+
+[1m Has server cipher order?     [m[0;32myes (OK)[m -- only for < TLS 1.3
+[1m Negotiated protocol          [m[1;32mTLSv1.3[m
+[1m Negotiated cipher            [m[1;32mTLS_AES_256_GCM_SHA384[m, [0;32m253 bit ECDH (X25519)[m
+[1m Cipher order[m
+    TLSv1:     ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA 
+    TLSv1.1:   ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA 
+    TLSv1.2:   ECDHE-ECDSA-CHACHA20-POLY1305 ECDHE-ECDSA-AES128-GCM-SHA256
+               ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-GCM-SHA384
+               ECDHE-ECDSA-AES256-SHA ECDHE-ECDSA-AES128-SHA256
+               ECDHE-ECDSA-AES256-SHA384 
+
+
+[1m[4m Testing server defaults (Server Hello) [m
+
+[1m TLS extensions (standard)    [m"server name/#0" "renegotiation info/#65281"
+                              "EC point formats/#11" "session ticket/#35"
+                              "next protocol/#13172"
+                              "signed certificate timestamps/#18"
+                              "key share/#51" "supported versions/#43"
+                              "extended master secret/#23"
+                              "application layer protocol negotiation/#16"
+[1m Session Ticket RFC 5077 hint [m64800 seconds, session tickets keys seems to be rotated < daily
+[1m SSL Session ID support       [myes
+[1m Session Resumption           [mTickets: yes, ID: yes
+[1m TLS clock skew[m               0 sec from localtime
+[1m Signature Algorithm          [m[0;32mECDSA with SHA384[m
+[1m Server key size              [mEC [0;32m256[m bits
+[1m Server key usage             [mDigital Signature
+[1m Server extended key usage    [mTLS Web Server Authentication
+[1m Serial / Fingerprints        [m05E6CED83A4F2D97096F54959E40B9B85ADD / SHA1 2E9EE91CD80B0298B0368C96038494DA3EC19E1B
+                              SHA256 14C3AFBB5CD09B61C4D1CC1A5DD9AF36C1440AE86120FF2C5C10F94C4F988FCE
+[1m Common Name (CN)             [m[3mlarmkx.com [m (request w/o SNI didn't succeed, usual for EC certificates)
+[1m subjectAltName (SAN)         [m[3m*.larmkx.com larmkx.com [m
+[1m Issuer                       [m[3mYE2[m ([3mLet's Encrypt[m from [3mUS[m)
+[1m Trust (hostname)             [m[0;32mOk via SAN wildcard[m (SNI mandatory)
+[1m Chain of trust[m               [0;32mOk   [m[0;35m[m
+[1m EV cert[m (experimental)       no 
+[1m ETS/"eTLS"[m, visibility info  not present
+[1m Certificate Validity (UTC)   [m[0;32m63 >= 60 days[m (2026-10-17 08:19 --> 2027-01-15 07:19)
+[1m # of certificates provided[m   4
+[1m Certificate Revocation List  [mhttp://ye2.c.lencr.org/94.crl
+[1m OCSP URI                     [m--
+[1m OCSP stapling                [mnot offered
+[1m OCSP must staple extension   [m--
+[1m DNS CAA RR[m (experimental)    [1;33mnot offered[m
+[1m Certificate Transparency     [m[0;32myes[m (certificate extension)
+
+
+[1m[4m Testing HTTP header response @ "/" [m
+
+[1m HTTP Status Code           [m  200 OK
+[1m HTTP clock skew              [m0 sec from localtime
+[1m Strict Transport Security    [m[0;33m300 s = 0 days is too short ( >=15465600 seconds recommended)[m[0;36m, just this domain[m
+[1m Public Key Pinning           [m--
+[1m Server banner                [mcloudflare
+[1m Application banner           [m--
+[1m Cookie(s)                    [m(none issued at "/")
+[1m Security headers             [m[0;32mX-Frame-Options[m: DENY
+                              [0;32mX-Content-Type-Options[m: nosniff
+                              [0;32mContent-Security-Policy[m: default-src 'self';
+                                base-uri 'self'; object-src 'none';
+                                frame-ancestors 'none'; form-action 'self';
+                                img-src 'self' data: blob:
+                                https://tile.openstreetmap.org; font-src
+                                'self'; style-src 'self' 'unsafe-inline';
+                                style-src-elem 'self'; style-src-attr
+                                'unsafe-inline'; script-src 'self'; connect-src
+                                'self' ; worker-src 'self' blob:; manifest-src
+                                'self'
+                              Referrer-Policy: strict-origin-when-cross-origin
+                              Cache-Control: no-store
+[1m Reverse Proxy banner         [m--
+
+
+[1m[4m Testing vulnerabilities [m
+
+[1m Heartbleed[m (CVE-2014-0160)                [1;32mnot vulnerable (OK)[m, no heartbeat extension
+[1m CCS[m (CVE-2014-0224)                       [1;32mnot vulnerable (OK)[m
+[1m Ticketbleed[m (CVE-2016-9244), experiment.  [1;32mnot vulnerable (OK)[m, no session tickets
+[1m ROBOT                                     [m[1;32mServer does not support any cipher suites that use RSA key transport[m
+[1m Secure Renegotiation (RFC 5746)           [m[0;35mOpenSSL handshake didn't succeed[m
+[1m Secure Client-Initiated Renegotiation     [m[0;32mnot vulnerable (OK)[m
+[1m CRIME, TLS [m(CVE-2012-4929)                [0;32mnot vulnerable (OK)[m
+[1m BREACH[m (CVE-2013-3587)                    [0;33mpotentially NOT ok, "br" HTTP compression detected.[m - only supplied "/" tested
+                                           Can be ignored for static pages or if no secrets in the page
+[1m POODLE, SSL[m (CVE-2014-3566)               [1;32mnot vulnerable (OK)[m, no SSLv3 support
+[1m TLS_FALLBACK_SCSV[m (RFC 7507)              [0;32mDowngrade attack prevention supported (OK)[m
+[1m SWEET32[m (CVE-2016-2183, CVE-2016-6329)    [1;32mnot vulnerable (OK)[m
+[1m FREAK[m (CVE-2015-0204)                     [1;32mnot vulnerable (OK)[m
+[1m DROWN[m (CVE-2016-0800, CVE-2016-0703)      [1;32mnot vulnerable on this host and port (OK)[m
+                                           no RSA certificate, thus certificate can't be used with SSLv2 elsewhere
+[1m LOGJAM[m (CVE-2015-4000), experimental      [0;32mnot vulnerable (OK):[m no DH EXPORT ciphers, no DH key detected with <= TLS 1.2
+[1m BEAST[m (CVE-2011-3389)                     TLS1: [1;33mECDHE-ECDSA-AES128-SHA
+                                                 ECDHE-ECDSA-AES256-SHA [m
+                                           [1;33mVULNERABLE[m -- but also supports higher protocols  TLSv1.1 TLSv1.2 (likely mitigated)
+[1m LUCKY13[m (CVE-2013-0169), experimental     potentially [1;33mVULNERABLE[m, uses cipher block chaining (CBC) ciphers with TLS. Check patches
+[1m RC4[m (CVE-2013-2566, CVE-2015-2808)        [0;32mno RC4 ciphers detected (OK)[m
+
+
+[1m[4m Testing 370 ciphers via OpenSSL plus sockets against the server, ordered by encryption strength [m
+
+Hexcode  Cipher Suite Name (OpenSSL)       KeyExch.   Encryption  Bits     Cipher Suite Name (IANA/RFC)
+-----------------------------------------------------------------------------------------------------------------------------
+ x1302   TLS_AES_256_GCM_SHA384            ECDH[0;32m 253[m   AESGCM      256      TLS_AES_256_GCM_SHA384                             
+ x1303   TLS_CHACHA20_POLY1305_SHA256      ECDH[0;32m 253[m   ChaCha20    256      TLS_CHACHA20_POLY1305_SHA256                       
+ xc02c   ECDHE-ECDSA-AES256-GCM-SHA384     ECDH[0;32m 253[m   AESGCM      256      TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384            
+ xc024   ECDHE-ECDSA-AES256-SHA384         ECDH[0;32m 253[m   AES         256      TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384            
+ xc00a   ECDHE-ECDSA-AES256-SHA            ECDH[0;32m 253[m   AES         256      TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA               
+ xcca9   ECDHE-ECDSA-CHACHA20-POLY1305     ECDH[0;32m 253[m   ChaCha20    256      TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256      
+ x1301   TLS_AES_128_GCM_SHA256            ECDH[0;32m 253[m   AESGCM      128      TLS_AES_128_GCM_SHA256                             
+ xc02b   ECDHE-ECDSA-AES128-GCM-SHA256     ECDH[0;32m 253[m   AESGCM      128      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256            
+ xc023   ECDHE-ECDSA-AES128-SHA256         ECDH[0;32m 253[m   AES         128      TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256            
+ xc009   ECDHE-ECDSA-AES128-SHA            ECDH[0;32m 253[m   AES         128      TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA               
+
+
+[1m[4m Running client simulations [m[1m[4m(HTTP) [m[1m[4mvia sockets [m
+
+ Android 4.4.2                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 5.0.0                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 6.0                  TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 7.0 (native)         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Android 8.1 (native)         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Android 9.0 (native)         TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Android 10.0 (native)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Chrome 74 (Win 10)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Chrome 79 (Win 10)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Firefox 66 (Win 8.1/10)      TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Firefox 71 (Win 10)          TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ IE 6 XP                      No connection
+ IE 8 Win 7                   TLSv1.0 ECDHE-ECDSA-AES128-SHA, [0;32m256 bit ECDH (P-256)[m
+ IE 8 XP                      No connection
+ IE 11 Win 7                  TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win 8.1                TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win Phone 8.1          TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ IE 11 Win 10                 TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Edge 15 Win 10               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Edge 17 (Win 10)             TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m253 bit ECDH (X25519)[m
+ Opera 66 (Win 10)            TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Safari 9 iOS 9               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 9 OS X 10.11          TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 10 OS X 10.12         TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Safari 12.1 (iOS 12.2)       TLSv1.3 TLS_CHACHA20_POLY1305_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Safari 13.0 (macOS 10.14.6)  TLSv1.3 TLS_CHACHA20_POLY1305_SHA256, [0;32m253 bit ECDH (X25519)[m
+ Apple ATS 9 iOS 9            TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 6u45                    No connection
+ Java 7u25                    TLSv1.0 ECDHE-ECDSA-AES128-SHA, [0;32m256 bit ECDH (P-256)[m
+ Java 8u161                   TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 11.0.2 (OpenJDK)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m256 bit ECDH (P-256)[m
+ Java 12.0.1 (OpenJDK)        TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m256 bit ECDH (P-256)[m
+ OpenSSL 1.0.2e               TLSv1.2 ECDHE-ECDSA-AES128-GCM-SHA256, [0;32m256 bit ECDH (P-256)[m
+ OpenSSL 1.1.0l (Debian)      TLSv1.2 ECDHE-ECDSA-CHACHA20-POLY1305, [0;32m253 bit ECDH (X25519)[m
+ OpenSSL 1.1.1d (Debian)      TLSv1.3 TLS_AES_256_GCM_SHA384, [0;32m253 bit ECDH (X25519)[m
+ Thunderbird (68.3)           TLSv1.3 TLS_AES_128_GCM_SHA256, [0;32m253 bit ECDH (X25519)[m
+
+[7m Done 2026-11-12 18:20:10 [ 365s] -->> 172.67.191.121:443 (clarion-testnet.larmkx.com) <<--[m
+
+-----------------------------------------------------
+[1mDone testing now all IP addresses (on port 443): [m104.21.68.68 172.67.191.121
+

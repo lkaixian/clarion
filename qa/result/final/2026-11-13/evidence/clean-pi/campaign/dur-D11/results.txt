@@ -1,0 +1,3 @@
+INFO D11 soak 6h against https://clarion-testnet.larmkx.com (Ctrl-C to stop early)
+PASS D11 availability_pct=100.000 (ge 99.5)
+INFO D11 probes=20 failed=0; graph: report.py picks up D11.probe.csv

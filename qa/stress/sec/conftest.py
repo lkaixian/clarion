@@ -3,7 +3,7 @@
 Everything is driven by env, nothing is hardcoded:
   BASE_URL        https://clarion.example.com            (required; no trailing slash)
   API_PREFIX      /api                                   (default; "" if hitting the backend directly)
-  SEC_USER/SEC_PASS            a staff login WITHOUT MFA (cookie + JWT tests)
+  SEC_USER/SEC_PASS            a staff login (cookie + JWT tests); for an MFA role also set SEC_TOTP_SECRET (base32)
   SEC_<ROLE>_USER/_PASS        ROLE in ADMIN CLINICIAN PHARMACIST RECEPTIONIST PATIENT OTHERFAC
   SEC_INSECURE=1  skip TLS verification (tls internal origin tests)
   APP_ENV=demo    HSTS short max-age becomes an xfail instead of a failure
@@ -13,7 +13,11 @@ Like qa/blackbox: login is OAuth2 form, replay checks are STATELESS (explicit Co
 never a cookie jar, which would silently present the rotated cookie and invert the result).
 """
 
+import base64
+import hashlib
+import hmac
 import os
+import struct
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -49,18 +53,47 @@ def client(**kw):
     return httpx.Client(**kw)
 
 
+_last_step = [0]
+
+
+def _totp(secret_b32):
+    """RFC 6238 code. The server refuses a step it already accepted, so a second login in the same 30 s step waits."""
+    step = int(time.time() // 30)
+    if step <= _last_step[0]:
+        time.sleep(30 - time.time() % 30 + 0.5)
+        step = int(time.time() // 30)
+    _last_step[0] = step
+    s = secret_b32.strip().replace(" ", "").upper()
+    d = hmac.new(base64.b32decode(s + "=" * (-len(s) % 8)), struct.pack(">Q", step), hashlib.sha1).digest()
+    o = d[-1] & 15
+    return str((struct.unpack(">I", d[o:o + 4])[0] & 0x7FFFFFFF) % 10 ** 6).zfill(6)
+
+
 def login(user, password, tries=2):
-    """-> (response, body_dict). Retries once past a per-IP 429."""
+    """-> (response, body_dict). Retries once past a per-IP 429. If the account is an MFA role and SEC_TOTP_SECRET is set
+    (admin / clinician on a production build), the TOTP step is answered too and the returned response is the one that
+    carries the tokens and the refresh cookie (/auth/mfa/verify)."""
     with client() as c:
         for i in range(tries):
             r = c.post(url("/auth/login"), data={"username": user, "password": password})
             if r.status_code != 429:
                 break
             time.sleep(65)
-    try:
-        body = r.json()
-    except ValueError:
-        body = {}
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        secret = os.environ.get("SEC_TOTP_SECRET")
+        if r.status_code == 200 and body.get("mfa_required") and secret and not body.get("mfa_enrol"):
+            for attempt in (0, 1):          # a code from a step another process used is refused: retry on the next step
+                r = c.post(url("/auth/mfa/verify"), json={"mfa_token": body["mfa_token"], "code": _totp(secret)})
+                if r.status_code != 401 or attempt:
+                    break
+                _last_step[0] = int(time.time() // 30)
+            try:
+                body = r.json()
+            except ValueError:
+                body = {}
     return r, body
 
 

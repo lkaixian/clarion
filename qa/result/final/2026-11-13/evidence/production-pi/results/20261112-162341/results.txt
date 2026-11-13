@@ -1,0 +1,2 @@
+INFO H11 life: no mmc-utils/smartctl output
+INFO H11 baseline saved; run again after ~24 h

@@ -295,9 +295,9 @@ def main(argv):
     res, probes, resources = collect(dirs) if dirs else ([], {}, [])
     verd = verdicts(res)
     cov_svg, cov = coverage_svg(verd)
-    open(os.path.join(HERE, "coverage.svg"), "w", encoding="utf-8").write(cov_svg)
+    open(os.path.join(HERE, "coverage-spec.svg"), "w", encoding="utf-8").write(cov_svg)   # coverage.svg is now drawn by qa/result/build_matrix.py
     open(os.path.join(HERE, "tests.svg"), "w", encoding="utf-8").write(inventory_svg())
-    print("wrote", os.path.join(HERE, "coverage.svg"), "and tests.svg")
+    print("wrote", os.path.join(HERE, "coverage-spec.svg"), "and tests.svg (coverage.svg: run qa/result/build_matrix.py)")
     if cov_only or not dirs:
         return 0
     out = dirs[0]

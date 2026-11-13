@@ -1,0 +1,9 @@
+INFO H4 probe n=210 fail=0 5xx=0 ok%=100.000 med=178.193ms p95=270.824ms p99=307.955ms max=358.56ms
+PASS H4 median_ms=178.193 (le 1000)
+PASS H4 ok_pct=100.000 (ge 99.9)
+FAIL H4 swap_pages_per_s=322 (le 100)
+PASS H4 all core containers running
+INFO H6 probe n=149 fail=0 5xx=0 ok%=100.000 med=52.247ms p95=75.649ms p99=92.649ms max=114.359ms
+PASS H6 backend running+healthy after the limit
+PASS H6 restart_delta=0 (le 1)
+INFO H6 no data loss: compare snapshot_counts.sh before/after if you ran writes

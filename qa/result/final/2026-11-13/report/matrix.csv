@@ -1,0 +1,1277 @@
+id,group,test,env,status,detail,note,src
+H1,H,H1 median_ms,dirty,pass,85.055 (le 1000),,production-pi/results/20261112-142259/results.txt
+H1,H,H1 ok_pct,dirty,pass,100.000 (ge 99.9),,production-pi/results/20261112-142259/results.txt
+H1,H,H1 p95_rtt_ms,dirty,pass,113.309 (le 250),,production-pi/results/20261112-142259/results.txt
+H1,H,H1 no new throttle bits,dirty,pass,(before=0x0 after=0x0 mask=0xFFFFFFFF),,production-pi/results/20261112-142259/results.txt
+H3,H,H3 p95_rtt_ms,dirty,pass,141.482 (le 500),,production-pi/results/20261112-142259/results.txt
+H12,H,H12 no new throttle bits,dirty,pass,(before=0x0 after=0x0 mask=0x10001),,production-pi/results/20261112-142259/results.txt
+N1,N,N1 median_ms,dirty,pass,301.95 (le 1000),,production-pi/results/20261112-145159/results.txt
+N1,N,N1 ok_pct,dirty,pass,100.000 (ge 99.9),,production-pi/results/20261112-145159/results.txt
+N2,N,N2 median_ms,dirty,pass,343.802 (le 3000),,production-pi/results/20261112-150512/results.txt
+N2,N,N2 http_5xx,dirty,pass,0 (le 0),,production-pi/results/20261112-150512/results.txt
+N2,N,N2 static asset served compressed,dirty,pass,,,production-pi/results/20261112-150512/results.txt
+N2,N,N2 login_ms,dirty,pass,1073 (le 3000),,production-pi/results/20261112-150512/results.txt
+N3,N,N3 max_ms,dirty,pass,1018.46 (le 10000),,production-pi/results/20261112-150512/results.txt
+N3,N,N3 scan_max_ms,dirty,pass,841.307 (le 10000),,production-pi/results/20261112-150512/results.txt
+N3,N,N3 login_ms,dirty,pass,1186 (le 10000),,production-pi/results/20261112-150512/results.txt
+N4,N,N4 ok_pct,dirty,pass,100.000 (ge 99.9),,production-pi/results/20261112-150512/results.txt
+N4,N,N4 max_ms,dirty,pass,2204.04 (le 10000),,production-pi/results/20261112-150512/results.txt
+N5,N,N5a max_ms,dirty,pass,1253.42 (le 11000),,production-pi/results/20261112-150512/results.txt
+N5,N,N5b max_ms,dirty,pass,920.393 (le 11000),,production-pi/results/20261112-150512/results.txt
+N6,N,N6 http_5xx,dirty,pass,0 (le 0),,production-pi/results/20261112-150512/results.txt
+N6,N,N6 ok_pct,dirty,pass,100.000 (ge 99.9),,production-pi/results/20261112-150512/results.txt
+N7,N,N7 max_ms,dirty,pass,9358.45 (le 11000),,production-pi/results/20261112-150512/results.txt
+N7,N,N7 recovery_ms,dirty,pass,1910 (le 5000),,production-pi/results/20261112-150512/results.txt
+H8,H,H8 p95_rtt_ms,dirty,pass,234.939 (le 250),"p95 235 ms, 15 ms under the limit; 256 MB file instead of 1 GB",production-pi/results/20261112-153510/results.txt
+H8,H,H8 mariadb_commit_ms,dirty,pass,45 (le 100),"p95 235 ms, 15 ms under the limit; 256 MB file instead of 1 GB",production-pi/results/20261112-153510/results.txt
+H9,H,H9 mariadb_commit_ms,dirty,pass,15 (le 2000),256 MB file instead of 1 GB,production-pi/results/20261112-153510/results.txt
+H9,H,H9 semaphore_waits,dirty,pass,0 (le 0),256 MB file instead of 1 GB,production-pi/results/20261112-153510/results.txt
+H6,H,H6 backend running+healthy after the limit,dirty,void,PASS in the log: ,memory limit was never applied (memory cgroup off); PASS lines are meaningless,production-pi/results/20261112-153510/results.txt
+H6,H,H6 restart_delta,dirty,void,PASS in the log: 0 (le 1),memory limit was never applied (memory cgroup off); PASS lines are meaningless,production-pi/results/20261112-153510/results.txt
+N8,N,N8 ok_pct,dirty,pass,100.000 (ge 99),,production-pi/results/20261112-163355/results.txt
+N8,N,N8 restarts_delta,dirty,pass,0 (le 0),,production-pi/results/20261112-163355/results.txt
+N9,N,N9 first_request_ms,dirty,fail,15066 (le 5000),cloudflared needs ~15 s to rebuild its tunnel after a total blackout,production-pi/results/20261112-163355/results.txt
+N9,N,N9 restarts_delta,dirty,pass,0 (le 0),,production-pi/results/20261112-163355/results.txt
+N10,N,N10 reconnect_s,dirty,pass,2 (le 30),,production-pi/results/20261112-163355/results.txt
+N10,N,N10 other_restarts,dirty,pass,0 (le 0),,production-pi/results/20261112-163355/results.txt
+N11,N,N11 ok_pct,dirty,pass,100.000 (ge 99.9),,production-pi/results/20261112-163355/results.txt
+N11,N,N11 login_ms,dirty,pass,839 (le 10000),,production-pi/results/20261112-163355/results.txt
+D9,D,D9 watchdog device present,dirty,pass,,,production-pi/results/20261112-141627/results.txt
+D9,D,D9 systemd RuntimeWatchdogSec not set,dirty,fail,(setup_pi.sh --apply),"no RuntimeWatchdogSec, no dtparam=watchdog=on (baseline before setup_pi.sh)",production-pi/results/20261112-141627/results.txt
+D10,D,D10:mariadb log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:backend log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:proxy log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:redis log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:minio log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:mpi log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:cloudflared log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10:web log config 'json-file  ',dirty,fail,(daemon.json log-opts apply to NEW containers: recreate),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+D10,D,D10 journald SystemMaxUse not set,dirty,fail,(setup_pi.sh --apply),no log rotation on containers / journald not capped (baseline before setup_pi.sh),production-pi/results/20261112-141627/results.txt
+H1,H,H1 median_ms,pilot,pass,91.148 (le 1000),,test-pi/results/20261112-153040/results.txt
+H1,H,H1 ok_pct,pilot,pass,100.000 (ge 99.9),,test-pi/results/20261112-153040/results.txt
+H1,H,H1 p95_rtt_ms,pilot,pass,118.742 (le 250),,test-pi/results/20261112-153040/results.txt
+H1,H,H1 no new throttle bits,pilot,pass,(before=0x0 after=0x0 mask=0xFFFFFFFF),,test-pi/results/20261112-153040/results.txt
+H3,H,H3 p95_rtt_ms,pilot,pass,161.379 (le 500),,test-pi/results/20261112-153040/results.txt
+H4,H,H4 median_ms,pilot,void,PASS in the log: 142.369 (le 1000),superseded by the rerun (cloudflared false failure; cgroup was off),test-pi/results/20261112-153040/results.txt
+H4,H,H4 ok_pct,pilot,void,PASS in the log: 100.000 (ge 99.9),superseded by the rerun (cloudflared false failure; cgroup was off),test-pi/results/20261112-153040/results.txt
+H4,H,H4 swap_pages_per_s,pilot,void,FAIL in the log: 502 (le 100),superseded by the rerun (cloudflared false failure; cgroup was off),test-pi/results/20261112-153040/results.txt
+H4,H,H4 not running: cloudflared,pilot,void,FAIL in the log: ,superseded by the rerun (cloudflared false failure; cgroup was off),test-pi/results/20261112-153040/results.txt
+H6,H,H6 backend running+healthy after the limit,pilot,void,PASS in the log: ,memory limit was never applied (memory cgroup off),test-pi/results/20261112-153040/results.txt
+H6,H,H6 restart_delta,pilot,void,PASS in the log: 0 (le 1),memory limit was never applied (memory cgroup off),test-pi/results/20261112-153040/results.txt
+H8,H,H8 p95_rtt_ms,pilot,pass,92.835 (le 250),,test-pi/results/20261112-153040/results.txt
+H8,H,H8 mariadb_commit_ms,pilot,pass,23 (le 100),,test-pi/results/20261112-153040/results.txt
+H9,H,H9 mariadb_commit_ms,pilot,pass,13 (le 2000),,test-pi/results/20261112-153040/results.txt
+H9,H,H9 semaphore_waits,pilot,pass,0 (le 0),,test-pi/results/20261112-153040/results.txt
+H12,H,H12 no new throttle bits,pilot,pass,(before=0x0 after=0x0 mask=0x10001),,test-pi/results/20261112-153040/results.txt
+H4,H,H4 median_ms,pilot,pass,178.193 (le 1000),,test-pi/results/20261112-161440/results.txt
+H4,H,H4 ok_pct,pilot,pass,100.000 (ge 99.9),,test-pi/results/20261112-161440/results.txt
+H4,H,H4 swap_pages_per_s,pilot,fail,322 (le 100),swap churn 322 pages/s vs limit 100 (zram); latency held,test-pi/results/20261112-161440/results.txt
+H4,H,H4 all core containers running,pilot,pass,,,test-pi/results/20261112-161440/results.txt
+H6,H,H6 backend running+healthy after the limit,pilot,pass,,,test-pi/results/20261112-161440/results.txt
+H6,H,H6 restart_delta,pilot,pass,0 (le 1),,test-pi/results/20261112-161440/results.txt
+N1,N,N1 median_ms,pilot,pass,51.234 (le 1000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N1,N,N1 ok_pct,pilot,fail,29.930 (ge 99.9),"failed requests were HTTP 429: probe ran at 0.2 s gap (harness bug), not a stack failure",test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N2,N,N2 median_ms,pilot,pass,83.421 (le 3000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N2,N,N2 http_5xx,pilot,pass,0 (le 0),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N2,N,N2 static asset served compressed,pilot,pass,,,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N2,N,N2 login_ms,pilot,pass,843 (le 3000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N3,N,N3 max_ms,pilot,pass,7083.46 (le 10000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N3,N,N3 scan_max_ms,pilot,fail,10001.3 (le 10000),failed requests were HTTP 429 (probe gap bug),test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N3,N,N3 login http=000,pilot,fail,,failed requests were HTTP 429 (probe gap bug),test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N4,N,N4 ok_pct,pilot,pass,100.000 (ge 99.9),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N4,N,N4 max_ms,pilot,pass,9115.14 (le 10000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N5,N,N5a max_ms,pilot,pass,7300.14 (le 11000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N5,N,N5b max_ms,pilot,pass,10001.5 (le 11000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N6,N,N6 http_5xx,pilot,pass,0 (le 0),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N6,N,N6 ok_pct,pilot,fail,96.552 (ge 99.9),failed requests were HTTP 429 (probe gap bug),test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N7,N,N7 max_ms,pilot,pass,10001.6 (le 11000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N7,N,N7 recovery_ms,pilot,pass,2964 (le 5000),,test-pi/results/overnight-20261112-162945/net-N1-N7/results.txt
+N8,N,N8 ok_pct,pilot,fail,75.000 (ge 99),failed requests were HTTP 429 (probe gap bug),test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+N8,N,N8 restarts_delta,pilot,pass,0 (le 0),,test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+N9,N,N9 first_request_ms,pilot,fail,8092 (le 5000),,test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+N9,N,N9 restarts_delta,pilot,pass,0 (le 0),,test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+N11,N,N11 ok_pct,pilot,fail,75.000 (ge 99.9),failed requests were HTTP 429 (probe gap bug),test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+N11,N,N11 login_ms,pilot,pass,782 (le 10000),,test-pi/results/overnight-20261112-162945/net-N8-N9-N11/results.txt
+H5,H,H5 core process killed: gunicorn,pilot,fail,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H5,H,H5 all core containers running,pilot,pass,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H5,H,H5 mariadb-check clean,pilot,pass,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H10,H,H10 healthz_http,pilot,fail,0 (ge 200),,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H10,H,H10 mariadb-check clean while full,pilot,pass,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H10,H,H10 recovered in 22s with no manual repair,pilot,pass,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+H10,H,H10 all core containers running,pilot,pass,,,test-pi/results/overnight-20261112-162945/hw-H5-H10-H13/results.txt
+R1,R,test_r1_parallel_webhooks_one_payment,lap,pass,,,laptop/races.xml
+R2,R,test_r2_parallel_pay_never_exceeds_bill,lap,skip,SQLite serialises every writer (no row locks); run with DATABASE_URL=mysql+pymysql://... on MariaDB,,laptop/races.xml
+R3,R,test_r3_refund_two_admins_and_requester,lap,pass,,,laptop/races.xml
+R4,R,test_r4_double_booking_clinician_slot,lap,pass,,,laptop/races.xml
+R4,R,test_r4b_booking_capacity_not_exceeded,lap,pass,,,laptop/races.xml
+R5,R,test_r5_room_claim_single_holder,lap,pass,,,laptop/races.xml
+R6,R,test_r6_po_line_received_once,lap,pass,,,laptop/races.xml
+R7,R,test_r7_dispense_never_oversells,lap,pass,,,laptop/races.xml
+R8,R,test_r8_refresh_rotation_single_winner,lap,pass,,,laptop/races.xml
+R9,R,test_r9_lockout_cannot_be_bypassed_by_parallelism,lap,pass,,,laptop/races.xml
+R9,R,test_r9b_failed_counter_is_atomic,lap,pass,,,laptop/races.xml
+R10,R,test_r10_rate_limit_holds_under_burst,lap,pass,,,laptop/races.xml
+R11,R,test_r11_same_nric_one_patient,lap,pass,,,laptop/races.xml
+R12,R,test_r12_concurrent_clinical_edit_no_lost_update,lap,skip,R12: no optimistic version/If-Match on any editable clinical entity (ClinicalForm.version is append-,,laptop/races.xml
+R13,R,test_r13_signoff_during_merge_or_delete,lap,skip,R13: no patient delete/merge endpoint exists (FK ondelete uniformity is deferred until one is built),,laptop/races.xml
+R14,R,test_r14_federation_fetch_while_origin_updates,lap,skip,R14: needs two federated nodes + an updating origin; covered by test_mpi_federation (unit) and the l,,laptop/races.xml
+R15,R,test_r15_offline_log_upload_twice_concurrently,lap,pass,,,laptop/races.xml
+A14,A,test_a14_every_flipped_byte_is_rejected,lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[.],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C1],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C1.1],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C1.1.],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C2.1.AAAA],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C1.x.AAAA],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[C1.1.!!!!],lap,pass,,,laptop/races.xml
+A14,A,test_a14_malformed_blobs_rejected[AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA],lap,pass,,,laptop/races.xml
+A14,A,test_a14_truncated_and_extended_rejected,lap,pass,,,laptop/races.xml
+A14,A,test_a14_blob_is_bound_to_its_tag_uid,lap,pass,,,laptop/races.xml
+A14,A,test_a14_key_id_in_header_is_authenticated,lap,pass,,,laptop/races.xml
+A14,A,test_a14_wrong_master_secret_cannot_open,lap,pass,,,laptop/races.xml
+A14,A,test_a14_retired_key_is_not_handed_to_devices,lap,pass,,,laptop/races.xml
+A14,A,test_a14_nonces_never_repeat,lap,pass,,,laptop/races.xml
+A14,A,test_a14_revocation_id_is_stable_per_card_and_independent_of_key_rotation,lap,pass,,,laptop/races.xml
+A14,A,test_a14_replayed_blob_from_same_tag_is_refused,lap,xfail,NTAG213/215 have no tamper-proof read counter: a copied blob replays (needs NTAG 424 DNA),,laptop/races.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/register],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/me],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/switch-role],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/issue-account],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/change-password],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/mfa/status],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/setup/start],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/setup/confirm],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/disable],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/recovery-codes],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/reset/{user_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/sessions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /auth/sessions/{session_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/sessions/revoke-others],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/announcements],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/appointment-slots],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/booking-options],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/clinicians/{clinician_id}/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/campus-eligibility/{nric}],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/conditions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/conditions/{condition_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/medications],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/medications/{medication_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/allergies],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/allergies/{allergy_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/encounters],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/encounters/{encounter_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/profile],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/audit-log],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}/file],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}/thumbnail],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/encounters/{encounter_id}/visit-summary.pdf],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/documents/generate],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/annotations],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/annotations],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/issue],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/scan],dirty,fail,HTTP 422,public emergency endpoint validates input before auth (by design),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/location],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/locations/{patient_id}],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/revoke/{card_reference}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/current/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/register],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/scan],dirty,fail,HTTP 422,public emergency endpoint validates input before auth (by design),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/tag-keys],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/offline-reads],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/revoke/{token_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/nfc/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/nfc/{patient_id}/{card_id}/history],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /federation/patients/{patient_id}/other-visits],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /federation/patients/{patient_id}/visits/{facility_id}/{visit_ref}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/summary/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/interaction-check/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/prescription-screen/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ai/digitise/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/appointments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/appointments/{appointment_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests/{request_id}/accept],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests/{request_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/self-book],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/appointments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/inventory],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/{item_id}/image],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/inventory/{item_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/inventory/{item_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/inventory/delete-requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/delete-requests/{request_id}/approve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/delete-requests/{request_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/purchase-proposals],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/purchase-proposals/{proposal_id}/approve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/purchase-proposals/{proposal_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/budget],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/budget],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/hospital-settings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/hospital-settings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/role-permissions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/role-permissions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/wards],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/wards],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/wards/{ward_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/wards/{ward_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/floors],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/floors],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/floors/{floor_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/floors/{floor_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/rooms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/rooms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/rooms/{room_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/rooms/{room_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/sections],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/sections],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/sections/{section_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/sections/{section_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/announcements],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/announcements],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/announcements/{announcement_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/responders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/responders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/responders/{user_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/responders/{user_id}/revoke],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/users/{user_id}/roles],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/users/{user_id}/roles],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/users/{user_id}/roles/{role}],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/staff],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/staff/{user_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/staff/{user_id}/profile],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/staff/{user_id}/reset-password],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/admins],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/staff/{user_id}/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/staff/{user_id}/clock-history],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/waiting-room-displays],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/waiting-room-displays],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/waiting-room-displays/{display_id}/revoke],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/ldap-role-mappings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/ldap-role-mappings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/ldap-role-mappings/{mapping_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/ldap-role-mappings/{mapping_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/audit/chain-status],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/security-alerts],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/security-alerts/summary],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/scan],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/acknowledge],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/resolve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/explain],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/data-quality],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/data-quality/summary],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/scan],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/{alert_id}/acknowledge],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/{alert_id}/resolve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/dpo-register],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/dpo-register],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/retention-policies],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/retention-policies/{category}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/retention/scan],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/retention/review],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/retention/review/{item_id}/disposition],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /staff/clock-in],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /staff/clock-out],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /staff/clock-status],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/patients/{patient_id}/registration-claims],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/registration-claims/{claim_id}/approve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/registration-claims/{claim_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /auth/flagged-emails/{email}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/checkin],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/sections],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/call],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/complete],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/assign-room],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue/{ticket_id}/ticket.escpos],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue/status/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/station],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/station],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/station/revoke],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/self-checkin],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/rooms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/rooms/{room_id}/claim],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/rooms/release],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/my-room],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/admissions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/admissions],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /reception/admissions/{admission_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/admissions/{admission_id}/movements],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/admissions/{admission_id}/discharge],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/ward-map],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/low-stock],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/summary],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/adjust],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/dispense],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/{item_id}/image],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/image],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/{item_id}/image/thumbnail],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/delete-request],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/purchase-proposals],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/purchase-proposals],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/rooms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/my-room],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/session/start],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/session/end],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/call],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/complete],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/cds-hint],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/voice-to-soap],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/encounters/{encounter_id}/note],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/signature],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /me/signature],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /me/signature],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/hospital],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /me/profile],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /me/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /me/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /staff/{user_id}/photo],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/consent],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/consent],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests/{dsr_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/assign],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/complete],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/extend],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests/{dsr_id}/export],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/catalog],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/catalog],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /ancillary/catalog/{item_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/label],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/result],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/result/document],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/result/document],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/attachments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/attachments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/attachments/{attachment_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /ancillary/requests/{request_id}/attachments/{attachment_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/stats],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/analyser-inbox],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/analyser-inbox/{inbox_id}/discard],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pacs/requests/{request_id}/study],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pacs/requests/{request_id}/study],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pacs/requests/{request_id}/study/instances/{instance_id}/file],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dental/chart-options],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dental/chart/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /dental/chart],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/charge-master],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/charge-master],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/charge-master/import-template],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/charge-master/import],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /billing/charge-master/{item_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/bills],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/bills/{bill_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/items],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/items/{item_id}/void],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/finalize],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/void],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/payments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/payments/{payment_id}/void],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/claims],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /billing/claims/{claim_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/submit],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/approve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/void],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/stats],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/datasets],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/run],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/export],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/narrative],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/visit-volume],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/disease-burden],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/stock-depletion],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/risk-stratification],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/templates],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/templates],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /reports/templates/{template_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases/candidates],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/notifiable-diseases],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/notifiable-diseases/{report_id}/submitted],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases/{report_id}/document],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dashboard/summary],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dashboard/flow-forecast],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/metadata],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Patient/{patient_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Condition/{condition_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Condition],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/MedicationStatement/{medication_statement_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/MedicationStatement],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/AllergyIntolerance/{allergy_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/AllergyIntolerance],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Encounter/{encounter_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Encounter],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/ServiceRequest/{service_request_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/ServiceRequest],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DiagnosticReport/{service_result_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DiagnosticReport],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DocumentReference/{document_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DocumentReference],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /notifications],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /notifications/unread-count],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /notifications/read-all],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /notifications/{notification_id}/read],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reference],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reference/{kind}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /drugs],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /drugs/{drug_code}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /products],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /products/{product_code}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /price-tiers],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fee-schedules],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/demographics],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /sponsors],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /sponsors],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /sponsors/{sponsor_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/dependants],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/dependants],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /patients/{patient_id}/dependants/{link_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profile/directives],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /profile/directives/{kind}],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/directives],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/directives],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profiles],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles/switch],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profiles/guardians],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /profiles/guardians/{link_id}],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles/guardians/{link_id}/approve],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/orders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/orders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /orders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /orders/{order_id}/complete],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /orders/{order_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/patients/{patient_id}/prescription/pdf],dirty,fail,HTTP 404,route not in the deployed build (production image is older than the repo),production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /forms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /forms],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /forms/{form_id}/deactivate],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/forms/{form_id}/responses],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/form-responses],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/categories],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities/{facility_name}/availability],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities/{facility_name}/slots],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/appointments],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/appointments/{appointment_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/profiles],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/profiles],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /booking/profiles/{profile_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /booking/profiles/{profile_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/admin/settings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /booking/admin/settings],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/suppliers],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/suppliers],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /purchasing/suppliers/{supplier_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/orders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/orders/{order_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/place],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/receive],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/my-bills],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/bills/{bill_id}/intents],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/intents/{intent_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/intents/{intent_id}/cancel],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/intents/{intent_id}/simulate],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/receipts/{payment_id}],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/receipts/{payment_id}/pdf],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/receipts/{payment_id}/email],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/my-history],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/reconciliation],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/reconciliation/pdf],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/outstanding],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/payments/{payment_id}/refunds],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/refunds],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/refunds/{refund_id}/approve],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/refunds/{refund_id}/reject],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/deposits],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits/{deposit_id}/apply],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits/{deposit_id}/refund],dirty,pass,,,production-sec/sec.log
+A1,A,test_a1_public_route_inventory,dirty,fail,,POST /payments/webhook/{provider} is unauthenticated by design (HMAC signature),production-sec/sec.log
+A1,A,test_a1_role_matrix,dirty,void,502 responses while the tunnel was down (N9/N10),502s during the N9/N10 outage; needs a clean rerun,production-sec/sec.log
+A2,A,test_a2_idor_foreign_ids_refused,dirty,skip,set SEC_FOREIGN_PATIENT_ID (etc.) and SEC_PATIENT_USER/PASS or SEC_OTHERFAC_USER/PASS,,production-sec-rerun/sec-rerun.xml
+A3,A,test_a3_rate_limit_and_spoofed_forwarded_for,dirty,skip,SEC_RUN_BURST=1 to run (trips the per-IP login limiter),,production-sec-rerun/sec-rerun.xml
+A4,A,test_a4_login_injection_strings_rejected[' OR '1'='1' --],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A4,A,test_a4_login_injection_strings_rejected[admin'--],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A4,A,test_a4_login_injection_strings_rejected[*)(uid=*))(|(uid=*],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A4,A,test_a4_login_injection_strings_rejected[\x00],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A4,A,test_a4_login_injection_strings_rejected[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/../../../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/..%2f..%2f..%2fetc%2fpasswd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/%2e%2e/%2e%2e/etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/%252e%252e/%252e%252e/etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/....//....//etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/assets/..%2f..%2f..%2fetc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/static/../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/maintenance/..%2f..%2fetc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[True-/maintenance/../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/../../../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/..%2f..%2f..%2fetc%2fpasswd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/%2e%2e/%2e%2e/etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/%252e%252e/%252e%252e/etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/....//....//etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/assets/..%2f..%2f..%2fetc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/static/../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/maintenance/..%2f..%2fetc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_path_traversal_not_served[False-/maintenance/../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_traversal_in_path_params[../../etc/passwd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_traversal_in_path_params[%2e%2e%2f%2e%2e%2fetc%2fpasswd],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_traversal_in_path_params[..\\..\\windows\\win.ini],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_traversal_in_path_params[x\x00.png],dirty,fail,"httpx.InvalidURL: Invalid non-printable ASCII character in URL, '\x00' at position 52.",client library refuses to send a NUL byte (harness error),production-sec-rerun/sec-rerun.xml
+A5,A,test_a5_upload_abuse,dirty,skip,SEC_UPLOAD (+SEC_USER/PASS) not set,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.DS_Store],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env.docker],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env.tunnel],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.git/HEAD],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/.git/config],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/backend/.env],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/backup.sql],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/clarion.db],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/docker-compose.pi.yml],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/docker-compose.yml],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/docs],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/dump.sql],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/openapi.json],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/proxy/Caddyfile],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/redoc],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/requirements.txt],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[True-/server-status],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.DS_Store],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env],dirty,fail,"AssertionError: /.env exposed (root)
+assert not (200 == 200 and '=' in '<!doctype html>\n<",false positive: SPA index.html returned with 200,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env.docker],dirty,fail,"AssertionError: /.env.docker exposed (root)
+assert not (200 == 200 and '=' in '<!doctype h",false positive: SPA index.html returned with 200,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env.tunnel],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.git/HEAD],dirty,fail,"AssertionError: /.git/HEAD exposed (root)
+assert not (200 == 200 and 'ref:' in '<!doctype ",false positive: SPA index.html returned with 200,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/.git/config],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/backend/.env],dirty,fail,"AssertionError: /backend/.env exposed (root)
+assert not (200 == 200 and '=' in '<!doctype ",false positive: SPA index.html returned with 200,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/backup.sql],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/clarion.db],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/docker-compose.pi.yml],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/docker-compose.yml],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/docs],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/dump.sql],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/openapi.json],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/proxy/Caddyfile],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/redoc],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/requirements.txt],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_no_sensitive_paths[False-/server-status],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A6,A,test_a6_errors_do_not_leak_internals,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A7,A,test_a7_jwt_forgeries_rejected,dirty,fail,httpx.LocalProtocolError: Illegal header value b'Bearer ',client library refuses an empty 'Bearer ' header (harness error),production-sec-rerun/sec-rerun.xml
+A8,A,test_a8_ssrf_candidates_listed,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+A8,A,test_a8_ssrf_targets_refused,dirty,skip,SEC_SSRF and SEC_ADMIN_USER/PASS not set,,production-sec-rerun/sec-rerun.xml
+A12,A,test_a12_gitleaks_clean,dirty,skip,gitleaks not installed,,production-sec/sec.log
+A12,A,test_a12_container_env_has_no_default_secrets,dirty,skip,needs SEC_DOCKER=1 on the Pi,,production-sec/sec.log
+A13,A,test_a13_audit_logs_append_only_as_app_account,dirty,skip,needs MARIADB_APP_PASSWORD on the Pi,,production-sec/sec.log
+CK1,CK,test_ck1_cookie_attributes,dirty,fail,"AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=[redacted];",refresh cookie has Path=/ (sent to every route),production-sec-rerun/sec-rerun.xml
+CK1,CK,test_ck1b_host_prefix,dirty,xfail,no __Host- prefix (needs Path=/ and no Domain; conflicts with a narrowed Path),,production-sec-rerun/sec-rerun.xml
+CK10,CK,test_ck10_no_domain_attribute,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+CK2,CK,test_ck2_plaintext_http_redirects_without_cookie,dirty,fail,"AssertionError: GET http:// returned 200, not a redirect
+assert 200 in (301, 302, 307, 308",plain http returns 200 (Cloudflare 'Always Use HTTPS' off),production-sec-rerun/sec-rerun.xml
+CK6,CK,test_ck6_no_token_in_url_or_js_storage,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+CK6,CK,test_ck6b_token_not_in_server_logs,dirty,skip,SEC_LOG_CMD not set,,production-sec-rerun/sec-rerun.xml
+CK7,CK,test_ck7_replay_after_logout,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+CK7,CK,test_ck7_rotation_reuse_revokes_family,dirty,fail,"AssertionError: family not revoked after reuse (B still works)
+assert 200 == 401
+ +  where",family not revoked after reuse; may be inside the 8 s grace window (to check),production-sec-rerun/sec-rerun.xml
+CK8,CK,test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/refresh],dirty,xfail,/auth/refresh honours a cookie sent with a foreign Origin; defence relies on SameSite=Stri,,production-sec-rerun/sec-rerun.xml
+CK8,CK,test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/logout],dirty,xfail,/auth/logout honours a cookie sent with a foreign Origin; defence relies on SameSite=Stric,,production-sec-rerun/sec-rerun.xml
+CK8,CK,test_ck8b_samesite_blocks_when_not_strict,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+CK9,CK,test_ck9_csp_blocks_inline_script,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+CK11,CK,test_ck11_no_store_on_set_cookie_responses,dirty,fail,"AssertionError: login response Cache-Control='' (needs no-store)
+assert 'no-store' in ''",login response lacks Cache-Control: no-store,production-sec-rerun/sec-rerun.xml
+T2,T,test_hsts_max_age_one_year,dirty,xfail,HSTS max-age=300 (< 31536000) accepted only because APP_ENV=demo,"HSTS max-age 300, accepted only because APP_ENV=demo",production-sec-rerun/sec-rerun.xml
+T1,T,test_t1_tls12_and_13_accepted,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T1,T,test_t1_legacy_tls_refused[TLSv1],dirty,fail,Failed: TLSv1 handshake succeeded (TLSv1),Cloudflare edge accepts TLS 1.0/1.1 (set minimum TLS 1.2),production-sec-rerun/sec-rerun.xml
+T1,T,test_t1_legacy_tls_refused[TLSv1_1],dirty,fail,Failed: TLSv1_1 handshake succeeded (TLSv1.1),Cloudflare edge accepts TLS 1.0/1.1 (set minimum TLS 1.2),production-sec-rerun/sec-rerun.xml
+T2,T,test_t2_security_headers[/],dirty,xfail,HSTS max-age=300 (demo),,production-sec-rerun/sec-rerun.xml
+T2,T,test_t2_security_headers[/api/healthz],dirty,xfail,HSTS max-age=300 (demo),,production-sec-rerun/sec-rerun.xml
+T2,T,test_t2_no_wildcard_cors_with_credentials,dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T3,T,test_t3_http_redirects_and_serves_nothing,dirty,fail,"assert 200 in (301, 302, 307, 308)
+ +  where 200 = <Response [200 OK]>.status_code",plain http returns 200 (Cloudflare 'Always Use HTTPS' off),production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/metrics],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/readyz],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/docs],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/redoc],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/openapi.json],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/METRICS],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/Readyz],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/metrics/],dirty,fail,"AssertionError: https://clarion.larmkx.com/api/metrics/ -> 307
+assert 307 in (403, 404)
+ +","trailing-slash /metrics/ answers 307 (probably benign, to confirm)",production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[//metrics],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/%6detrics],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/%2e/metrics],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T6,T,test_t6_diagnostics_not_public[/docs/oauth2-redirect],dirty,pass,,,production-sec-rerun/sec-rerun.xml
+T7,T,test_t7_origin_ip_does_not_answer,dirty,skip,ORIGIN_IP not set,,production-sec-rerun/sec-rerun.xml
+T1,T,test_t1_testssl_json_if_available,dirty,skip,testssl.sh not installed,,production-sec-rerun/sec-rerun.xml
+H7,H,H7 memory-growth soak (24 h),dirty,void,halted by the owner after about 30 min (217 samples); no verdict,,production-pi/results/20261112-163950
+H11,H,H11 SD/eMMC writes per day,dirty,void,"baseline taken, second reading never done (run halted); no verdict",,production-pi/results/20261112-162341
+D11,D,D11 (will not run on the Pi),clean,excluded,skipped by the owner: stopped after 10 of 6 h; the 10-minute partial reading is not a verdict,,clean-pi/campaign/not-run.txt
+CK5,CK,CK5 (will not run on the Pi),clean,excluded,manual: HSTS stripping needs a LAN rig with mitmproxy,,clean-pi/campaign/not-run.txt
+N12,N,N12 (will not run on the Pi),clean,excluded,manual: phone in airplane mode + NFC tag,,clean-pi/campaign/not-run.txt
+D5,D,D5 (will not run on the Pi),clean,excluded,needs a smart plug (POWER_CYCLE_CMD),,clean-pi/campaign/not-run.txt
+D8,D,D8 (will not run on the Pi),clean,excluded,needs a restic repo + backup sandbox,,clean-pi/campaign/not-run.txt
+RN4,RN,RN4 (will not run on the Pi),clean,excluded,UI race: needs a browser (Playwright),,clean-pi/campaign/not-run.txt
+RN5,RN,RN5 (will not run on the Pi),clean,excluded,needs a 15 min token expiry,,clean-pi/campaign/not-run.txt
+RN8,RN,RN8 (will not run on the Pi),clean,excluded,true half-open sockets need hardware,,clean-pi/campaign/not-run.txt
+T7,T,T7 (will not run on the Pi),clean,excluded,needs the Pi's public address (ORIGIN_IP),,clean-pi/campaign/not-run.txt
+A2,A,A2 (will not run on the Pi),clean,excluded,needs a foreign patient id / second login (SEC_FOREIGN_PATIENT_ID),,clean-pi/campaign/not-run.txt
+A8,A,A8 (will not run on the Pi),clean,excluded,needs the SSRF endpoint list (SEC_SSRF),,clean-pi/campaign/not-run.txt
+A14,A,A14 (will not run on the Pi),clean,excluded,needs NTAG 424 DNA hardware; tag crypto is covered in-process on the laptop,,clean-pi/campaign/not-run.txt
+R3,R,R3 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R5,R,R5 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R6,R,R6 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R7,R,R7 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R12,R,R12 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R13,R,R13 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R14,R,R14 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+R15,R,R15 (will not run on the Pi),clean,excluded,no live version; covered in-process on the laptop only,,clean-pi/campaign/not-run.txt
+N1,N,N1 median_ms=266.312 (le 1000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N1,N,N1 ok_pct=99.764 (ge 99.9),clean,fail,,,clean-pi/campaign/net-N1-N7/results.txt
+N2,N,N2 median_ms=296.853 (le 3000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N2,N,N2 http_5xx=0 (le 0),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N2,N,N2 static asset served compressed,clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N2,N,N2 login_ms=997 (le 3000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N3,N,N3 max_ms=433.484 (le 10000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N3,N,N3 scan_max_ms=441.32 (le 10000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N3,N,N3 login_ms=1035 (le 10000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N4,N,N4 ok_pct=100.000 (ge 99.9),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N4,N,N4 max_ms=1168.84 (le 10000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N5,N,N5a max_ms=1351.25 (le 11000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N5,N,N5b max_ms=792.26 (le 11000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N6,N,N6 http_5xx=0 (le 0),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N6,N,N6 ok_pct=100.000 (ge 99.9),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N7,N,N7 max_ms=9472.22 (le 11000),clean,pass,,,clean-pi/campaign/net-N1-N7/results.txt
+N7,N,N7 recovery_ms=22798 (le 5000),clean,fail,,,clean-pi/campaign/net-N1-N7/results.txt
+H1,H,H1 median_ms=84.545 (le 1000),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H1,H,H1 ok_pct=100.000 (ge 99.9),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H1,H,H1 p95_rtt_ms=113.305 (le 250),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H1,H,H1 no new throttle bits (before=0x0 after=0x0 mask=0xFFFFFFFF),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H3,H,H3 p95_rtt_ms=155.49 (le 500),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H4,H,H4 median_ms=154.941 (le 1000),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H4,H,H4 ok_pct=100.000 (ge 99.9),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H4,H,H4 swap_pages_per_s=348 (le 100),clean,fail,,,clean-pi/campaign/hw-safe/results.txt
+H4,H,H4 all core containers running,clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H6,H,H6 backend running+healthy after the limit,clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H6,H,H6 restart_delta=0 (le 1),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H8,H,H8 p95_rtt_ms=252.847 (le 250),clean,fail,,,clean-pi/campaign/hw-safe/results.txt
+H8,H,H8 mariadb_commit_ms=26 (le 100),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H9,H,H9 mariadb_commit_ms=14 (le 2000),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H9,H,H9 semaphore_waits=0 (le 0),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H12,H,H12 no new throttle bits (before=0x0 after=0x0 mask=0x10001),clean,pass,,,clean-pi/campaign/hw-safe/results.txt
+H2,H,H2 max_temp_c=46.7 (le 80),clean,pass,,,clean-pi/campaign/hw-H2/results.txt
+H2,H,H2 no new throttle bits (before=0x0 after=0x0 mask=0x50005),clean,pass,,,clean-pi/campaign/hw-H2/results.txt
+N8,N,N8 ok_pct=100.000 (ge 99),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N8,N,N8 restarts_delta=0 (le 0),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N9,N,N9 first_request_ms=26417 (le 5000),clean,fail,,,clean-pi/campaign/net-disruptive/results.txt
+N9,N,N9 restarts_delta=0 (le 0),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N10,N,N10 reconnect_s=2 (le 30),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N10,N,N10 other_restarts=0 (le 0),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N11,N,N11 ok_pct=100.000 (ge 99.9),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+N11,N,N11 login_ms=1046 (le 10000),clean,pass,,,clean-pi/campaign/net-disruptive/results.txt
+H5,H,H5 inconclusive: no OOM kill seen (stressor exited or swap absorbed it,clean,skip,,,clean-pi/campaign/hw-risky/results.txt
+H5,H,H5 all core containers running,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H5,H,H5 mariadb-check clean,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H10,H,H10 healthz_http=200 (ge 200),clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H10,H,H10 mariadb-check clean while full,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H10,H,H10 recovered in 0s with no manual repair,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H10,H,H10 all core containers running,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H13,H,H13 max_ms=835.765 (le 10000),clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H13,H,H13 pct_5xx=0.000 (le 0.1),clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+H13,H,H13 all core containers running,clean,pass,,,clean-pi/campaign/hw-risky/results.txt
+D1,D,D1:web not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:redis not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:mpi not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:minio not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:backend not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:proxy not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:mariadb not healthy within 30s of the kill (needs manual action?),clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:mariadb mariadb-check clean after SIGKILL,clean,pass,,,clean-pi/campaign/dur-destructive/results.txt
+D1,D,D1:cloudflared not healthy within 30s of the kill (needs manual action,clean,fail,,,clean-pi/campaign/dur-destructive/results.txt
+D7,D,D7 clean read ok; flipped and truncated objects refused by the sha256 ,clean,pass,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D9,D,D9 watchdog device present,clean,pass,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D9,D,D9 systemd RuntimeWatchdogSec not set (setup_pi.sh --apply),clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:mariadb log config 'json-file  ' (daemon.json log-opts apply to NE,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:backend log config 'json-file  ' (daemon.json log-opts apply to NE,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:proxy log config 'json-file  ' (daemon.json log-opts apply to NEW ,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:redis log config 'json-file  ' (daemon.json log-opts apply to NEW ,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:minio log config 'json-file  ' (daemon.json log-opts apply to NEW ,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:mpi log config 'json-file  ' (daemon.json log-opts apply to NEW co,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:cloudflared log config 'json-file  ' (daemon.json log-opts apply t,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10:web log config 'json-file  ' (daemon.json log-opts apply to NEW co,clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10 journald SystemMaxUse not set (setup_pi.sh --apply),clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+D10,D,D10 logdir_after_1GB_mb=3933 (le 35),clean,fail,,,clean-pi/campaign/dur-D7-D9-D10/results.txt
+H11,H,H11 gb_written_per_day=47.71 (le 5),clean,fail,,,clean-pi/campaign/h11-second/results.txt
+D4,D,"D4 mariadb up (waited 7s, uptime 15s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 backend up (waited 16s, uptime 24s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 proxy up (waited 0s, uptime 8s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 redis up (waited 0s, uptime 8s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 minio up (waited 0s, uptime 8s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 mpi up (waited 6s, uptime 14s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 cloudflared up (waited 0s, uptime 8s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,"D4 web up (waited 0s, uptime 8s)",clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,D4 serving_uptime_s=73 (le 180),clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,D4 backend_healthz=200 (ge 200),clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,D4 mariadb-check clean,clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+D4,D,D4 row counts >= counts.pre,clean,pass,,,clean-pi/campaign/D4-verify/results.txt
+R1,R,test_r1_parallel_simulate_one_payment,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R2,R,test_r2_parallel_pay_never_exceeds_bill,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R11,R,test_r11_same_nric_one_patient,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R4,R,test_r4_double_booking_one_slot,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R8,R,test_r8_refresh_rotation_single_winner,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R9,R,test_r9_lockout_not_bypassed_by_parallelism,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+R10,R,test_r10_rate_limit_holds,clean,pass,,,clean-pi/campaign/race-live-rerun/races-live.xml
+RN1,RN,test_rn1_lost_response_retry_same_intent,clean,pass,,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN1,RN,test_rn1b_generic_idempotency_key_header,clean,xfail,GAP: no generic Idempotency-Key header; POST /patients (and other non-payment POSTs) creat,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN2,RN,test_rn2_lost_refresh_response_is_recoverable,clean,pass,,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN2,RN,test_rn2b_replay_after_grace_revokes_family,clean,fail,"AssertionError: assert 200 == 401
+ +  where 200 = <Response [200 OK]>.status_code
+ +    wh",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN3,RN,test_rn3_double_submit_on_slow_link_one_record,clean,fail,"AssertionError: [409, 409]
+assert 0 == 1
+ +  where 0 = len(set())",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN4,RN,test_rn4_out_of_order_responses,clean,skip,"RN4 is a UI race (stale response painted last): covered by the Playwright suite, not the A",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN5,RN,test_rn5_token_expiry_during_slow_request,clean,skip,RN5 needs a 15-minute access token to expire mid-upload: rerun manually with a short ACCES,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN6,RN,test_rn6_two_clients_refreshing_on_flaky_link,clean,pass,,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN7,RN,test_rn7_webhook_bad_signature_rejected_under_brownout,clean,pass,,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN7,RN,test_rn7b_signed_webhook_replayed_10x_settles_once,clean,fail,KeyError: 'provider_ref',,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN7,RN,test_rn7c_old_timestamp_rejected,clean,xfail,"[NOTRUN] GAP: webhook events carry no timestamp, so an old-but-validly-signed event cannot",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN8,RN,test_rn8_stalled_clients_do_not_starve_workers,clean,pass,,,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN9,RN,test_rn9_retry_storm_after_blackout,clean,fail,"AssertionError: {200: 27, 'gave_up': 73}
+assert 27 >= 95
+ +  where 27 = <built-in method c",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+RN10,RN,test_rn10_offline_queue_replay_exactly_once,clean,fail,"AssertionError: {'chain_broken': 0, 'conflicts': 0, 'duplicates': 0, 'stored': 25}
+assert ",,clean-pi/campaign/rn-live-rerun/rn-live.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/register],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/me],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/switch-role],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/issue-account],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/change-password],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/mfa/status],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/setup/start],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/setup/confirm],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/disable],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/recovery-codes],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/mfa/reset/{user_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/sessions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /auth/sessions/{session_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/sessions/revoke-others],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/announcements],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/appointment-slots],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/booking-options],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/clinicians/{clinician_id}/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/campus-eligibility/{nric}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/conditions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/conditions/{condition_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/medications],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/medications/{medication_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/allergies],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/allergies/{allergy_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/encounters],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/encounters/{encounter_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/profile],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/audit-log],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}/file],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/documents/{document_id}/thumbnail],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/encounters/{encounter_id}/visit-summary.pdf],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/documents/generate],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/annotations],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/annotations],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/issue],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/scan],clean,fail,"AssertionError: anonymous POST /emergency/scan -> 422
+assert 422 in (401, 403)
+ +  where 4",,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/location],clean,fail,"AssertionError: anonymous POST /emergency/location -> 422
+assert 422 in (401, 403)
+ +  whe",,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/locations/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/revoke/{card_reference}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/current/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/register],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/scan],clean,fail,"AssertionError: anonymous POST /emergency/nfc/scan -> 422
+assert 422 in (401, 403)
+ +  whe",,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/tag-keys],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/offline-reads],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /emergency/nfc/revoke/{token_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/nfc/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /emergency/nfc/{patient_id}/{card_id}/history],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /federation/patients/{patient_id}/other-visits],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /federation/patients/{patient_id}/visits/{facility_id}/{visit_ref}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/summary/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/interaction-check/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ai/prescription-screen/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ai/digitise/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/appointments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/appointments/{appointment_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests/{request_id}/accept],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/{appointment_id}/reschedule-requests/{request_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/appointments/self-book],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/appointments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/inventory],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/{item_id}/image],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/inventory/{item_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/inventory/{item_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/inventory/delete-requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/delete-requests/{request_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/inventory/delete-requests/{request_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/purchase-proposals],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/purchase-proposals/{proposal_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/purchase-proposals/{proposal_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/budget],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/budget],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/hospital-settings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/hospital-settings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/role-permissions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/role-permissions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/wards],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/wards],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/wards/{ward_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/wards/{ward_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/floors],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/floors],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/floors/{floor_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/floors/{floor_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/rooms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/rooms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/rooms/{room_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/rooms/{room_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/sections],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/sections],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/sections/{section_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/sections/{section_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/announcements],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/announcements],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/announcements/{announcement_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/responders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/responders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/responders/{user_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/responders/{user_id}/revoke],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/users/{user_id}/roles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/users/{user_id}/roles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/users/{user_id}/roles/{role}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/staff],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/staff/{user_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /admin/staff/{user_id}/profile],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/staff/{user_id}/reset-password],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/admins],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/staff/{user_id}/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/staff/{user_id}/clock-history],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/waiting-room-displays],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/waiting-room-displays],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/waiting-room-displays/{display_id}/revoke],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/ldap-role-mappings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/ldap-role-mappings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/ldap-role-mappings/{mapping_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /admin/ldap-role-mappings/{mapping_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/audit/chain-status],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/security-alerts],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/security-alerts/summary],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/scan],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/acknowledge],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/resolve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/security-alerts/{alert_id}/explain],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/data-quality],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/data-quality/summary],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/scan],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/{alert_id}/acknowledge],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/data-quality/{alert_id}/resolve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/dpo-register],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/dpo-register],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/retention-policies],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /admin/retention-policies/{category}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/retention/scan],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /admin/retention/review],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /admin/retention/review/{item_id}/disposition],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /staff/clock-in],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /staff/clock-out],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /staff/clock-status],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /auth/patients/{patient_id}/registration-claims],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/registration-claims/{claim_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /auth/patients/{patient_id}/registration-claims/{claim_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /auth/flagged-emails/{email}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/checkin],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/sections],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/call],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/complete],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/queue/{ticket_id}/assign-room],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue/{ticket_id}/ticket.escpos],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/queue/status/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/station],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/station],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/station/revoke],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/self-checkin],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/rooms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/rooms/{room_id}/claim],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/rooms/release],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/my-room],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/admissions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/admissions],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /reception/admissions/{admission_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/admissions/{admission_id}/movements],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reception/admissions/{admission_id}/discharge],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reception/ward-map],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/low-stock],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/summary],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/adjust],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/dispense],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/{item_id}/image],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/image],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/inventory/{item_id}/image/thumbnail],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/inventory/{item_id}/delete-request],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/purchase-proposals],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pharmacy/purchase-proposals],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/rooms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/my-room],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/session/start],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/session/end],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/call],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/complete],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/cds-hint],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /consultation/tickets/{ticket_id}/voice-to-soap],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /consultation/encounters/{encounter_id}/note],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/signature],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /me/signature],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /me/signature],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/hospital],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /me/profile],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /me/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /me/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /me/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /staff/{user_id}/photo],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/consent],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/consent],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests/{dsr_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/assign],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/complete],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pdpa/requests/{dsr_id}/extend],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pdpa/requests/{dsr_id}/export],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/catalog],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/catalog],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /ancillary/catalog/{item_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/label],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/result],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/result/document],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/result/document],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/attachments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/requests/{request_id}/attachments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/requests/{request_id}/attachments/{attachment_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /ancillary/requests/{request_id}/attachments/{attachment_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/stats],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /ancillary/analyser-inbox],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /ancillary/analyser-inbox/{inbox_id}/discard],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pacs/requests/{request_id}/study],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /pacs/requests/{request_id}/study],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pacs/requests/{request_id}/study/instances/{instance_id}/file],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dental/chart-options],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dental/chart/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /dental/chart],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/charge-master],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/charge-master],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/charge-master/import-template],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/charge-master/import],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /billing/charge-master/{item_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/bills],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/bills/{bill_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/items],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/items/{item_id}/void],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/finalize],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/void],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/payments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/payments/{payment_id}/void],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/bills/{bill_id}/claims],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /billing/claims/{claim_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/submit],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/claims/{claim_id}/void],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/stats],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/datasets],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/run],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/export],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/narrative],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/visit-volume],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/disease-burden],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/stock-depletion],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/predictive/risk-stratification],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/templates],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/templates],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /reports/templates/{template_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases/candidates],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/notifiable-diseases],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /reports/notifiable-diseases/{report_id}/submitted],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reports/notifiable-diseases/{report_id}/document],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dashboard/summary],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /dashboard/flow-forecast],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/metadata],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Patient/{patient_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Condition/{condition_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Condition],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/MedicationStatement/{medication_statement_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/MedicationStatement],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/AllergyIntolerance/{allergy_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/AllergyIntolerance],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Encounter/{encounter_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/Encounter],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/ServiceRequest/{service_request_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/ServiceRequest],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DiagnosticReport/{service_result_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DiagnosticReport],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DocumentReference/{document_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fhir/DocumentReference],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /notifications],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /notifications/unread-count],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /notifications/read-all],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /notifications/{notification_id}/read],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reference],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /reference/{kind}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /drugs],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /drugs/{drug_code}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /products],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /products/{product_code}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /price-tiers],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /fee-schedules],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /patients/{patient_id}/demographics],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /sponsors],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /sponsors],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /sponsors/{sponsor_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/dependants],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/dependants],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /patients/{patient_id}/dependants/{link_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profile/directives],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /profile/directives/{kind}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/directives],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/directives],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profiles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles/switch],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /profiles/guardians],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /profiles/guardians/{link_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /profiles/guardians/{link_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/orders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/orders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /orders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /orders/{order_id}/complete],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /orders/{order_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /pharmacy/patients/{patient_id}/prescription/pdf],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /forms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /forms],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /forms/{form_id}/deactivate],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /patients/{patient_id}/forms/{form_id}/responses],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /patients/{patient_id}/form-responses],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/categories],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities/{facility_name}/availability],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/facilities/{facility_name}/slots],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/appointments],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/appointments/{appointment_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/profiles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /booking/profiles],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /booking/profiles/{profile_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[DELETE /booking/profiles/{profile_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /booking/admin/settings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PUT /booking/admin/settings],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/suppliers],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/suppliers],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[PATCH /purchasing/suppliers/{supplier_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/orders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /purchasing/orders/{order_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/place],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /purchasing/orders/{order_id}/receive],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/my-bills],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/bills/{bill_id}/intents],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/intents/{intent_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/intents/{intent_id}/cancel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/intents/{intent_id}/simulate],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/receipts/{payment_id}],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/receipts/{payment_id}/pdf],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /payments/receipts/{payment_id}/email],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /payments/my-history],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/reconciliation],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/reconciliation/pdf],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/outstanding],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/payments/{payment_id}/refunds],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/refunds],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/refunds/{refund_id}/approve],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/refunds/{refund_id}/reject],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[GET /billing/deposits],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits/{deposit_id}/apply],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_anonymous_refused_on_every_secured_route[POST /billing/deposits/{deposit_id}/refund],clean,pass,,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_public_route_inventory,clean,fail,AssertionError: unauthenticated operations under sensitive prefixes: ['POST /payments/webh,,clean-pi/campaign/sec/app.xml
+A1,A,test_a1_role_matrix,clean,pass,,,clean-pi/campaign/sec/app.xml
+A2,A,test_a2_idor_foreign_ids_refused,clean,skip,set SEC_FOREIGN_PATIENT_ID (etc.) and SEC_PATIENT_USER/PASS or SEC_OTHERFAC_USER/PASS,,clean-pi/campaign/sec/app.xml
+A3,A,test_a3_rate_limit_and_spoofed_forwarded_for,clean,fail,"AssertionError: spoofed X-Forwarded-For bypassed the limiter: [403, 403, 403, 403, 403, 40",,clean-pi/campaign/sec/app.xml
+A4,A,test_a4_login_injection_strings_rejected[' OR '1'='1' --],clean,pass,,,clean-pi/campaign/sec/app.xml
+A4,A,test_a4_login_injection_strings_rejected[admin'--],clean,pass,,,clean-pi/campaign/sec/app.xml
+A4,A,test_a4_login_injection_strings_rejected[*)(uid=*))(|(uid=*],clean,pass,,,clean-pi/campaign/sec/app.xml
+A4,A,test_a4_login_injection_strings_rejected[\x00],clean,pass,,,clean-pi/campaign/sec/app.xml
+A4,A,test_a4_login_injection_strings_rejected[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/../../../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/..%2f..%2f..%2fetc%2fpasswd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/%2e%2e/%2e%2e/etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/%252e%252e/%252e%252e/etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/....//....//etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/assets/..%2f..%2f..%2fetc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/static/../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/maintenance/..%2f..%2fetc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[True-/maintenance/../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/../../../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/..%2f..%2f..%2fetc%2fpasswd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/%2e%2e/%2e%2e/etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/%252e%252e/%252e%252e/etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/....//....//etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/assets/..%2f..%2f..%2fetc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/static/../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/maintenance/..%2f..%2fetc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_path_traversal_not_served[False-/maintenance/../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_traversal_in_path_params[../../etc/passwd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_traversal_in_path_params[%2e%2e%2f%2e%2e%2fetc%2fpasswd],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_traversal_in_path_params[..\\..\\windows\\win.ini],clean,pass,,,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_traversal_in_path_params[x\x00.png],clean,fail,"httpx.InvalidURL: Invalid non-printable ASCII character in URL, '\x00' at position 60.",,clean-pi/campaign/sec/app.xml
+A5,A,test_a5_upload_abuse,clean,skip,SEC_UPLOAD (+SEC_USER/PASS) not set,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.DS_Store],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env.docker],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.env.tunnel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.git/HEAD],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/.git/config],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/backend/.env],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/backup.sql],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/clarion.db],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/docker-compose.pi.yml],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/docker-compose.yml],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/docs],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/dump.sql],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/openapi.json],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/proxy/Caddyfile],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/redoc],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/requirements.txt],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[True-/server-status],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.DS_Store],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env],clean,fail,"AssertionError: /.env exposed (root)
+assert not (200 == 200 and '=' in '<!doctype html>\r\",,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env.docker],clean,fail,"AssertionError: /.env.docker exposed (root)
+assert not (200 == 200 and '=' in '<!doctype h",,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.env.tunnel],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.git/HEAD],clean,fail,"AssertionError: /.git/HEAD exposed (root)
+assert not (200 == 200 and 'ref:' in '<!doctype ",,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/.git/config],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/backend/.env],clean,fail,"AssertionError: /backend/.env exposed (root)
+assert not (200 == 200 and '=' in '<!doctype ",,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/backup.sql],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/clarion.db],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/docker-compose.pi.yml],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/docker-compose.yml],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/docs],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/dump.sql],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/openapi.json],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/proxy/Caddyfile],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/redoc],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/requirements.txt],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_no_sensitive_paths[False-/server-status],clean,pass,,,clean-pi/campaign/sec/app.xml
+A6,A,test_a6_errors_do_not_leak_internals,clean,pass,,,clean-pi/campaign/sec/app.xml
+A8,A,test_a8_ssrf_candidates_listed,clean,pass,,,clean-pi/campaign/sec/app.xml
+A8,A,test_a8_ssrf_targets_refused,clean,skip,SEC_SSRF and SEC_ADMIN_USER/PASS not set,,clean-pi/campaign/sec/app.xml
+A12,A,test_a12_gitleaks_clean,clean,pass,,,clean-pi/campaign/sec/app.xml
+A12,A,test_a12_container_env_has_no_default_secrets,clean,fail,AssertionError: container env still holds default secrets (names only shown): ['MARIADB_ME,,clean-pi/campaign/sec/app.xml
+A13,A,test_a13_audit_logs_append_only_as_app_account,clean,skip,cannot read audit_logs / empty: sh: 1: Syntax error: word unexpected,,clean-pi/campaign/sec/app.xml
+T2,T,test_hsts_max_age_one_year,clean,xfail,HSTS max-age=300 (< 31536000) accepted only because APP_ENV=demo,,clean-pi/campaign/sec/cookies.xml
+CK1,CK,test_ck1_cookie_attributes,clean,fail,"AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=zFdXRVBzw1S","rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK1,CK,test_ck1b_host_prefix,clean,xfail,no __Host- prefix (needs Path=/ and no Domain; conflicts with a narrowed Path),"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK10,CK,test_ck10_no_domain_attribute,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK2,CK,test_ck2_plaintext_http_redirects_without_cookie,clean,fail,"AssertionError: GET http:// returned 200, not a redirect
+assert 200 in (301, 302, 307, 308","rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK6,CK,test_ck6_no_token_in_url_or_js_storage,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK6,CK,test_ck6b_token_not_in_server_logs,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK7,CK,test_ck7_replay_after_logout,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK7,CK,test_ck7_rotation_reuse_revokes_family,clean,fail,"AssertionError: family not revoked after reuse (B still works)
+assert 200 == 401
+ +  where","rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK8,CK,test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/refresh],clean,xfail,/auth/refresh honours a cookie sent with a foreign Origin; defence relies on SameSite=Stri,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK8,CK,test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/logout],clean,xfail,/auth/logout honours a cookie sent with a foreign Origin; defence relies on SameSite=Stric,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK8,CK,test_ck8b_samesite_blocks_when_not_strict,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK9,CK,test_ck9_csp_blocks_inline_script,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK11,CK,test_ck11_no_store_on_set_cookie_responses,clean,fail,"AssertionError: login response Cache-Control='' (needs no-store)
+assert 'no-store' in ''","rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+A7,A,test_a7_jwt_forgeries_rejected,clean,pass,,"rerun as admin, answering the TOTP step",clean-pi/campaign/sec-rerun-login/rerun.xml
+CK3,CK,CK3 host NIC: pattern 'clinician123' x1,clean,fail,hit in the capture,,clean-pi/campaign/sec.log
+CK4,CK,CK4 docker bridge: pattern 'clarion_refresh_token' x1,clean,xfail,hit in the capture,Caddy->backend hop is plaintext by design (residual),clean-pi/campaign/sec.log
+CK4,CK,CK4 docker bridge: pattern 'Authorization: Bearer' x1,clean,xfail,hit in the capture,Caddy->backend hop is plaintext by design (residual),clean-pi/campaign/sec.log
+CK4,CK,CK4 docker bridge: pattern 'clinician123' x2,clean,xfail,hit in the capture,Caddy->backend hop is plaintext by design (residual),clean-pi/campaign/sec.log
+CK2,CK,CK2 plaintext redirect has no Set-Cookie,clean,pass,host script,,clean-pi/campaign/sec.log
+CK11,CK,CK11 login lacks Cache-Control: no-store,clean,fail,host script,,clean-pi/campaign/sec.log
+T4,T,T4 DOCKER-USER has no DROP/REJECT rule: published ports bypass ufw (ad,clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 proxy:443 reachable (intended),clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb:3306 reachable from a generic container on 'clarion-pi_app',clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 redis:6379 reachable from a generic container on 'clarion-pi_app' (,clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 minio:9000 reachable from a generic container on 'clarion-pi_app' (,clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mpi:8100 reachable from a generic container on 'clarion-pi_app' (we,clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 backend:8000 reachable from a generic container on 'clarion-pi_app',clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 redis answers PING unauthenticated (set --requirepass),clean,fail,host script,,clean-pi/campaign/sec.log
+T5,T,T5 minio anonymous bucket access refused (403),clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb refused '-uroot',clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb refused '-uroot -pchange-me-root',clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb refused '-uclarion_app -pchange-me-app',clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb refused '-uclarion_migrate -pchange-me-migrate',clean,pass,host script,,clean-pi/campaign/sec.log
+T5,T,T5 mariadb refused '-u anonymous',clean,pass,host script,,clean-pi/campaign/sec.log
+A9,A,A9 fail2ban not installed/running (apt install fail2ban),clean,fail,host script,,clean-pi/campaign/sec.log
+A11,A,A11 trivy fs backend/ has CRITICAL findings,clean,fail,host script,,clean-pi/campaign/sec.log
+A11,A,A11 pip-audit findings (see /home/pi/CLARION_CENTRAL/qa/stress/pi/resu,clean,fail,host script,,clean-pi/campaign/sec.log
+A11,A,A11 npm audit findings (see /home/pi/CLARION_CENTRAL/qa/stress/pi/resu,clean,fail,host script,,clean-pi/campaign/sec.log
+A12,A,A12 /home/pi/CLARION_CENTRAL/.env.tunnel mode 600 owner pi,clean,pass,host script,,clean-pi/campaign/sec.log
+A12,A,A12 /home/pi/CLARION_CENTRAL/.env.docker mode 600 owner pi,clean,pass,host script,,clean-pi/campaign/sec.log
+A12,A,A12 /home/pi/CLARION_CENTRAL/backend/db/mariadb/encryption/keyfile mod,clean,pass,host script,,clean-pi/campaign/sec.log
+A12,A,A12 no real .env file tracked by git,clean,pass,host script,,clean-pi/campaign/sec.log
+A10,A,A10 permitrootlogin=without-password,clean,fail,host script,,clean-pi/campaign/sec/host.log
+A10,A,A10 passwordauthentication=yes,clean,fail,host script,,clean-pi/campaign/sec/host.log
+A10,A,A10 kbdinteractiveauthentication no,clean,pass,host script,,clean-pi/campaign/sec/host.log
+A10,A,A10 pubkeyauthentication yes,clean,pass,host script,,clean-pi/campaign/sec/host.log
+A10,A,A10 permitemptypasswords no,clean,pass,host script,,clean-pi/campaign/sec/host.log
