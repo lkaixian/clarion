@@ -84,7 +84,7 @@ dependencies:
   timezone: ^0.9.4
   # Reads the device's actual IANA timezone name so scheduled reminders
   # (e.g. "8 AM") fire at the user's real local time, not UTC.
-  flutter_timezone: ^4.1.0
+  flutter_timezone: ^5.1.1
 
   # Runtime permission requests (camera / notifications) with a shared,
   # consistent API instead of hand-rolling platform channel calls.
