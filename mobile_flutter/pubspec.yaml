@@ -44,7 +44,7 @@ dependencies:
   # Networking. Chosen over plain `http` for its built-in interceptor
   # support (used here to attach the bearer token / current base URL to
   # every request) — still a small, dependency-light package.
-  dio: ^5.7.0
+  dio: ^5.11.1
 
   # AES-GCM + SHA-256 for opening encrypted NFC tags offline and
   # hash-chaining the offline-read log (lib/services/tag_crypto.dart).
@@ -52,13 +52,13 @@ dependencies:
 
   # Reads this build's own version (pubspec stays the single source of
   # truth) for the update check against GET /app/version.
-  package_info_plus: ^8.1.0
+  package_info_plus: ^10.2.2
 
   # Secure storage for the auth token
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^11.2.0
 
   # Runtime-editable settings (API base URL + locale overrides)
-  shared_preferences: ^2.3.3
+  shared_preferences: ^2.5.6
 
   # State management — deliberately Provider (not Riverpod/BLoC/GetX):
   # smallest footprint of the mainstream options and enough for this app's
@@ -71,17 +71,17 @@ dependencies:
 
   # Camera-based QR/barcode scanning for the emergency-card scanner
   # (responder flow) — ML Kit on Android under the hood.
-  mobile_scanner: ^7.0.1
+  mobile_scanner: ^7.5.0
 
   # Reading physical NFC card UIDs (responder flow) for senior citizens /
   # anyone without a smartphone. Android-only feature in this app; iOS NFC
   # reading has extra entitlement requirements out of scope here.
-  nfc_manager: ^4.0.2
+  nfc_manager: ^4.3.0
 
   # Local (device-only) medication + appointment reminder notifications —
   # no backend endpoint for this, purely client-side scheduling.
   flutter_local_notifications: ^18.0.1
-  timezone: ^0.9.4
+  timezone: ^0.10.1
   # Reads the device's actual IANA timezone name so scheduled reminders
   # (e.g. "8 AM") fire at the user's real local time, not UTC.
   flutter_timezone: ^4.1.0
@@ -92,7 +92,7 @@ dependencies:
 
   # Website fallback for the MySejahtera launcher (see
   # lib/services/mysejahtera_launcher.dart).
-  url_launcher: ^6.3.1
+  url_launcher: ^6.3.3
 
   # Opens another installed app directly by its verified Android package
   # name (falling back to its Play Store listing automatically if it's
@@ -107,7 +107,7 @@ dependencies:
   # ImageSource.camera)` returning an `XFile` to upload. The single,
   # standard package for this exact job, same "no stacked alternatives"
   # philosophy as every other dependency in this section.
-  image_picker: ^1.1.2
+  image_picker: ^1.2.4
 
   # P3.10: "download/share visit summaries as PDF". The PDF
   # endpoint is Bearer-authed (same as every other API call), so it must be
@@ -117,10 +117,10 @@ dependencies:
   # temp file and wraps the Android FileProvider/iOS share-sheet plumbing
   # that a raw file:// URI hits StrictMode/FileUriExposedException on --
   # there's no stdlib or already-installed path that does this safely.
-  share_plus: ^10.1.4
+  share_plus: ^13.3.1
   google_mlkit_text_recognition: ^0.17.1
-  geolocator: ^14.0.2
-  camera: ^0.12.1
+  geolocator: ^14.1.2
+  camera: ^0.12.2
   local_auth: ^3.0.2
 
 dev_dependencies:
