@@ -88,7 +88,7 @@ dependencies:
 
   # Runtime permission requests (camera / notifications) with a shared,
   # consistent API instead of hand-rolling platform channel calls.
-  permission_handler: ^11.3.1
+  permission_handler: ^13.0.2
 
   # Website fallback for the MySejahtera launcher (see
   # lib/services/mysejahtera_launcher.dart).
