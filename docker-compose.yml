@@ -576,7 +576,7 @@ services:
   prometheus:
     <<: *restart
     profiles: ["observability"]
-    image: prom/prometheus:v3.0.1
+    image: prom/prometheus:v3.16.0
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
