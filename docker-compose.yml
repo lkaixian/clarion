@@ -664,7 +664,7 @@ services:
   loki:
     <<: *restart
     profiles: ["observability"]
-    image: grafana/loki:3.3.2
+    image: grafana/loki:3.7.9
     volumes:
       - ./observability/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
