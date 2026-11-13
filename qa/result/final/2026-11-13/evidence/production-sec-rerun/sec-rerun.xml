@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="14" skipped="13" tests="105" time="104.258" timestamp="2026-11-13T00:39:39.791663+08:00" hostname="DESKTOP-JVNE4EP"><testcase classname="test_cookies" name="test_ck1_cookie_attributes" time="1.730"><failure message="AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=[redacted]; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure&#10;assert '/' != '/'&#10; +  where '/' = &lt;built-in method get of dict object at 0x0000023CF7DA3240&gt;('path', '/')&#10; +    where &lt;built-in method get of dict object at 0x0000023CF7DA3240&gt; = {'httponly': '', 'max-age': '2592000', 'path': '/', 'samesite': 'strict', ...}.get">session = {'access': '[jwt-redacted]..c9Gl_AqbXogVQ4vh0PZAeChgzCi; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure'}, 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck1_cookie_attributes(session):
+        ck = session["cookie"]
+        if ck is None:
+            pytest.skip("web flow sets no cookie (body-only refresh token)")
+        a = ck["attrs"]
+        assert "httponly" in a, f"HttpOnly missing: {ck['raw']}"
+        assert "secure" in a, f"Secure missing: {ck['raw']}"
+        assert a.get("samesite", "").lower() in ("strict", "lax"), f"SameSite: {ck['raw']}"
+        if env("SEC_REQUIRE_STRICT", "1") == "1":
+            assert a.get("samesite", "").lower() == "strict", f"SameSite should be Strict: {ck['raw']}"
+        assert a.get("max-age", "").isdigit() and int(a["max-age"]) &gt; 0, f"no finite Max-Age: {ck['raw']}"
+        # Protocol wants Path limited to /api/auth. The app default is "/" (REFRESH_COOKIE_PATH) because
+        # a Path=/auth cookie is never sent to /api/auth/refresh. Set REFRESH_COOKIE_PATH=/api/auth in
+        # the Pi compose to satisfy this; SEC_ALLOW_ROOT_PATH=1 accepts "/" knowingly.
+        if env("SEC_ALLOW_ROOT_PATH") != "1":
+&gt;           assert a.get("path", "/") != "/", f"cookie Path is '/', sent to every route: {ck['raw']}"
+E           AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=[redacted]; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure
+E           assert '/' != '/'
+E            +  where '/' = &lt;built-in method get of dict object at 0x0000023CF7DA3240&gt;('path', '/')
+E            +    where &lt;built-in method get of dict object at 0x0000023CF7DA3240&gt; = {'httponly': '', 'max-age': '2592000', 'path': '/', 'samesite': 'strict', ...}.get
+
+test_cookies.py:35: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck1b_host_prefix" time="1.148"><skipped type="pytest.xfail" message="no __Host- prefix (needs Path=/ and no Domain; conflicts with a narrowed Path)" /></testcase><testcase classname="test_cookies" name="test_ck10_no_domain_attribute" time="1.054" /><testcase classname="test_cookies" name="test_ck2_plaintext_http_redirects_without_cookie" time="1.150"><failure message="AssertionError: GET http:// returned 200, not a redirect&#10;assert 200 in (301, 302, 307, 308)&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">creds = ('clinician@clarion.demo', '[demo-password]')
+
+    def test_ck2_plaintext_http_redirects_without_cookie(creds):
+        h = _http_base()
+        try:
+            with client() as c:
+                g = c.get(h + "/")
+                p = c.post(h + url("/auth/login", api=True)[len(BASE):],
+                           data={"username": creds[0], "password": creds[1]})
+        except httpx.ConnectError:
+            pytest.skip("port 80 closed (fine: nothing is served over http)")
+        for r in (g, p):
+&gt;           assert r.status_code in REDIRECTS, f"{r.request.method} http:// returned {r.status_code}, not a redirect"
+E           AssertionError: GET http:// returned 200, not a redirect
+E           assert 200 in (301, 302, 307, 308)
+E            +  where 200 = &lt;Response [200 OK]&gt;.status_code
+
+test_cookies.py:68: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck6_no_token_in_url_or_js_storage" time="2.574" /><testcase classname="test_cookies" name="test_ck6b_token_not_in_server_logs" time="1.068"><skipped type="pytest.skip" message="SEC_LOG_CMD not set">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_cookies.py:94: SEC_LOG_CMD not set</skipped></testcase><testcase classname="test_cookies" name="test_ck7_replay_after_logout" time="2.979" /><testcase classname="test_cookies" name="test_ck7_rotation_reuse_revokes_family" time="2.608"><failure message="AssertionError: family not revoked after reuse (B still works)&#10;assert 200 == 401&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +    where &lt;Response [200 OK]&gt; = _refresh('h8t9bVEp2MiQW2H999gowLXxtn4V7lxORx0IXZkH5_LyhDZZJviN19PPeJZH5hiu')">session = {'access': '[jwt-redacted]..cP9pSYsuJjExLenxc4ND5cYrbP6; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure'}, 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck7_rotation_reuse_revokes_family(session):
+        a = session["refresh"]
+        r1 = _refresh(a)
+        assert r1.status_code == 200, f"first refresh failed: {r1.status_code}"
+        b = _new_token(r1)
+        assert b and b != a, "refresh token was not rotated"
+        assert _refresh(a).status_code == 401, "old (rotated) token still accepted"
+        # reuse of A must have burned the whole family, including the legitimate successor B
+&gt;       assert _refresh(b).status_code == 401, "family not revoked after reuse (B still works)"
+E       AssertionError: family not revoked after reuse (B still works)
+E       assert 200 == 401
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +    where &lt;Response [200 OK]&gt; = _refresh('h8t9bVEp2MiQW2H999gowLXxtn4V7lxORx0IXZkH5_LyhDZZJviN19PPeJZH5hiu')
+
+test_cookies.py:130: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/refresh]" time="1.664"><skipped type="pytest.xfail" message="/auth/refresh honours a cookie sent with a foreign Origin; defence relies on SameSite=Strict only" /></testcase><testcase classname="test_cookies" name="test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/logout]" time="2.853"><skipped type="pytest.xfail" message="/auth/logout honours a cookie sent with a foreign Origin; defence relies on SameSite=Strict only" /></testcase><testcase classname="test_cookies" name="test_ck8b_samesite_blocks_when_not_strict" time="1.193" /><testcase classname="test_cookies" name="test_ck9_csp_blocks_inline_script" time="0.456" /><testcase classname="test_cookies" name="test_ck11_no_store_on_set_cookie_responses" time="1.119"><failure message="AssertionError: login response Cache-Control='' (needs no-store)&#10;assert 'no-store' in ''">session = {'access': '[jwt-redacted]..pV2YRnlzNpzX5djq8nAFEpxbpI1; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure'}, 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck11_no_store_on_set_cookie_responses(session):
+        r = session["resp"]
+        assert r.headers.get_list("set-cookie") or session["cookie"] is None
+        cc = r.headers.get("cache-control", "").lower()
+&gt;       assert "no-store" in cc, f"login response Cache-Control={cc!r} (needs no-store)"
+E       AssertionError: login response Cache-Control='' (needs no-store)
+E       assert 'no-store' in ''
+
+test_cookies.py:174: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_hsts_max_age_one_year" time="0.427"><skipped type="pytest.xfail" message="HSTS max-age=300 (&lt; 31536000) accepted only because APP_ENV=demo" /></testcase><testcase classname="test_transport_headers" name="test_t1_tls12_and_13_accepted" time="0.210" /><testcase classname="test_transport_headers" name="test_t1_legacy_tls_refused[TLSv1]" time="0.114"><failure message="Failed: TLSv1 handshake succeeded (TLSv1)">name = 'TLSv1'
+
+    @pytest.mark.parametrize("name", ["TLSv1", "TLSv1_1"])
+    def test_t1_legacy_tls_refused(name):
+        v = getattr(ssl.TLSVersion, name)
+        try:
+            got = _tls_connect(v, v)
+        except (ssl.SSLError, OSError, ValueError):
+            return  # handshake refused (or this OpenSSL cannot even offer it): pass
+&gt;       pytest.fail(f"{name} handshake succeeded ({got})")
+E       Failed: TLSv1 handshake succeeded (TLSv1)
+
+test_transport_headers.py:57: Failed</failure></testcase><testcase classname="test_transport_headers" name="test_t1_legacy_tls_refused[TLSv1_1]" time="0.122"><failure message="Failed: TLSv1_1 handshake succeeded (TLSv1.1)">name = 'TLSv1_1'
+
+    @pytest.mark.parametrize("name", ["TLSv1", "TLSv1_1"])
+    def test_t1_legacy_tls_refused(name):
+        v = getattr(ssl.TLSVersion, name)
+        try:
+            got = _tls_connect(v, v)
+        except (ssl.SSLError, OSError, ValueError):
+            return  # handshake refused (or this OpenSSL cannot even offer it): pass
+&gt;       pytest.fail(f"{name} handshake succeeded ({got})")
+E       Failed: TLSv1_1 handshake succeeded (TLSv1.1)
+
+test_transport_headers.py:57: Failed</failure></testcase><testcase classname="test_transport_headers" name="test_t2_security_headers[/]" time="0.548"><skipped type="pytest.xfail" message="HSTS max-age=300 (demo)" /></testcase><testcase classname="test_transport_headers" name="test_t2_security_headers[/api/healthz]" time="0.560"><skipped type="pytest.xfail" message="HSTS max-age=300 (demo)" /></testcase><testcase classname="test_transport_headers" name="test_t2_no_wildcard_cors_with_credentials" time="0.546" /><testcase classname="test_transport_headers" name="test_t3_http_redirects_and_serves_nothing" time="0.524"><failure message="assert 200 in (301, 302, 307, 308)&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">def test_t3_http_redirects_and_serves_nothing():
+        try:
+            with client() as c:
+                r = c.get("http://" + BASE.split("://", 1)[1] + "/")
+        except httpx.ConnectError:
+            pytest.skip("port 80 closed")
+&gt;       assert r.status_code in (301, 302, 307, 308)
+E       assert 200 in (301, 302, 307, 308)
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+
+test_transport_headers.py:94: AssertionError</failure></testcase><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/metrics]" time="0.560" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/readyz]" time="0.491" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/docs]" time="0.431" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/redoc]" time="0.455" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/openapi.json]" time="0.453" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/METRICS]" time="0.488" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/Readyz]" time="0.475" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/metrics/]" time="0.551"><failure message="AssertionError: https://clarion.larmkx.com/api/metrics/ -&gt; 307&#10;assert 307 in (403, 404)&#10; +  where 307 = &lt;Response [307 Temporary Redirect]&gt;.status_code">p = '/metrics/'
+
+    @pytest.mark.parametrize("p", BLOCKED)
+    def test_t6_diagnostics_not_public(p):
+        with client() as c:
+            r = c.get(url(p))
+        body = r.text[:4000]
+&gt;       assert r.status_code in (403, 404), f"{url(p)} -&gt; {r.status_code}"
+E       AssertionError: https://clarion.larmkx.com/api/metrics/ -&gt; 307
+E       assert 307 in (403, 404)
+E        +  where 307 = &lt;Response [307 Temporary Redirect]&gt;.status_code
+
+test_transport_headers.py:109: AssertionError</failure></testcase><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[//metrics]" time="0.450" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/%6detrics]" time="0.417" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/%2e/metrics]" time="0.472" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/docs/oauth2-redirect]" time="0.469" /><testcase classname="test_transport_headers" name="test_t7_origin_ip_does_not_answer" time="0.001"><skipped type="pytest.skip" message="ORIGIN_IP not set">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_transport_headers.py:117: ORIGIN_IP not set</skipped></testcase><testcase classname="test_transport_headers" name="test_t1_testssl_json_if_available" time="0.031"><skipped type="pytest.skip" message="testssl.sh not installed">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_transport_headers.py:136: testssl.sh not installed</skipped></testcase><testcase classname="test_app_attack" name="test_a2_idor_foreign_ids_refused" time="5.453"><skipped type="pytest.skip" message="set SEC_FOREIGN_PATIENT_ID (etc.) and SEC_PATIENT_USER/PASS or SEC_OTHERFAC_USER/PASS">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_app_attack.py:178: set SEC_FOREIGN_PATIENT_ID (etc.) and SEC_PATIENT_USER/PASS or SEC_OTHERFAC_USER/PASS</skipped></testcase><testcase classname="test_app_attack" name="test_a3_rate_limit_and_spoofed_forwarded_for" time="0.001"><skipped type="pytest.skip" message="SEC_RUN_BURST=1 to run (trips the per-IP login limiter)">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_app_attack.py:196: SEC_RUN_BURST=1 to run (trips the per-IP login limiter)</skipped></testcase><testcase classname="test_app_attack" name="test_a4_login_injection_strings_rejected[' OR '1'='1' --]" time="2.664" /><testcase classname="test_app_attack" name="test_a4_login_injection_strings_rejected[admin'--]" time="1.863" /><testcase classname="test_app_attack" name="test_a4_login_injection_strings_rejected[*)(uid=*))(|(uid=*]" time="1.776" /><testcase classname="test_app_attack" name="test_a4_login_injection_strings_rejected[\x00]" time="1.774" /><testcase classname="test_app_attack" name="test_a4_login_injection_strings_rejected[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]" time="1.980" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/../../../../etc/passwd]" time="0.112" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/..%2f..%2f..%2fetc%2fpasswd]" time="0.034" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/%2e%2e/%2e%2e/etc/passwd]" time="0.124" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/%252e%252e/%252e%252e/etc/passwd]" time="0.207" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/....//....//etc/passwd]" time="0.119" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/assets/..%2f..%2f..%2fetc/passwd]" time="0.034" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/static/../../etc/passwd]" time="0.206" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/maintenance/..%2f..%2fetc/passwd]" time="0.104" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[True-/maintenance/../../etc/passwd]" time="0.109" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/../../../../etc/passwd]" time="0.100" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/..%2f..%2f..%2fetc%2fpasswd]" time="0.041" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/%2e%2e/%2e%2e/etc/passwd]" time="0.131" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/%252e%252e/%252e%252e/etc/passwd]" time="0.207" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/....//....//etc/passwd]" time="0.115" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/assets/..%2f..%2f..%2fetc/passwd]" time="0.037" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/static/../../etc/passwd]" time="0.199" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/maintenance/..%2f..%2fetc/passwd]" time="0.042" /><testcase classname="test_app_attack" name="test_a5_path_traversal_not_served[False-/maintenance/../../etc/passwd]" time="0.220" /><testcase classname="test_app_attack" name="test_a5_traversal_in_path_params[../../etc/passwd]" time="7.714" /><testcase classname="test_app_attack" name="test_a5_traversal_in_path_params[%2e%2e%2f%2e%2e%2fetc%2fpasswd]" time="8.188" /><testcase classname="test_app_attack" name="test_a5_traversal_in_path_params[..\\..\\windows\\win.ini]" time="7.962" /><testcase classname="test_app_attack" name="test_a5_traversal_in_path_params[x\x00.png]" time="1.355"><failure message="httpx.InvalidURL: Invalid non-printable ASCII character in URL, '\x00' at position 52.">tokens = {'admin': '[jwt-redacted]..YzYmViMmI0YjAiLCJyb2xlIjoicmVjZXB0aW9uaXN0IiwiZXhwIjoxNzk0NTAyNTIzfQ.o7zOVz6KIOA_zaK26BoyqdiadU05EYiQ91Y6oe-Jq0U', ...}
+seg = 'x\x00.png'
+
+    @pytest.mark.parametrize("seg", ["../../etc/passwd", "%2e%2e%2f%2e%2e%2fetc%2fpasswd", "..\\..\\windows\\win.ini", "x\x00.png"])
+    def test_a5_traversal_in_path_params(tokens, seg):
+        t = tokens.get("admin") or next(iter(tokens.values()), None)
+        if not t:
+            pytest.skip("no role tokens")
+        cands = [o for o in SECURED if o["method"] == "GET" and len(o["params"]) == 1 and
+                 re.search(r"(file|document|download|image|photo|thumbnail|object)", o["path"], re.I)][:6]
+        with client() as c:
+            for o in cands:
+                p = o["path"].replace("{" + o["params"][0] + "}", seg)
+&gt;               r = send(c, "GET", p, headers=bearer(t))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_app_attack.py:249: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+test_app_attack.py:95: in send
+    r = c.request(method, url(path), headers=headers or {}, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:812: in request
+    request = self.build_request(
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:366: in build_request
+    url = self._merge_url(url)
+          ^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:396: in _merge_url
+    merge_url = URL(url)
+                ^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_urls.py:117: in __init__
+    self._uri_reference = urlparse(url, **kwargs)
+                          ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+url = 'https://clarion.larmkx.com/api/patients/clinicians/x\x00.png/photo'
+kwargs = {}
+
+    def urlparse(url: str = "", **kwargs: str | None) -&gt; ParseResult:
+        # Initial basic checks on allowable URLs.
+        # ---------------------------------------
+    
+        # Hard limit the maximum allowable URL length.
+        if len(url) &gt; MAX_URL_LENGTH:
+            raise InvalidURL("URL too long")
+    
+        # If a URL includes any ASCII control characters including \t, \r, \n,
+        # then treat it as invalid.
+        if any(char.isascii() and not char.isprintable() for char in url):
+            char = next(char for char in url if char.isascii() and not char.isprintable())
+            idx = url.find(char)
+            error = (
+                f"Invalid non-printable ASCII character in URL, {char!r} at position {idx}."
+            )
+&gt;           raise InvalidURL(error)
+E           httpx.InvalidURL: Invalid non-printable ASCII character in URL, '\x00' at position 52.
+
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_urlparse.py:229: InvalidURL</failure></testcase><testcase classname="test_app_attack" name="test_a5_upload_abuse" time="0.000"><skipped type="pytest.skip" message="SEC_UPLOAD (+SEC_USER/PASS) not set">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_app_attack.py:257: SEC_UPLOAD (+SEC_USER/PASS) not set</skipped></testcase><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.DS_Store]" time="0.193" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.env]" time="0.127" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.env.docker]" time="0.127" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.env.tunnel]" time="0.115" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.git/HEAD]" time="0.121" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/.git/config]" time="0.133" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/backend/.env]" time="0.132" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/backup.sql]" time="0.127" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/clarion.db]" time="0.113" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/docker-compose.pi.yml]" time="0.127" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/docker-compose.yml]" time="0.111" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/docs]" time="0.091" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/dump.sql]" time="0.148" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/openapi.json]" time="0.095" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/proxy/Caddyfile]" time="0.110" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/redoc]" time="0.095" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/requirements.txt]" time="0.110" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[True-/server-status]" time="0.123" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.DS_Store]" time="0.104" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.env]" time="0.097"><failure message="AssertionError: /.env exposed (root)&#10;assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()&#10; +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower&#10; +  and   '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFA77FA80&gt;()&#10; +    where &lt;built-in method lower of str object at 0x0000023CFA77FA80&gt; = '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower&#10; +      where '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text">http = &lt;httpx.Client object at 0x0000023CF822B710&gt;, p = '/.env', api = False
+
+    @pytest.mark.parametrize("p", sorted(LEAKS))
+    @pytest.mark.parametrize("api", [True, False])
+    def test_a6_no_sensitive_paths(http, p, api):
+        r = http.get(BASE + (API if api else "") + p)
+&gt;       assert not (r.status_code == 200 and LEAKS[p].lower() in r.text.lower()), f"{p} exposed ({'api' if api else 'root'})"
+E       AssertionError: /.env exposed (root)
+E       assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()
+E        +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower
+E        +  and   '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFA77FA80&gt;()
+E        +    where &lt;built-in method lower of str object at 0x0000023CFA77FA80&gt; = '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower
+E        +      where '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text
+
+test_app_attack.py:294: AssertionError</failure></testcase><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.env.docker]" time="0.103"><failure message="AssertionError: /.env.docker exposed (root)&#10;assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()&#10; +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower&#10; +  and   '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFA783F00&gt;()&#10; +    where &lt;built-in method lower of str object at 0x0000023CFA783F00&gt; = '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower&#10; +      where '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text">http = &lt;httpx.Client object at 0x0000023CF822B710&gt;, p = '/.env.docker'
+api = False
+
+    @pytest.mark.parametrize("p", sorted(LEAKS))
+    @pytest.mark.parametrize("api", [True, False])
+    def test_a6_no_sensitive_paths(http, p, api):
+        r = http.get(BASE + (API if api else "") + p)
+&gt;       assert not (r.status_code == 200 and LEAKS[p].lower() in r.text.lower()), f"{p} exposed ({'api' if api else 'root'})"
+E       AssertionError: /.env.docker exposed (root)
+E       assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()
+E        +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower
+E        +  and   '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFA783F00&gt;()
+E        +    where &lt;built-in method lower of str object at 0x0000023CFA783F00&gt; = '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower
+E        +      where '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text
+
+test_app_attack.py:294: AssertionError</failure></testcase><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.env.tunnel]" time="0.113" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.git/HEAD]" time="0.096"><failure message="AssertionError: /.git/HEAD exposed (root)&#10;assert not (200 == 200 and 'ref:' in '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +  and   'ref:' = &lt;built-in method lower of str object at 0x0000023CD6BE0A80&gt;()&#10; +    where &lt;built-in method lower of str object at 0x0000023CD6BE0A80&gt; = 'ref:'.lower&#10; +  and   '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFAC5B3C0&gt;()&#10; +    where &lt;built-in method lower of str object at 0x0000023CFAC5B3C0&gt; = '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower&#10; +      where '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text">http = &lt;httpx.Client object at 0x0000023CF822B710&gt;, p = '/.git/HEAD'
+api = False
+
+    @pytest.mark.parametrize("p", sorted(LEAKS))
+    @pytest.mark.parametrize("api", [True, False])
+    def test_a6_no_sensitive_paths(http, p, api):
+        r = http.get(BASE + (API if api else "") + p)
+&gt;       assert not (r.status_code == 200 and LEAKS[p].lower() in r.text.lower()), f"{p} exposed ({'api' if api else 'root'})"
+E       AssertionError: /.git/HEAD exposed (root)
+E       assert not (200 == 200 and 'ref:' in '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +  and   'ref:' = &lt;built-in method lower of str object at 0x0000023CD6BE0A80&gt;()
+E        +    where &lt;built-in method lower of str object at 0x0000023CD6BE0A80&gt; = 'ref:'.lower
+E        +  and   '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFAC5B3C0&gt;()
+E        +    where &lt;built-in method lower of str object at 0x0000023CFAC5B3C0&gt; = '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower
+E        +      where '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text
+
+test_app_attack.py:294: AssertionError</failure></testcase><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/.git/config]" time="0.084" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/backend/.env]" time="0.089"><failure message="AssertionError: /backend/.env exposed (root)&#10;assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()&#10; +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower&#10; +  and   '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;utf-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFAC5E720&gt;()&#10; +    where &lt;built-in method lower of str object at 0x0000023CFAC5E720&gt; = '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower&#10; +      where '&lt;!doctype html&gt;\n&lt;html lang=&quot;en&quot;&gt;\n  &lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot; /&gt;\n    &lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text">http = &lt;httpx.Client object at 0x0000023CF822B710&gt;, p = '/backend/.env'
+api = False
+
+    @pytest.mark.parametrize("p", sorted(LEAKS))
+    @pytest.mark.parametrize("api", [True, False])
+    def test_a6_no_sensitive_paths(http, p, api):
+        r = http.get(BASE + (API if api else "") + p)
+&gt;       assert not (r.status_code == 200 and LEAKS[p].lower() in r.text.lower()), f"{p} exposed ({'api' if api else 'root'})"
+E       AssertionError: /backend/.env exposed (root)
+E       assert not (200 == 200 and '=' in '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n')
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +  and   '=' = &lt;built-in method lower of str object at 0x00007FFE26458238&gt;()
+E        +    where &lt;built-in method lower of str object at 0x00007FFE26458238&gt; = '='.lower
+E        +  and   '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="utf-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readystate&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;built-in method lower of str object at 0x0000023CFAC5E720&gt;()
+E        +    where &lt;built-in method lower of str object at 0x0000023CFAC5E720&gt; = '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n'.lower
+E        +      where '&lt;!doctype html&gt;\n&lt;html lang="en"&gt;\n  &lt;head&gt;\n    &lt;meta charset="UTF-8" /&gt;\n    &lt;link rel="icon" type="image/png" size...tion(b){e(b);\'loading\'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;\n&lt;/html&gt;\n' = &lt;Response [200 OK]&gt;.text
+
+test_app_attack.py:294: AssertionError</failure></testcase><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/backup.sql]" time="0.111" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/clarion.db]" time="0.094" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/docker-compose.pi.yml]" time="0.092" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/docker-compose.yml]" time="0.096" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/docs]" time="0.092" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/dump.sql]" time="0.088" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/openapi.json]" time="0.097" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/proxy/Caddyfile]" time="0.097" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/redoc]" time="0.091" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/requirements.txt]" time="0.096" /><testcase classname="test_app_attack" name="test_a6_no_sensitive_paths[False-/server-status]" time="0.085" /><testcase classname="test_app_attack" name="test_a6_errors_do_not_leak_internals" time="4.940" /><testcase classname="test_app_attack" name="test_a7_jwt_forgeries_rejected" time="13.206"><failure message="httpx.LocalProtocolError: Illegal header value b'Bearer '">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\connection_pool.py:256: in handle_request
+    raise exc from None
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\connection.py:103: in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\http11.py:136: in handle_request
+    raise exc
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\http11.py:86: in handle_request
+    self._send_request_headers(**kwargs)
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_sync\http11.py:144: in _send_request_headers
+    with map_exceptions({h11.LocalProtocolError: LocalProtocolError}):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+map = {&lt;class 'h11._util.LocalProtocolError'&gt;: &lt;class 'httpcore.LocalProtocolError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.LocalProtocolError: Illegal header value b'Bearer '
+
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpcore\_exceptions.py:14: LocalProtocolError
+
+The above exception was the direct cause of the following exception:
+
+session = {'access': '[jwt-redacted]..PGwa5LjEQZiGP6RENlRE8C-QGpJ; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure'}, 'resp': &lt;Response [200 OK]&gt;}
+http = &lt;httpx.Client object at 0x0000023CF822B710&gt;
+
+    def test_a7_jwt_forgeries_rejected(session, http):
+        real = send(http, "GET", "/auth/me", headers=bearer(session["access"]))
+        assert real.status_code == 200, f"positive control failed: {real.status_code}"
+        bad = {}
+        for name, tok in forge(session["access"]).items():
+&gt;           r = send(http, "GET", "/auth/me", headers=bearer(tok))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_app_attack.py:348: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+test_app_attack.py:95: in send
+    r = c.request(method, url(path), headers=headers or {}, **kw)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py:249: in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.LocalProtocolError: Illegal header value b'Bearer '
+
+..\..\..\..\..\..\AppData\Local\Programs\Python\Python314\Lib\site-packages\httpx\_transports\default.py:118: LocalProtocolError</failure></testcase><testcase classname="test_app_attack" name="test_a8_ssrf_candidates_listed" time="0.003" /><testcase classname="test_app_attack" name="test_a8_ssrf_targets_refused" time="0.001"><skipped type="pytest.skip" message="SEC_SSRF and SEC_ADMIN_USER/PASS not set">C:\Users\Larm Kai Xian\Desktop\CLARION\clarion_clean\qa\stress\sec\test_app_attack.py:380: SEC_SSRF and SEC_ADMIN_USER/PASS not set</skipped></testcase></testsuite></testsuites>

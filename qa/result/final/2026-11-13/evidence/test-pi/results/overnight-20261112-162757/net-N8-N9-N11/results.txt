@@ -1,0 +1,3 @@
+INFO N8 Caddy dropping slow headers at its timeout: confirm in proxy logs
+SKIP N11 LOGIN_USER/LOGIN_PASS not set
+INFO N11 NIH RxClass should degrade, not fail: check backend logs in /home/pi/CLARION_CENTRAL/qa/stress/pi/results/overnight-20261112-162757/net-N8-N9-N11

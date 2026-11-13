@@ -1,0 +1,17 @@
+PASS D7 clean read ok; flipped and truncated objects refused by the sha256 check
+PASS D9 watchdog device present
+FAIL D9 systemd RuntimeWatchdogSec not set (setup_pi.sh --apply)
+INFO D9 dtparam=watchdog=on not found in /boot/firmware/config.txt
+INFO D9 panic trigger skipped (needs --destructive --panic)
+FAIL D10:mariadb log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:backend log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:proxy log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:redis log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:minio log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:mpi log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:cloudflared log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:web log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+INFO D10 journal usage: 216.0M
+FAIL D10 journald SystemMaxUse not set (setup_pi.sh --apply)
+INFO D10 logrotate.d entries: 11
+FAIL D10 logdir_after_1GB_mb=3933 (le 35)

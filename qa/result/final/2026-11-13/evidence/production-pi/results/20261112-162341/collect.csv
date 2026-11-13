@@ -1,0 +1,1 @@
+epoch,temp_c,throttled,arm_hz,mem_used_mb,mem_avail_mb,swap_used_mb,load1,pswp_pages,rd_sectors,wr_sectors,iowait_pct

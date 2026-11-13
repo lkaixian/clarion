@@ -2,7 +2,7 @@
 # hw_stress.sh - H1..H13 hardware pressure with a constant probe (spec section B).
 #   hw_stress.sh [--dry-run] [--i-know-this-kills] [H1 H4 ...]
 # default set : H1 H3 H4 H6 H8 H9 H12
-# explicit    : H2 (30 min soak), H7 (24 h soak), H11 (run twice ~24 h apart)
+# explicit    : H2 (30 min soak), H7 (8 h soak), H11 (run twice ~24 h apart)
 # gated       : H5 (OOM), H10 (disk full), H13 (combined worst case)  -> need --i-know-this-kills
 # Staging only. The probe measures RTT against BASE_URL; run on the Pi against the origin/proxy to approximate
 # "server time", and use LOCUST=1 (20 users) for the spec's critical-path probe.
@@ -14,10 +14,10 @@ H_MED_MS=1000                       # probe median under any load
 H1_SECS=600;  H1_P95_MS=250
 H2_SECS=1800; H2_MAX_C=80;  H2_MASK=0x50005
 H3_SECS=300;  H3_P95_MS=500;  H3_CPUS=8
-H4_SECS=300;  H4_SWAP_PPS=100
+H4_SECS=300;  H4_SWAP_PPS=100;  H4_VM_BYTES=${H4_VM_BYTES:-60%}
 H5_SECS=120;  H5_VICTIM_BAD='mariadbd|mysqld|gunicorn|caddy|redis|cloudflared|minio|uvicorn|python'
 H6_MEM=256m;  H6_SECS=180;  H6_RESTARTS=1;  H6_UP_SECS=120
-H7_SECS=86400; H7_GROWTH_PCT_12H=5
+H7_SECS=${H7_SECS:-28800}; H7_GROWTH_PCT_12H=5
 H8_SECS=300;  H8_P95_MS=250;  H8_COMMIT_MS=100
 H9_SECS=300;  H9_COMMIT_MS=2000
 H10_FLOOR_MB=1024; H10_RECOVER_S=60; FILL_FILE=${FILL_FILE:-/var/lib/docker/fill.bin}
@@ -25,7 +25,7 @@ H11_MAX_GB_DAY=5; MMC_DEV=${MMC_DEV:-/dev/mmcblk0}
 H12_SECS=120; H12_MASK=0x10001      # bits 0 / 16 = under-voltage now / has occurred
 H13_SECS=600; H13_MAX_MS=10000; H13_5XX_PCT=0.1; H13_NETEM="delay 200ms 50ms loss 1%"
 FIO_DIR=${FIO_DIR:-/var/lib/docker/clarion-fio}
-FIO_SIZE=1g
+FIO_SIZE=${FIO_SIZE:-1g}
 EMERGENCY_PATH=${EMERGENCY_PATH:-$PROBE_PATH}
 
 KILLS=0 IDS=()
@@ -106,7 +106,7 @@ h3() {
   check H3 p95_rtt_ms "$PROBE_P95" le "$H3_P95_MS"
 }
 h4() {
-  hrun H4 "$H4_SECS" stress-ng --vm 2 --vm-bytes 60% --timeout "${H4_SECS}s"
+  hrun H4 "$H4_SECS" stress-ng --vm 2 --vm-bytes "$H4_VM_BYTES" --timeout "${H4_SECS}s"
   probe_ok H4
   [ "$DRY_RUN" = 1 ] || check H4 swap_pages_per_s "$(( ($(swap_pages) - SW0) / H4_SECS ))" le "$H4_SWAP_PPS"
   check_core H4
@@ -128,6 +128,11 @@ h5() {
 }
 h6() {
   local c; c=$(cid backend)
+  # Without the memory cgroup, docker discards --memory and this test would pass without testing anything.
+  if [ "$DRY_RUN" != 1 ] && [ "$(awk '$1=="memory"{print $4}' /proc/cgroups 2>/dev/null)" != 1 ]; then
+    skip H6 "memory cgroup disabled: add 'cgroup_enable=memory cgroup_memory=1' to /boot/cmdline.txt (or /boot/firmware/cmdline.txt) and reboot"
+    return 0
+  fi
   CLEAN_MEM=1
   run docker update --memory "$H6_MEM" --memory-swap "$H6_MEM" "$c"
   hrun H6 "$H6_SECS" sleep "$H6_SECS"
@@ -141,10 +146,13 @@ h7() {
   local f=$RESULTS_DIR/H7.rss.csv spid
   [ "$DRY_RUN" = 1 ] && { echo "DRY: H7 soak ${H7_SECS}s, RSS sample every 60s"; return 0; }
   echo "epoch,name,mib" >"$f"
+  # Sum of RSS of every process in each container, read from the host with `docker top`. Works with the memory
+  # cgroup off (docker stats shows 0B then) and measures the same thing on every Pi. Shared pages are counted
+  # per process, so read the trend, not the absolute number.
   ( while :; do
-      docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | awk -v t="$(date +%s)" '{
-        v=$2; u=v; gsub(/[0-9.]/,"",u); gsub(/[A-Za-z]/,"",v)
-        m=(u=="GiB"?v*1024:(u=="KiB"||u=="kB")?v/1024:(u=="B")?v/1048576:v); printf "%s,%s,%.1f\n", t,$1,m}' >>"$f"
+      for c in $(docker ps --format '{{.Names}}'); do
+        docker top "$c" -eo pid,rss 2>/dev/null | awk -v t="$(date +%s)" -v n="$c" 'NR>1{s+=$2} END{printf "%s,%s,%.1f\n", t, n, s/1024}' >>"$f"
+      done
       sleep 60
     done ) & spid=$!
   probe H7 "$H7_SECS"

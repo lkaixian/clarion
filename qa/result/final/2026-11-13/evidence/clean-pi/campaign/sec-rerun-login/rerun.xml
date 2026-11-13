@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="3" tests="14" time="330.812" timestamp="2026-11-13T06:19:12.316039+00:00" hostname="uthm-pr-emos-000m"><testcase classname="test_cookies" name="test_ck1_cookie_attributes" time="1.070"><failure message="AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=zFdXRVBzw1SZgTgzfa14UVdn6-faknc6B7tLcoeII8XsY-0p9qWNjeXU1Otuxa_q; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure&#10;assert '/' != '/'&#10; +  where '/' = &lt;built-in method get of dict object at 0x7fa6bd9480&gt;('path', '/')&#10; +    where &lt;built-in method get of dict object at 0x7fa6bd9480&gt; = {'httponly': '', 'max-age': '2592000', 'path': '/', 'samesite': 'strict', ...}.get">session = {'access': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0OTU3OTlmNS1lZmZkLTQ0MmYtOTZjNS1hMjQyNTQ5NjgwNjIiLCJyb2xlI...1Otuxa_q'}, 'refresh': 'zFdXRVBzw1SZgTgzfa14UVdn6-faknc6B7tLcoeII8XsY-0p9qWNjeXU1Otuxa_q', 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck1_cookie_attributes(session):
+        ck = session["cookie"]
+        if ck is None:
+            pytest.skip("web flow sets no cookie (body-only refresh token)")
+        a = ck["attrs"]
+        assert "httponly" in a, f"HttpOnly missing: {ck['raw']}"
+        assert "secure" in a, f"Secure missing: {ck['raw']}"
+        assert a.get("samesite", "").lower() in ("strict", "lax"), f"SameSite: {ck['raw']}"
+        if env("SEC_REQUIRE_STRICT", "1") == "1":
+            assert a.get("samesite", "").lower() == "strict", f"SameSite should be Strict: {ck['raw']}"
+        assert a.get("max-age", "").isdigit() and int(a["max-age"]) &gt; 0, f"no finite Max-Age: {ck['raw']}"
+        # Protocol wants Path limited to /api/auth. The app default is "/" (REFRESH_COOKIE_PATH) because
+        # a Path=/auth cookie is never sent to /api/auth/refresh. Set REFRESH_COOKIE_PATH=/api/auth in
+        # the Pi compose to satisfy this; SEC_ALLOW_ROOT_PATH=1 accepts "/" knowingly.
+        if env("SEC_ALLOW_ROOT_PATH") != "1":
+&gt;           assert a.get("path", "/") != "/", f"cookie Path is '/', sent to every route: {ck['raw']}"
+E           AssertionError: cookie Path is '/', sent to every route: clarion_refresh_token=zFdXRVBzw1SZgTgzfa14UVdn6-faknc6B7tLcoeII8XsY-0p9qWNjeXU1Otuxa_q; HttpOnly; Max-Age=2592000; Path=/; SameSite=strict; Secure
+E           assert '/' != '/'
+E            +  where '/' = &lt;built-in method get of dict object at 0x7fa6bd9480&gt;('path', '/')
+E            +    where &lt;built-in method get of dict object at 0x7fa6bd9480&gt; = {'httponly': '', 'max-age': '2592000', 'path': '/', 'samesite': 'strict', ...}.get
+
+test_cookies.py:35: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck1b_host_prefix" time="16.598"><skipped type="pytest.xfail" message="no __Host- prefix (needs Path=/ and no Domain; conflicts with a narrowed Path)" /></testcase><testcase classname="test_cookies" name="test_ck10_no_domain_attribute" time="29.992" /><testcase classname="test_cookies" name="test_ck2_plaintext_http_redirects_without_cookie" time="0.912"><failure message="AssertionError: GET http:// returned 200, not a redirect&#10;assert 200 in (301, 302, 307, 308)&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">creds = ('admin@clarion.demo', 'admin123')
+
+    def test_ck2_plaintext_http_redirects_without_cookie(creds):
+        h = _http_base()
+        try:
+            with client() as c:
+                g = c.get(h + "/")
+                p = c.post(h + url("/auth/login", api=True)[len(BASE):],
+                           data={"username": creds[0], "password": creds[1]})
+        except httpx.ConnectError:
+            pytest.skip("port 80 closed (fine: nothing is served over http)")
+        for r in (g, p):
+&gt;           assert r.status_code in REDIRECTS, f"{r.request.method} http:// returned {r.status_code}, not a redirect"
+E           AssertionError: GET http:// returned 200, not a redirect
+E           assert 200 in (301, 302, 307, 308)
+E            +  where 200 = &lt;Response [200 OK]&gt;.status_code
+
+test_cookies.py:68: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck6_no_token_in_url_or_js_storage" time="29.352" /><testcase classname="test_cookies" name="test_ck6b_token_not_in_server_logs" time="30.251" /><testcase classname="test_cookies" name="test_ck7_replay_after_logout" time="30.040" /><testcase classname="test_cookies" name="test_ck7_rotation_reuse_revokes_family" time="30.307"><failure message="AssertionError: family not revoked after reuse (B still works)&#10;assert 200 == 401&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +    where &lt;Response [200 OK]&gt; = _refresh('_CR0Y0QpEdE-BQ4dCqL7ZD8SLdbDANblXOpRoDyoBoWtwQXbEVl94zodKchuB76-')">session = {'access': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0OTU3OTlmNS1lZmZkLTQ0MmYtOTZjNS1hMjQyNTQ5NjgwNjIiLCJyb2xlI...07YVEggb'}, 'refresh': 'Zk3SP1q4rO-_iP089q4GEE48FkjzD2_VeOEJiKNJ1tk04EOWM7zO9YFO07YVEggb', 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck7_rotation_reuse_revokes_family(session):
+        a = session["refresh"]
+        r1 = _refresh(a)
+        assert r1.status_code == 200, f"first refresh failed: {r1.status_code}"
+        b = _new_token(r1)
+        assert b and b != a, "refresh token was not rotated"
+        assert _refresh(a).status_code == 401, "old (rotated) token still accepted"
+        # reuse of A must have burned the whole family, including the legitimate successor B
+&gt;       assert _refresh(b).status_code == 401, "family not revoked after reuse (B still works)"
+E       AssertionError: family not revoked after reuse (B still works)
+E       assert 200 == 401
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +    where &lt;Response [200 OK]&gt; = _refresh('_CR0Y0QpEdE-BQ4dCqL7ZD8SLdbDANblXOpRoDyoBoWtwQXbEVl94zodKchuB76-')
+
+test_cookies.py:130: AssertionError</failure></testcase><testcase classname="test_cookies" name="test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/refresh]" time="29.500"><skipped type="pytest.xfail" message="/auth/refresh honours a cookie sent with a foreign Origin; defence relies on SameSite=Strict only" /></testcase><testcase classname="test_cookies" name="test_ck8_csrf_cors_never_reflects_foreign_origin[/auth/logout]" time="31.106"><skipped type="pytest.xfail" message="/auth/logout honours a cookie sent with a foreign Origin; defence relies on SameSite=Strict only" /></testcase><testcase classname="test_cookies" name="test_ck8b_samesite_blocks_when_not_strict" time="28.424" /><testcase classname="test_cookies" name="test_ck9_csp_blocks_inline_script" time="0.328" /><testcase classname="test_cookies" name="test_ck11_no_store_on_set_cookie_responses" time="29.721"><failure message="AssertionError: login response Cache-Control='' (needs no-store)&#10;assert 'no-store' in ''">session = {'access': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0OTU3OTlmNS1lZmZkLTQ0MmYtOTZjNS1hMjQyNTQ5NjgwNjIiLCJyb2xlI...24w7Tycx'}, 'refresh': 'k88OuxuxLwecFIwuRxnk6wxim0lyVfALJ6HFvAnAY7lliQMuR11uqt4824w7Tycx', 'resp': &lt;Response [200 OK]&gt;}
+
+    def test_ck11_no_store_on_set_cookie_responses(session):
+        r = session["resp"]
+        assert r.headers.get_list("set-cookie") or session["cookie"] is None
+        cc = r.headers.get("cache-control", "").lower()
+&gt;       assert "no-store" in cc, f"login response Cache-Control={cc!r} (needs no-store)"
+E       AssertionError: login response Cache-Control='' (needs no-store)
+E       assert 'no-store' in ''
+
+test_cookies.py:174: AssertionError</failure></testcase><testcase classname="test_app_attack" name="test_a7_jwt_forgeries_rejected" time="42.157" /></testsuite></testsuites>

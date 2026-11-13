@@ -1,0 +1,19 @@
+{
+  "scenarios_with_result": 0,
+  "tally": {
+    "fail": 0,
+    "xfail": 0,
+    "pass": 0,
+    "skip": 0
+  },
+  "failed": [],
+  "known_gaps_xfail": [],
+  "suites": {
+    "sec": {
+      "status": "fail",
+      "rc": 1,
+      "seconds": 1185.1,
+      "note": "64 failed, 398 passed, 21 skipped, 149 warnings in 1182.18s (0:19:42)"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+INFO H2 probe n=1379 fail=0 5xx=0 ok%=100.000 med=84.779ms p95=114.486ms p99=145.724ms max=787.314ms
+PASS H2 max_temp_c=46.7 (le 80)
+PASS H2 no new throttle bits (before=0x0 after=0x0 mask=0x50005)
+INFO H2 closed-case vs open-case comparison is manual: repeat with the case open

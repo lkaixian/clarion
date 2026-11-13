@@ -1,0 +1,22 @@
+INFO N1 warm-up 60s discarded, then 600s; p95 SERVER time needs Caddy/uvicorn logs or /metrics (not measured here)
+INFO N1 p95_rtt=0ms (client RTT, not server time)
+SKIP N2 LOGIN_USER/LOGIN_PASS not set
+SKIP N3 LOGIN_USER/LOGIN_PASS not set
+INFO N3 'no worker pinned': inspect docker stats / gunicorn log in /home/pi/clarion_qa/stress/pi/results/20261112-140756
+INFO N4 zero duplicated writes is asserted by the R group, not here
+INFO N5 no half-written record: assert with the R/RN group
+PASS D9 watchdog device present
+FAIL D9 systemd RuntimeWatchdogSec not set (setup_pi.sh --apply)
+INFO D9 dtparam=watchdog=on not found in /boot/firmware/config.txt
+INFO D9 panic trigger skipped (needs --destructive --panic)
+FAIL D10:mariadb log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:backend log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:proxy log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:redis log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:minio log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:mpi log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:cloudflared log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+FAIL D10:web log config 'json-file  ' (daemon.json log-opts apply to NEW containers: recreate)
+INFO D10 journal usage: 168.0M
+FAIL D10 journald SystemMaxUse not set (setup_pi.sh --apply)
+INFO D10 logrotate.d entries: 11

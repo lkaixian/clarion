@@ -1,0 +1,5 @@
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+
+--- 8.8.8.8 ping statistics ---
+20 packets transmitted, 20 received, 0% packet loss, time 3814ms
+rtt min/avg/max/mdev = 17.092/22.119/30.130/3.680 ms

@@ -1,0 +1,1 @@
+INFO D12 time services stopped: systemd-timesyncd

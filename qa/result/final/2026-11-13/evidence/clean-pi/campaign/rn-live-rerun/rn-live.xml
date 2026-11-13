@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="4" tests="14" time="82.875" timestamp="2026-11-13T05:57:52.378920+00:00" hostname="uthm-pr-emos-000m"><testcase classname="test_degraded_network" name="test_rn1_lost_response_retry_same_intent" time="7.654" /><testcase classname="test_degraded_network" name="test_rn1b_generic_idempotency_key_header" time="0.163"><skipped type="pytest.xfail" message="GAP: no generic Idempotency-Key header; POST /patients (and other non-payment POSTs) create a duplicate when a lost response is retried" /></testcase><testcase classname="test_degraded_network" name="test_rn2_lost_refresh_response_is_recoverable" time="0.776" /><testcase classname="test_degraded_network" name="test_rn2b_replay_after_grace_revokes_family" time="39.684"><failure message="AssertionError: assert 200 == 401&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code&#10; +    where &lt;Response [200 OK]&gt; = post('/auth/refresh', json={'refresh_token': 'xmyqHkUJn6vZ2XaJkIHX7XZO8BE5Y_7EuKOZp48FNcY8OOUDmraGDpq8hv62tzVV'})&#10; +      where post = &lt;httpx.Client object at 0x7fac059850&gt;.post">client = &lt;httpx.Client object at 0x7fac059850&gt;
+admin = {'email': 'admin@clarion.demo', 'headers': {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0...dY8BSwlo'}, 'password': 'admin123', 'refresh': 'lH1L26s_PhUNo_cdxsugakoAblKAnwYTCz1PLJgm6L7Egus5QbLc10VfrZTY90VO', ...}
+
+    def test_rn2b_replay_after_grace_revokes_family(client, admin):
+        t1 = _login(client, admin["email"], admin["password"])["refresh_token"]
+        t2 = client.post("/auth/refresh", json={"refresh_token": t1}).json()["refresh_token"]
+        time.sleep(GRACE + 2)
+&gt;       assert client.post("/auth/refresh", json={"refresh_token": t1}).status_code == 401  # stale replay
+E       AssertionError: assert 200 == 401
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+E        +    where &lt;Response [200 OK]&gt; = post('/auth/refresh', json={'refresh_token': 'xmyqHkUJn6vZ2XaJkIHX7XZO8BE5Y_7EuKOZp48FNcY8OOUDmraGDpq8hv62tzVV'})
+E        +      where post = &lt;httpx.Client object at 0x7fac059850&gt;.post
+
+test_degraded_network.py:91: AssertionError</failure></testcase><testcase classname="test_degraded_network" name="test_rn3_double_submit_on_slow_link_one_record" time="1.443"><failure message="AssertionError: [409, 409]&#10;assert 0 == 1&#10; +  where 0 = len(set())">px = &lt;toxiproxy_scenarios.Proxy object at 0x7fac09f700&gt;
+bill_world = ({'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYjhjZTMzZS1kMTE3LTQ0ZTItYWE3MC1hMTkyMzhhMz...MmYtOTZjNS1hMjQyNTQ5NjgwNjIiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3OTQ1NTAzNzN9.LPfDcfIbp_H3p8QwMHpmSXkHuqh_F4tXp-ndY8BSwlo'})
+
+    def test_rn3_double_submit_on_slow_link_one_record(px, bill_world):
+        ph, bill_id, _ = bill_world
+        key = secrets.token_hex(8)
+    
+        def tap(_):
+            with via(px, timeout=20) as c:
+                return c.post(f"/payments/bills/{bill_id}/intents", headers=ph, json={"amount_cents": 1200, "idempotency_key": key})
+        with px.toxic("bandwidth", stream="upstream", rate=1), cf.ThreadPoolExecutor(2) as ex:
+            res = list(ex.map(tap, range(2)))
+        ids = {r.json()["id"] for r in res if r.status_code in (200, 201)}
+&gt;       assert len(ids) == 1, [r.status_code for r in res]
+E       AssertionError: [409, 409]
+E       assert 0 == 1
+E        +  where 0 = len(set())
+
+test_degraded_network.py:106: AssertionError</failure></testcase><testcase classname="test_degraded_network" name="test_rn4_out_of_order_responses" time="0.001"><skipped type="pytest.skip" message="RN4 is a UI race (stale response painted last): covered by the Playwright suite, not the API">/home/pi/CLARION_CENTRAL/qa/stress/py/test_degraded_network.py:110: RN4 is a UI race (stale response painted last): covered by the Playwright suite, not the API</skipped></testcase><testcase classname="test_degraded_network" name="test_rn5_token_expiry_during_slow_request" time="0.001"><skipped type="pytest.skip" message="RN5 needs a 15-minute access token to expire mid-upload: rerun manually with a short ACCESS_TOKEN_EXPIRE_MINUTES on staging and a 100 kbit/s bandwidth toxic">/home/pi/CLARION_CENTRAL/qa/stress/py/test_degraded_network.py:115: RN5 needs a 15-minute access token to expire mid-upload: rerun manually with a short ACCESS_TOKEN_EXPIRE_MINUTES on staging and a 100 kbit/s bandwidth toxic</skipped></testcase><testcase classname="test_degraded_network" name="test_rn6_two_clients_refreshing_on_flaky_link" time="19.441" /><testcase classname="test_degraded_network" name="test_rn7_webhook_bad_signature_rejected_under_brownout" time="1.095" /><testcase classname="test_degraded_network" name="test_rn7b_signed_webhook_replayed_10x_settles_once" time="0.162"><failure message="KeyError: 'provider_ref'">px = &lt;toxiproxy_scenarios.Proxy object at 0x7fac09f700&gt;
+client = &lt;httpx.Client object at 0x7fac059850&gt;
+bill_world = ({'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYjhjZTMzZS1kMTE3LTQ0ZTItYWE3MC1hMTkyMzhhMz...MmYtOTZjNS1hMjQyNTQ5NjgwNjIiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3OTQ1NTAzNzN9.LPfDcfIbp_H3p8QwMHpmSXkHuqh_F4tXp-ndY8BSwlo'})
+
+    @pytest.mark.skipif(not os.environ.get("PAYMENTS_WEBHOOK_SECRET"), reason="PAYMENTS_WEBHOOK_SECRET not provided")
+    def test_rn7b_signed_webhook_replayed_10x_settles_once(px, client, bill_world):
+        ph, bill_id, ah = bill_world
+        paid0 = client.get(f"/billing/bills/{bill_id}", headers=ah).json()["paid_cents"]
+        i = client.post(f"/payments/bills/{bill_id}/intents", headers=ph, json={"amount_cents": 700}).json()
+&gt;       body = json.dumps({"provider_ref": i["provider_ref"], "status": "succeeded", "amount_cents": 700}).encode()
+E       KeyError: 'provider_ref'
+
+test_degraded_network.py:150: KeyError</failure></testcase><testcase classname="test_degraded_network" name="test_rn7c_old_timestamp_rejected" time="0.001"><skipped type="pytest.xfail" message="[NOTRUN] GAP: webhook events carry no timestamp, so an old-but-validly-signed event cannot be rejected for age; replay safety rests only on the intent-state compare-and-set" /></testcase><testcase classname="test_degraded_network" name="test_rn8_stalled_clients_do_not_starve_workers" time="1.824" /><testcase classname="test_degraded_network" name="test_rn9_retry_storm_after_blackout" time="8.517"><failure message="AssertionError: {200: 27, 'gave_up': 73}&#10;assert 27 &gt;= 95&#10; +  where 27 = &lt;built-in method count of list object at 0x7faa9daac0&gt;(200)&#10; +    where &lt;built-in method count of list object at 0x7faa9daac0&gt; = ['gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', ...].count">px = &lt;toxiproxy_scenarios.Proxy object at 0x7fac09f700&gt;
+
+    def test_rn9_retry_storm_after_blackout(px):
+        def retry(_):
+            with via(px, timeout=5) as c:
+                for backoff in (0.2, 0.4, 0.8, 1.6, 3.2):  # capped, jittered
+                    try:
+                        return c.get("/healthz").status_code
+                    except httpx.HTTPError:
+                        time.sleep(backoff * (0.5 + secrets.randbelow(100) / 100))
+            return "gave_up"
+        with cf.ThreadPoolExecutor(100) as ex:
+            with px.down():
+                futs = [ex.submit(retry, i) for i in range(100)]
+                time.sleep(3)
+            res = [f.result() for f in futs]
+        assert not [r for r in res if isinstance(r, int) and r &gt;= 500], "5xx cascade after recovery"
+&gt;       assert res.count(200) &gt;= 95, {r: res.count(r) for r in set(res)}
+E       AssertionError: {200: 27, 'gave_up': 73}
+E       assert 27 &gt;= 95
+E        +  where 27 = &lt;built-in method count of list object at 0x7faa9daac0&gt;(200)
+E        +    where &lt;built-in method count of list object at 0x7faa9daac0&gt; = ['gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', ...].count
+
+test_degraded_network.py:199: AssertionError</failure></testcase><testcase classname="test_degraded_network" name="test_rn10_offline_queue_replay_exactly_once" time="1.511"><failure message="AssertionError: {'chain_broken': 0, 'conflicts': 0, 'duplicates': 0, 'stored': 25}&#10;assert (25 == 0)">px = &lt;toxiproxy_scenarios.Proxy object at 0x7fac09f700&gt;
+client = &lt;httpx.Client object at 0x7fac059850&gt;
+admin = {'email': 'admin@clarion.demo', 'headers': {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0...dY8BSwlo'}, 'password': 'admin123', 'refresh': 'lH1L26s_PhUNo_cdxsugakoAblKAnwYTCz1PLJgm6L7Egus5QbLc10VfrZTY90VO', ...}
+
+    def test_rn10_offline_queue_replay_exactly_once(px, client, admin):
+        body = {"device_id": "dev-" + secrets.token_hex(4), "entries": _chain(25, secrets.token_hex(7).upper())}
+        done = False
+        for _ in range(6):  # lossy link: the response is cut after the server commits, so the client retries
+            with px.toxic("limit_data", stream="downstream", bytes=40), via(px) as c:
+                try:
+                    done = c.post("/emergency/offline-reads", headers=admin["headers"], json=body).status_code == 200
+                except httpx.HTTPError:
+                    done = False
+            if done:
+                break
+        final = client.post("/emergency/offline-reads", headers=admin["headers"], json=body).json()
+&gt;       assert final["stored"] == 0 and final["duplicates"] == 25 and final["chain_broken"] == 0, final
+E       AssertionError: {'chain_broken': 0, 'conflicts': 0, 'duplicates': 0, 'stored': 25}
+E       assert (25 == 0)
+
+test_degraded_network.py:226: AssertionError</failure></testcase></testsuite></testsuites>

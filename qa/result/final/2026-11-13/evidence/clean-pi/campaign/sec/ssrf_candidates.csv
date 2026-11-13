@@ -1,0 +1,2 @@
+method,path,field
+PUT,/admin/hospital-settings,logo_data_url

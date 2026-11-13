@@ -1,0 +1,24 @@
+INFO H1 probe n=461 fail=0 5xx=0 ok%=100.000 med=84.545ms p95=113.305ms p99=140.847ms max=627ms
+PASS H1 median_ms=84.545 (le 1000)
+PASS H1 ok_pct=100.000 (ge 99.9)
+PASS H1 p95_rtt_ms=113.305 (le 250)
+PASS H1 no new throttle bits (before=0x0 after=0x0 mask=0xFFFFFFFF)
+INFO H3 probe n=220 fail=0 5xx=0 ok%=100.000 med=107.887ms p95=155.49ms p99=186.96ms max=221.707ms
+PASS H3 p95_rtt_ms=155.49 (le 500)
+INFO H4 probe n=213 fail=0 5xx=0 ok%=100.000 med=154.941ms p95=233.782ms p99=301.612ms max=324.872ms
+PASS H4 median_ms=154.941 (le 1000)
+PASS H4 ok_pct=100.000 (ge 99.9)
+FAIL H4 swap_pages_per_s=348 (le 100)
+PASS H4 all core containers running
+INFO H6 probe n=150 fail=0 5xx=0 ok%=100.000 med=46.937ms p95=70.018ms p99=79.393ms max=83.831ms
+PASS H6 backend running+healthy after the limit
+PASS H6 restart_delta=0 (le 1)
+INFO H6 no data loss: compare snapshot_counts.sh before/after if you ran writes
+INFO H8 probe n=236 fail=0 5xx=0 ok%=100.000 med=74.109ms p95=252.847ms p99=425.631ms max=918.337ms
+FAIL H8 p95_rtt_ms=252.847 (le 250)
+PASS H8 mariadb_commit_ms=26 (le 100)
+INFO H9 probe n=217 fail=0 5xx=0 ok%=100.000 med=61.84ms p95=198.121ms p99=794.108ms max=4048.58ms
+PASS H9 mariadb_commit_ms=14 (le 2000)
+PASS H9 semaphore_waits=0 (le 0)
+INFO H12 probe n=92 fail=0 5xx=0 ok%=100.000 med=83.187ms p95=115.604ms p99=132.332ms max=132.332ms
+PASS H12 no new throttle bits (before=0x0 after=0x0 mask=0x10001)

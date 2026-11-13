@@ -1,0 +1,9 @@
+FAIL D1:web not healthy within 30s of the kill (needs manual action?)
+FAIL D1:redis not healthy within 30s of the kill (needs manual action?)
+FAIL D1:mpi not healthy within 30s of the kill (needs manual action?)
+FAIL D1:minio not healthy within 30s of the kill (needs manual action?)
+FAIL D1:backend not healthy within 30s of the kill (needs manual action?)
+FAIL D1:proxy not healthy within 30s of the kill (needs manual action?)
+FAIL D1:mariadb not healthy within 30s of the kill (needs manual action?)
+PASS D1:mariadb mariadb-check clean after SIGKILL
+FAIL D1:cloudflared not healthy within 30s of the kill (needs manual action?)

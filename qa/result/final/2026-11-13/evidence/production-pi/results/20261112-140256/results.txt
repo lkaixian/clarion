@@ -1,0 +1,6 @@
+INFO base_ping_1.1.1.1_avg_ms 26.928 (min=23.706 max=37.614 0% packet loss)
+INFO base_ping_8.8.8.8_avg_ms 20.595 (min=17.615 max=31.697 0% packet loss)
+INFO base_down_mbps 340.6 (4 streams, 1 runs)
+INFO base_up_mbps 37.7 (4 streams, 1 runs)
+INFO base_tunnel probe n=16 fail=0 5xx=0 ok%=100.000 med=316.865ms p95=654.569ms p99=654.569ms max=654.569ms
+INFO base_tunnel_avg_ms 382.6 (client RTT via https://clarion.larmkx.com/api/healthz, successful requests only)

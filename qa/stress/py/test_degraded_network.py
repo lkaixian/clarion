@@ -20,6 +20,7 @@ import httpx
 import pytest
 
 from test_races_live import _nric, _post, bill_world  # noqa: F401  (bill_world is a fixture)
+from conftest import login_tokens
 from toxiproxy_scenarios import Proxy, available
 
 GRACE = int(os.environ.get("REFRESH_REUSE_GRACE_SECONDS", "8"))
@@ -38,7 +39,7 @@ def via(px, **kw):
 
 
 def _login(client, email, pw):
-    return client.post("/auth/login", data={"username": email, "password": pw}).json()
+    return login_tokens(client, email, pw)
 
 
 # RN1 ------------------------------------------------------------------------

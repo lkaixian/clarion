@@ -1,0 +1,32 @@
+INFO N1 warm-up 60s discarded, then 300s; p95 SERVER time needs Caddy/uvicorn logs or /metrics (not measured here)
+INFO N1-warmup probe n=201 fail=141 5xx=0 ok%=29.851 med=51.065ms p95=73.25ms p99=88.583ms max=111.178ms
+INFO N1 probe n=999 fail=700 5xx=0 ok%=29.930 med=51.234ms p95=73.788ms p99=84.859ms max=109.933ms
+PASS N1 median_ms=51.234 (le 1000)
+FAIL N1 ok_pct=29.930 (ge 99.9)
+INFO N1 p95_rtt=73.788ms (client RTT, not server time)
+INFO N2 probe n=180 fail=120 5xx=0 ok%=33.333 med=83.421ms p95=96.779ms p99=107.878ms max=107.969ms
+PASS N2 median_ms=83.421 (le 3000)
+PASS N2 http_5xx=0 (le 0)
+PASS N2 static asset served compressed
+PASS N2 login_ms=843 (le 3000)
+INFO N3 probe n=88 fail=27 5xx=0 ok%=69.318 med=191.587ms p95=426.886ms p99=7083.46ms max=7083.46ms
+PASS N3 max_ms=7083.46 (le 10000)
+INFO N3-scan probe n=47 fail=1 5xx=0 ok%=97.872 med=190.378ms p95=6980.57ms p99=10001.3ms max=10001.3ms
+FAIL N3 scan_max_ms=10001.3 (le 10000)
+FAIL N3 login http=000
+INFO N3 'no worker pinned': inspect docker stats / gunicorn log in /home/pi/CLARION_CENTRAL/qa/stress/pi/results/overnight-20261112-162945/net-N1-N7
+INFO N4 probe n=14 fail=0 5xx=0 ok%=100.000 med=1733.48ms p95=9115.14ms p99=9115.14ms max=9115.14ms
+PASS N4 ok_pct=100.000 (ge 99.9)
+PASS N4 max_ms=9115.14 (le 10000)
+INFO N4 zero duplicated writes is asserted by the R group, not here
+INFO N5a probe n=66 fail=0 5xx=0 ok%=100.000 med=61.749ms p95=6614.92ms p99=7300.14ms max=7300.14ms
+PASS N5a max_ms=7300.14 (le 11000)
+INFO N5b probe n=30 fail=1 5xx=0 ok%=96.667 med=274.533ms p95=8157.36ms p99=10001.5ms max=10001.5ms
+PASS N5b max_ms=10001.5 (le 11000)
+INFO N5 no half-written record: assert with the R/RN group
+INFO N6 probe n=29 fail=1 5xx=0 ok%=96.552 med=828.39ms p95=7996.9ms p99=10000.1ms max=10000.1ms
+PASS N6 http_5xx=0 (le 0)
+FAIL N6 ok_pct=96.552 (ge 99.9)
+INFO N7 probe n=4 fail=4 5xx=0 ok%=0.000 med=8223.02ms p95=10001.6ms p99=10001.6ms max=10001.6ms
+PASS N7 max_ms=10001.6 (le 11000)
+PASS N7 recovery_ms=2964 (le 5000)

@@ -52,10 +52,12 @@ hook() { # NAME CMD
 trap 'collect_stop' EXIT
 if [ "$DRY_RUN" != 1 ]; then bash "$LIB_DIR/collect.sh" >/dev/null 2>&1 & COLLECT_PID=$!; fi
 
+step "internet speed + latency baseline (Cloudflare, no setup)"; TAG=base sh_ speedtest_baseline.sh "${FWD[@]}"
 want d5 && { step "D5 power loss (one cycle; continue with verify_after_boot.sh --continue)"; sh_ durability.sh "${FWD[@]}" --destructive D5; }
 want hw && { step "B hardware (safe set)"; sh_ hw_stress.sh "${FWD[@]}"; }
 want hw-risky && { step "B hardware (H5 H10 H13)"; sh_ hw_stress.sh "${FWD[@]}" --i-know-this-kills H5 H10 H13; }
 want net && { step "A network (N1-N7)"; sh_ net_scenarios.sh "${FWD[@]}"; }
+# for a speed/RTT reading under shaping, run by hand while netem is active: TAG=shaped ./speedtest_baseline.sh
 want net-disruptive && { step "A network (N8-N11)"; sh_ net_scenarios.sh "${FWD[@]}" --disruptive N8 N9 N10 N11; }
 step "C / C2 race suite (hook)"; hook HOOK_RACE_CMD "${HOOK_RACE_CMD:-}"
 step "E security (hook)"; hook HOOK_SEC_CMD "${HOOK_SEC_CMD:-}"

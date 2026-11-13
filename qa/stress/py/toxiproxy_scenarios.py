@@ -35,7 +35,10 @@ class Proxy:
         host = upstream_host_override or os.environ.get("TOXIPROXY_UPSTREAM_HOST") or u.hostname
         self.name, self.listen = name, f"0.0.0.0:{listen_port}"
         self.upstream = f"{host}:{port}"
-        self.url = f"{u.scheme}://127.0.0.1:{listen_port}{u.path.rstrip('/')}"
+        # TOXIPROXY_CLIENT_HOST: name the client uses to reach the proxy (default 127.0.0.1). Needed when the target
+        # checks the TLS name / Host header (map the name to 127.0.0.1 in /etc/hosts for the duration of the run).
+        chost = os.environ.get("TOXIPROXY_CLIENT_HOST") or "127.0.0.1"
+        self.url = f"{u.scheme}://{chost}:{listen_port}{u.path.rstrip('/')}"
 
     def __enter__(self):
         httpx.delete(f"{API}/proxies/{self.name}", timeout=5)  # leftover from a crashed run

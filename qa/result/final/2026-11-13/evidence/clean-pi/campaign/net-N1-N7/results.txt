@@ -1,0 +1,32 @@
+INFO N1 warm-up 60s discarded, then 600s; p95 SERVER time needs Caddy/uvicorn logs or /metrics (not measured here)
+INFO N1-warmup probe n=35 fail=1 5xx=0 ok%=97.143 med=266.942ms p95=309.812ms p99=10001.5ms max=10001.5ms
+INFO N1 probe n=424 fail=1 5xx=0 ok%=99.764 med=266.312ms p95=300.413ms p99=329.143ms max=447.916ms
+PASS N1 median_ms=266.312 (le 1000)
+FAIL N1 ok_pct=99.764 (ge 99.9)
+INFO N1 p95_rtt=300.413ms (client RTT, not server time)
+INFO N2 probe n=41 fail=0 5xx=0 ok%=100.000 med=296.853ms p95=322.768ms p99=328.379ms max=328.379ms
+PASS N2 median_ms=296.853 (le 3000)
+PASS N2 http_5xx=0 (le 0)
+PASS N2 static asset served compressed
+PASS N2 login_ms=997 (le 3000)
+INFO N3 probe n=39 fail=0 5xx=0 ok%=100.000 med=392.498ms p95=424.988ms p99=433.484ms max=433.484ms
+PASS N3 max_ms=433.484 (le 10000)
+INFO N3-scan probe n=39 fail=0 5xx=0 ok%=100.000 med=390.477ms p95=434.58ms p99=441.32ms max=441.32ms
+PASS N3 scan_max_ms=441.32 (le 10000)
+PASS N3 login_ms=1035 (le 10000)
+INFO N3 'no worker pinned': inspect docker stats / gunicorn log in /home/pi/CLARION_CENTRAL/qa/stress/pi/results/campaign-20261112-180523/net-N1-N7
+INFO N4 probe n=27 fail=0 5xx=0 ok%=100.000 med=1063.72ms p95=1162.7ms p99=1168.84ms max=1168.84ms
+PASS N4 ok_pct=100.000 (ge 99.9)
+PASS N4 max_ms=1168.84 (le 10000)
+INFO N4 zero duplicated writes is asserted by the R group, not here
+INFO N5a probe n=39 fail=0 5xx=0 ok%=100.000 med=281.096ms p95=896.802ms p99=1351.25ms max=1351.25ms
+PASS N5a max_ms=1351.25 (le 11000)
+INFO N5b probe n=41 fail=0 5xx=0 ok%=100.000 med=275.143ms p95=528.271ms p99=792.26ms max=792.26ms
+PASS N5b max_ms=792.26 (le 11000)
+INFO N5 no half-written record: assert with the R/RN group
+INFO N6 probe n=34 fail=0 5xx=0 ok%=100.000 med=657.786ms p95=691.054ms p99=694.955ms max=694.955ms
+PASS N6 http_5xx=0 (le 0)
+PASS N6 ok_pct=100.000 (ge 99.9)
+INFO N7 probe n=15 fail=15 5xx=15 ok%=0.000 med=223.009ms p95=9472.22ms p99=9472.22ms max=9472.22ms
+PASS N7 max_ms=9472.22 (le 11000)
+FAIL N7 recovery_ms=22798 (le 5000)

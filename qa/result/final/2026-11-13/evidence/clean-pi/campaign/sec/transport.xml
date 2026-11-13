@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="3" tests="21" time="363.027" timestamp="2026-11-12T18:08:01.479915+00:00" hostname="uthm-pr-emos-000m"><testcase classname="test_transport_headers" name="test_t1_tls12_and_13_accepted" time="0.269" /><testcase classname="test_transport_headers" name="test_t1_legacy_tls_refused[TLSv1]" time="0.149"><failure message="Failed: TLSv1 handshake succeeded (TLSv1)">name = 'TLSv1'
+
+    @pytest.mark.parametrize("name", ["TLSv1", "TLSv1_1"])
+    def test_t1_legacy_tls_refused(name):
+        v = getattr(ssl.TLSVersion, name)
+        try:
+            got = _tls_connect(v, v)
+        except (ssl.SSLError, OSError, ValueError):
+            return  # handshake refused (or this OpenSSL cannot even offer it): pass
+&gt;       pytest.fail(f"{name} handshake succeeded ({got})")
+E       Failed: TLSv1 handshake succeeded (TLSv1)
+
+test_transport_headers.py:57: Failed</failure></testcase><testcase classname="test_transport_headers" name="test_t1_legacy_tls_refused[TLSv1_1]" time="0.149"><failure message="Failed: TLSv1_1 handshake succeeded (TLSv1.1)">name = 'TLSv1_1'
+
+    @pytest.mark.parametrize("name", ["TLSv1", "TLSv1_1"])
+    def test_t1_legacy_tls_refused(name):
+        v = getattr(ssl.TLSVersion, name)
+        try:
+            got = _tls_connect(v, v)
+        except (ssl.SSLError, OSError, ValueError):
+            return  # handshake refused (or this OpenSSL cannot even offer it): pass
+&gt;       pytest.fail(f"{name} handshake succeeded ({got})")
+E       Failed: TLSv1_1 handshake succeeded (TLSv1.1)
+
+test_transport_headers.py:57: Failed</failure></testcase><testcase classname="test_transport_headers" name="test_t2_security_headers[/]" time="0.421"><skipped type="pytest.xfail" message="HSTS max-age=300 (demo)" /></testcase><testcase classname="test_transport_headers" name="test_t2_security_headers[/api/healthz]" time="0.240"><skipped type="pytest.xfail" message="HSTS max-age=300 (demo)" /></testcase><testcase classname="test_transport_headers" name="test_t2_no_wildcard_cors_with_credentials" time="0.249" /><testcase classname="test_transport_headers" name="test_t3_http_redirects_and_serves_nothing" time="0.185"><failure message="assert 200 in (301, 302, 307, 308)&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">def test_t3_http_redirects_and_serves_nothing():
+        try:
+            with client() as c:
+                r = c.get("http://" + BASE.split("://", 1)[1] + "/")
+        except httpx.ConnectError:
+            pytest.skip("port 80 closed")
+&gt;       assert r.status_code in (301, 302, 307, 308)
+E       assert 200 in (301, 302, 307, 308)
+E        +  where 200 = &lt;Response [200 OK]&gt;.status_code
+
+test_transport_headers.py:94: AssertionError</failure></testcase><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/metrics]" time="0.228" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/readyz]" time="0.238" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/docs]" time="0.251" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/redoc]" time="0.253" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/openapi.json]" time="0.240" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/METRICS]" time="0.239" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/Readyz]" time="0.234" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/metrics/]" time="0.287"><failure message="AssertionError: https://clarion-testnet.larmkx.com/api/metrics/ -&gt; 307&#10;assert 307 in (403, 404)&#10; +  where 307 = &lt;Response [307 Temporary Redirect]&gt;.status_code">p = '/metrics/'
+
+    @pytest.mark.parametrize("p", BLOCKED)
+    def test_t6_diagnostics_not_public(p):
+        with client() as c:
+            r = c.get(url(p))
+        body = r.text[:4000]
+&gt;       assert r.status_code in (403, 404), f"{url(p)} -&gt; {r.status_code}"
+E       AssertionError: https://clarion-testnet.larmkx.com/api/metrics/ -&gt; 307
+E       assert 307 in (403, 404)
+E        +  where 307 = &lt;Response [307 Temporary Redirect]&gt;.status_code
+
+test_transport_headers.py:109: AssertionError</failure></testcase><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[//metrics]" time="0.290" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/%6detrics]" time="0.226" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/%2e/metrics]" time="0.240" /><testcase classname="test_transport_headers" name="test_t6_diagnostics_not_public[/docs/oauth2-redirect]" time="0.252" /><testcase classname="test_transport_headers" name="test_t7_origin_ip_does_not_answer" time="0.002"><skipped type="pytest.skip" message="ORIGIN_IP not set">/home/pi/CLARION_CENTRAL/qa/stress/sec/test_transport_headers.py:117: ORIGIN_IP not set</skipped></testcase><testcase classname="test_transport_headers" name="test_t1_testssl_json_if_available" time="357.934"><failure message="AssertionError: FAIL MEDIUM HSTS_time: max-age too short. 0 days (=300 seconds) &lt; 15465600 seconds&#10;  FAIL MEDIUM BREACH: potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested&#10;  FAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA&#10;  FAIL MEDIUM HSTS_time: max-age too short. 0 days (=300 seconds) &lt; 15465600 seconds&#10;  FAIL MEDIUM BREACH: potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested&#10;  FAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA&#10;  6 finding(s)&#10;  &#10;assert 1 == 0&#10; +  where 1 = CompletedProcess(args=['bash', '/home/pi/CLARION_CENTRAL/qa/stress/sec/tls_audit.sh', 'clarion-testnet.larmkx.com'], r...lied '/' tested\nFAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA\n6 finding(s)\n&quot;, stderr='').returncode">def test_t1_testssl_json_if_available():
+        """Runs tls_audit.sh when testssl is installed; skip otherwise."""
+        import shutil, pathlib
+        if not (shutil.which("testssl.sh") or shutil.which("testssl")):
+            pytest.skip("testssl.sh not installed")
+        sh = pathlib.Path(__file__).with_name("tls_audit.sh")
+        p = subprocess.run(["bash", str(sh), host()], capture_output=True, text=True, timeout=900)
+&gt;       assert p.returncode == 0, p.stdout[-3000:]
+E       AssertionError: FAIL MEDIUM HSTS_time: max-age too short. 0 days (=300 seconds) &lt; 15465600 seconds
+E         FAIL MEDIUM BREACH: potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested
+E         FAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA
+E         FAIL MEDIUM HSTS_time: max-age too short. 0 days (=300 seconds) &lt; 15465600 seconds
+E         FAIL MEDIUM BREACH: potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested
+E         FAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA
+E         6 finding(s)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['bash', '/home/pi/CLARION_CENTRAL/qa/stress/sec/tls_audit.sh', 'clarion-testnet.larmkx.com'], r...lied '/' tested\nFAIL MEDIUM BEAST_CBC_TLS1: ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA\n6 finding(s)\n", stderr='').returncode
+
+test_transport_headers.py:139: AssertionError</failure></testcase></testsuite></testsuites>

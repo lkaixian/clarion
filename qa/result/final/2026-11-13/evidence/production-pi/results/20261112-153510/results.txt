@@ -1,0 +1,10 @@
+INFO H8 probe n=240 fail=0 5xx=0 ok%=100.000 med=66.037ms p95=234.939ms p99=368.649ms max=637.661ms
+PASS H8 p95_rtt_ms=234.939 (le 250)
+PASS H8 mariadb_commit_ms=45 (le 100)
+INFO H9 probe n=228 fail=0 5xx=0 ok%=100.000 med=58.569ms p95=167.596ms p99=455.901ms max=705.175ms
+PASS H9 mariadb_commit_ms=15 (le 2000)
+PASS H9 semaphore_waits=0 (le 0)
+INFO H6 probe n=151 fail=0 5xx=0 ok%=100.000 med=46.652ms p95=77.191ms p99=117.578ms max=430.627ms
+PASS H6 backend running+healthy after the limit
+PASS H6 restart_delta=0 (le 1)
+INFO H6 no data loss: compare snapshot_counts.sh before/after if you ran writes

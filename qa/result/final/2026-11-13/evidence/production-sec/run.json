@@ -1,0 +1,20 @@
+{
+  "when": "2026-11-13T00:37:24",
+  "host": "DESKTOP-JVNE4EP",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "env": {
+    "BASE_URL": "set",
+    "SEC_USER": "set",
+    "ADMIN_EMAIL": "set",
+    "TOXIPROXY_URL": "unset",
+    "DATABASE_URL": "unset"
+  },
+  "suites": {
+    "sec": {
+      "status": "fail",
+      "rc": 1,
+      "seconds": 1185.1,
+      "note": "64 failed, 398 passed, 21 skipped, 149 warnings in 1182.18s (0:19:42)"
+    }
+  }
+}

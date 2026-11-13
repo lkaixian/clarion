@@ -1,0 +1,9 @@
+INFO H1 probe n=467 fail=0 5xx=0 ok%=100.000 med=85.055ms p95=113.309ms p99=126.33ms max=137.026ms
+PASS H1 median_ms=85.055 (le 1000)
+PASS H1 ok_pct=100.000 (ge 99.9)
+PASS H1 p95_rtt_ms=113.309 (le 250)
+PASS H1 no new throttle bits (before=0x0 after=0x0 mask=0xFFFFFFFF)
+INFO H3 probe n=224 fail=0 5xx=0 ok%=100.000 med=105.103ms p95=141.482ms p99=187.5ms max=211.705ms
+PASS H3 p95_rtt_ms=141.482 (le 500)
+INFO H12 probe n=93 fail=0 5xx=0 ok%=100.000 med=83.801ms p95=110.524ms p99=153.105ms max=153.105ms
+PASS H12 no new throttle bits (before=0x0 after=0x0 mask=0x10001)

@@ -1,0 +1,26 @@
+INFO N2 probe n=38 fail=0 5xx=0 ok%=100.000 med=343.802ms p95=818.585ms p99=1272.42ms max=1272.42ms
+PASS N2 median_ms=343.802 (le 3000)
+PASS N2 http_5xx=0 (le 0)
+PASS N2 static asset served compressed
+PASS N2 login_ms=1073 (le 3000)
+INFO N3 probe n=37 fail=0 5xx=0 ok%=100.000 med=427.102ms p95=812.87ms p99=1018.46ms max=1018.46ms
+PASS N3 max_ms=1018.46 (le 10000)
+INFO N3-scan probe n=37 fail=0 5xx=0 ok%=100.000 med=432.876ms p95=783.961ms p99=841.307ms max=841.307ms
+PASS N3 scan_max_ms=841.307 (le 10000)
+PASS N3 login_ms=1186 (le 10000)
+INFO N3 'no worker pinned': inspect docker stats / gunicorn log in /home/pi/clarion_qa/stress/pi/results/20261112-150512
+INFO N4 probe n=26 fail=0 5xx=0 ok%=100.000 med=1140.54ms p95=1369.03ms p99=2204.04ms max=2204.04ms
+PASS N4 ok_pct=100.000 (ge 99.9)
+PASS N4 max_ms=2204.04 (le 10000)
+INFO N4 zero duplicated writes is asserted by the R group, not here
+INFO N5a probe n=38 fail=0 5xx=0 ok%=100.000 med=312.796ms p95=1188.47ms p99=1253.42ms max=1253.42ms
+PASS N5a max_ms=1253.42 (le 11000)
+INFO N5b probe n=40 fail=0 5xx=0 ok%=100.000 med=323.008ms p95=626.34ms p99=920.393ms max=920.393ms
+PASS N5b max_ms=920.393 (le 11000)
+INFO N5 no half-written record: assert with the R/RN group
+INFO N6 probe n=32 fail=0 5xx=0 ok%=100.000 med=701.049ms p95=873.23ms p99=923.162ms max=923.162ms
+PASS N6 http_5xx=0 (le 0)
+PASS N6 ok_pct=100.000 (ge 99.9)
+INFO N7 probe n=15 fail=15 5xx=15 ok%=0.000 med=259.365ms p95=9358.45ms p99=9358.45ms max=9358.45ms
+PASS N7 max_ms=9358.45 (le 11000)
+PASS N7 recovery_ms=1910 (le 5000)

@@ -1,0 +1,9 @@
+INFO H5 probe n=78 fail=7 5xx=0 ok%=91.026 med=128.152ms p95=10001.9ms p99=10019.3ms max=10019.3ms
+FAIL H5 core process killed: gunicorn 
+PASS H5 all core containers running
+PASS H5 mariadb-check clean
+FAIL H10 healthz_http=0 (ge 200)
+INFO H10 readyz while full: 0; uploads 503/507 and 75/90% alerts: verify by hand/Alertmanager
+PASS H10 mariadb-check clean while full
+PASS H10 recovered in 22s with no manual repair
+PASS H10 all core containers running

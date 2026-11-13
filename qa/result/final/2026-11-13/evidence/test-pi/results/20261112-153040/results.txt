@@ -1,0 +1,30 @@
+INFO base_ping_1.1.1.1_avg_ms 28.718 (min=23.627 max=36.802 0% packet loss)
+INFO base_ping_8.8.8.8_avg_ms 22.119 (min=17.092 max=30.130 0% packet loss)
+INFO base_down_mbps 345.1 (4 streams, 3 runs)
+INFO base_up_mbps 37.8 (4 streams, 3 runs)
+INFO base_tunnel probe n=17 fail=0 5xx=0 ok%=100.000 med=49.12ms p95=84.876ms p99=84.876ms max=84.876ms
+INFO base_tunnel_avg_ms 55.6 (client RTT via https://clarion.test:18443/api/healthz, successful requests only)
+INFO H1 probe n=462 fail=0 5xx=0 ok%=100.000 med=91.148ms p95=118.742ms p99=144.38ms max=200.534ms
+PASS H1 median_ms=91.148 (le 1000)
+PASS H1 ok_pct=100.000 (ge 99.9)
+PASS H1 p95_rtt_ms=118.742 (le 250)
+PASS H1 no new throttle bits (before=0x0 after=0x0 mask=0xFFFFFFFF)
+INFO H3 probe n=222 fail=0 5xx=0 ok%=100.000 med=114.349ms p95=161.379ms p99=183.536ms max=256.036ms
+PASS H3 p95_rtt_ms=161.379 (le 500)
+INFO H4 probe n=220 fail=0 5xx=0 ok%=100.000 med=142.369ms p95=195.111ms p99=243.059ms max=255.41ms
+PASS H4 median_ms=142.369 (le 1000)
+PASS H4 ok_pct=100.000 (ge 99.9)
+FAIL H4 swap_pages_per_s=502 (le 100)
+FAIL H4 not running: cloudflared
+INFO H6 probe n=151 fail=0 5xx=0 ok%=100.000 med=49.072ms p95=73.854ms p99=79.477ms max=93.461ms
+PASS H6 backend running+healthy after the limit
+PASS H6 restart_delta=0 (le 1)
+INFO H6 no data loss: compare snapshot_counts.sh before/after if you ran writes
+INFO H8 probe n=248 fail=0 5xx=0 ok%=100.000 med=61.464ms p95=92.835ms p99=130.027ms max=172.698ms
+PASS H8 p95_rtt_ms=92.835 (le 250)
+PASS H8 mariadb_commit_ms=23 (le 100)
+INFO H9 probe n=235 fail=0 5xx=0 ok%=100.000 med=55.786ms p95=82.307ms p99=304.525ms max=3309.5ms
+PASS H9 mariadb_commit_ms=13 (le 2000)
+PASS H9 semaphore_waits=0 (le 0)
+INFO H12 probe n=93 fail=0 5xx=0 ok%=100.000 med=91.996ms p95=115.991ms p99=131.419ms max=131.419ms
+PASS H12 no new throttle bits (before=0x0 after=0x0 mask=0x10001)

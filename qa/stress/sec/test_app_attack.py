@@ -22,6 +22,7 @@ import time
 from functools import lru_cache
 from pathlib import Path
 
+import httpx
 import pytest
 
 from conftest import (API, BASE, HERE, OUT, UA, bearer, client, env, login, role_tokens, url)
@@ -345,7 +346,10 @@ def test_a7_jwt_forgeries_rejected(session, http):
     assert real.status_code == 200, f"positive control failed: {real.status_code}"
     bad = {}
     for name, tok in forge(session["access"]).items():
-        r = send(http, "GET", "/auth/me", headers=bearer(tok))
+        try:
+            r = send(http, "GET", "/auth/me", headers=bearer(tok))
+        except httpx.LocalProtocolError:
+            continue          # the client library refuses to send e.g. an empty 'Bearer ' header: the server never sees it
         if r.status_code != 401 and r.status_code != 403 and r.status_code != 422:
             bad[name] = r.status_code
     assert not bad, f"forged tokens accepted/misrouted: {bad}"

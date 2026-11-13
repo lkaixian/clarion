@@ -1,0 +1,13 @@
+INFO H5 probe n=92 fail=0 5xx=0 ok%=100.000 med=103.226ms p95=155.932ms p99=205.784ms max=205.784ms
+SKIP H5 inconclusive: no OOM kill seen (stressor exited or swap absorbed it)
+PASS H5 all core containers running
+PASS H5 mariadb-check clean
+PASS H10 healthz_http=200 (ge 200)
+INFO H10 readyz while full: 200; uploads 503/507 and 75/90% alerts: verify by hand/Alertmanager
+PASS H10 mariadb-check clean while full
+PASS H10 recovered in 0s with no manual repair
+PASS H10 all core containers running
+INFO H13 probe n=397 fail=0 5xx=0 ok%=100.000 med=175.398ms p95=380.687ms p99=520.86ms max=835.765ms
+PASS H13 max_ms=835.765 (le 10000)
+PASS H13 pct_5xx=0.000 (le 0.1)
+PASS H13 all core containers running

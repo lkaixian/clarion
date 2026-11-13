@@ -1,0 +1,736 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="6" failures="2" skipped="5" tests="14" time="16.812" timestamp="2026-11-12T18:48:30.848735+00:00" hostname="uthm-pr-emos-000m"><testcase classname="test_degraded_network" name="test_rn1_lost_response_retry_same_intent" time="0.180"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase><testcase classname="test_degraded_network" name="test_rn1b_generic_idempotency_key_header" time="0.001"><skipped type="pytest.xfail" message="GAP: no generic Idempotency-Key header; POST /patients (and other non-payment POSTs) create a duplicate when a lost response is retried" /></testcase><testcase classname="test_degraded_network" name="test_rn2_lost_refresh_response_is_recoverable" time="0.001"><skipped type="pytest.xfail" message="GAP: replaying a just-rotated refresh token inside the grace window returns 401 (auth._is_concurrent_refresh_race only avoids chain revocation); a client whose rotate response was lost cannot recover the new pair without re-login" /></testcase><testcase classname="test_degraded_network" name="test_rn2b_replay_after_grace_revokes_family" time="0.001"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase><testcase classname="test_degraded_network" name="test_rn3_double_submit_on_slow_link_one_record" time="0.001"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase><testcase classname="test_degraded_network" name="test_rn4_out_of_order_responses" time="0.001"><skipped type="pytest.skip" message="RN4 is a UI race (stale response painted last): covered by the Playwright suite, not the API">/home/pi/CLARION_CENTRAL/qa/stress/py/test_degraded_network.py:109: RN4 is a UI race (stale response painted last): covered by the Playwright suite, not the API</skipped></testcase><testcase classname="test_degraded_network" name="test_rn5_token_expiry_during_slow_request" time="0.001"><skipped type="pytest.skip" message="RN5 needs a 15-minute access token to expire mid-upload: rerun manually with a short ACCESS_TOKEN_EXPIRE_MINUTES on staging and a 100 kbit/s bandwidth toxic">/home/pi/CLARION_CENTRAL/qa/stress/py/test_degraded_network.py:114: RN5 needs a 15-minute access token to expire mid-upload: rerun manually with a short ACCESS_TOKEN_EXPIRE_MINUTES on staging and a 100 kbit/s bandwidth toxic</skipped></testcase><testcase classname="test_degraded_network" name="test_rn6_two_clients_refreshing_on_flaky_link" time="0.001"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase><testcase classname="test_degraded_network" name="test_rn7_webhook_bad_signature_rejected_under_brownout" time="1.523" /><testcase classname="test_degraded_network" name="test_rn7b_signed_webhook_replayed_10x_settles_once" time="0.002"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase><testcase classname="test_degraded_network" name="test_rn7c_old_timestamp_rejected" time="0.001"><skipped type="pytest.xfail" message="[NOTRUN] GAP: webhook events carry no timestamp, so an old-but-validly-signed event cannot be rejected for age; replay safety rests only on the intent-state compare-and-set" /></testcase><testcase classname="test_degraded_network" name="test_rn8_stalled_clients_do_not_starve_workers" time="1.751"><failure message="httpx.ConnectError: [Errno 111] Connection refused">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+px = &lt;toxiproxy_scenarios.Proxy object at 0x7f81c011f0&gt;
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    def test_rn8_stalled_clients_do_not_starve_workers(px, client):
+        """Approximates a half-open peer: 30 requests stall in the proxy, clients give up; the backend must stay responsive."""
+        def stall(_):
+            with via(px, timeout=1.5) as c:
+                try:
+                    c.get("/healthz")
+                except httpx.HTTPError:
+                    pass
+        with px.toxic("timeout", stream="downstream", timeout=0), cf.ThreadPoolExecutor(30) as ex:
+            list(ex.map(stall, range(30)))
+        t0 = time.time()
+&gt;       assert client.get("/healthz").status_code == 200 and time.time() - t0 &lt; 2
+
+test_degraded_network.py:179: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</failure></testcase><testcase classname="test_degraded_network" name="test_rn9_retry_storm_after_blackout" time="8.555"><failure message="AssertionError: {200: 23, 'gave_up': 77}&#10;assert 23 &gt;= 95&#10; +  where 23 = &lt;built-in method count of list object at 0x7f81b19d80&gt;(200)&#10; +    where &lt;built-in method count of list object at 0x7f81b19d80&gt; = ['gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', ...].count">px = &lt;toxiproxy_scenarios.Proxy object at 0x7f81c011f0&gt;
+
+    def test_rn9_retry_storm_after_blackout(px):
+        def retry(_):
+            with via(px, timeout=5) as c:
+                for backoff in (0.2, 0.4, 0.8, 1.6, 3.2):  # capped, jittered
+                    try:
+                        return c.get("/healthz").status_code
+                    except httpx.HTTPError:
+                        time.sleep(backoff * (0.5 + secrets.randbelow(100) / 100))
+            return "gave_up"
+        with cf.ThreadPoolExecutor(100) as ex:
+            with px.down():
+                futs = [ex.submit(retry, i) for i in range(100)]
+                time.sleep(3)
+            res = [f.result() for f in futs]
+        assert not [r for r in res if isinstance(r, int) and r &gt;= 500], "5xx cascade after recovery"
+&gt;       assert res.count(200) &gt;= 95, {r: res.count(r) for r in set(res)}
+E       AssertionError: {200: 23, 'gave_up': 77}
+E       assert 23 &gt;= 95
+E        +  where 23 = &lt;built-in method count of list object at 0x7f81b19d80&gt;(200)
+E        +    where &lt;built-in method count of list object at 0x7f81b19d80&gt; = ['gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', 'gave_up', ...].count
+
+test_degraded_network.py:198: AssertionError</failure></testcase><testcase classname="test_degraded_network" name="test_rn10_offline_queue_replay_exactly_once" time="0.029"><error message="failed on setup with &quot;httpx.ConnectError: [Errno 111] Connection refused&quot;">@contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+&gt;           yield
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_backends/sync.py:215: in connect_tcp
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {&lt;class 'socket.timeout'&gt;: &lt;class 'httpcore.ConnectTimeout'&gt;, &lt;class 'OSError'&gt;: &lt;class 'httpcore.ConnectError'&gt;}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -&gt; typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+&gt;                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+client = &lt;httpx.Client object at 0x7f81fdd460&gt;
+
+    @pytest.fixture(scope="session")
+    def admin(client):
+        email, pw = os.environ.get("ADMIN_EMAIL"), os.environ.get("ADMIN_PASSWORD")
+        if not (email and pw):
+            pytest.skip("ADMIN_EMAIL/ADMIN_PASSWORD not set")
+&gt;       tok = login(client, email, pw)
+
+conftest.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+conftest.py:41: in login
+    r = client.post("/auth/login", data={"username": email, "password": password})
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+/usr/lib/python3.9/contextlib.py:135: in __exit__
+    self.gen.throw(type, value, traceback)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -&gt; typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+&gt;           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 111] Connection refused
+
+/home/pi/qa-venv/lib/python3.9/site-packages/httpx/_transports/default.py:118: ConnectError</error></testcase></testsuite></testsuites>

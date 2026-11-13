@@ -1,0 +1,68 @@
+[
+         {
+              "id"           : "HSTS_time",
+              "ip"           : "clarion-testnet.larmkx.com/104.21.68.68",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "finding"      : "max-age too short. 0 days (=300 seconds) < 15465600 seconds"
+          }
+,         {
+              "id"           : "secure_renego",
+              "ip"           : "clarion-testnet.larmkx.com/104.21.68.68",
+              "port"         : "443",
+              "severity"     : "WARN",
+              "cwe"          : "CWE-310",
+              "finding"      : "OpenSSL handshake didn't succeed"
+          }
+,         {
+              "id"           : "BREACH",
+              "ip"           : "clarion-testnet.larmkx.com/104.21.68.68",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "cve"          : "CVE-2013-3587",
+              "cwe"          : "CWE-310",
+              "finding"      : "potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested"
+          }
+,         {
+              "id"           : "BEAST_CBC_TLS1",
+              "ip"           : "clarion-testnet.larmkx.com/104.21.68.68",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "cve"          : "CVE-2011-3389",
+              "cwe"          : "CWE-20",
+              "finding"      : "ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA"
+          }
+,         {
+              "id"           : "HSTS_time",
+              "ip"           : "clarion-testnet.larmkx.com/172.67.191.121",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "finding"      : "max-age too short. 0 days (=300 seconds) < 15465600 seconds"
+          }
+,         {
+              "id"           : "secure_renego",
+              "ip"           : "clarion-testnet.larmkx.com/172.67.191.121",
+              "port"         : "443",
+              "severity"     : "WARN",
+              "cwe"          : "CWE-310",
+              "finding"      : "OpenSSL handshake didn't succeed"
+          }
+,         {
+              "id"           : "BREACH",
+              "ip"           : "clarion-testnet.larmkx.com/172.67.191.121",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "cve"          : "CVE-2013-3587",
+              "cwe"          : "CWE-310",
+              "finding"      : "potentially VULNERABLE, br HTTP compression detected  - only supplied '/' tested"
+          }
+,         {
+              "id"           : "BEAST_CBC_TLS1",
+              "ip"           : "clarion-testnet.larmkx.com/172.67.191.121",
+              "port"         : "443",
+              "severity"     : "MEDIUM",
+              "cve"          : "CVE-2011-3389",
+              "cwe"          : "CWE-20",
+              "finding"      : "ECDHE-ECDSA-AES128-SHA ECDHE-ECDSA-AES256-SHA"
+          }
+]
