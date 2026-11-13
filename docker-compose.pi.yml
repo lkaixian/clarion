@@ -273,7 +273,7 @@ services:
 
   redis:
     <<: *restart
-    image: redis:7.4-alpine
+    image: redis:8.0-alpine
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     volumes:
       - redis_data:/data
