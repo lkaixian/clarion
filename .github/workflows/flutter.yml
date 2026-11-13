@@ -78,7 +78,7 @@ jobs:
           echo "merged manifest: $f"
           grep -n 'android:host' "$f" || { echo "::error::no android:host in $f"; exit 1; }
           grep -q 'android:host="clarion.larmkx.com"' "$f" || { echo "::error::launch filter host is not clarion.larmkx.com"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: clarion-debug-apk
           path: mobile_flutter/build/app/outputs/flutter-apk/app-debug.apk
