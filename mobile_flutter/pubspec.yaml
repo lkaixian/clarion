@@ -55,7 +55,7 @@ dependencies:
   package_info_plus: ^8.1.0
 
   # Secure storage for the auth token
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.3.4
 
   # Runtime-editable settings (API base URL + locale overrides)
   shared_preferences: ^2.3.3
