@@ -36,7 +36,7 @@ x-env-file: &env-file
 services:
   proxy:
     <<: [*restart, *env-file]
-    image: caddy:2.8-alpine
+    image: caddy:2.10-alpine
     environment:
       CLARION_SITE_ADDRESS: ${CLARION_SITE_ADDRESS:-localhost}
       CLARION_TLS_DIRECTIVE: ${CLARION_TLS_DIRECTIVE:-tls internal}

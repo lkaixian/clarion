@@ -40,7 +40,7 @@ services:
   # -------------------------------------------------------------------------
   proxy:
     <<: [*restart, *env-file]
-    image: caddy:2.8-alpine
+    image: caddy:2.10-alpine
     environment:
       # FQDN clients use. "localhost" for the demo; set to
       # e.g. clarion.example.edu.my in .env.docker for a real deployment.
@@ -785,7 +785,7 @@ services:
     # environment when it needs none of them. Every var it actually uses is
     # named explicitly below.
     <<: *restart
-    image: caddy:2.8-alpine
+    image: caddy:2.10-alpine
     profiles: ["branch-edge"]
     environment:
       CLARION_SITE_ADDRESS: ${CLARION_BRANCH_SITE_ADDRESS:-localhost}
