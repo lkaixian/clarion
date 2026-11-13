@@ -626,7 +626,7 @@ services:
     # SECRET_KEY/MAILTRAP_* the way env_file's blanket dump would hand it.
     <<: *restart
     profiles: ["observability"]
-    image: grafana/grafana:11.4.0
+    image: grafana/grafana:13.3.0
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       # No "change-me" fallback here on purpose -- Grafana refuses an empty
