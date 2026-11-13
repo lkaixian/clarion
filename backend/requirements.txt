@@ -30,7 +30,7 @@ idna==3.18
 limits==5.8.0
 packaging==26.3
 passlib==1.7.4
-pillow==12.3.0
+pillow==13.0.0
 # P1.7b: HEIC/HEIF input (app/imaging.py) -- an iPhone camera's default
 # photo format. Ships prebuilt libheif binaries, no host libs needed.
 pillow-heif==1.7.0
