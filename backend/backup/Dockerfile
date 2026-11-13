@@ -1,7 +1,7 @@
 # CLARION backup runner (roadmap P2.8). mariadb:11.4 already carries
 # mariadb-backup + mariadb-binlog + the mariadb client; add restic / age /
 # rsync / mydumper / mc on top.
-FROM mariadb:11.4
+FROM mariadb:12.2
 
 ARG MC_VERSION=RELEASE.2025-04-22T22-12-26Z
 RUN set -eux; \
