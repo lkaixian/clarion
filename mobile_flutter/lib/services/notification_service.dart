@@ -62,7 +62,8 @@ class NotificationService {
     tz_data.initializeTimeZones();
     try {
       final deviceTimeZone = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(deviceTimeZone));
+      // flutter_timezone 5.x returns a TimezoneInfo, not the IANA name string.
+      tz.setLocalLocation(tz.getLocation(deviceTimeZone.identifier));
     } catch (e) {
       // Falls back to whatever `timezone`'s default local location is
       // (UTC) rather than crashing app startup over a reminders feature.
